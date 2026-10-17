@@ -46,6 +46,7 @@ def execute(
     comparison: bool = False,
     cashflow: bool = False,
     insurance: bool = False,
+    homecare: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -74,6 +75,7 @@ def execute(
             comparison=comparison,
             cashflow=cashflow,
             insurance=insurance,
+            homecare=homecare,
         )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
@@ -88,6 +90,7 @@ def run_browser(
     comparison: bool = False,
     cashflow: bool = False,
     insurance: bool = False,
+    homecare: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -283,6 +286,7 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_COMPARISON": "1" if comparison else "0",
                         "SALLIMBOOK_HTTPS_CASHFLOW": "1" if cashflow else "0",
                         "SALLIMBOOK_HTTPS_INSURANCE": "1" if insurance else "0",
+                        "SALLIMBOOK_HTTPS_HOMECARE": "1" if homecare else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -293,7 +297,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months|cashflow|insurance)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -359,6 +363,10 @@ if __name__ == "__main__":
         "--insurance", action="store_true",
         help="Verify insurance policies, medical cases and actual financial events with real HTTPS.",
     )
+    parser.add_argument(
+        "--homecare", action="store_true",
+        help="Verify appliances, shared stock, replacement and dashboard with real HTTPS.",
+    )
     args = parser.parse_args()
     with test_service_lock():
         execute(
@@ -368,4 +376,5 @@ if __name__ == "__main__":
             comparison=args.comparison,
             cashflow=args.cashflow,
             insurance=args.insurance,
+            homecare=args.homecare,
         )

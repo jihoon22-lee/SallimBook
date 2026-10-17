@@ -8,6 +8,7 @@ import { useHomecareApi } from "./api";
 import { changedFields, consumableDraft, consumableInput, etag, preserveDraft, statuses } from "./model";
 import type { Consumable, ConsumableDraft } from "./model";
 import { ConflictReview, HomecarePage, ListFeedback, MetadataFeedback, ResourceFeedback, useMetadataCommand } from "./HomecareSupport";
+import { DeleteHomecare } from "./DeleteHomecare";
 import { DeviceLinks } from "./DeviceLinks";
 import { StockMovements } from "./StockPages";
 import { TodayConsumables } from "./TodayConsumables";
@@ -31,7 +32,7 @@ function ConsumableList() {
 export function ConsumableListPage() { return <HomecarePage title="소모품 관리" description="같은 규격의 재고는 함께 쓰고, 기기별 교체 기준은 따로 관리해요." navigation={<div className="form-actions"><Link className="button-link" to="/consumables/new">소모품 등록하기</Link><Link to="/appliances">가전 관리</Link></div>}><ConsumableList /></HomecarePage>; }
 export function ConsumableNewPage() { return <HomecarePage title="소모품 등록" description="사용자가 정한 규격·단위와 재고 부족 기준을 기록해요."><ConsumableEditor /></HomecarePage>; }
 function ConsumableDetail({ id, edit }: { id: string; edit: boolean }) {
-  const api = useHomecareApi(); const resource = useResource(useCallback(() => isUuid(id) ? api.getConsumable({ consumableId: id }) : Promise.reject(new ApiError(404, "NOT_FOUND")), [api, id])); const row = resource.data;
-  return <><ResourceFeedback resource={resource} />{row && !resource.error && !resource.loading && (edit ? <ConsumableEditor key={`${row.id}:${row.version}`} initial={row} /> : <><section className="card"><h2>{row.name}</h2><ConsumableSummary row={row} /><div className="form-actions"><Link to={`/consumables/${id}/edit`}>소모품 정보 수정·사용 종료</Link>{row.status === "active" && <Link className="button-link" to={`/consumables/${id}/stock/new`}>입고·재고 조정 기록</Link>}</div></section><DeviceLinks consumable={row} /><StockMovements consumable={row} /></>)}</>;
+  const api = useHomecareApi(); const navigate = useNavigate(); const resource = useResource(useCallback(() => isUuid(id) ? api.getConsumable({ consumableId: id }) : Promise.reject(new ApiError(404, "NOT_FOUND")), [api, id])); const row = resource.data;
+  return <><ResourceFeedback resource={resource} />{row && !resource.error && !resource.loading && (edit ? <ConsumableEditor key={`${row.id}:${row.version}`} initial={row} /> : <><section className="card"><h2>{row.name}</h2><ConsumableSummary row={row} /><div className="form-actions"><Link to={`/consumables/${id}/edit`}>소모품 정보 수정·사용 종료</Link>{row.status === "active" && <Link className="button-link" to={`/consumables/${id}/stock/new`}>입고·재고 조정 기록</Link>}</div><DeleteHomecare initial={row} label="소모품" name={row.name} read={() => api.getConsumable({ consumableId: id })} remove={(current, signal) => api.deleteConsumable({ consumableId: id, ifMatch: etag(current.version) }, signal)} render={(current) => <ConsumableSummary row={current} />} deleted={() => navigate("/consumables")} listPath="/consumables?status=all" /></section><DeviceLinks consumable={row} /><StockMovements consumable={row} /></>)}</>;
 }
 export function ConsumableDetailPage({ edit = false }: { edit?: boolean }) { const { id = "" } = useParams(); return <HomecarePage title={edit ? "소모품 정보 수정" : "소모품 상세"} description="공용 재고 원장과 기기별 교체 이력을 함께 확인해요."><ConsumableDetail key={`${id}:${edit}`} id={id} edit={edit} /></HomecarePage>; }

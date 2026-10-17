@@ -236,3 +236,9 @@ SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외
 [서버 135개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
 정리 명령 `uv run --project services/api python scripts/cleanup_documents.py`는 기본 dry-run이다.
 검토 후 `--apply`를 명시하면 24시간이 지난 DB 미참조/삭제 암호문만 제거하며 metadata 이력은 유지한다.
+
+### 가전·재고·홈 화면 검증
+
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.homecare.config.ts`는 전용 18755 포트를 사용한다.
+`uv run --project services/api python scripts/test_web_auth.py --homecare`는 기존 격리 HTTPS harness에서 실제 가전/재고/교체와 홈을 검사한다.
+Docker 시험 DB 시작·중지와 브라우저 검사를 병행하지 않는다. 구체적인 실행 결과는 [가전·재고 UI 검증](testing/homecare-client.md)을 따른다.

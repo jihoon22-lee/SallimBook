@@ -215,3 +215,7 @@ footer { font-size: .75rem; color: var(--muted); padding-top: 32px; }
 
 .home-secondary-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 @media (min-width: 1100px) { .home-secondary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .home-secondary-grid .metadata-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.home-warranties { margin-block: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
+.home-warranties summary { cursor: pointer; padding-block: 8px; font-weight: 700; }
+.home-warranties li { overflow-wrap: anywhere; }

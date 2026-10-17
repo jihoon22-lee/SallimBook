@@ -1,15 +1,19 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
+import { todaySeoul } from "../finance/dates";
 import { FinanceError } from "../finance/FinanceSupport";
 export function HomecarePage({ title, children, description, navigation }: { title: string; description: string; children: ReactNode; navigation?: ReactNode }) {
   const { state } = useAuth(); return <><div className="intro"><p className="eyebrow">우리 집 물건과 공용 재고</p><h1>{title}</h1><p>{description}</p></div>{navigation}{state.status === "authenticated" ? children : <SessionStatus />}</>;
 }
 export function HomecareError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
+    APPLIANCE_IN_USE: "연결 소모품이나 사용·문서 이력이 있는 가전은 삭제할 수 없어요. 사용 종료로 기록을 보존해 주세요.",
+    CONSUMABLE_IN_USE: "기기 연결이나 재고·문서 이력이 있는 소모품은 삭제할 수 없어요. 사용 종료로 기록을 보존해 주세요.",
+    APPLIANCE_CONSUMABLE_IN_USE: "교체 이력이 있는 기기 연결은 삭제할 수 없어요. 연결 사용을 중지하면 과거 기록을 보존할 수 있어요.",
     REQUEST_CANCELLED: "요청 대기를 중단했어요. 서버에 반영됐을 수 있으니 현재 기록을 확인해 주세요. 같은 재고 입력으로 재시도하면 같은 작업을 확인해요.",
     INVALID_HOMECARE_DATE: "실제 구매·사용 종료·입고·교체·취소 날짜는 서울 기준 오늘을 넘을 수 없어요.",
     INVALID_HOMECARE_INPUT: "제품 정보와 수량·주기·날짜를 확인해 주세요.",
@@ -47,3 +51,5 @@ export function ListFeedback({ list, empty }: { list: { loading: boolean; error:
 }
 export function ResourceFeedback({ resource }: { resource: { loading: boolean; error: ApiError | null; reload: () => Promise<void> } }) { return <>{resource.loading && <p role="status">현재 기록을 확인하고 있어요.</p>}<HomecareError error={resource.error} />{resource.error && <button type="button" onClick={() => void resource.reload()}>현재 기록 다시 확인</button>}</>; }
 export const recordedLabel = (value: string) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+
+export function useSeoulDayRefresh(reload: () => Promise<void>) { useEffect(() => { let observedDay = todaySeoul(); const check = () => { const day = todaySeoul(); if (day !== observedDay) { observedDay = day; void reload(); } }; const timer = window.setInterval(check, 30000); window.addEventListener("focus", check); document.addEventListener("visibilitychange", check); return () => { window.clearInterval(timer); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); }; }, [reload]); }
