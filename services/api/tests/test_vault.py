@@ -1042,3 +1042,40 @@ def test_rotation_closes_pending_share_before_freeze_and_allows_fresh_share(vaul
         assert new["id"] != old["id"]
         accept(client, partner, new)
         assert own_wrap(client, partner)["key_version"] == 2
+
+
+def test_rotation_metadata_batches_source_and_prepared_cards_without_ciphertexts(vault_app, actors):
+    actor, _, foreign = actors
+    with TestClient(vault_app) as client:
+        initialize(client, actor)
+        rows = [card(client, actor, archived=index == 5) for index in range(6)]
+        for index, row in enumerate(rows):
+            assert (
+                write_secret(client, actor, row, payload=card_secret(seed=20 + index)).status_code
+                == 200
+            )
+        rotation = prepare(client, actor, start_rotation(client, actor), [actor])
+        for index in range(2):
+            rotation = stage(client, actor, rotation, rotation["cards"][index], seed=120 + index)
+        initialize(client, foreign)
+        other = card(client, foreign)
+        assert write_secret(client, foreign, other).status_code == 200
+        foreign_rotation = prepare(client, foreign, start_rotation(client, foreign), [foreign])
+        stage(client, foreign, foreign_rotation, foreign_rotation["cards"][0])
+        queries = []
+
+        def observe(connection, cursor, statement, parameters, context, executemany):
+            if statement.startswith("SELECT") and "card_secret_envelopes" in statement:
+                queries.append(statement)
+
+        event.listen(vault_app.state.engine, "before_cursor_execute", observe)
+        try:
+            result = rotation_detail(client, actor, rotation["id"])
+        finally:
+            event.remove(vault_app.state.engine, "before_cursor_execute", observe)
+        assert len(queries) == 2
+        assert all("ciphertext" not in query.split("FROM", 1)[0] for query in queries)
+        assert result["cards"] == rotation["cards"]
+        assert len(result["cards"]) == 6
+        assert sum(row["prepared"] for row in result["cards"]) == 2
+        assert {row["card_id"] for row in result["cards"]} == {row["id"] for row in rows}

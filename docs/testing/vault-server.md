@@ -70,6 +70,17 @@ uv run --project services/api python scripts/test_database.py services/api/tests
 목록의 비밀 존재 판정 SELECT가 한 번이며 암호문 열을 조회하지 않음을 확인했다.
 처음 명령의 파일명 오타(test_vault_storage.py)는 테스트를 실행하지 못했고 올바른 파일명으로 재실행했다.
 
+## 회전 metadata 조회 보강
+
+후속 코드 리뷰에서 회전 상태 조회도 source/staged envelope를 카드 수만큼 조회하는 문제를
+확인했다. source의 ID/revision/last4와 staged card ID를 각각 한 번에 조회하며 ciphertext는
+적재하지 않는다. 현재/중단된 회전의 prepared 의미와 가계·권한 검사는 유지한다.
+
+위 vault/card/DB 명령을 다시 실행해 **61개 통과**(vault24 + DB7 + cards30), drift 없음과
+마이그레이션 왕복을 확인했다. 새 회귀는 6개 카드(종료 카드 포함), 일부만 준비된 상태,
+다른 가계의 동시 회전이 있을 때 metadata가 같고 envelope SELECT가 정확히 2개임을 검사한다.
+자동 리뷰 제한을 지키기 위해 원래 PR source에 추가 push하지 않고 최종 통합 branch에서 보강했다.
+
 ## 남은 검증
 
 Android/PC의 실제 암호화·보호 화면·공유/복구/재개 UI는 별도 변경에서 검증한다.
