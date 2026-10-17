@@ -47,6 +47,7 @@ CSV의 문자열에는 금액까지 `text:` 접두사가 있고 null과 빈 문�
 `exportArchiveUI`로 전달한다. 네이티브 구현은 인증·ZIP 검증·SAF 저장을 담당하고 JS에
 `{status: 'exported'|'cancelled'}`만 반환한다. URI·파일 경로·Blob·원본 bytes·다운로드 URL·
 CSRF/세션/인증 증명은 bridge에 전달하지 않는다. 기능 미지원·실패 시 웹 HTTP로 우회하지 않는다.
+JS 대기 중단은 이미 열린 네이티브 보호 화면의 저장 취소를 증명하지 않으므로 실제 저장 결과를 확인하도록 안내한다.
 네이티브 구현·JVM/실기기 결과는 담당 Android 검증 기록을 별도로 확인한다.
 
 ## 실행 기록
@@ -62,8 +63,8 @@ python3 scripts/validate_docs.py
 git diff --check
 ```
 
-모의 화면 시험은 전용 18756 포트를 사용한다. 신규 76개(웹 48, Android UI 16, bounded stream 12)가
-PC/Android 화면 크기에서 통과했다. JSON/CSV·문서 선택과 한도, 상태 변경, 재인증·가계 범위 증명,
+모의 화면 시험은 전용 18756 포트를 사용한다. 신규 78개(웹 50, Android UI 16, bounded stream 12)를
+최신 통합 base에서 모두 다시 실행해 PC/Android 화면 크기에서 통과했다(1.3분). JSON/CSV·문서 선택과 한도, 상태 변경, 재인증·가계 범위 증명,
 CSRF 갱신, 실패·취소·pagehide·401, 파일 응답의 크기/헤더/해시·buffer 정리·URL 해제를 확인했다.
 실제 WebAuthn 서명 검증은 이 모의 시험 범위가 아니다.
 
@@ -72,11 +73,25 @@ CSRF 갱신, 실패·취소·pagehide·401, 파일 응답의 크기/헤더/해�
 기능 코드는 이 locator 수정으로 바뀌지 않았다.
 
 생성 계약 재생성 결과 변경 없음. 타입 검사와 배포용 빌드 통과(158개 모듈,
-주 JS 876.68kB/gzip 226.70kB). 기존 500kB 초과 chunk 경고는 남는다.
+주 JS 881.07kB/gzip 227.73kB). 기존 500kB 초과 chunk 경고는 남는다.
 
-실제 HTTPS 시험 2회는 합성 PNG 업로드의 보관 완료 확인에서 실패했다. 내보내기 API의 성공 여부는 아직 검증하지 못했으며 원인을 확인 중이다. 기존 document runtime의 실제 고정
-ClamAV/parser/OCR를 사용하고 합성 PNG 원본을 검사해 첨부한다. 별도 합성 가계는 일회용 schema에만
-준비한다. 임시 TLS·필드 키·문서 저장소·계정 fixture·브라우저 산출물은 전용 private 디렉터리에
-두고 종료 시 제거한다. 실패 출력은 코드 위치와 비밀 없는 단계 표지만 남긴다.
+실제 HTTPS 시험은 최신 통합 base에 병합한 뒤 통과했다. HTTP route mock 없이 실제
+PostgreSQL과 고정 ClamAV/parser/OCR를 사용해 합성 PNG 원본을 검사·첨부하고 다음을 확인했다.
+
+- JSON+CSV와 선택 원본 ZIP: 전체 SHA-256/Content-Length, manifest의 모든 entry 크기·해시,
+  고정 파일명·no-store·nosniff, 원본 bytes 동일성, 금액 문자열과 CSV 수식 방어 표현.
+- 전체 계좌/증권번호·암호문·인증 필드 제외, 업무 메모 유지, 다른 가계 자료 미포함과 문서 ID 강제 요청 404.
+- 연결이 종료된 선택 문서 409·파일 미저장, 최신 상태 확인 후 제외, CSV만/JSON만 각각 다운로드.
+- 최근 인증 만료 403·파일 미저장, 비밀번호 재인증 후 성공, 서버 로그아웃 뒤 401·화면 해제·파일 미저장.
+- CSRF 전달, 멱등키 미사용, localStorage/sessionStorage/Cache API 비저장.
+
+초기 PNG의 새 합성 문구가 OCR 카드정보 검사에서 `DOCUMENT_CARD_DATA`로 거절되어,
+이미 문서 시험을 통과한 합성 문구로 교체했다. 검사 기준은 변경하지 않았다. 시험 전용 인증 만료
+호출은 별도 TLS client 대신 임시 인증서를 신뢰하는 브라우저 fetch를 사용하도록 수정했다.
+단계 로그는 Playwright 소스 발췌문을 실행 결과로 오인하지 않도록 완전한 로그 줄만 추출한다.
+
+별도 합성 가계는 일회용 schema에만 준비한다. 임시 TLS·필드 키·문서 저장소·계정 fixture·
+브라우저 산출물은 private 디렉터리에 두고 종료 시 제거한다. 전용 DB는 시험 후 중지했다.
+실제 Android SAF·실기기 인증/취소와 실제 WebAuthn 서명은 이 HTTPS 시험 범위가 아니다.
 
 [보안 정책](../security-authentication.md) · [운영 백업과 사용자 내보내기](../deployment-backup-operations.md)

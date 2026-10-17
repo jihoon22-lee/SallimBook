@@ -225,13 +225,13 @@
       "sha256": "f6b78782fd0ba9eb16c88e8fa2395e1bad978ded409c13e2df3c6c8cc4696fea",
       "git_sha1": "7173392c6a618c5cb8cd72728975093cb846b6a1"
     },
-    "docs/testing/native-security-proof.md": {
-      "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
-      "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
-    },
     "docs/testing/passkeys-web.md": {
       "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
       "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
+    },
+    "docs/testing/native-security-proof.md": {
+      "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
+      "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
     },
     "docs/testing/assets-accounts-client.md": {
       "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",
@@ -241,6 +241,14 @@
       "sha256": "d1f8af7845fa22f3ecb85d8db595254c7cc6bcaf18864ffb99cf55dbb9e0e916",
       "git_sha1": "f4ca9f527aef0a213cf38ff21c48098d2c077287"
     },
+    "docs/testing/homecare-server.md": {
+      "sha256": "5294bb1903116b5fe8bc5ce3cb02a315736e15a586ff27d63c90c9d7ccefea39",
+      "git_sha1": "a8b02f82de5f99d45a3b2e6dc556659e6c54c45d"
+    },
+    "infra/documents/README.md": {
+      "sha256": "ee1b7ea9d0c5c239737cefb6868111c9f152900de16cfa4d7eebc27c92e96ceb",
+      "git_sha1": "112a8f48c2ebc6761e02ce4642f6df465bb3ebb1"
+    },
     "docs/testing/assets-comparison-client.md": {
       "sha256": "226bf23365e5d0760ec2c18726379e63b411875816f9d212ab6dba8c34fba3c7",
       "git_sha1": "430221764340d608cdd93c0c0c4b88bc69f3a021"
@@ -249,21 +257,17 @@
       "sha256": "0c996a88ec7970a964b1ac9b684329e25d8027e40dd73e137126955a8bfbc4c5",
       "git_sha1": "fbc10ac28ce7ed8e0e808a45e9b8a35991ec7c03"
     },
-    "docs/testing/insurance-client.md": {
-      "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
-      "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
+    "docs/adr/vault-format-v1.md": {
+      "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
+      "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
     },
-    "docs/testing/homecare-server.md": {
-      "sha256": "5294bb1903116b5fe8bc5ce3cb02a315736e15a586ff27d63c90c9d7ccefea39",
-      "git_sha1": "a8b02f82de5f99d45a3b2e6dc556659e6c54c45d"
+    "docs/testing/native-vault-crypto.md": {
+      "sha256": "0fcd76d8aa1c97b3e9c4748efd0a74e7a9cba6a08f87945d0f22da3050fb99f1",
+      "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
     },
     "docs/testing/documents-server.md": {
       "sha256": "89958991fe93e7784d277adb7daf74c4ec4949290e5f527272a1228cb6fcb767",
       "git_sha1": "404e821227adc9548092735670d9cbfc6567e4d7"
-    },
-    "infra/documents/README.md": {
-      "sha256": "ee1b7ea9d0c5c239737cefb6868111c9f152900de16cfa4d7eebc27c92e96ceb",
-      "git_sha1": "112a8f48c2ebc6761e02ce4642f6df465bb3ebb1"
     },
     "scripts/cleanup_documents.py": {
       "sha256": "514c471e081b56d2dc7fcdbc5f00d4b352a729b2c7b1f1997594606218eb527f",
@@ -272,6 +276,14 @@
     "scripts/test_document_tools.py": {
       "sha256": "166136e8691243996d2bf2ea0e561d2a3d505748427613eb7df2965d0dec2f64",
       "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
+    },
+    "docs/testing/native-vault-lifecycle.md": {
+      "sha256": "c71c4699eb3ab00b200a627575047fdf1418db19a1562b8ce6e151873013bcb9",
+      "git_sha1": "c0650670ed9eeb16d573d48770849fa10b2f9907"
+    },
+    "docs/testing/insurance-client.md": {
+      "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
+      "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
     },
     "docs/testing/homecare-client.md": {
       "sha256": "0581401abb980f338b8287d83087f6a9c56aa2314eaaec02c0c86d591152bb12",
@@ -285,26 +297,6 @@
       "sha256": "a88659c4df7d11862f893fdc72cab1175b5acf0a1b70a513dc14a0bf88cf6b92",
       "git_sha1": "8d7f77e4d155e2921f883cc7ba87a3e4a3066ac0"
     },
-    "docs/testing/vault-overview.md": {
-      "sha256": "546db5996e046fc5b32c1df3a09d6b87d104f42216a87db1593df99bb6eb7e83",
-      "git_sha1": "c8d785f25257c30141e59008be46acc0711197b4"
-    },
-    "docs/testing/exports-client.md": {
-      "sha256": "9e4da96ee69c2c41db7997d4163a90d76b712dcf774df50f3baf388e80654fd7",
-      "git_sha1": "30b6502b3ee67ddf9a71433895bdbc2f176c025e"
-    },
-    "docs/adr/vault-format-v1.md": {
-      "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
-      "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
-    },
-    "docs/testing/native-vault-crypto.md": {
-      "sha256": "0fcd76d8aa1c97b3e9c4748efd0a74e7a9cba6a08f87945d0f22da3050fb99f1",
-      "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
-    },
-    "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "c71c4699eb3ab00b200a627575047fdf1418db19a1562b8ce6e151873013bcb9",
-      "git_sha1": "c0650670ed9eeb16d573d48770849fa10b2f9907"
-    },
     "docs/testing/vault-server.md": {
       "sha256": "3a745029c31d11afe5eaa28fd17a51b0cdaf90e68ad45472813d77a503a11e4e",
       "git_sha1": "cf2aaea53031c656128669b3562f632b49caa399"
@@ -313,6 +305,10 @@
       "sha256": "1c562545fc2d1dc8ec3e863ccfa632395b8d8fdfd8527a1092a1f948241a0913",
       "git_sha1": "cee6563e6b1f449757cba5e178b742b8c4039964"
     },
+    "docs/testing/vault-overview.md": {
+      "sha256": "546db5996e046fc5b32c1df3a09d6b87d104f42216a87db1593df99bb6eb7e83",
+      "git_sha1": "c8d785f25257c30141e59008be46acc0711197b4"
+    },
     "docs/testing/vault-web.md": {
       "sha256": "974918b98d22ed5d7c16781c0c3e40fbbdb8aa909f98388cc897f7d4312cfe74",
       "git_sha1": "6575fd34f4311b4ea9cdfece99a9881c4bf5eb3a"
@@ -320,6 +316,10 @@
     "docs/testing/exports-server.md": {
       "sha256": "47335f81fdc13dd47c9e1174982a41cd8c7790c95282757996df29f0808f768e",
       "git_sha1": "4f990254002c6e8efc564087cdc56c3bf48b6133"
+    },
+    "docs/testing/exports-client.md": {
+      "sha256": "f896c3c08aaa6432b479babd15417ca8804782b96384e41aafb9263f5e52bfe0",
+      "git_sha1": "b3d07ee6a953eb3d40fa7564f80e0c8f997ae7d2"
     }
   }
 }

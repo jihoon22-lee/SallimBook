@@ -12,7 +12,7 @@ export function ExportError({ error }: { error: ApiError | null }) {
     DOCUMENT_CONTENT_MISMATCH: "받은 ZIP의 크기·형식·체크섬을 확인하지 못해 파일을 저장하지 않았어요. 다시 시도해도 같으면 운영자에게 알려 주세요.",
     REAUTHENTICATION_REQUIRED: "최근 5분 이내의 계정 인증이 필요해요. 패스키로 이 내보내기를 확인하거나 비밀번호로 다시 인증해 주세요.",
     STEP_UP_REQUIRED: "이 내보내기의 인증이 만료됐어요. 패스키로 다시 확인하거나 비밀번호로 다시 인증해 주세요.",
-    REQUEST_CANCELLED: "내보내기 대기를 중단했어요. 서버에서 파일을 발급했을 수 있지만 이 요청으로 새 파일을 저장하지 않아요. 다시 시작하면 새 시점의 자료를 만들어요.",
+    REQUEST_CANCELLED: "내보내기 대기를 중단했어요. 서버에서 파일을 발급했을 수 있으니 Android 보호 화면이나 브라우저 저장 목록에서 결과를 확인해 주세요. 다시 시작하면 새 시점의 자료를 만들어요.",
     NETWORK_UNAVAILABLE: "연결이 끊겨 ZIP을 받지 못했어요. 서버에서 파일을 발급했을 수 있어요. 저장 목록을 확인한 뒤 새 내보내기를 요청해 주세요.",
     NATIVE_AUTH_UNAVAILABLE: "이 앱에서 내보내기 보호 화면을 열 수 없어요. 지원하는 앱 버전을 확인해 주세요.",
   };
