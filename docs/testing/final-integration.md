@@ -13,6 +13,7 @@ SB-034~040 · R-01~R-22 · 2026-10-18 WSL Ubuntu.
 | Android 전체 | Android sync 뒤 JDK 21·고정 SDK로 `:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin` | `ba4d0ac` **330 통과**, 실패·오류·건너뜀 0. debug APK·release Kotlin 성공, 1분 5초 |
 | Android 실행 설정 | `python3 scripts/test_android_runtime_config.py` | bundled config 및 원격·wildcard·잘못된 navigation 거절 5개 성공. 생성 설정 원상 복원 |
 | API 계약·타입 | `pnpm api:generate`, 생성 파일 `git diff --exit-code`, `pnpm typecheck` | 재생성 차이 0, 타입 오류 0 |
+| 실제 HTTPS | `scripts/test_web_auth.py`와 11개 업무 선택 플래그를 각각 실행 | 인증·패스키·자산/계좌·월 기록·비교·생활비·보험·소모품·보관함·문서·내보내기·감사의 **12개 흐름 통과**. 감사 외 11개 순차 실행 414.7초 |
 | 웹 배포 빌드 | `pnpm build` | 165 modules 성공. JS 894.13kB/gzip 231.15kB, 기존 chunk 크기 경고 남음 |
 | 정적 검사 | API src/tests/migrations와 실제 HTTPS harness Ruff | 통과 |
 | 저장소·운영 도구 | `python3 -m unittest discover -s tests -v` | 운영 14개 포함 **54 통과** |
@@ -52,7 +53,12 @@ trace가 없어 같은 원인으로 확정하지 않았다. 세 시나리오를 
 실제 감사 HTTPS도 `ba4d0ac`에서 통과했다. 현재 가계 52개 기록의 50+2 페이지, 값 없는
 메타데이터·필터, 다른 가계 actor 404, 최근 인증 만료 후 안전한 조회, 로그아웃 뒤 401과
 화면 제거, no-store·브라우저 저장소 미사용을 검증했다.
-최종 전체 웹·나머지 실제 HTTPS 업무 검증은 실행 완료 후 결과를 추가한다.
+최종 실제 HTTPS는 `--passkeys`, `--finance`, `--months`, `--comparison`, `--cashflow`,
+`--insurance`, `--homecare`, `--vault`, `--documents`, `--exports`, `--audit`를 각각 실행했다.
+실제 API/PostgreSQL을 사용했고 HTTP route mock은 없었다. WebAuthn은 Chromium 가상 인증기의
+실제 서명을 사용했고, 문서/내보내기는 고정 이미지의 실제 검사 도구와 연결했다.
+각 실행은 일회용 schema·임시 인증서·합성 계정·private 출력물을 정리하고 DB를 중지했다.
+최종 전체 웹 **972개**는 Docker 네트워크 변경 없이 실행 중이며 완료 후 결과를 추가한다.
 새 debug CVC acceptance proof의 release 제외 검사는 해당 Android 변경 이후 추가한다.
 실행 대기 상태를 통과로 표시하지 않는다.
 
