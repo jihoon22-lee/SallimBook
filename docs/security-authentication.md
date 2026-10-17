@@ -5,7 +5,8 @@
 
 SB-005/007에서 비밀번호·초대·웹/native 서버 세션과 가계 권한·멱등성 기반을 구현했다.
 Argon2id는 64 MiB·3회·4 lanes로 고정했고 개발 WSL에서 해시 중앙값 60.8ms, 검증 56.2ms를 측정했다.
-배포 환경의 자원 제한 아래에서 다시 측정한다. native 자격증명 보관, 패스키·앱 잠금·보관함은 별도 구현·실기기 게이트 대상이다.
+배포 환경의 자원 제한 아래에서 다시 측정한다. SB-006은 패스키의 서버 검증과 목적별 증명을 추가했다.
+PC/Android 패스키 UI, native 자격증명 보관, 앱 잠금·보관함의 구현·실기기 게이트와는 구분한다.
 
 초기 등록 CLI는 비밀번호를 인자로 받거나 토큰을 stdout에 출력하지 않는다. 운영자 소유 0700 디렉터리의
 새 0600 파일에 15분 등록 코드를 쓰며 Git 작업 디렉터리와 symlink 경로·기존 파일 덮어쓰기를 거부한다.
@@ -39,12 +40,40 @@ RP ID·origin·challenge·user verification·한 번 사용 여부를 서버에�
 Android 앱과 도메인 연결에 Digital Asset Links 및 실제 앱 서명 정보가 필요하므로 정식 서명 전에 설정을 검증한다.
 패스키 등록/새 기기 허용은 기존 계정의 최근 재인증을 요구한다.
 
+SB-006 서버는 `webauthn==3.0.1`의 등록·서명 검증을 사용한다.
+32바이트 난수 challenge는 5분 유효·일회성이고 DB에는 해시만 남긴다.
+RP ID, 정확한 origin, user presence/verification, credential ID/소유권, 공개키 서명과 카운터를 검증한다.
+cross-origin/top-origin assertion은 거부한다. 등록 요청은 현재 계정의 5분 이내 실제 로그인과
+동일 세션·기기 범위를 요구한다. 로그인 성공은 비밀번호 로그인과 같은 세션 발급기를 사용한다.
+공개키·카운터·인증기 공개 메타데이터만 저장하며 attestation `none`을 하드웨어 신뢰 증명으로 해석하지 않는다.
+
+운영 RP/domain/certificate를 추정해서 넣지 않는다. `SALLIMBOOK_WEBAUTHN_RP_ID`와 해당 transport의
+origin 목록이 비어 있으면 ceremony를 503으로 거부한다. 웹은 RP ID와 동일한 호스트의 정확한 HTTPS origin을
+패스키 목록과 일반 허용 origin 목록 양쪽에 설정해야 한다. 하위 도메인·와일드카드·HTTP를 자동 허용하지 않는다.
+native origin은 실제 앱 서명 인증서의 SHA-256을 패딩 없는 base64url로 표현한
+`android:apk-key-hash:…` allowlist로 제한한다. 개발/운영 서명과 applicationId를 혼용하지 않는다.
+Digital Asset Links의 실제 도메인·패키지·서명 인증서 설정과 실기기 검증은 아직 미완료다.
+
 웹은 HttpOnly/Secure/SameSite 쿠키와 CSRF 방어를 사용한다.
 Android는 native auth adapter가 refresh token을 Keystore 보호 저장소에 보관하며 일반 JS storage에 저장하지 않는다.
 일반 API 호출에 필요한 짧은 access token은 메모리로 제한하고 로그/URL로 보내지 않는다.
 설계 기본값은 access token 10분, refresh 세션 30일 상한, 재사용 탐지 시 해당 세션 폐기다.
 웹 세션은 유휴 30분·절대 12시간을 초기 정책으로 두고 실제 사용성을 검증한다.
 서버는 토큰 소유만 아니라 계정/기기/가계의 활성 상태도 확인한다.
+
+step-up은 별도의 인증된 challenge로 발급하는 2분 일회용 증명이다. 가계·사용자·세션·기기·purpose·target에
+바인딩하며 `grant_token` 원문은 로그·URL·영구 저장소에 두지 않는다.
+현재 소비 동작은 `household.invite`(가계 UUID)와 `device.revoke`(본인 기기 UUID)다.
+동작의 권한·사전 조건·버전 검사를 통과한 뒤 `X-Step-Up-Token`을 검증하고 변경과 같은 트랜잭션에서 소비한다.
+명시된 증명이 유효하지 않으면 최근 로그인 상태라도 거부한다. 증명이 없을 때만 기존 최근 로그인 검사를 사용한다.
+step-up은 `authenticated_at`을 갱신하지 않으므로 다른 목적에 재인증을 대신 제공하지 않는다.
+등록/패스키 폐기는 현재 최근 로그인으로만 허용한다. enum에 있는 다른 목적은 해당 소비 동작을 구현하기 전까지
+권한을 부여하지 않는다. 자세한 요청 순서는 [API 계약](api-contract.md)의 목적별 step-up 절차를 따른다.
+
+만료된 challenge·grant는 새 ceremony 발급 때 `expires_at` 인덱스로 테이블당 최대 100건씩 정리한다.
+정리 대상은 만료된 행뿐이며 `FOR UPDATE SKIP LOCKED`로 검증/소비 중인 행을 기다리지 않는다.
+정리 자체는 commit하지 않아 현재 세션 잠금과 트랜잭션 경계를 유지한다.
+다음 발급이 없으면 만료 행이 즉시 삭제되지는 않지만 만료 시점부터 검증·소비는 거부한다.
 
 ### 앱 잠금
 

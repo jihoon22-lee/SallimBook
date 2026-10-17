@@ -17,6 +17,8 @@ from sallimbook.identity.dependencies import (
     require_registration_transport,
     require_web_transport,
 )
+from sallimbook.identity.passkeys.models import StepUpPurpose
+from sallimbook.identity.passkeys.service import consume_step_up
 from sallimbook.identity.schemas import (
     CsrfResponse,
     DeviceListResponse,
@@ -163,9 +165,14 @@ def get_members(principal: PrincipalDependency, session: SessionDependency) -> l
     operation_id="createPartnerInvitation",
 )
 def create_invitation(
-    payload: InvitationRequest, principal: PrincipalDependency, session: SessionDependency
+    payload: InvitationRequest,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    step_up_token: Annotated[str | None, Header(alias="X-Step-Up-Token", max_length=128)] = None,
 ) -> InvitationResponse:
-    return service.create_partner_invitation(session, principal, payload)
+    return service.create_partner_invitation(
+        session, principal, payload, step_up_token=step_up_token
+    )
 
 
 @router.get("/devices", response_model=DeviceListResponse, operation_id="listDevices")
@@ -221,11 +228,17 @@ def revoke_device(
     principal: PrincipalDependency,
     session: SessionDependency,
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    step_up_token: Annotated[str | None, Header(alias="X-Step-Up-Token", max_length=128)] = None,
 ) -> Response:
-    require_recent_login(principal, now=service.utcnow())
+    if step_up_token is None:
+        require_recent_login(principal, now=service.utcnow())
     device = scoped_entity(session, RegisteredDevice, device_id, principal, for_update=True)
     if device.user_id != principal.user_id:
         raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
     require_version(device, if_match)
+    if step_up_token is None:
+        require_recent_login(principal, now=service.utcnow())
+    else:
+        consume_step_up(session, principal, step_up_token, StepUpPurpose.DEVICE_REVOKE, device.id)
     service.revoke_device(session, principal, device)
     return Response(status_code=204)

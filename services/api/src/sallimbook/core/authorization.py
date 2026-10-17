@@ -55,7 +55,7 @@ def require_version(entity: Base, if_match: str | None) -> None:
 
 
 def require_recent_login(principal: Principal, *, now: datetime | None = None) -> None:
-    """Only a verified password login sets authenticated_at; refresh never extends it."""
+    """A verified account login sets authenticated_at; refresh and scoped grants never extend it."""
     now = now or datetime.now(UTC)
     age = now - principal.authenticated_at
     if age < timedelta(0) or age > timedelta(minutes=5):

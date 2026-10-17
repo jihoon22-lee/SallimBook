@@ -55,6 +55,10 @@ CLI SDK 설치기는 공식 명령 도구 build 15859902의 SHA-256을 검증하
 실기기 연결에 필요한 ADB는 별도로 버전을 선택하며 빌드 설치기가 자동 설치·업데이트하지 않는다.
 앱 Gradle dependency lock은 `apps/client/android/app/gradle.lockfile`에 저장한다.
 SB-002에서 SQLAlchemy 2.1.5, Alembic 1.20.0, psycopg 3.3.6을 추가했다.
+SB-006 서버 패스키 검증은 `webauthn==3.0.1`로 고정했다. [공식 배포 메타데이터](https://pypi.org/project/webauthn/3.0.1/)의
+Python 3.10 이상 요구를 확인하고, 프로젝트 Python 3.14.7에서 합성 ES256 서명과 PostgreSQL 통합 시험을 실행했다.
+검증 구현은 [Duo Labs 공식 소스](https://github.com/duo-labs/py_webauthn)를 기준으로 하며 전이 의존성도 `services/api/uv.lock`에 고정한다.
+이 시험은 서버 호환 검증이며 PC WebAuthn UI·Android Credential Manager·실기기 보안 검증을 대신하지 않는다.
 개발 PostgreSQL 18.6-bookworm 이미지는 Compose에서 digest까지 고정한다.
 운영 이미지 버전은 해당 Issue에서 호환 시험 후 별도로 고정한다.
 
@@ -104,5 +108,26 @@ Gradle wrapper의 CLI 빌드는 공식 지원 경로다([S18](references.md)).
 origin을 지정하지 않은 development·test는 전용 로컬 UI origin 두 개를 사용한다.
 staging·production은 기본 허용 origin이 없으며 환경변수 또는 `.env`에 허용 목록을 명시한다.
 `.env`에 적힌 로컬 origin도 명시적 설정이므로 운영 환경을 선택할 때 함께 검토한다.
+
+### 패스키 설정
+
+`.env.example`은 다음 세 변수를 빈 값/빈 목록으로 둔다. 이 상태에서는 패스키 ceremony가 비활성화된다.
+
+| 설정 | 운영 연결 시 입력할 값 |
+|---|---|
+| `SALLIMBOOK_WEBAUTHN_RP_ID` | 실제 소유·배포할 RP 호스트명. URL·포트·경로 제외 |
+| `SALLIMBOOK_WEBAUTHN_WEB_ORIGINS` | 같은 RP 호스트의 정확한 HTTPS origin을 담은 JSON 배열. 필요한 포트까지 일치 |
+| `SALLIMBOOK_WEBAUTHN_NATIVE_ORIGINS` | 실제 인증서 SHA-256의 패딩 없는 base64url을 사용한 `android:apk-key-hash:…` JSON 배열 |
+
+웹 origin은 `SALLIMBOOK_ALLOWED_ORIGINS`에도 명시한다. Vite의 HTTP localhost 개발 origin은 패스키 origin으로
+사용할 수 없다. 테스트의 합성 도메인·인증서는 운영 설정으로 복사하지 않는다.
+native는 [Android Digital Asset Links 절차](https://developer.android.com/identity/credential-manager/prerequisites)에 따라
+실제 RP 도메인에 `/.well-known/assetlinks.json`을 배포하고 applicationId와 실제 서명 인증서를 연결해야 한다.
+DAL의 `sha256_cert_fingerprints`와 서버 native origin의 base64url 해시 표현을 구분한다.
+현재 실제 도메인·운영 서명 인증서·DAL 배포·PC/Android 인증 UI 연결은 미완료이며, 서버 검증만 구현했다.
+
+서버 검증 명령은 `uv run --project services/api --frozen python scripts/test_database.py`다.
+전체 테스트와 Alembic 차이 검사·`downgrade base`/`upgrade head`를 전용 시험 DB에서 실행한다.
+API 변경 후 `pnpm api:generate`와 `pnpm typecheck`로 OpenAPI·TS 계약을 갱신하고 확인한다.
 
 환경 간 실제 건강·금융데이터를 복사하지 않는다. 꼭 필요한 진단은 익명화·축약된 재현 데이터로 대체한다.

@@ -230,16 +230,22 @@ def create_bootstrap_invitation(
 
 
 def create_partner_invitation(
-    session: Session, principal: Principal, request: InvitationRequest
+    session: Session,
+    principal: Principal,
+    request: InvitationRequest,
+    *,
+    step_up_token: str | None = None,
 ) -> InvitationResponse:
     now = utcnow()
-    require_recent_login(principal, now=now)
+    if step_up_token is None:
+        require_recent_login(principal, now=now)
     require_owner(principal)
     session.execute(
         select(Household).where(Household.id == principal.household_id).with_for_update()
     ).scalar_one()
     now = utcnow()
-    require_recent_login(principal, now=now)
+    if step_up_token is None:
+        require_recent_login(principal, now=now)
     count = session.scalar(
         select(func.count())
         .select_from(HouseholdMember)
@@ -252,6 +258,18 @@ def create_partner_invitation(
         raise DomainError("HOUSEHOLD_FULL", "가계에는 두 계정까지만 등록할 수 있습니다.", 409)
     if session.scalar(select(User.id).where(User.login_name == request.intended_login)) is not None:
         raise DomainError("LOGIN_UNAVAILABLE", "다른 로그인 이름을 사용해 주세요.", 409)
+    if step_up_token is not None:
+        # Import at the operation boundary: passkey verification reuses identity sessions.
+        from sallimbook.identity.passkeys.models import StepUpPurpose
+        from sallimbook.identity.passkeys.service import consume_step_up
+
+        consume_step_up(
+            session,
+            principal,
+            step_up_token,
+            StepUpPurpose.HOUSEHOLD_INVITE,
+            principal.household_id,
+        )
     # Reissuing an invite invalidates all unconsumed codes for this household.
     session.execute(
         update(Invitation)
