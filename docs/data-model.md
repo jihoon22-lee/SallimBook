@@ -5,6 +5,7 @@
 SB-002의 `0001_households`는 가계 루트와 KRW/Asia·Seoul/version 제약을 생성한다.
 SB-005/007의 `0002_identity_auth`는 사용자·구성원·초대·기기·세션·refresh 이력·요청 제한·멱등 기록을 추가한다.
 SB-006의 `0003_passkeys`는 `auth_credentials`, `auth_challenges`, `auth_step_up_grants` 세 테이블을 추가한다.
+SB-010의 `0004_assets`는 자산 식별 정보와 `audit_events`를 추가한다. 월 평가액·계좌 테이블은 아직 포함하지 않는다.
 아래 나머지 업무 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
 공통 ORM은 UUID·UTC timestamp·낙관적 version을 제공하며, `KrwNumeric` 바인딩은
 float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. 새 DB에 사용자 가계를 자동 생성하지 않는다.
@@ -77,6 +78,11 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 연금저축보험 같은 상품은 보험계약이 평가용 asset_id를 참조할 수 있다. 동일 평가액의 계좌를 따로 더하지 않는다.
 자산의 소유 정보는 자산에 둔다. 계좌 화면은 이를 표시한다.
 부채 입력은 남은 원금 중심이며 미래 이자 총합을 현재 부채로 자동 더하지 않는다.
+
+현재 자산은 개별 소유 시 활성 구성원 한 명, 공동 소유 시 단일 소유자 없이 한 행으로 저장한다.
+가계 지분은 0~1의 정확한 십진 문자열이며 소수점 아래 최대 18자리다. DB numeric scale CHECK도 이를 검증한다.
+`whole`과 `owned` 입력 기준을 구분하며 금액을 등록/수정하는 필드는 자산 metadata에 없다.
+종료일과 archived_at은 함께 설정/해제하고, 다른 기록이 참조하는 자산의 물리 삭제는 FK로 거부한다.
 
 ## 4. 카드와 보관함
 
@@ -157,6 +163,9 @@ stock_quantity는 movement 합계의 트랜잭션 내 캐시다. 정기 검증�
 | idempotency_records | actor_id, operation, key, request_hash, response_reference, state, expires_at | unique(actor_id,operation,key); 다른 payload 재사용=409 |
 
 파일 업로드는 pending → 검증 → committed, 연결 도중 실패한 orphan은 보존 기간 뒤 정리한다.
+현재 감사 helper는 자원 ID·작업·행 버전·변경 필드명만 저장하며 사용자 입력값을 임의 dict로 받지 않는다.
+자산 생성·수정·종료·삭제와 감사 기록을 같은 트랜잭션에서 저장한다. FK 충돌 등으로 실패하면 감사 추가도 롤백한다.
+감사 행의 actor_id는 해당 가계의 사용자 복합 FK로 제한한다. 감사 조회 API는 후속 화면 연결에서 추가한다.
 가계가 다른 parent와 document를 연결할 수 없다.
 
 ## 9. 핵심 관계도
@@ -214,7 +223,7 @@ erDiagram
 ## 12. 마이그레이션
 
 초기 순서: identity → assets/accounts → cards metadata → insurance contracts → cashflow → insurance cases/claims/payouts → homecare → vault/documents.
-현재 적용 순서는 `0001_households` → `0002_identity_auth` → `0003_passkeys`이며 readiness도 이 revision을 요구한다.
+현재 적용 순서는 `0001_households` → `0002_identity_auth` → `0003_passkeys` → `0004_assets`이며 readiness도 이 revision을 요구한다.
 단계 간 FK 대상은 먼저 만들고, 순환 참조가 필요하면 별도 migration에서 제약을 추가한다.
 각 단계의 테스트 DB 생성·migration round-trip을 검증한다.
 운영 데이터가 있는 migration은 백업/복구와 하위 호환 API 기간을 먼저 계획한다.
