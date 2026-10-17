@@ -168,7 +168,7 @@ function validPan(pan: Bytes): boolean {
     if ((pan.length - 1 - index) % 2 === 1) { digit *= 2; if (digit > 9) digit -= 9; }
     sum += digit;
   }
-  return sum % 10 === 0;
+  return sum % 10 === 0 && pan.some((digit) => digit !== 48);
 }
 export function cardPayload(pan: string, year: number, month: number): Bytes {
   requireValue(typeof pan === "string" && /^[0-9]{13,19}$/.test(pan));

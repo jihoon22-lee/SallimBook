@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import vector from "../../../packages/test-fixtures/vault-v1.json" with { type: "json" };
 
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/v1/**", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "synthetic" } }) }));
   await page.goto("/");
@@ -105,4 +107,30 @@ test("input bounds reject malformed Unicode, lossy encodings and invalid payload
     let count = 0; for (const work of cases) { try { work(); } catch (error) { if (error instanceof c.VaultCryptoError) count++; } }
     return count;
   })).toBe(13);
+});
+
+test("all-zero PANs fail input encryption and decryption consistently with Android", async ({ page }) => {
+  const rejected = await page.evaluate(async (fixture) => {
+    const c = await import("/src/features/vault/crypto.ts");
+    const key = c.VaultKey.generate(), scope = { householdId: fixture.household_id, keyVersion: 1 };
+    let count = 0;
+    try {
+      for (let length = 13; length <= 19; length++) {
+        const plain = new Uint8Array(27); plain.set([83, 66, 86, 49, length]);
+        plain.fill(48, 5, 5 + length); new DataView(plain.buffer).setUint16(24, 2032, false); plain[26] = 12;
+        const nonce = c.randomBytes(12);
+        const ciphertext = await key.encrypt(nonce, c.cardAad(scope, fixture.card.card_id), plain);
+        const cases = [
+          () => c.cardPayload("0".repeat(length), 2032, 12),
+          () => c.encryptCard(key, scope, fixture.card.card_id, plain),
+          () => c.decryptCard(key, scope, fixture.card.card_id, { format_version: 1, key_version: 1, payload_schema_version: 1, last_four: "0000", nonce: c.encode64(nonce), ciphertext: c.encode64(ciphertext) }),
+        ];
+        try {
+          for (const operation of cases) { try { await operation(); } catch (error) { if (error instanceof c.VaultCryptoError) count++; } }
+        } finally { c.wipe(plain); c.wipe(nonce); c.wipe(ciphertext); }
+      }
+    } finally { key.destroy(); }
+    return count;
+  }, vector);
+  expect(rejected).toBe(21);
 });
