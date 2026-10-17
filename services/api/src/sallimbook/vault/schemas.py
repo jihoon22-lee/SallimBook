@@ -233,8 +233,15 @@ class VaultMutationReference(VaultModel):
 
 class VaultMemberSummary(VaultModel):
     member_id: CanonicalUUID
-    status: MembershipState
-    version: PositiveVersion
+    status: Literal["not_enrolled", "active", "revoked"]
+    version: PositiveVersion | None
+    next_wrapping_generation: PositiveVersion
+
+    @model_validator(mode="after")
+    def membership_version(self) -> Self:
+        if (self.status == "not_enrolled") != (self.version is None):
+            raise ValueError("Only an enrolled membership has a resource version")
+        return self
 
 
 class VaultStatusResponse(VaultModel):

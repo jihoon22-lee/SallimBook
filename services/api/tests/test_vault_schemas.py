@@ -286,3 +286,45 @@ def test_validation_error_string_omits_raw_input():
     with pytest.raises(ValidationError) as error:
         MemberWrappingInput.model_validate(payload)
     assert "PUBLIC SYNTHETIC BAD INPUT" not in str(error.value)
+
+
+def test_vault_openapi_requires_mutation_headers_and_has_no_retired_blob_route():
+    from fastapi import FastAPI
+
+    from sallimbook.vault.router import router
+
+    app = FastAPI()
+    app.include_router(router)
+    schema = app.openapi()
+    identifiers = []
+    for path, operations in schema["paths"].items():
+        assert "{key_version}" not in path and "retired" not in path
+        for method, operation in operations.items():
+            identifiers.append(operation["operationId"])
+            if method in {"post", "put", "delete"}:
+                headers = {
+                    item["name"]: item for item in operation["parameters"] if item["in"] == "header"
+                }
+                assert headers["Idempotency-Key"]["required"] is True
+                if path == "/api/v1/vault/initialize":
+                    assert "If-Match" not in headers
+                else:
+                    assert headers["If-Match"]["required"] is True
+    assert len(identifiers) == len(set(identifiers)) == 23
+    forbidden = {"pan", "expiry", "cvc", "cvv", "password", "recovery_code", "hvk", "device_key"}
+    for definition in schema["components"]["schemas"].values():
+        assert not forbidden.intersection(definition.get("properties", {}))
+
+
+def test_vault_database_constraint_names_do_not_alias_other_unique_indexes():
+    import sallimbook.models  # noqa: F401
+    from sallimbook.core.database import Base
+
+    names = []
+    for table in Base.metadata.tables.values():
+        if not (table.name.startswith("vault_") or table.name == "card_secret_envelopes"):
+            continue
+        names.extend(str(item.name) for item in table.constraints if item.name is not None)
+        names.extend(str(item.name) for item in table.indexes)
+    assert names and len(names) == len(set(names))
+    assert max(map(len, names)) <= 63
