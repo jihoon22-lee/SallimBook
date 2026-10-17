@@ -80,6 +80,8 @@ export const nativeFinance = {
   updateCard: (options: Parameters<SallimBookAuth["updateCard"]>[0]) => metadata(() => plugin.updateCard(options)),
   archiveCard: (options: Parameters<SallimBookAuth["archiveCard"]>[0]) => metadata(() => plugin.archiveCard(options)),
   deleteCard: (options: Parameters<SallimBookAuth["deleteCard"]>[0]) => metadata(() => plugin.deleteCard(options)),
+  getAssetComparison: (options: Parameters<SallimBookAuth["getAssetComparison"]>[0]) => metadata(() => plugin.getAssetComparison(options)),
+  getAssetTrends: (options: Parameters<SallimBookAuth["getAssetTrends"]>[0]) => metadata(() => plugin.getAssetTrends(options)),
   editAccountNumber: (options: { accountId: string; ifMatch: string }) => invoke(() => plugin.editAccountNumberUI(options)),
   showAccountNumber: (options: { accountId: string }) => invoke(() => plugin.showAccountNumberUI(options)),
   showAccountNumberWithPasskey: (options: { accountId: string }) => invoke(() => plugin.showAccountNumberWithPasskeyUI(options)),

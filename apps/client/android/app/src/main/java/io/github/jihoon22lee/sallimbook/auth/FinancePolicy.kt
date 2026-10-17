@@ -12,6 +12,7 @@ internal enum class FinanceOperation {
     LIST_INCOME, INCOME_SUMMARY, INCOME_DUPLICATE_CANDIDATES, GET_INCOME, INCOME_HISTORY,
     CREATE_INCOME, CORRECT_INCOME, VOID_INCOME, RETURN_INCOME, CONVERT_INCOME_PRECISION,
     LIST_CARDS, GET_CARD, CREATE_CARD, UPDATE_CARD, ARCHIVE_CARD, DELETE_CARD,
+    GET_ASSET_COMPARISON, GET_ASSET_TRENDS,
 }
 
 /** Constructed from named metadata commands, never from a JS URL, headers or encoded body. */
@@ -144,6 +145,7 @@ internal object FinancePolicy {
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
         if (CashflowPolicy.supports(operation)) return CashflowPolicy.prepare(operation, value)
         if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.prepare(operation, value)
+        if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
         val args = objectValue(value)
         val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
         val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
@@ -184,6 +186,7 @@ internal object FinancePolicy {
         if (CashflowPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (idempotencyKey != null) return false
         if (CardMetadataPolicy.httpAllowed(method, path, body, ifMatch)) return true
+        if (ComparisonPolicy.httpAllowed(method, path, body, ifMatch)) return true
         val uri = URI(path)
         if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path ||
             path.any { it.isWhitespace() || it.code < 32 }) false
@@ -286,6 +289,7 @@ internal object FinancePolicy {
         try {
             if (CashflowPolicy.supports(operation)) return CashflowPolicy.response(operation, request, status, value)
             if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.response(operation, request, status, value)
+            if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
             if (operation == FinanceOperation.DELETE_ASSET) {
                 if (status != 204 || value != null) invalid()
                 return null

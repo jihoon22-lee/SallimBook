@@ -7,7 +7,7 @@ const id = "00000000-0000-4000-8000-000000000001";
 const valueId = "00000000-0000-4000-8000-000000000002";
 const methods = ["getAssetMonth", "getAssetMonthRevision", "listAssetMonthRevisions", "createAssetMonthDraft", "updateAssetMonthValue",
   "synchronizeAssetMonthScope", "confirmAssetMonth", "reopenAssetMonth", "listIncome", "incomeSummary", "incomeDuplicateCandidates",
-  "getIncome", "incomeHistory", "createIncome", "correctIncome", "voidIncome", "returnIncome", "convertIncomePrecision", "listCards", "getCard", "createCard", "updateCard", "archiveCard", "deleteCard"];
+  "getIncome", "incomeHistory", "createIncome", "correctIncome", "voidIncome", "returnIncome", "convertIncomePrecision", "listCards", "getCard", "createCard", "updateCard", "archiveCard", "deleteCard", "getAssetComparison", "getAssetTrends"];
 
 async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "unavailable" = "success") {
   await page.route("**/__cashflow-bridge", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Synthetic bridge test</title>" }));
@@ -33,7 +33,7 @@ async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "
   await page.goto("/__cashflow-bridge");
 }
 
-test("24 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
+test("26 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
   await setup(page);
   const result = await page.evaluate(async ({ id, valueId }) => {
     const source = "/src/platform/nativeFinance.ts";
@@ -65,6 +65,8 @@ test("24 named metadata commands retain DTO values and mutation keys without web
       ["updateCard", { cardId: id, input: { settlement_account_id: null, alias: "합성 변경" }, ifMatch: mutation.ifMatch }],
       ["archiveCard", { cardId: id, input: { ended_on: "2026-01-31" }, ifMatch: mutation.ifMatch }],
       ["deleteCard", { cardId: id, ifMatch: mutation.ifMatch }],
+      ["getAssetComparison", { query: { to: "2026-01", from: null, asset_id: id, limit: 200 } }],
+      ["getAssetTrends", { query: { from: "2016-02", to: "2026-01", asset_id: id } }],
     ];
     const values = [];
     for (const [method, args] of cases) values.push(await nativeFinance[method](args));

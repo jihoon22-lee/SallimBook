@@ -161,6 +161,9 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun archiveCard(call: PluginCall) = finance(call, FinanceOperation.ARCHIVE_CARD)
     @PluginMethod fun deleteCard(call: PluginCall) = finance(call, FinanceOperation.DELETE_CARD)
 
+    @PluginMethod fun getAssetComparison(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_COMPARISON)
+    @PluginMethod fun getAssetTrends(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_TRENDS)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }

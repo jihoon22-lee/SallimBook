@@ -234,6 +234,11 @@ internal object CashflowPolicy {
         "verification_state" to choice("missing", "carried_unconfirmed", "verified"), "origin" to choice("manual", "carried"),
         "origin_revision_id" to nullable(id), "change_reason" to nullable(reason), "version" to positive)
 
+    // Comparison endpoints embed these same generated monthly schemas.
+    fun monthReference(value: Any?) = shape(value, referenceFields())
+    fun monthTotals(value: Any?) = shape(value, totalsFields())
+    fun monthValue(value: Any?) = shape(value, valueFields())
+
     fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
         if (status != routes.getValue(operation).status) invalid()
         if (routes.getValue(operation).path.startsWith("/api/v1/income")) return incomeResponse(operation, request, value)

@@ -86,6 +86,8 @@ export interface SallimBookAuth {
   updateCard(options: { cardId: string; input: components["schemas"]["CardPatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CardResponse"]>>>;
   archiveCard(options: { cardId: string; input: components["schemas"]["CardArchive"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CardResponse"]>>>;
   deleteCard(options: { cardId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  getAssetComparison(options: { query: operations["getAssetComparison"]["parameters"]["query"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetComparisonResponse"]>>>;
+  getAssetTrends(options: { query: operations["getAssetTrends"]["parameters"]["query"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetTrendResponse"]>>>;
   /** Number plaintext and ciphertext never appear in arguments or return values. */
   editAccountNumberUI(options: { accountId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "saved" | "deleted" | "cancelled" }>>;
   showAccountNumberUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
