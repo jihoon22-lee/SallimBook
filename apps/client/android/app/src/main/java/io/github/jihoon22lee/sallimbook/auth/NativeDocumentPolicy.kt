@@ -13,6 +13,7 @@ internal class NativeDocumentInfo(val id: String, val name: String, val mime: St
 /** Six public metadata commands; create and binary content are native file-screen operations only. */
 internal object NativeDocumentPolicy {
     val errorMessages = mapOf(
+        "DOCUMENT_UPLOAD_BUSY" to (503 to "다른 첨부파일을 처리하고 있어요. 잠시 후 목록을 확인해 주세요."),
         "INVALID_DOCUMENT_TARGET" to (422 to "첨부할 항목의 종류와 대상을 확인해 주세요."),
         "DOCUMENT_UNAVAILABLE" to (409 to "삭제된 첨부파일입니다."),
         "DOCUMENT_UPLOAD_EXPIRED" to (409 to "첨부 대기 시간이 끝났습니다. 목록을 확인한 뒤 다시 등록해 주세요."),

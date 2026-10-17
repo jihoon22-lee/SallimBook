@@ -33,6 +33,9 @@ export type NativeAccountPatch = Omit<components["schemas"]["AccountPatch"], "ac
 export type NativeFinanceResponse<T> = { status: number; body: T | components["schemas"]["ErrorResponse"] | null };
 
 export interface SallimBookAuth {
+  deleteAppliance(options: { applianceId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  deleteConsumable(options: { consumableId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  deleteApplianceConsumable(options: { linkId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   /** File bytes/URIs stay in native UI; createDocument is deliberately not a bridge command. */
   createDocumentLink(options: { input: components["schemas"]["DocumentLinkCreate"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentMutationReference"]>>>;
   endDocumentLink(options: { linkId: string; input: components["schemas"]["DocumentReason"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentMutationReference"]>>>;

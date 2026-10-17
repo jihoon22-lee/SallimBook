@@ -110,4 +110,14 @@ class NativeDocumentPolicyTest {
         bad(AuthCode.ACCESS_DENIED) { NativeDocumentPolicy.info(document + mapOf("state" to "pending", "stored_at" to null), id) }
         assertFalse(info.toString().contains("합성"))
     }
+    @Test fun documentErrorsKeepOnlyKnownStatusMatchedCodesAndLocalMessages() {
+        for ((code, detail) in NativeDocumentPolicy.errorMessages) {
+            val raw = mapOf("error" to mapOf("code" to code, "message" to "SYNTHETIC PRIVATE", "uri" to "content://synthetic/private"))
+            val safe = AuthPolicy.safeError(detail.first, raw, id)!!
+            assertEquals(code, (safe["error"] as Map<*, *>)["code"])
+            assertFalse(safe.toString().contains("SYNTHETIC PRIVATE"))
+            assertFalse(safe.toString().contains("content://"))
+            assertEquals("INTERNAL_ERROR", (AuthPolicy.safeError(500, raw, id)!!["error"] as Map<*, *>)["code"])
+        }
+    }
 }

@@ -46,6 +46,9 @@ function metadataOnly(input: NativeAccountCreate | NativeAccountPatch): void {
 
 /** Tokenless, generated-schema metadata operations. No URL, bearer token or raw body API. */
 export const nativeFinance = {
+  deleteAppliance: (options: Parameters<SallimBookAuth["deleteAppliance"]>[0]) => metadata(() => plugin.deleteAppliance(options)),
+  deleteConsumable: (options: Parameters<SallimBookAuth["deleteConsumable"]>[0]) => metadata(() => plugin.deleteConsumable(options)),
+  deleteApplianceConsumable: (options: Parameters<SallimBookAuth["deleteApplianceConsumable"]>[0]) => metadata(() => plugin.deleteApplianceConsumable(options)),
   createDocumentLink: (options: Parameters<SallimBookAuth["createDocumentLink"]>[0]) => metadata(() => plugin.createDocumentLink(options)),
   endDocumentLink: (options: Parameters<SallimBookAuth["endDocumentLink"]>[0]) => metadata(() => plugin.endDocumentLink(options)),
   listDocuments: (options: Parameters<SallimBookAuth["listDocuments"]>[0]) => metadata(() => plugin.listDocuments(options)),

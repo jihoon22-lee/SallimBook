@@ -195,6 +195,9 @@ internal object AuthPolicy {
         if (requestId == null || !uuid.matches(requestId)) return null
         val messages = mapOf(
             "INVALID_HOMECARE_DATE" to (422 to "실제 기록 날짜와 취소 날짜를 확인해 주세요."),
+            "APPLIANCE_IN_USE" to (409 to "연결 또는 사용 이력이 있는 가전입니다. 사용 종료로 보관해 주세요."),
+            "CONSUMABLE_IN_USE" to (409 to "연결 또는 재고 이력이 있는 소모품입니다. 사용 종료로 보관해 주세요."),
+            "APPLIANCE_CONSUMABLE_IN_USE" to (409 to "교체 이력이 있는 연결입니다. 연결을 비활성화해 보관해 주세요."),
             "INVALID_HOMECARE_INPUT" to (422 to "가전·소모품의 입력 항목과 날짜·주기를 확인해 주세요."),
             "APPLIANCE_UNAVAILABLE" to (422 to "사용 중인 가전을 선택해 주세요."),
             "CONSUMABLE_UNAVAILABLE" to (422 to "사용 중인 소모품을 선택해 주세요."),

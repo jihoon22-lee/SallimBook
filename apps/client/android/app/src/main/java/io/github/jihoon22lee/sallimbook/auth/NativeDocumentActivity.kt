@@ -223,6 +223,7 @@ class NativeDocumentActivity : AppCompatActivity() {
             try {
                 val selection = provider(request) { signal ->
                     val mime = contentResolver.getType(uri) ?: throw AuthFailure(AuthCode.INVALID_REQUEST)
+                    request.check()
                     val cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null, signal)
                         ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
                     cursor.use {

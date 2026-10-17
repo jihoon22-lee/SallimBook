@@ -4,6 +4,8 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import okhttp3.Call
+import okhttp3.EventListener
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,6 +17,12 @@ import org.json.JSONObject
 import org.json.JSONTokener
 
 internal fun documentHttpClient() = accountHttpClient().newBuilder()
+    // OkHttp 5.4 may follow GET 503/Retry-After:0 even with connection retries disabled.
+    .eventListener(object : EventListener() {
+        override fun followUpDecision(call: Call, networkResponse: Response, nextRequest: Request?) {
+            if (nextRequest != null) call.cancel()
+        }
+    })
     .callTimeout(NativeDocumentBytes.TRANSFER_MILLIS, TimeUnit.MILLISECONDS)
     .readTimeout(NativeDocumentBytes.TRANSFER_MILLIS, TimeUnit.MILLISECONDS)
     .writeTimeout(30, TimeUnit.SECONDS).build()
@@ -85,7 +93,7 @@ internal class NativeDocumentHttp(private val origin: String, private val client
         val type = response.body.contentType()
         if (type?.type != "application" || type.subtype != "json") throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         val buffer = ByteArray(4096)
-        val output = ByteArrayOutputStream()
+        val output = object : ByteArrayOutputStream() { fun wipe() { buf.fill(0); reset() } }
         var bytes: ByteArray? = null
         try {
             response.body.byteStream().use { stream ->
@@ -103,7 +111,7 @@ internal class NativeDocumentHttp(private val origin: String, private val client
             if (parser.nextClean() != 0.toChar()) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
             gate.check()
             return NativeHttpResponse(response.code, result, requestId(response))
-        } finally { buffer.fill(0); bytes?.fill(0); output.reset() }
+        } finally { buffer.fill(0); bytes?.fill(0); output.wipe() }
     }
     private fun jsonValue(value: Any?, depth: Int = 0): Any? {
         if (depth > 16) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)

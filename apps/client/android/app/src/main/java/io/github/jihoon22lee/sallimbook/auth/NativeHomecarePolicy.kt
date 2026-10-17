@@ -76,6 +76,9 @@ internal object NativeHomecarePolicy {
     private val statusQuery = pageQuery + mapOf("status" to choice("active", "ended", "all"))
     private val linkQuery = pageQuery + mapOf("appliance_id" to nullable(id), "consumable_id" to nullable(id))
     private val routes = mapOf(
+        FinanceOperation.DELETE_APPLIANCE to Route("DELETE", "/api/v1/appliances/{applianceId}", "", "", emptyMap(), true, false, 204),
+        FinanceOperation.DELETE_CONSUMABLE to Route("DELETE", "/api/v1/consumables/{consumableId}", "", "", emptyMap(), true, false, 204),
+        FinanceOperation.DELETE_APPLIANCE_CONSUMABLE to Route("DELETE", "/api/v1/appliance-consumables/{linkId}", "", "", emptyMap(), true, false, 204),
         FinanceOperation.LIST_APPLIANCES to Route("GET", "/api/v1/appliances", "", "ApplianceListResponse", statusQuery, false, false, 200),
         FinanceOperation.CREATE_APPLIANCE to Route("POST", "/api/v1/appliances", "ApplianceInput", "ApplianceResponse", emptyMap(), false, false, 201),
         FinanceOperation.GET_APPLIANCE to Route("GET", "/api/v1/appliances/{applianceId}", "", "ApplianceResponse", emptyMap(), false, false, 200),
@@ -264,6 +267,7 @@ internal object NativeHomecarePolicy {
         try {
             val route = routes[operation] ?: invalid()
             if (status != route.status) invalid()
+            if (status == 204) { if (value != null) invalid(); return null }
             val uri = URI(request.path)
             val parts = uri.path.split('/')
             val target = mutableMapOf<String, String>()

@@ -2,6 +2,11 @@ package io.github.jihoon22lee.sallimbook.auth
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import okhttp3.Authenticator
 import okhttp3.CookieJar
 import okhttp3.MediaType.Companion.toMediaType
@@ -44,6 +49,35 @@ class NativeDocumentHttpTest {
         assertFalse(client.followRedirects); assertFalse(client.followSslRedirects); assertFalse(client.retryOnConnectionFailure)
         assertNull(client.cache); assertTrue(client.interceptors.isEmpty()); assertTrue(client.networkInterceptors.isEmpty())
         assertEquals(180_000, client.callTimeoutMillis); assertEquals(180_000, client.readTimeoutMillis)
+    }
+    @Test fun serverRetryAfterZeroCannotTriggerASecondDownloadRequest() {
+        // A real loopback connection exercises OkHttp's follow-up engine; no credentials are sent.
+        ServerSocket(0, 2, InetAddress.getByName("127.0.0.1")).use { server ->
+            server.soTimeout = 1500
+            val requests = AtomicInteger()
+            val responder = thread(isDaemon = true, name = "synthetic-document-server") {
+                try {
+                    repeat(2) {
+                        server.accept().use { socket ->
+                            socket.soTimeout = 1500
+                            val reader = socket.getInputStream().bufferedReader()
+                            while (true) { val line = reader.readLine() ?: break; if (line.isEmpty()) break }
+                            requests.incrementAndGet()
+                            socket.getOutputStream().write("HTTP/1.1 503 Service Unavailable\r\nRetry-After: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                            socket.getOutputStream().flush()
+                        }
+                    }
+                } catch (_: SocketTimeoutException) { }
+                catch (_: java.io.IOException) { }
+            }
+            val request = Request.Builder().url("http://127.0.0.1:${server.localPort}/synthetic").build()
+            try {
+                documentHttpClient().newCall(request).execute().use { fail("A download follow-up was allowed") }
+            } catch (_: java.io.IOException) { }
+            responder.join(3000)
+            assertFalse(responder.isAlive)
+            assertEquals(1, requests.get())
+        }
     }
     @Test fun authenticatedDownloadChecksExactMetadataAndRetainsNativeBytesOnly() {
         var calls = 0

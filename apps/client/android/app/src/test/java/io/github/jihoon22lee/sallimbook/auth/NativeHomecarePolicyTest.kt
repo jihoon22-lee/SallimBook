@@ -70,10 +70,13 @@ class NativeHomecarePolicyTest {
         FinanceOperation.CREATE_CONSUMABLE_REPLACEMENT to change(replacementInput) + mapOf("linkId" to linkId),
         FinanceOperation.GET_CONSUMABLE_REPLACEMENT to mapOf("linkId" to linkId, "replacementId" to replacementId),
         FinanceOperation.CANCEL_CONSUMABLE_REPLACEMENT to change(cancelInput) + mapOf("linkId" to linkId, "replacementId" to replacementId),
-        FinanceOperation.GET_HOMECARE_STATUS to emptyMap())
+        FinanceOperation.GET_HOMECARE_STATUS to emptyMap(),
+        FinanceOperation.DELETE_APPLIANCE to mapOf("applianceId" to applianceId, "ifMatch" to tag),
+        FinanceOperation.DELETE_CONSUMABLE to mapOf("consumableId" to consumableId, "ifMatch" to tag),
+        FinanceOperation.DELETE_APPLIANCE_CONSUMABLE to mapOf("linkId" to linkId, "ifMatch" to tag))
 
-    @Test fun allTwentyOneCommandsUseFixedPathsAndExactHeaders() {
-        assertEquals(21, commands().size)
+    @Test fun allTwentyFourCommandsUseFixedPathsAndExactHeaders() {
+        assertEquals(24, commands().size)
         for ((op, args) in commands()) {
             val r = request(op, args)
             assertTrue(op.name, FinancePolicy.metadataHttpAllowed(r.method, r.path, r.body, r.ifMatch, r.idempotencyKey))
@@ -87,9 +90,10 @@ class NativeHomecarePolicyTest {
             } else bad { request(op, args + mapOf("ifMatch" to tag)) }
         }
     }
-    @Test fun allTwentyOneResponsesFollowActualContractWithoutDroppingNullsOrZeroes() {
+    @Test fun allTwentyFourResponsesFollowActualContractWithoutDroppingNullsOrZeroes() {
         for ((op, args) in commands()) {
             val body = when (op) {
+                FinanceOperation.DELETE_APPLIANCE, FinanceOperation.DELETE_CONSUMABLE, FinanceOperation.DELETE_APPLIANCE_CONSUMABLE -> null
                 FinanceOperation.LIST_APPLIANCES -> page(appliance())
                 FinanceOperation.CREATE_APPLIANCE, FinanceOperation.GET_APPLIANCE, FinanceOperation.UPDATE_APPLIANCE -> appliance()
                 FinanceOperation.LIST_CONSUMABLES -> page(consumable())
@@ -103,10 +107,10 @@ class NativeHomecarePolicyTest {
                 FinanceOperation.GET_HOMECARE_STATUS -> page(statusItem()) + mapOf("as_of" to "2026-02-28")
                 else -> reference(op == FinanceOperation.CREATE_CONSUMABLE_REPLACEMENT)
             }
-            val status = if (op.name.startsWith("CREATE")) 201 else 200
+            val status = if (op.name.startsWith("CREATE")) 201 else if (op.name.startsWith("DELETE")) 204 else 200
             assertEquals(op.name, body, response(op, args, body, status))
             bad(AuthCode.ACCESS_DENIED) { response(op, args, body, 202) }
-            bad(AuthCode.ACCESS_DENIED) { response(op, args, body + mapOf("token" to "synthetic"), status) }
+            bad(AuthCode.ACCESS_DENIED) { response(op, args, (body ?: emptyMap()) + mapOf("token" to "synthetic"), status) }
         }
     }
     @Test fun quantitiesAreBoundedIntegersAndMoneyRemainsDecimalStrings() {
@@ -231,7 +235,9 @@ class NativeHomecarePolicyTest {
         for (suffix in listOf("?limit=01", "?limit=201", "?limit=1&limit=2", "?status=unknown", "?cursor=$consumableId%2f", "#fragment", "/../appliances"))
             assertFalse(FinancePolicy.metadataHttpAllowed("GET", path + suffix, null, null))
         assertFalse(FinancePolicy.metadataHttpAllowed("GET", "https://synthetic.invalid$path", null, null))
-        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", "$path/$consumableId", null, tag))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", "$path/$consumableId", null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", "$path/$consumableId", emptyMap<String, Any?>(), tag))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", "$path/$consumableId", null, tag, "unexpected"))
         assertFalse(FinancePolicy.metadataHttpAllowed("PATCH", "$path/$consumableId", mapOf("name" to "합성"), tag, "unexpected"))
         assertFalse(FinancePolicy.metadataHttpAllowed("POST", "$path/$consumableId/stock-movements", movementInput, null, "synthetic"))
         assertFalse(FinancePolicy.metadataHttpAllowed("POST", "$path/$consumableId/stock-movements", movementInput, tag, "bad key"))
@@ -248,7 +254,8 @@ class NativeHomecarePolicyTest {
     @Test fun domainErrorsKeepKnownCodesWithoutServerTextOrSubmittedValues() {
         for ((code, status) in listOf("INSUFFICIENT_STOCK" to 409, "STOCK_MOVEMENT_ALREADY_REVERSED" to 409,
             "INVALID_HOMECARE_DATE" to 422, "STOCK_LIMIT_EXCEEDED" to 422, "CONSUMABLE_UNIT_IN_USE" to 409,
-            "REPLACEMENT_CANCEL_REQUIRED" to 409, "APPLIANCE_CONSUMABLE_UNAVAILABLE" to 422)) {
+            "REPLACEMENT_CANCEL_REQUIRED" to 409, "APPLIANCE_CONSUMABLE_UNAVAILABLE" to 422,
+            "APPLIANCE_IN_USE" to 409, "CONSUMABLE_IN_USE" to 409, "APPLIANCE_CONSUMABLE_IN_USE" to 409)) {
             val raw = mapOf("error" to mapOf("code" to code, "message" to "SYNTHETIC PRIVATE", "details" to mapOf("note" to "SYNTHETIC PRIVATE")))
             val safe = AuthPolicy.safeError(status, raw, householdId)!!
             assertEquals(code, (safe["error"] as Map<*, *>)["code"])

@@ -396,8 +396,8 @@ TS 본문/응답/조회 조건은 생성 `components`와 `operations`를 참조�
 
 ## 18. 가전·소모품·재고 (SB-024~027, Refs #33~36)
 
-R-03/R-16/R-17/R-19/R-22의 생성 API 21개 operationId를 같은 이름의 `nativeFinance` 명령으로 연결했다.
-가전·소모품·기기별 연결은 목록/생성/상세/수정을 제공하고, 입고·재고 동작과 교체는 각각
+R-03/R-16/R-17/R-19/R-22의 생성 API 24개 operationId를 같은 이름의 `nativeFinance` 명령으로 연결했다.
+가전·소모품·기기별 연결은 목록/생성/상세/수정/삭제를 제공하고, 입고·재고 동작과 교체는 각각
 부모별 목록/생성/상세/취소를 제공한다. 오늘 기준 상태는 `getHomecareStatus`로 조회한다.
 경로 인자는 `applianceId`, `consumableId`, `linkId`, `movementId`, `replacementId`이며,
 TS 입력·응답·조회 조건은 생성 `components`와 `operations`를 참조한다.
@@ -408,6 +408,12 @@ TS 입력·응답·조회 조건은 생성 `components`와 `operations`를 참�
 float·bool·숫자 문자열을 수량으로 변환하지 않는다. 금액은 null·0원·최대 20자리 십진 문자열을
 그대로 보존한다. 임의 자원 ID 변경과 빈 patch, 잘못된 날짜/주기, 입출고 방향, 조정 사유를 검사한다.
 구매 URL은 자격증명 없는 HTTPS 메타데이터로 검증하며 native 네트워크 요청 경로로 사용하지 않는다.
+
+가전·소모품·연결 삭제는 `deleteAppliance`, `deleteConsumable`, `deleteApplianceConsumable`을
+사용한다. 해당 자원의 `ifMatch`만 요구하고 본문·멱등키를 받지 않으며 204 빈 응답을 null로
+반환한다. 연결·재고·교체 이력 때문에 삭제할 수 없는 경우 서버의 `APPLIANCE_IN_USE`,
+`CONSUMABLE_IN_USE`, `APPLIANCE_CONSUMABLE_IN_USE` 409 코드를 보존하고 사용 종료 또는
+연결 비활성화를 안내한다. 이력 삭제나 자동 종료로 우회하지 않는다.
 
 메타데이터 수정은 해당 가전·소모품·연결의 `ifMatch`를 요구한다. 재고/교체 생성·취소의
 `ifMatch`는 공용 **소모품 버전**이며 `idempotencyKey`도 필수다. 교체 생성은 별도 `link_version`과
@@ -512,6 +518,23 @@ webServer만 18754로 바꾼 임시 config를 사용했고 완료 후 제거했�
 
 ```bash
 TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test documents-native-bridge.spec.ts homecare-native-bridge.spec.ts insurance-events-native-bridge.spec.ts insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.documents-native.local.config.ts --workers=2
+```
+
+후속 계약 반영에서 homecare 삭제 3개 명령과 `DOCUMENT_UPLOAD_BUSY` 503의 고정 문구를
+추가했다. OkHttp 5.4는 `retryOnConnectionFailure(false)`여도 GET의 `503 / Retry-After: 0`에
+후속 요청을 만들 수 있어 문서 전용 EventListener에서 후속 요청 결정 시 call을 취소한다.
+[고정 버전의 후속 요청 구현](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RetryAndFollowUpInterceptor.kt)과
+[공식 EventListener 계약](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/EventListener.kt)을 대조했다.
+자격증명 없는 합성 loopback 서버에서 해당 응답 뒤 실제 HTTP 요청이 한 번뿐임을 검증했다.
+오류 JSON 내부 바이트 버퍼도 지우고, 제공자 MIME 조회 뒤 취소 여부를 다시 확인한다.
+
+후속 `pnpm typecheck`, `pnpm android:sync`와 위 Gradle JVM/debug APK/release Kotlin 명령은
+모두 통과했다. 전체 JVM **226개**는 실패·오류·건너뜀 0이며 새 HTTP 시험 1개와 문서 오류
+정제 시험 1개를 포함한다. homecare 24개 명령 전달을 포함한 브리지 **22개**와 문서 **24개**,
+총 **46개**를 아래 명령으로 다시 통과했다. 임시 config 제거와 18754 포트 반환을 확인했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test homecare-native-bridge.spec.ts documents-native-bridge.spec.ts --config playwright.documents-native.local.config.ts --workers=2
 ```
 
 실제 Galaxy의 파일 제공자·URI 권한·선택기/회전/잠금·부분 저장·취소 시험,
