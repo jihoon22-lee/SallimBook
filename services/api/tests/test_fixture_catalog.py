@@ -151,7 +151,9 @@ def test_concurrent_replacements_contend_for_one_household_consumable():
         link = links[request["appliance_consumable_id"]]
         assert link["appliance_id"] == request["appliance_id"]
         assert resources[link["appliance_id"]]["household_id"] == inputs["household_id"]
-        actor = next(row for row in IDENTITIES["members"] if row["id"] == request["actor_member_id"])
+        actor = next(
+            row for row in IDENTITIES["members"] if row["id"] == request["actor_member_id"]
+        )
         assert actor["household_id"] == inputs["household_id"]
     assert inputs["initial_stock"] == 1 and expected["final_stock"] == 0
 
