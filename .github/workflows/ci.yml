@@ -1,0 +1,199 @@
+name: CI
+
+# Fork PRs run only on disposable GitHub-hosted runners, without repository secrets.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: "true"
+
+jobs:
+  docs:
+    name: Documentation and tooling tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - name: Validate documentation
+        run: uv run --no-project python scripts/validate_docs.py
+      - name: Test repository tools
+        run: uv run --no-project python -m unittest discover -s tests -v
+
+  api-unit:
+    name: API lint and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      UV_FROZEN: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - run: uv sync --project services/api --frozen
+      - run: uv run --project services/api ruff check services/api/src services/api/tests
+      # PostgreSQL tests are exercised separately with an explicit disposable test DB.
+      - run: uv run --project services/api pytest services/api/tests -m 'not database'
+
+  types-contract:
+    name: Type checks and generated API contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      UV_FROZEN: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: "9.15.9"
+          run_install: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --project services/api --frozen
+      - run: pnpm api:generate
+      - name: Require committed OpenAPI and generated TypeScript updates
+        run: git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  api-postgres:
+    name: PostgreSQL migrations and API integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c
+        env:
+          POSTGRES_USER: sallimbook_ci
+          # Synthetic credentials exist only for this disposable CI service.
+          POSTGRES_PASSWORD: sallimbook_ci_only
+          POSTGRES_DB: sallimbook_ci_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U sallimbook_ci -d sallimbook_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SALLIMBOOK_ENVIRONMENT: test
+      UV_FROZEN: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - run: uv sync --project services/api --frozen
+      - name: Select the disposable PostgreSQL service
+        env:
+          SALLIMBOOK_CI_PG_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          printf '%s\n' \
+            "SALLIMBOOK_DATABASE_URL=postgresql+psycopg://sallimbook_ci:sallimbook_ci_only@127.0.0.1:$SALLIMBOOK_CI_PG_PORT/sallimbook_ci_test" \
+            "SALLIMBOOK_TEST_DATABASE_URL=postgresql+psycopg://sallimbook_ci:sallimbook_ci_only@127.0.0.1:$SALLIMBOOK_CI_PG_PORT/sallimbook_ci_test" >> "$GITHUB_ENV"
+      - name: Apply database migrations
+        run: uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+      - name: Run API and PostgreSQL constraint tests
+        run: uv run --project services/api pytest services/api/tests
+      - name: Check model and migration agreement
+        run: uv run --project services/api alembic -c services/api/alembic.ini check
+      - name: Verify migrations can be reversed and reapplied
+        run: |
+          uv run --project services/api alembic -c services/api/alembic.ini downgrade base
+          uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+
+  web-smoke:
+    name: Desktop and Android viewport web smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: "9.15.9"
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sallimbook/client exec playwright install --with-deps chromium
+      - run: pnpm test:web
+
+  android:
+    name: Android debug compile and available unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: "9.15.9"
+          run_install: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: pnpm install --frozen-lockfile
+      - name: Select a dedicated Android SDK directory
+        run: |
+          printf '%s\n' \
+            "ANDROID_HOME=$RUNNER_TEMP/sallimbook-android-sdk" \
+            "ANDROID_SDK_ROOT=$RUNNER_TEMP/sallimbook-android-sdk" >> "$GITHUB_ENV"
+      - name: Install checksum-pinned Android command line tools and SDK
+        run: uv run --no-project python scripts/setup_android_sdk.py --sdk-root "$ANDROID_HOME" --accept-licenses
+      # NO-SOURCE means no native unit cases exist yet, not that device security passed.
+      # The debug APK remains on this disposable runner; no signing secrets or uploads.
+      - run: uv run --no-project pnpm android:build

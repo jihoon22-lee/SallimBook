@@ -90,8 +90,8 @@
       "git_sha1": "42ce0c53d8174abc20b12b4cb913336cc3ad4311"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "a9d764228ed99f1ab8e9c2e73686d8599c46d5947ff3d2c53670093346b2f5e9",
-      "git_sha1": "b4878d3bffe5582ae05cc7e9ee890806f1621c30"
+      "sha256": "d0734f39da733c4b7f3c7bd0ccd1600f3c6acf1c00a627af620ac202067c48ec",
+      "git_sha1": "e35e5675bc1ce0e08852a29489ceea412e5ecc58"
     },
     "docs/deployment-backup-operations.md": {
       "sha256": "2df325fa1228bd019d5c95b9a7e59481b02cc64fb23317d37528afd896a723e6",
@@ -208,6 +208,10 @@
     "scripts/test_database.py": {
       "sha256": "6731bb7e782b02d2cbf6304c5a6a199d5dd1596899f37256af4455727b5cb3cf",
       "git_sha1": "9ec9349b820b073112d6beafae9118f5405d6d0d"
+    },
+    "packages/test-fixtures/README.md": {
+      "sha256": "31615721cdf00323743ee191245f7e643e28e8cedf15e32006a478cb49a88958",
+      "git_sha1": "b1b1dc5de1b9a4d0123b0ce1013991511582446b"
     }
   }
 }

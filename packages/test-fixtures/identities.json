@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "uuid_namespace": "d1d03809-0bb8-5abc-94b5-6608acd32aca",
+  "households": [
+    {
+      "id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "label": "H1",
+      "name": "합성 가계 H1",
+      "timezone": "Asia/Seoul",
+      "base_currency": "KRW"
+    },
+    {
+      "id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
+      "label": "H2",
+      "name": "합성 가계 H2",
+      "timezone": "Asia/Seoul",
+      "base_currency": "KRW"
+    }
+  ],
+  "users": [
+    {
+      "id": "3f68bcda-4755-5264-9efc-5862371e4350",
+      "label": "A",
+      "display_name": "합성 구성원 A"
+    },
+    {
+      "id": "ba84a1d3-c43f-5164-ba8d-d44576536678",
+      "label": "B",
+      "display_name": "합성 구성원 B"
+    },
+    {
+      "id": "b2ee9403-907d-55bb-8185-694b18c578e9",
+      "label": "C",
+      "display_name": "합성 구성원 C"
+    },
+    {
+      "id": "c822e32b-51b2-5b7c-aacf-c9adc93210f6",
+      "label": "D",
+      "display_name": "합성 구성원 D"
+    }
+  ],
+  "members": [
+    {
+      "id": "42046756-3340-568c-9b5b-4e6db748ac1b",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "user_id": "3f68bcda-4755-5264-9efc-5862371e4350",
+      "status": "active"
+    },
+    {
+      "id": "f23bf323-e15d-5347-8bab-1b50c53e2b31",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "user_id": "ba84a1d3-c43f-5164-ba8d-d44576536678",
+      "status": "active"
+    },
+    {
+      "id": "7958dca9-f3b8-5e18-a701-91fb236774d0",
+      "household_id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
+      "user_id": "b2ee9403-907d-55bb-8185-694b18c578e9",
+      "status": "active"
+    },
+    {
+      "id": "3477dba5-2744-5e8e-b40a-9428a4ccec1f",
+      "household_id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
+      "user_id": "c822e32b-51b2-5b7c-aacf-c9adc93210f6",
+      "status": "active"
+    }
+  ],
+  "resources": [
+    {
+      "id": "1dbdc3f1-53fb-55b0-a411-1444f652bf8f",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "asset",
+      "label": "합성 H1 asset"
+    },
+    {
+      "id": "37219348-1b94-5df6-b313-2de259df87e3",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "insurance_case",
+      "label": "합성 H1 insurance_case"
+    },
+    {
+      "id": "b5e3f971-5bab-59fe-b8b1-849eb3917564",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "appliance",
+      "label": "합성 H1 appliance"
+    },
+    {
+      "id": "dcdc7c59-40af-5fe9-b5d8-0febfadddd61",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "document",
+      "label": "합성 H1 document"
+    },
+    {
+      "id": "42712b0d-0ab4-5b0f-94ec-c36c029a75c8",
+      "household_id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
+      "kind": "asset",
+      "label": "합성 H2 asset"
+    },
+    {
+      "id": "128b6215-9fc6-50fa-a7be-297c45311744",
+      "household_id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
+      "kind": "insurance_case",
+      "label": "합성 H2 insurance_case"
+    },
+    {
+      "id": "ba03c923-aa4c-5152-8433-89c0a4057685",
+      "household_id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
+      "kind": "appliance",
+      "label": "합성 H2 appliance"
+    },
+    {
+      "id": "a974d244-1eb4-5c1c-b427-e37c705c7fe5",
+      "household_id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
+      "kind": "document",
+      "label": "합성 H2 document"
+    }
+  ]
+}
