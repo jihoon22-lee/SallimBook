@@ -160,3 +160,48 @@ footer { font-size: .75rem; color: var(--muted); padding-top: 32px; }
 .unverified-chip { color: #754800; background: #fff0ce; }
 .month-history { padding-left: 1.2rem; }
 .month-history li + li { margin-top: 1rem; }
+
+.comparison-numbers dd { font-variant-numeric: tabular-nums; font-size: 1.12rem; overflow-wrap: anywhere; }
+.comparison-observations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.comparison-observations > section { min-width: 0; padding: 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; }
+.observation-grid { grid-template-columns: 1fr; }
+.date-warning { border-left: 4px solid #b87920; padding-left: 0.9rem; margin: 1rem 0; }
+.asset-trend-chart { width: 100%; height: auto; min-height: 150px; overflow: visible; }
+.chart-axis { stroke: #9baca5; stroke-width: 1; }
+.chart-line { stroke: #34846a; stroke-width: 3; stroke-linejoin: round; }
+.chart-point { fill: #34846a; stroke: white; stroke-width: 2; cursor: pointer; }
+.chart-point:focus { outline: none; stroke: #aa6818; stroke-width: 4; }
+.chart-gap { stroke: #9baca5; stroke-width: 2; stroke-dasharray: 2 2; }
+.chart-label { fill: currentColor; font-size: 12px; }
+.chart-inspector { border-top: 1px solid var(--border); padding-top: 1rem; }
+@media (max-width: 640px) { .comparison-observations { grid-template-columns: 1fr; } }
+
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.form-grid > * { min-width: 0; }
+.form-field label { display: grid; gap: 0.45rem; }
+.card fieldset { min-width: 0; padding: 0; border: 0; margin: 1rem 0; }
+.card legend { font-weight: 650; margin-bottom: 0.8rem; }
+.review-panel { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border); border-left: 4px solid #367a67; border-radius: 0.6rem; }
+.review-panel ul { padding-left: 1.2rem; }
+.review-panel li { margin: 0.6rem 0; overflow-wrap: anywhere; }
+.review-panel details { padding: 0.65rem 0; }
+.review-panel summary { cursor: pointer; font-weight: 600; }
+.conversion-row { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+.finance-list > li > h3, .metadata-grid dd { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.payment-calendar-weekdays, .payment-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .25rem; }
+.payment-calendar-weekdays { text-align: center; font-weight: 600; }
+.payment-calendar { padding: 0; list-style: none; }
+.payment-calendar > li { min-width: 0; padding: .5rem; border: 1px solid var(--border); border-radius: .5rem; overflow-wrap: anywhere; }
+.payment-calendar time { display: block; font-weight: 600; margin-bottom: .5rem; }
+.payment-calendar ul { list-style: none; margin: 0; padding: 0; }
+.payment-calendar ul li + li { margin-top: .75rem; }
+.payment-calendar ul span { display: block; font-size: .8rem; }
+.payment-calendar-weekday, .payment-calendar-padding { visibility: hidden; }
+@media (max-width: 700px) {
+  .payment-calendar { display: block; }
+  .payment-calendar > li { margin-bottom: .5rem; }
+  .payment-calendar-weekdays, .payment-calendar-padding { display: none; }
+  .payment-calendar-weekday { visibility: visible; }
+}

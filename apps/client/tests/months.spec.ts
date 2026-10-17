@@ -120,10 +120,8 @@ test("pagination refuses mixed revisions then loads one complete snapshot on exp
   expect(state.writes).toHaveLength(0);
 });
 
-test("invalid dates fail client validation and native month UI has no web fallback", async ({ page }) => {
+test("invalid dates and invalid months fail client validation", async ({ page }) => {
   const state = await mockMonths(page); const row = state.record!.values[0]!;
   for (const date of ["2025-02-30", "2025-03-01", "9999-02-01"]) expect(valueInput(uid(91), row, { mode: "amount", amount: "0", asOf: date, reason: "" }, "2025-02")).toBeNull();
   await page.goto("/assets/months/2025-13"); await expect(page.getByRole("heading", { name: "월을 확인해 주세요", exact: true })).toBeVisible(); expect(state.reads).toHaveLength(0);
-  await page.addInitScript(() => Object.assign(window, { CapacitorCustomPlatform: { name: "android" }, Capacitor: { PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "request"].map((name) => ({ name, rtype: "promise" })) }], nativePromise: async (_plugin: string, method: string) => method === "getSession" ? { ok: true, value: { available: true, authenticated: true } } : { ok: true, value: { status: 200, body: { user_id: "00000000-0000-4000-8000-000000000001", member_id: "00000000-0000-4000-8000-000000000002", household_id: "00000000-0000-4000-8000-000000000003", display_name: "합성 월 앱 구성원", role: "owner" } } } } }));
-  await page.goto("/assets/months/2025-02"); await expect(page.getByRole("heading", { name: "앱의 월 기록 연결 준비 중", exact: true })).toBeVisible(); expect(state.reads).toHaveLength(0); expect(state.writes).toHaveLength(0);
 });

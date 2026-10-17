@@ -7,7 +7,7 @@ async function nativeFinanceMock(page: Page, scenario: "normal" | "conflict" | "
   await page.addInitScript(({ account, household, scenario }) => {
     const state = { account, calls: [] as { method: string; args: Record<string, unknown> }[], http: 0, accountGets: 0, editOnce: true };
     Object.assign(window, { __financeNative: state, CapacitorCustomPlatform: { name: "android" }, Capacitor: {
-      PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "request", "listAssets", "getAsset", "createAsset", "updateAsset", "archiveAsset", "listAccounts", "getAccount", "createAccount", "updateAccount", "editAccountNumberUI", "showAccountNumberUI", "showAccountNumberWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })).concat([{ name: "addListener", rtype: "callback" }, { name: "removeListener", rtype: "promise" }]) }],
+      PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "request", "getAssetComparison", "getAssetTrends", "listAssets", "getAsset", "createAsset", "updateAsset", "archiveAsset", "listAccounts", "getAccount", "createAccount", "updateAccount", "editAccountNumberUI", "showAccountNumberUI", "showAccountNumberWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })).concat([{ name: "addListener", rtype: "callback" }, { name: "removeListener", rtype: "promise" }]) }],
       nativeCallback: () => "synthetic-lock-listener",
         nativePromise: async (_plugin: string, method: string, args: Record<string, unknown> = {}) => {
         if (method === "removeListener") return;
@@ -15,6 +15,11 @@ async function nativeFinanceMock(page: Page, scenario: "normal" | "conflict" | "
         if (method === "getSession") return ok({ available: true, authenticated: true });
         if (method === "request" && args.path === "/api/v1/me") return metadata(household[0]);
         if (method === "request" && args.path === "/api/v1/household/members") return metadata(household);
+        if (method === "getAssetComparison") {
+          const query = args.query as { from: string; to: string }; const period = (month: string) => ({ month, state: "missing", revision: null, confirmed_at: null, totals: null, dates: { non_month_end_asset_ids: [], missing_date_asset_ids: [], mixed_dates: false } });
+          return metadata({ from_month: query.from, to_month: query.to, filters: {}, state: "current_missing", previous: period(query.from), current: period(query.to), total_delta_krw: null, common_scope_delta_krw: null, change_percent: null, change_percent_unavailable_reason: "current_missing", scope_changed: null, added_asset_ids: [], removed_asset_ids: [], changed_share_asset_ids: [], item_count: 0, items: [], next_cursor: null });
+        }
+        if (method === "getAssetTrends") { const query = args.query as { from: string; to: string }; return metadata({ from_month: query.from, to_month: query.to, filters: {}, series_kind: "asset_owned_amount", points: [] }); }
         if (method === "listAccounts") return metadata({ items: [state.account], next_cursor: null });
         if (method === "getAccount") { state.accountGets++; return metadata(state.account); }
         if (method === "listAssets") return metadata({ items: [state.account.asset], next_cursor: null });

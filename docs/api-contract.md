@@ -136,7 +136,7 @@ draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `
 `REVISION_CONFLICT`, 범위 재생성으로 행 UUID가 바뀌면 `VALUE_CONFLICT`, 기존 행 버전 충돌이면 `VERSION_CONFLICT`로 409를 반환한다.
 포함된 항목이 미입력이면 해당 합계는 null이다. 전월 복사값은 숫자를 보여도 `provisional=true`이고 확정할 수 없다.
 확정할 때 `acknowledge_non_month_end_dates`, `acknowledge_scope_change`로 표시된 차이를 명시 확인한다.
-웹 월 입력·확정·정정·과거 조회 화면을 연결했다. Android 월 adapter와 비교·추이·홈 연결은 후속 변경에서 진행한다.
+웹과 Android의 월 입력·확정·정정·과거 조회 화면, 비교·추이·홈 요약을 같은 월 기록에 연결했다. Android는 네이티브 인증 adapter를 사용한다.
 
 ### 9) 자산 비교·추이 (SB-013)
 
@@ -164,6 +164,9 @@ draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `
 문자열로 반환한다. 0원/음수 기준은 null과 zero_previous_total/negative_previous_total 사유를 반환한다.
 원 단위 증감은 유지한다. 증감률은 투자 수익률이나 저축률이 아니다.
 각 월의 월말 아닌 기준일·미입력 기준일 ID와 혼합 날짜 여부도 반환한다.
+일반 조회의 날짜 진단은 필터에 맞는 합계 포함 항목만 대상으로 한다. `asset_id`를 명시하면
+모든 필터에 맞는 해당 항목의 합계 제외 관측값도 날짜 진단에 포함한다. 금액 합계에는 계속 제외한다.
+날짜 진단은 작성/정정/확정 상태와 무관하게 제공하며, 서로 다른 월의 기준일을 한 달의 혼합 날짜로 묶지 않는다.
 
 추이는 missing/draft/reopened/confirmed 기록 상태와 missing_month/missing_item/outside_filter/
 missing_value/unconfirmed/verified 금액 상태를 구분한다. `observed_amount_krw`는 현재 관찰값,
@@ -188,7 +191,7 @@ missing_value/unconfirmed/verified 금액 상태를 구분한다. `observed_amou
 계좌·구성원은 가계 FK와 API 권한을 함께 검증한다. 수입·반환 입력은 자산 월 스냅샷이나 계좌 잔액을 자동으로 변경하지 않는다.
 `editable`/`voidable`은 현재 상세·목록·중복 후보 조회에서 활성 반환까지 반영한 작업 가능 표시다. 반환을 모두 무효화하면 다시 허용된다. 변경 응답(재전송 포함)·전환 결과·과거 이력은 불변 영수증이므로 두 값이 항상 false이며, 작업 전 현재 상세를 조회한다. 현재 조회는 가계 잠금 안에서 원본과 반환 상태를 읽고 목록의 반환 상태는 일괄 조회한다.
 
-목록·이력은 cursor를 지원하고 요약은 근로·부수입과 실제 보험금 유입/반환을 분리한다. 웹/Android 수입 화면 연결은 후속 client 변경에서 진행한다.
+목록·이력은 cursor를 지원하고 요약은 근로·부수입과 실제 보험금 유입/반환을 분리한다. 웹/Android 수입 화면은 생성 계약의 10개 동작에 연결되며 변경 후 현재 상세를 다시 조회한다. [수입·고정 납부·카드 UI 검증 기록](testing/cashflow-client.md)을 따른다.
 
 ### 10) 카드 일반정보와 결제수단 (SB-017)
 
@@ -347,6 +350,16 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
 
+### SB-018 결제수단 연결 조회와 종료 확인
+
+`GET /api/v1/cards/{resource_id}/payment-links`와 `GET /api/v1/accounts/{resource_id}/payment-links`는 현재·미래 규칙 버전, 미납/부분 납부 회차와 연결 카드를 각각 count/cursor 페이지로 반환한다. `as_of_date`는 기본 서울 오늘이며 종료 화면에서는 선택한 종료일을 전달한다. 카드 승인 계획과 계좌 직접 납부 계획을 구분하고, 응답은 `registered_recurring_only` 및 `account_withdrawal_total_available=false`로 전체 카드대금 출금액을 알 수 없음을 명시한다.
+
+카드 PATCH/archive 및 계좌에 연결된 자산 PATCH/archive에서 새 종료일을 저장할 때 서버는 가계 잠금 안에서 연결을 다시 읽는다. 영향이 있으면 `closure_ack=true`와 조회에서 받은 `usage_digest`가 필요하며, 누락은 409 `PAYMENT_LINK_CONFIRMATION_REQUIRED`, 조회 이후 내용·버전·종료일 변경은 409 `PAYMENT_LINKS_CHANGED`다. digest는 페이지 밖의 연결까지 포함하며 권한 증명이 아니다. 종료일을 바꾸면 다시 조회한다. 확인 필드만 보낸 PATCH는 거부한다. 확인 필드는 DB·감사 변경 필드 목록에 저장하지 않는다.
+
+기존에 종료된 항목의 일반 메타데이터 수정에는 다시 확인을 요구하지 않는다. 종료일을 다른 날짜로 바꾸면 다시 확인한다. 과거 규칙·회차·현금 기록은 자동 이동하거나 삭제하지 않으며, 결제수단 교체는 사용자가 규칙 변경 또는 카드 납부계좌 수정으로 명시한다.
+
+웹/Android 화면은 종료일 기준 모든 페이지를 읽고 같은 digest·자원 버전·총건수를 확인한 뒤 명시 확인을 요구한다. 연결 변경409에서는 작성한 종료일을 유지하고 내역을 다시 읽으며 이전 확인을 재사용하지 않는다. Android 네이티브 경로도 확인 여부와 digest를 함께 전달한다.
+
 ### SB-019/SB-020 보험계약·독립 사건·진료 트리
 
 보험계약은 `/api/v1/insurance/policies`의 생성/목록과 `/{policy_id}`의 상세/PATCH로 관리한다. 계약·보장·납입 시작/종료일을 각각 저장하고, 보장은 `/{policy_id}/coverages` 목록/생성 및 `/{coverage_id}` PATCH로 관리한다. 금액 미입력과 0원을 구분한다. 정책 상태는 active/ended/lapsed이며 과거 계약은 보존한다.
@@ -396,6 +409,10 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 목록의 `status`는 active/ended/all이며 기본 active다. 가전 구매일·보증기한·구매액 미입력과 0원은 구분한다.
 금액은 십진 문자열, 수량은 0~1,000,000 범위의 엄격한 정수다. 가전 구매액과 재고 입고액은 자산·현금 기록을 자동 생성하지 않는다.
 수정은 `If-Match`, 상태 종료는 `ended_on` PATCH를 사용하며 이력을 실제 삭제하지 않는다.
+참조 없는 오등록은 DELETE /appliances/{id}, /consumables/{id}, /appliance-consumables/{id}로
+삭제한다. 해당 metadata If-Match가 필요하고 성공은 204다. 연결·재고·취소된 교체 이력이나 문서
+참조가 있으면 409 `APPLIANCE_IN_USE`/`CONSUMABLE_IN_USE`/`APPLIANCE_CONSUMABLE_IN_USE`이며
+사용 종료 또는 연결 비활성화를 사용한다. 다른 가계 ID는 404다.
 
 `/appliance-consumables`의 POST/GET와 `/{link_id}` GET/PATCH가 기기별 호환·주기·교체 수량·다음 확인일 override를 관리한다.
 동일 가계의 가전/소모품 조합은 하나이며 중지한 연결은 같은 행을 다시 활성화한다. 소모품 규격이 있으면 가계 안에서 유일하다.

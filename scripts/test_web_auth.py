@@ -39,7 +39,12 @@ from test_database import COMPOSE, ROOT, test_service_lock, validate_test_url
 
 
 def execute(
-    *, passkeys: bool = False, finance: bool = False, months: bool = False
+    *,
+    passkeys: bool = False,
+    finance: bool = False,
+    months: bool = False,
+    comparison: bool = False,
+    cashflow: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -60,13 +65,26 @@ def execute(
         subprocess.run(
             COMPOSE + ["up", "-d", "--wait", "db-test"], env=environment, check=True
         )
-        run_browser(url, passkeys=passkeys, finance=finance, months=months)
+        run_browser(
+            url,
+            passkeys=passkeys,
+            finance=finance,
+            months=months,
+            comparison=comparison,
+            cashflow=cashflow,
+        )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
 
 
 def run_browser(
-    url: str, *, passkeys: bool = False, finance: bool = False, months: bool = False
+    url: str,
+    *,
+    passkeys: bool = False,
+    finance: bool = False,
+    months: bool = False,
+    comparison: bool = False,
+    cashflow: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -259,6 +277,8 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_PASSKEYS": "1" if passkeys else "0",
                         "SALLIMBOOK_HTTPS_FINANCE": "1" if finance else "0",
                         "SALLIMBOOK_HTTPS_MONTHS": "1" if months else "0",
+                        "SALLIMBOOK_HTTPS_COMPARISON": "1" if comparison else "0",
+                        "SALLIMBOOK_HTTPS_CASHFLOW": "1" if cashflow else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -269,7 +289,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance|months|cashflow)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -322,10 +342,21 @@ if __name__ == "__main__":
         action="store_true",
         help="Verify monthly observation, confirmation and correction UI with the real API.",
     )
+    parser.add_argument(
+        "--comparison",
+        action="store_true",
+        help="Also verify comparison, trend and home using the real monthly records.",
+    )
+    parser.add_argument(
+        "--cashflow", action="store_true",
+        help="Verify manual income, cards, recurring payments and closure review with real HTTPS.",
+    )
     args = parser.parse_args()
     with test_service_lock():
         execute(
             passkeys=args.passkeys or args.finance,
             finance=args.finance,
-            months=args.months,
+            months=args.months or args.comparison,
+            comparison=args.comparison,
+            cashflow=args.cashflow,
         )

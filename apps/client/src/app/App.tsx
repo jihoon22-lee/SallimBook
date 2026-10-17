@@ -4,6 +4,7 @@ import { Link, matchRoutes, NavLink, Route, Routes, useLocation, useNavigate } f
 import { AccountListPage, AccountNewPage, AccountDetailPage } from "../features/accounts/AccountPages";
 import { accountScreens } from "../features/accounts/screens";
 import { assetScreens } from "../features/assets/screens";
+import { AssetComparisonPage } from "../features/assets/comparison/ComparisonPage";
 import { AssetMonthPage } from "../features/assets/months/MonthPage";
 import { AssetListPage, AssetNewPage, AssetDetailPage } from "../features/assets/AssetPages";
 import { authScreens } from "../features/auth/screens";
@@ -11,20 +12,23 @@ import { AuthProvider } from "../features/auth/AuthProvider";
 import { InvitationAcceptPage } from "../features/auth/InvitationAcceptPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SessionSettings } from "../features/auth/SessionSettings";
-import { cardScreens } from "../features/cards/screens";
+import { CardListPage, CardNewPage, CardDetailPage } from "../features/cards/CardPages";
+import { IncomeListPage, IncomeNewPage, IncomeDetailPage } from "../features/income/IncomePages";
+import { IncomeConversionPage } from "../features/income/IncomeConversion";
+import { FixedListPage, FixedDetailPage, RuleListPage, RuleNewPage, RuleDetailPage } from "../features/fixed/FixedPages";
+import { LivingPage } from "../features/living/LivingPage";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { householdScreens } from "../features/household/screens";
 import { insuranceScreens } from "../features/insurance/screens";
-import { livingScreens } from "../features/living/screens";
 import { VaultPage } from "../features/vault/VaultPage";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
 import { MonthProvider } from "../shared/MonthContext";
 import { PlannedPage } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month"), ...cardScreens, ...householdScreens, ...insuranceScreens, ...livingScreens];
+const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens, ...insuranceScreens];
 const screens = [
-  { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: false, element: <Dashboard /> },
+  { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <Dashboard /> },
   { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: false, element: <VaultPage /> },
   ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
   { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <SessionSettings /> },
@@ -35,6 +39,23 @@ const screens = [
   { path: "/accounts/new", title: "계좌 등록", group: "assets" as NavigationGroup, parent: { to: "/accounts", label: "계좌 목록" }, live: true, element: <AccountNewPage /> },
   { path: "/accounts/:id/edit", title: "계좌 정보 수정", group: "assets" as NavigationGroup, parent: { to: "/accounts", label: "계좌 목록" }, live: true, element: <AccountDetailPage edit /> },
   { path: "/assets/months/:month", title: "월별 자산 확인", group: "assets" as NavigationGroup, parent: { to: "/assets", label: "자산 목록" }, live: true, element: <AssetMonthPage /> },
+  { path: "/assets/compare", title: "월간 자산 비교", group: "assets" as NavigationGroup, parent: { to: "/assets", label: "자산 목록" }, live: true, element: <AssetComparisonPage /> },
+  { path: "/living", title: "생활비", group: "living" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <LivingPage /> },
+  { path: "/income", title: "월간 수입", group: "living" as NavigationGroup, parent: { to: "/living", label: "생활비" }, live: true, element: <IncomeListPage /> },
+  { path: "/income/new", title: "수입 입력", group: "living" as NavigationGroup, parent: { to: "/income", label: "수입 목록" }, live: true, element: <IncomeNewPage /> },
+  { path: "/income/convert", title: "월합계·일별 수입 전환", group: "living" as NavigationGroup, parent: { to: "/income", label: "수입 목록" }, live: true, element: <IncomeConversionPage /> },
+  { path: "/income/:id", title: "수입 상세", group: "living" as NavigationGroup, parent: { to: "/income", label: "수입 목록" }, live: true, element: <IncomeDetailPage /> },
+  { path: "/income/:id/edit", title: "수입 정정", group: "living" as NavigationGroup, parent: { to: "/income", label: "수입 목록" }, live: true, element: <IncomeDetailPage edit /> },
+  { path: "/cards", title: "카드 관리", group: "living" as NavigationGroup, parent: { to: "/living", label: "생활비" }, live: true, element: <CardListPage /> },
+  { path: "/cards/new", title: "카드 등록", group: "living" as NavigationGroup, parent: { to: "/cards", label: "카드 목록" }, live: true, element: <CardNewPage /> },
+  { path: "/cards/:id", title: "카드 상세", group: "living" as NavigationGroup, parent: { to: "/cards", label: "카드 목록" }, live: true, element: <CardDetailPage /> },
+  { path: "/cards/:id/edit", title: "카드 정보 수정", group: "living" as NavigationGroup, parent: { to: "/cards", label: "카드 목록" }, live: true, element: <CardDetailPage edit /> },
+  { path: "/fixed-payments", title: "고정 납부", group: "living" as NavigationGroup, parent: { to: "/living", label: "생활비" }, live: true, element: <FixedListPage /> },
+  { path: "/fixed-payments/rules", title: "납부 규칙 관리", group: "living" as NavigationGroup, parent: { to: "/fixed-payments", label: "고정 납부" }, live: true, element: <RuleListPage /> },
+  { path: "/fixed-payments/rules/new", title: "납부 규칙 등록", group: "living" as NavigationGroup, parent: { to: "/fixed-payments/rules", label: "납부 규칙" }, live: true, element: <RuleNewPage /> },
+  { path: "/fixed-payments/rules/:id", title: "납부 규칙 상세", group: "living" as NavigationGroup, parent: { to: "/fixed-payments/rules", label: "납부 규칙" }, live: true, element: <RuleDetailPage /> },
+  { path: "/fixed-payments/rules/:id/edit", title: "납부 규칙 변경", group: "living" as NavigationGroup, parent: { to: "/fixed-payments/rules", label: "납부 규칙" }, live: true, element: <RuleDetailPage edit /> },
+  { path: "/fixed-payments/:id", title: "고정 납부 상세", group: "living" as NavigationGroup, parent: { to: "/fixed-payments", label: "고정 납부 목록" }, live: true, element: <FixedDetailPage /> },
   ...plannedScreens.map((screen) => ({ ...screen, live: false, element: <PlannedPage screen={screen} /> })),
 ];
 

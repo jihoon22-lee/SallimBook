@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Query, Response
 
 from sallimbook.homecare import service
+from sallimbook.homecare.models import Appliance, ApplianceConsumable, Consumable
 from sallimbook.homecare.schemas import (
     ApplianceConsumableCreate,
     ApplianceConsumableListResponse,
@@ -58,6 +59,41 @@ def _stock(response, result):
         f"/api/v1/consumables/{result.consumable_id}/stock-movements/{result.id}"
     )
     return result
+
+
+@router.delete("/appliances/{appliance_id}", status_code=204, operation_id="deleteAppliance")
+def delete_appliance(
+    appliance_id: UUID,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    if_match: IfMatch,
+) -> Response:
+    service.delete_metadata(session, principal, Appliance, appliance_id, if_match)
+    return Response(status_code=204)
+
+
+@router.delete("/consumables/{consumable_id}", status_code=204, operation_id="deleteConsumable")
+def delete_consumable(
+    consumable_id: UUID,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    if_match: IfMatch,
+) -> Response:
+    service.delete_metadata(session, principal, Consumable, consumable_id, if_match)
+    return Response(status_code=204)
+
+
+@router.delete(
+    "/appliance-consumables/{link_id}", status_code=204, operation_id="deleteApplianceConsumable"
+)
+def delete_link(
+    link_id: UUID,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    if_match: IfMatch,
+) -> Response:
+    service.delete_metadata(session, principal, ApplianceConsumable, link_id, if_match)
+    return Response(status_code=204)
 
 
 @router.get("/appliances", response_model=ApplianceListResponse, operation_id="listAppliances")
