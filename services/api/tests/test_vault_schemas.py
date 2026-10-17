@@ -29,7 +29,7 @@ def opaque(size, marker=1):
     return base64.urlsafe_b64encode(bytes([marker]) * size).rstrip(b"=").decode("ascii")
 
 
-def member_wrap(*, member=MEMBER, key_version=1, nonce=1):
+def member_wrap(*, member=MEMBER, key_version=1, nonce=1, salt=1):
     return {
         "format_version": 1,
         "member_id": member,
@@ -37,7 +37,7 @@ def member_wrap(*, member=MEMBER, key_version=1, nonce=1):
         "generation": 1,
         "kdf": "PBKDF2-HMAC-SHA256",
         "iterations": 600_000,
-        "salt": opaque(16),
+        "salt": opaque(16, salt),
         "nonce": opaque(12, nonce),
         "wrapped_hvk": opaque(48),
     }
@@ -231,7 +231,7 @@ def test_rotation_bundle_requires_unique_members_new_key_and_noncolliding_nonces
         "key_check": key_check(key_version=2),
         "member_wrappings": [
             member_wrap(key_version=2),
-            member_wrap(member=OTHER_MEMBER, key_version=2, nonce=4),
+            member_wrap(member=OTHER_MEMBER, key_version=2, nonce=4, salt=2),
         ],
         "recovery_wrapping": recovery_wrap(key_version=2),
     }
@@ -240,7 +240,9 @@ def test_rotation_bundle_requires_unique_members_new_key_and_noncolliding_nonces
     duplicate["member_wrappings"][1]["member_id"] = MEMBER
     collision = deepcopy(payload)
     collision["member_wrappings"][1]["nonce"] = payload["key_check"]["nonce"]
-    for bad in [duplicate, collision, payload | {"member_wrappings": []}]:
+    same_salt = deepcopy(payload)
+    same_salt["member_wrappings"][1]["salt"] = payload["member_wrappings"][0]["salt"]
+    for bad in [duplicate, collision, same_salt, payload | {"member_wrappings": []}]:
         with pytest.raises(ValidationError):
             VaultRotationPrepare.model_validate(bad)
 

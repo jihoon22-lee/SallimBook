@@ -190,6 +190,7 @@ class VaultMemberWrapping(OpaqueFields, ActorFields, EntityMixin, Base):
         UniqueConstraint("household_id", "id"),
         UniqueConstraint("household_id", "id", "member_id", "key_version"),
         UniqueConstraint("household_id", "member_id", "key_version", "generation"),
+        UniqueConstraint("household_id", "salt", name="uq_vault_member_wrappings_salt"),
         *actor_constraints("vault_member_wrappings"),
         household_fk("vault_member_wrappings", "member_id", "household_members"),
         _version_fk("vault_member_wrappings"),
@@ -226,6 +227,7 @@ class VaultRecoveryWrapping(OpaqueFields, ActorFields, EntityMixin, Base):
     __table_args__ = (
         UniqueConstraint("household_id", "id"),
         UniqueConstraint("household_id", "key_version", "generation"),
+        UniqueConstraint("household_id", "salt", name="uq_vault_recovery_wrappings_salt"),
         *actor_constraints("vault_recovery_wrappings"),
         _version_fk("vault_recovery_wrappings"),
         *_nonce_constraints("vault_recovery_wrappings", "recovery"),

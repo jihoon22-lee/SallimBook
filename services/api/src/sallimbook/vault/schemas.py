@@ -150,6 +150,8 @@ def _bundle(key_check, members, recovery):
         raise ValueError("Each envelope requires a distinct nonce")
     if len({row.member_id for row in members}) != len(members):
         raise ValueError("Each member must appear once")
+    if len({row.salt for row in members}) != len(members):
+        raise ValueError("Each member wrapping requires a fresh salt")
 
 
 class VaultInitialize(VaultModel):
