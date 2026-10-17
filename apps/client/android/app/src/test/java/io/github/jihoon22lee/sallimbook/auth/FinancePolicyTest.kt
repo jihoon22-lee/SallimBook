@@ -37,6 +37,17 @@ class FinancePolicyTest {
         for (request in listOf(create, update, archive, delete)) assertTrue(FinancePolicy.metadataHttpAllowed(request.method, request.path, request.body, request.ifMatch))
     }
 
+    @Test fun unconfirmedClosureDefaultPreservesExistingMetadataCommands() {
+        val patch = FinancePolicy.prepare(FinanceOperation.UPDATE_ASSET, mapOf("assetId" to assetId,
+            "input" to mapOf("note" to "합성 수정", "closure_ack" to false), "ifMatch" to "\"1\""))
+        val archive = FinancePolicy.prepare(FinanceOperation.ARCHIVE_ASSET, mapOf("assetId" to assetId,
+            "input" to mapOf("ended_on" to "2026-12-31", "closure_ack" to false), "ifMatch" to "\"1\""))
+        for (request in listOf(patch, archive)) assertTrue(FinancePolicy.metadataHttpAllowed(request.method, request.path, request.body, request.ifMatch))
+        invalid { FinancePolicy.assetInput(mapOf("closure_ack" to false), true) }
+        invalid { FinancePolicy.assetInput(mapOf("note" to "합성", "closure_ack" to true, "payment_links_digest" to "invalid"), true) }
+        invalid { FinancePolicy.assetInput(input() + ("closure_ack" to false), false) }
+    }
+
     @Test fun urlsHeadersUnknownFieldsAndWeakVersionsCannotEnterNamedCommands() {
         for (extra in listOf("url", "path", "method", "headers", "Authorization", "body", "stepUpToken")) {
             invalid { FinancePolicy.prepare(FinanceOperation.GET_ASSET, mapOf("assetId" to assetId, extra to "synthetic")) }

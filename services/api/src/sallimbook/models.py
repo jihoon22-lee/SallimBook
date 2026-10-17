@@ -27,6 +27,19 @@ from sallimbook.identity.auth_models import (
 )
 from sallimbook.identity.models import Household
 from sallimbook.identity.passkeys.models import AuthChallenge, AuthCredential, StepUpGrant
+from sallimbook.insurance.event_models import (
+    ClaimExpense,
+    ClaimRevisionExpense,
+    InsuranceClaim,
+    InsuranceClaimRevision,
+    InsurancePayout,
+    InsuranceReturn,
+    MedicalExpense,
+    MedicalExpenseLine,
+    MedicalRefund,
+    PayoutAllocation,
+    PayoutAllocationRevision,
+)
 from sallimbook.insurance.models import (
     InsuranceCase,
     InsuranceCaseRevision,
@@ -37,6 +50,17 @@ from sallimbook.insurance.models import (
 )
 
 __all__ = [
+    "MedicalExpense",
+    "MedicalExpenseLine",
+    "MedicalRefund",
+    "InsuranceClaim",
+    "ClaimExpense",
+    "InsuranceClaimRevision",
+    "ClaimRevisionExpense",
+    "InsurancePayout",
+    "PayoutAllocation",
+    "PayoutAllocationRevision",
+    "InsuranceReturn",
     "InsurancePolicy",
     "InsuranceCoverage",
     "PolicyPremiumLink",
