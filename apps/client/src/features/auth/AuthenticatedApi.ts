@@ -5,7 +5,7 @@ type Client = ReturnType<typeof createApiClient>;
 export type ReadClient = Pick<Client, "GET">;
 export type WriteClient = Pick<Client, "POST" | "PATCH" | "PUT" | "DELETE">;
 export type ScopeProof = {
-  purpose: Extract<components["schemas"]["StepUpPurpose"], "household.invite" | "device.revoke" | "account.reveal">;
+  purpose: Extract<components["schemas"]["StepUpPurpose"], "household.invite" | "device.revoke" | "account.reveal" | "data.export">;
   targetId: string;
   signal: AbortSignal;
 };

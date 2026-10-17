@@ -33,7 +33,7 @@ test("all 26 specified routes support direct entry and reload without inventing 
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-      if (!["/", "/assets/compare", "/login", "/onboarding", "/assets", "/assets/synthetic-asset", "/accounts", "/accounts/synthetic-account", "/living", "/income", "/income/new", "/fixed-payments", "/fixed-payments/synthetic-payment", "/cards", "/cards/synthetic-card", "/insurance", "/insurance/policies", "/insurance/policies/synthetic-policy", "/insurance/cases", "/insurance/cases/synthetic-case", "/insurance/payouts/new"].includes(path) && !path.startsWith("/assets/months/")) {
+      if (!["/", "/assets/compare", "/login", "/onboarding", "/assets", "/assets/synthetic-asset", "/accounts", "/accounts/synthetic-account", "/living", "/income", "/income/new", "/fixed-payments", "/fixed-payments/synthetic-payment", "/cards", "/cards/synthetic-card", "/vault", "/insurance", "/insurance/policies", "/insurance/policies/synthetic-policy", "/insurance/cases", "/insurance/cases/synthetic-case", "/insurance/payouts/new"].includes(path) && !path.startsWith("/assets/months/") && !path.startsWith("/appliances") && !path.startsWith("/consumables")) {
         await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -115,10 +115,10 @@ for (const reload of [false, true]) {
   });
 }
 
-test("web vault clearly refuses secret input and leaves browser storage empty", async ({ page }) => {
+test("signed-out vault requires a session before exposing protected controls", async ({ page }) => {
   await page.goto("/vault");
-  await page.getByRole("button", { name: "이 기기의 지원 상태 확인" }).click();
-  await expect(page.getByRole("status")).toContainText("CVC/CVV는 이 기기에서 제공하지 않음");
+  await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "보관함 처음 설정", exact: true })).toHaveCount(0);
   await expect(page.locator("input, textarea")).toHaveCount(0);
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
 });
@@ -135,7 +135,7 @@ test("keyboard skip link, dark mode and enlarged narrow layout remain usable", a
   await page.addStyleTag({ content: "html { font-size: 200%; }" });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole("link", { name: "소모품 관리 둘러보기" }).click();
+  await page.getByRole("link", { name: "소모품 전체 관리" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("소모품 관리");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

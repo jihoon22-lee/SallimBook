@@ -17,6 +17,11 @@ import { IncomeListPage, IncomeNewPage, IncomeDetailPage } from "../features/inc
 import { IncomeConversionPage } from "../features/income/IncomeConversion";
 import { FixedListPage, FixedDetailPage, RuleListPage, RuleNewPage, RuleDetailPage } from "../features/fixed/FixedPages";
 import { LivingPage } from "../features/living/LivingPage";
+import { ApplianceListPage, ApplianceNewPage, ApplianceDetailPage } from "../features/homecare/AppliancePages";
+import { ConsumableListPage, ConsumableNewPage, ConsumableDetailPage } from "../features/homecare/ConsumablePages";
+import { DeviceDetailPage } from "../features/homecare/DeviceLinks";
+import { StockNewPage, StockDetailPage } from "../features/homecare/StockPages";
+import { ReplacementDetailPage } from "../features/homecare/ReplacementPages";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { householdScreens } from "../features/household/screens";
 import { InsuranceHome } from "../features/insurance/InsuranceHome";
@@ -24,16 +29,32 @@ import { PolicyListPage, PolicyNewPage, PolicyDetailPage } from "../features/ins
 import { CaseListPage, CaseNewPage, CaseDetailPage } from "../features/insurance/cases/CasePages";
 import { ClaimNewPage, ClaimDetailPage } from "../features/insurance/claims/ClaimPages";
 import { EventDetailPage, ExpenseNewPage, PayoutNewPage, PayoutListPage, ReturnNewPage } from "../features/insurance/events/EventPages";
+import { ExportsPage } from "../features/exports/ExportsPage";
 import { VaultPage } from "../features/vault/VaultPage";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
 import { MonthProvider } from "../shared/MonthContext";
-import { PlannedPage } from "../shared/PlannedPage";
+import { PlannedPage, RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens];
+const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens.filter((screen) => screen.path !== "/more" && !screen.path.startsWith("/appliances") && !screen.path.startsWith("/consumables"))];
 const screens = [
   { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <Dashboard /> },
-  { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: false, element: <VaultPage /> },
+  { path: "/more", title: "더보기", group: "more" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><div className="intro"><h1>더보기</h1><p>우리 집 물건과 공동 가계의 설정을 관리해요.</p></div><RelatedLinks links={householdScreens.find((screen) => screen.path === "/more")!.links ?? []} /></> },
+  { path: "/appliances", title: "가전 관리", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <ApplianceListPage /> },
+  { path: "/appliances/new", title: "가전 등록", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceNewPage /> },
+  { path: "/appliances/:id", title: "가전 상세", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceDetailPage /> },
+  { path: "/appliances/:id/edit", title: "가전 정보 수정", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceDetailPage edit /> },
+  { path: "/consumables", title: "소모품 관리", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <ConsumableListPage /> },
+  { path: "/consumables/new", title: "소모품 등록", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ConsumableNewPage /> },
+  { path: "/consumables/:id", title: "소모품 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ConsumableDetailPage /> },
+  { path: "/consumables/:id/edit", title: "소모품 정보 수정", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ConsumableDetailPage edit /> },
+  { path: "/consumables/:id/stock/new", title: "입고·재고 조정", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "공용 재고" }, live: true, element: <StockNewPage /> },
+  { path: "/consumables/:id/stock/:movementId", title: "재고 원본 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "공용 재고" }, live: true, element: <StockDetailPage /> },
+  { path: "/appliance-consumables/:id", title: "기기별 소모품 관리", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <DeviceDetailPage /> },
+  { path: "/appliance-consumables/:id/replace", title: "소모품 교체 기록", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <DeviceDetailPage replacing /> },
+  { path: "/appliance-consumables/:id/replacements/:replacementId", title: "교체 기록 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ReplacementDetailPage /> },
+  { path: "/exports", title: "자료 내보내기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <ExportsPage /> },
+  { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <VaultPage /> },
   ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
   { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <SessionSettings /> },
   ...assetScreens.filter((screen) => screen.path === "/assets" || screen.path === "/assets/:id").map((screen) => ({ ...screen, live: true, element: screen.path === "/assets" ? <AssetListPage /> : <AssetDetailPage /> })),

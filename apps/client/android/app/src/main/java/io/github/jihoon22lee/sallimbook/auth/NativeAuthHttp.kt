@@ -59,6 +59,7 @@ internal class NativeAuthHttp(private val origin: String) {
         nativeAccountNumber: Boolean = false,
         nativeInsurancePolicyNumber: Boolean = false,
         idempotencyKey: String? = null,
+        nativeDocumentCreate: Boolean = false,
     ): NativeHttpResponse {
         gate.checkHttp(method, path)
         if (AuthPolicy.apiOrigin(origin) == null) {
@@ -76,6 +77,9 @@ internal class NativeAuthHttp(private val origin: String) {
         val internalRevoke = method == "DELETE" && PasskeyPolicy.revokePath(path) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && body == null
         val metadata = FinancePolicy.metadataHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch, idempotencyKey)
+        val documentCreate = nativeDocumentCreate && !nativeAccountNumber && !nativeInsurancePolicyNumber && stepUpToken == null &&
+            NativeDocumentPolicy.createHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch, idempotencyKey)
+        if (nativeDocumentCreate && !documentCreate) throw AuthFailure(AuthCode.INVALID_REQUEST)
         val numberFields = body?.keys()?.asSequence()?.toSet()
         val numberMutation = nativeAccountNumber && method == "PATCH" && FinancePolicy.numberPath(path, false) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && numberFields == setOf("account_number") &&
@@ -88,11 +92,11 @@ internal class NativeAuthHttp(private val origin: String) {
         val policyNumber = nativeInsurancePolicyNumber && !nativeAccountNumber && stepUpToken == null &&
             InsurancePolicy.numberHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch)
         if (nativeInsurancePolicyNumber && !policyNumber || nativeAccountNumber && nativeInsurancePolicyNumber) throw AuthFailure(AuthCode.INVALID_REQUEST)
-        if (!internalAuthPath && !internalRevoke && !metadata && !numberMutation && !numberReveal && !policyNumber &&
+        if (!internalAuthPath && !internalRevoke && !metadata && !numberMutation && !numberReveal && !policyNumber && !documentCreate &&
             (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
-        if (idempotencyKey != null && !metadata) throw AuthFailure(AuthCode.INVALID_REQUEST)
+        if (idempotencyKey != null && !metadata && !documentCreate) throw AuthFailure(AuthCode.INVALID_REQUEST)
         if (nativeAccountNumber && !numberMutation && !numberReveal) throw AuthFailure(AuthCode.INVALID_REQUEST)
         if (stepUpToken != null && !PasskeyPolicy.stepUpHeaderAllowed(method, path, ifMatch, stepUpToken)) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)

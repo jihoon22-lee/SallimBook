@@ -2,11 +2,11 @@
 
 **부부가 함께 관리하는 자산과 생활의 기록. Android 앱을 중심으로, 같은 내용을 PC 웹에서도.**
 
-문서 기준일: **2026-10-17** · 목표 릴리스: **v1.0.0** · 현재 상태: **M1 공동 인증 구현 진행**
+문서 기준일: **2026-10-18** · 목표 릴리스: **v1.0.0** · 현재 상태: **전체 기능 통합·운영 검증 진행, 0.x 개발 빌드**
 
-> React 웹·Android 개발 빌드, FastAPI health/readiness API, PostgreSQL 기반과 생성 TS client가 추가되었습니다.
-> 26개 화면 경로와 모바일 탭·PC 사이드바, 부부 계정·초대·세션·기기 관리가 추가되었습니다. 금융·보험·재고·보관함의 업무 동작은 후속 Issue에서 구현합니다.
-> 개발 APK와 기본 빌드 성공은 v1 기능·보안·실기기 인수 완료를 뜻하지 않습니다.
+> 자산·계좌·카드·수입·고정 납부·보험·가전/소모품의 수동 입력과 이력, 비공개 문서, 보관함, 사용자 내보내기를 웹/Android에 연결했습니다.
+> 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. 근거는 [요구사항 추적표](docs/requirements-traceability.md)에 연결합니다.
+> 두 Galaxy의 보안·업데이트 인수와 실제 사설망 운영은 남아 있습니다. CVC는 실기기 보안 검증과 사용자 선택 전까지 비활성화하며, v1.0.0 출시로 표시하지 않습니다.
 
 ## 무엇을 만드는가
 
@@ -42,13 +42,14 @@
 |---|---|
 | 공통 화면 | React + TypeScript + Vite |
 | Android | Capacitor 8 계열 + Kotlin 네이티브 보안 모듈 |
-| UI/상태/입력 | Tailwind CSS, shadcn/ui, TanStack Query, React Hook Form, Zod, Recharts |
+| UI/상태/입력 | 공통 CSS·React hooks·생성 API 타입, SVG 추이와 접근 가능한 표 |
 | API | Python + FastAPI, SQLAlchemy 2, Alembic |
 | 데이터 | PostgreSQL, 인증된 비공개 첨부파일 저장소 |
 | 운영 | Docker Compose + Caddy + HTTPS |
-| 검증 | pytest, Vitest, Playwright, Android 단위·계측·실기기 테스트 |
+| 검증 | pytest, Python unittest, Playwright, Kotlin JVM·Android 계측/실기기 인수 |
 
 정확한 패치 버전은 호환성을 검증한 후 lockfile에 고정합니다.
+초기 UI 도구 후보와 실제 설치된 구현의 차이는 [클라이언트 구현 결정](docs/adr/client-implementation-and-tests.md)에 기록합니다.
 선정 근거와 현재 공식 문서는 [기술·환경 문서](docs/development-environment.md)와 [참고 자료](docs/references.md)에 있습니다.
 
 ## 문서 읽는 순서

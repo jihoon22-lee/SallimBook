@@ -17,6 +17,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [API 계약](api-contract.md) | 경로, 입력·응답, 인증, 충돌, 멱등성 |
 | [화면 명세](screen-specifications.md) | 26개 화면, Android/PC 배치·입력·상태·오류 |
 | [보안·인증](security-authentication.md) | 위협 모델, 계정/잠금/복호화, 민감정보 정책 |
+| [보관함 서버 검증](testing/vault-server.md) | opaque API·공유·복구·회전·폐기와 실제 DB 우회 시험 |
 | [보관함 키 수명주기](vault-key-lifecycle.md) | 부부 공유, 새 기기, 복구, 회전, 로컬 CVC |
 | [첨부 서버 검증](testing/documents-server.md) | 인증 다운로드, 암호화 저장, typed 연결, 정리 정책과 시험 결과 |
 | [보험 사건 흐름](insurance-workflows.md) | 진료 트리, 복수 청구, 분할 지급, 정산 예시 |
@@ -53,3 +54,11 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 위 우선순위는 검증된 보안 문제를 무시하라는 뜻이 아니다. 보안 문제가 있으면 해당 기능을 중지하고 안전한 설계 변경을 검토한다.
 
 GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다. 게시기 재실행은 사람이 수정한 이슈 본문·상태를 덮어쓰지 않는다.
+
+- [가전·공용 재고·교체·홈 화면 검증](testing/homecare-client.md): SB-024~SB-027/SB-033 화면과 계산·충돌·플랫폼 검증.
+
+- [첨부 문서 화면 검증](testing/documents-client.md): SB-023의 7개 부모 연결과 웹 원본/Android 보호 화면 검증.
+
+- [보관함 상태·카드 진입 화면 검증](testing/vault-overview.md) — 안전한 metadata와 플랫폼별 보호 화면 연결
+
+- [사용자 내보내기 화면 검증](testing/exports-client.md) — JSON·CSV·선택 문서 ZIP과 플랫폼별 저장 경계

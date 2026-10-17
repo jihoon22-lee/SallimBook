@@ -974,16 +974,41 @@ def get_rotation(session, principal, rotation_id):
     _state(context)
     _enrolled(context)
     rotation = _rotation(context, rotation_id)
+    targets = _rotation_cards(context, rotation)
+    sources = {
+        row.id: row
+        for row in session.execute(
+            select(
+                CardSecretEnvelope.id,
+                CardSecretEnvelope.revision,
+                CardSecretEnvelope.last_four,
+            ).where(
+                CardSecretEnvelope.household_id == principal.household_id,
+                CardSecretEnvelope.id.in_([target.source_envelope_id for target in targets]),
+            )
+        )
+    }
+    prepared_cards = set(
+        session.scalars(
+            select(CardSecretEnvelope.card_id).where(
+                CardSecretEnvelope.household_id == principal.household_id,
+                CardSecretEnvelope.key_version == rotation.key_version,
+                CardSecretEnvelope.is_current.is_(True),
+            )
+        )
+    )
     cards = []
-    for target in _rotation_cards(context, rotation):
-        source = scoped_entity(session, CardSecretEnvelope, target.source_envelope_id, principal)
+    for target in targets:
+        source = sources.get(target.source_envelope_id)
+        if source is None:
+            raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
         cards.append(
             VaultRotationCardResponse(
                 card_id=target.card_id,
                 source_envelope_id=source.id,
                 source_revision=source.revision,
                 last_four=source.last_four,
-                prepared=_envelope(context, rotation.key_version, target.card_id) is not None,
+                prepared=target.card_id in prepared_cards,
             )
         )
     prepared_members = set(

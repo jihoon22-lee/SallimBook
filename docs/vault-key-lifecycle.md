@@ -1,6 +1,7 @@
 # 카드 보관함 키 수명주기
 
-상태: 보안 구현을 위한 설계안. 암호 프로토콜·라이브러리·키복구 검토 후 구현한다.
+상태: 서버 opaque 보관함과 DB 수명주기를 구현했다. Android/PC 보호 화면과 실기기 인수는 별도 진행한다.
+확정 포맷은 [보관함 v1 결정](adr/vault-format-v1.md), 서버 증거는 [검증 기록](testing/vault-server.md)을 따른다.
 API의 인증 성공과 암호키 접근은 별도라는 전제를 유지한다.
 
 ## 1. 키 구분
@@ -24,7 +25,7 @@ AAD에 household_id, card_id, key_version, payload_schema_version을 고정된 �
 같은 키에서 nonce 재사용을 막고 서버는 저장된 nonce 충돌을 거부한다. 충돌 시 새 nonce로 다시 암호화한다.
 인증 tag 오류는 복호화 실패이며 부분 평문을 보여주지 않는다.
 
-구성원 wrapping KDF 초기 후보는 플랫폼 표준 호환성을 위한 PBKDF2-HMAC-SHA256, 600,000회 이상,
+구성원 wrapping KDF는 플랫폼 표준 호환성을 위한 PBKDF2-HMAC-SHA256, 600,000~2,000,000회,
 128비트 이상 랜덤 salt, 출력 256비트다. 이 값은 OWASP의 PBKDF2 참고값을 바탕으로 한 설계 하한이며
 Argon2id보다 우월하다는 의미나 FIPS 적합성 주장이 아니다([S07](references.md)).
 구현 전 Android/웹 성능과 암호 호환 벡터를 시험하고, KDF 종류·파라미터·salt를 wrapping마다 저장한다.
@@ -104,7 +105,7 @@ HVK/평문은 localStorage/IndexedDB/Service Worker/일반 Query cache에 저장
 
 ## 9. PIN fallback와 최소 Android
 
-minSdk는 사용자 승인으로 API 30(Android 11)에 고정한다. Galaxy S25 Ultra·S24 Ultra에서 실제 키·인증 동작을 검증한다.
+minSdk는 사용자 승인으로 API 30(Android 11)에 고정한다. Galaxy S25·S24 Ultra에서 실제 키·인증 동작을 검증한다.
 BiometricPrompt의 허용 인증 조합과 auth-per-use/time-based key 구성이 정확히 맞는지 검증한다.
 PIN fallback을 추가하려고 인증 후에도 언제든 사용 가능한 무보호 키를 만들지 않는다.
 기기에서 요구 정책을 충족하지 못하면 보관함 암호 재입력 경로 또는 기능 불가 안내를 사용하고 조용히 약화하지 않는다.
@@ -115,3 +116,12 @@ PIN fallback을 추가하려고 인증 후에도 언제든 사용 가능한 무�
 두 구성원 독립 암호, 새 기기 복구, 지문 변경 무효화, 키 회전 중 실패 복구,
 클립보드/백업/네트워크/bridge 무유출을 모두 확인한다.
 암호 라이브러리·구현 리뷰 완료 전 실제 카드정보를 입력하지 않는다.
+
+
+서버는 교체된 구성원/복구 wrapping 이력도 보존한다. 따라서 예전 암호·복구코드와 과거 wrapping
+사본을 가진 경우 같은 HVK를 열 수 있다. 암호 또는 코드 변경만으로 이미 유출된 HVK를 무효화하지 않는다.
+유출 대응은 새 HVK로 전체 회전해야 하며 이전 백업/오프라인 사본까지 회수할 수는 없다.
+카드 비밀의 명시 삭제는 현재·retired·aborted 모든 온라인 카드 암호문을 NULL로 폐기한다.
+
+카드 비밀을 새 값으로 교체하면 이전 envelope는 current에서 빠지지만 암호문 이력은 유지한다.
+이력까지 온라인에서 제거하려면 명시적 비밀 삭제를 사용한다. 일반 API는 현재 envelope만 조회한다.

@@ -1,3 +1,4 @@
+import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
@@ -134,7 +135,7 @@ function AssetDetail({ id }: { id: string }) {
       {asset.note && <div className="plain-note"><h3>메모</h3><p>{asset.note}</p></div>}
       <div className="form-actions"><Link className="button-link" to={`/assets/${id}/edit`}>자산 정보 수정</Link>{asset.status === "active" && <button type="button" className="secondary-button" onClick={() => { setError(null); setClosing(true); }}>사용 종료하기</button>}<Link className="button-link secondary-button" to="/assets">자산 목록</Link></div>
     </section>
-    <AssetMonthlyData assetId={id} />
+    <DocumentPanel kind="asset" id={id} /><AssetMonthlyData assetId={id} />
     {closing && <section className="card" aria-labelledby="asset-archive-title"><h2 id="asset-archive-title">자산 사용 종료</h2><p>자산 항목과 과거 연결 기록은 남겨두고 사용 종료 상태로 바꿔요.</p>
       <form className="finance-form" onSubmit={(event) => void archive(event)}><div className="form-field"><label htmlFor="asset-ended-on">종료일</label><input id="asset-ended-on" type="date" value={endedOn} onChange={(event) => setEndedOn(event.target.value)} min={asset.started_on} max="9999-12-31" required disabled={busy} /></div>
         {asset.category === "financial" && <ClosureReview review={closure} disabled={busy} />}

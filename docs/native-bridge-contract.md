@@ -393,3 +393,196 @@ TS 본문/응답/조회 조건은 생성 `components`와 `operations`를 참조�
 브라우저 포트는 18748이며 해당 실행 중 Docker 서비스 상태는 변경하지 않았다.
 문서 manifest·로컬 링크 및 `git diff --check`도 통과했다. 이 변경의 APK 조립·서명·배포,
 실제 기기의 앱 잠금/백그라운드/화면 꺼짐/늦은 응답 시험은 실행하지 않았다.
+
+## 18. 가전·소모품·재고 (SB-024~027, Refs #33~36)
+
+R-03/R-16/R-17/R-19/R-22의 생성 API 24개 operationId를 같은 이름의 `nativeFinance` 명령으로 연결했다.
+가전·소모품·기기별 연결은 목록/생성/상세/수정/삭제를 제공하고, 입고·재고 동작과 교체는 각각
+부모별 목록/생성/상세/취소를 제공한다. 오늘 기준 상태는 `getHomecareStatus`로 조회한다.
+경로 인자는 `applianceId`, `consumableId`, `linkId`, `movementId`, `replacementId`이며,
+TS 입력·응답·조회 조건은 생성 `components`와 `operations`를 참조한다.
+서버·마이그레이션·API 계약·lockfile은 변경하지 않았다.
+
+`NativeHomecarePolicy`는 고정 경로와 메서드, 정확한 인자·본문·응답 필드를 검증한다.
+수량은 0~1,000,000의 JSON 정수이며 교체 수량은 양수, 원장 증감은 0이 아닌 정수다.
+float·bool·숫자 문자열을 수량으로 변환하지 않는다. 금액은 null·0원·최대 20자리 십진 문자열을
+그대로 보존한다. 임의 자원 ID 변경과 빈 patch, 잘못된 날짜/주기, 입출고 방향, 조정 사유를 검사한다.
+구매 URL은 자격증명 없는 HTTPS 메타데이터로 검증하며 native 네트워크 요청 경로로 사용하지 않는다.
+
+가전·소모품·연결 삭제는 `deleteAppliance`, `deleteConsumable`, `deleteApplianceConsumable`을
+사용한다. 해당 자원의 `ifMatch`만 요구하고 본문·멱등키를 받지 않으며 204 빈 응답을 null로
+반환한다. 연결·재고·교체 이력 때문에 삭제할 수 없는 경우 서버의 `APPLIANCE_IN_USE`,
+`CONSUMABLE_IN_USE`, `APPLIANCE_CONSUMABLE_IN_USE` 409 코드를 보존하고 사용 종료 또는
+연결 비활성화를 안내한다. 이력 삭제나 자동 종료로 우회하지 않는다.
+
+메타데이터 수정은 해당 가전·소모품·연결의 `ifMatch`를 요구한다. 재고/교체 생성·취소의
+`ifMatch`는 공용 **소모품 버전**이며 `idempotencyKey`도 필수다. 교체 생성은 별도 `link_version`과
+`clear_next_check_override` bool을 반드시 전달해 수동 확인일 유지/해제를 명시한다.
+재고 응답의 `{id, consumable_id, stock_version, replacement_id}`는 원래 동작 당시의 불변 참조다.
+재전송 응답의 version을 현재 재고로 해석하거나 If-Match에 맞춰 올리지 않으며, 후속 변경 전
+현재 소모품과 연결을 다시 조회한다. 취소는 새 원장 ID를 반환하며 원본을 삭제하지 않는다.
+
+응답은 부모 ID·조회 필터·내림차순 cursor/limit·가계 일관성을 검사한다. 보증 상태는 미입력과
+만료일 포함 유효 상태를 구분한다. 다음 확인일의 unknown/override/replacement와 교체 필요 null,
+구매 필요 및 재고 임계 상태를 보존하며 날짜/수량의 내부 일관성을 대조한다. `getHomecareStatus`는
+서버 `as_of`를 사용하고 자산 month나 임의 기준일 쿼리를 받지 않는다.
+권한, 실제 오늘, 최종 재고 계산·트랜잭션·중복 처리는 서버가 결정한다.
+
+기존 `NativeAuthSession.finance`의 앱 잠금·foreground/cancel gate와 토큰 전용 HTTP를 재사용한다.
+일반 `request`의 경로 범위는 확장하지 않는다. 알려진 오류 코드와 로컬 문구만 전달하고 서버 원문
+메시지·제출값은 버린다. 웹 HTTP 우회·자동 재시도·브라우저 저장소를 추가하지 않았다.
+
+`pnpm typecheck`, `pnpm android:sync`가 통과했다. 아래 명령으로 신규 homecare 15개를 포함한
+JVM **203개**가 실패·오류·건너뜀 없이 통과했고 디버그 APK 조립과 release Kotlin 컴파일도 성공했다.
+
+```bash
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin
+```
+
+`homecare-native-bridge.spec.ts`의 명령 전달/재전송 참조/실패 경계 11개 시나리오를 desktop과
+Android 크기에서 실행해 신규 **22개**, 기존 보험·금융·계좌 **46개**, 총 **68개**가 통과했다.
+소스 `648d9b7`의 독립 검토에서도 21개 경로/헤더/본문/응답, 재고·연결 버전 구분,
+멱등 참조·cursor·부모 ID 검증과 기존 네이티브 gate 연결을 대조해 추가 차단 문제는 없었다.
+아래 실행에는 기본 Playwright 설정의 baseURL/webServer만 18754로 바꾼 임시 config를 사용했다.
+Docker 시험 정지 후 실행했고 완료 후 Vite 정지와 포트 반환을 확인했다. 임시 config는 제거했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test homecare-native-bridge.spec.ts insurance-events-native-bridge.spec.ts insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.homecare-native.local.config.ts --workers=2
+python3 scripts/validate_docs.py
+git diff --check
+```
+
+브라우저 모의시험은 실제 Android 기기 검증을 대신하지 않는다. 실기기 잠금·백그라운드·늦은 응답,
+화면 캡처·백업 시험과 정식 APK 서명·배포는 실행하지 않았다.
+
+## 19. 문서 첨부와 사본 저장 (SB-023, Refs #32)
+
+R-13/R-15/R-20의 9개 서버 API 중 `nativeFinance`의 JSON 메타데이터 명령은
+`listDocuments`, `getDocument`, `deleteDocument`, `createDocumentLink`, `listDocumentLinks`,
+`endDocumentLink` 6개다. 입력·조회·응답은 생성 API 타입을 참조하고 Kotlin에서 경로·필드·
+버전·멱등키·typed target·문서 상태·부모 ID·페이지를 검증한다. 연결 생성의 If-Match는 문서,
+연결 해제의 If-Match는 연결 자체의 버전이다. 변경 응답은 원래 요청 당시의 불변 참조다.
+
+`uploadDocument({target})`와 `downloadDocument({documentId})`는 각각
+`uploadDocumentUI`/`downloadDocumentUI`를 통해 비공개 `NativeDocumentActivity`를 연다.
+JS는 URI·파일명·크기·해시·바이트·토큰이나 카드자료 미포함 bool을 입력하지 않으며,
+결과에는 uploaded/downloaded/cancelled 상태 또는 고정 오류 코드만 있다.
+`createDocument`와 raw content 전송은 일반 bridge 명령으로 노출하지 않는다.
+
+네이티브 업로드는 `ACTION_OPEN_DOCUMENT`로 PDF/JPEG/PNG 한 개를 선택하고 파일명·형식·
+크기를 보여준다. 사용자가 카드 사진·전체 카드번호·보안코드가 없음을 직접 확인한 뒤에만
+본문을 읽는다. 제공자 크기가 null일 수 있으므로 실제 읽기량을 20MiB로 제한하고, 같은
+네이티브 버퍼에서 SHA-256을 계산해 메타데이터 POST와 raw PUT을 수행한다. URI를 다시 열어
+다른 바이트를 전송하지 않는다. 앱의 평문 임시 파일·base64·영구 URI 권한은 만들지 않는다.
+서버의 포맷·악성파일·카드자료 검사를 대신했다고 주장하지 않는다.
+[공식 SAF 안내](https://developer.android.com/training/data-storage/shared/documents-files)를 확인했다.
+
+다운로드는 선택한 위치에 앱 밖의 사본을 저장하는 동작으로 안내한다. `ACTION_CREATE_DOCUMENT`
+선택 뒤 현재 문서와 접근 권한을 다시 확인하고, 다운로드 MIME·실제 크기·SHA-256이 메타데이터와
+일치한 바이트만 목적지에 쓴다. 자동 외부 뷰어 실행이나 공개 URL 전달은 하지 않는다.
+취소·실패 시 이번에 생성한 목적지 파일의 삭제를 시도하지만 제공자/프로세스 종료에 따른
+부분 파일 제거를 보장하지 않는다. 이 한계와 서버 삭제가 외부 사본을 지우지 않는다는 점을
+저장 전에 안내한다. [ContentResolver 계약](https://developer.android.com/reference/android/content/ContentResolver)과
+[DocumentsContract 삭제 계약](https://developer.android.com/reference/android/provider/DocumentsContract#deleteDocument(android.content.ContentResolver,android.net.Uri))을 따른다.
+
+Activity는 FLAG_SECURE와 저장 상태·자동완성·content capture 차단을 적용한다. 파일 선택기는
+기존 앱 잠금의 60초 한도 안에서만 기다리고 그동안 파일 I/O·HTTP를 하지 않는다. 복귀는 같은
+요청 세대와 resumed·focus·기기 잠금을 확인하며 1초 안에 포커스가 돌아오지 않으면 취소한다.
+일반 포커스 상실·pause·화면 꺼짐·앱 잠금·명시 취소·재생성은 작업을 폐기한다. Activity Result
+callback은 매번 등록하지만 재생성된 인스턴스에 URI나 진행 상태를 복원하지 않는다.
+[공식 Activity Result 지침](https://developer.android.com/training/basics/intents/result)을 확인했다.
+FLAG_SECURE는 앱의 창에 적용되며 외부 제공자 화면이나 저장된 사본을 보호한다고 표현하지 않는다.
+[Android 화면 보호 지침](https://developer.android.com/security/fraud-prevention/activities)
+
+파일 읽기·쓰기와 HTTP는 한 요청의 owner별 취소 처리로 연결한다. 제공자 CancellationSignal/
+descriptor와 HTTP 취소가 서로 덮어쓰지 않으며 취소된 gate에 새 소유자를 등록해도 즉시 취소한다.
+고정 HTTPS·쿠키/리디렉션/로그/캐시 없음·one-shot 본문·자동 재시도 금지를 유지하고 파일 전용
+HTTP call/read 제한은 180초다. 서버 검사 최악 105초를 고려한 값이며 기존 JSON 15초는 유지한다.
+업로드 결과가 불명확하면 자동 재등록하지 않고 목록 재확인을 안내한다. 파일 버퍼는 사용 종료와
+실패 경로에서 지우며, 늦은 다운로드 버퍼도 화면/JS에 전달하지 않는다.
+
+`pnpm typecheck`, `pnpm android:sync`, 디버그 APK 조립과 release Kotlin 컴파일이 통과했다.
+신규 문서 정책 7개·선택기/버퍼/복합 취소 8개·실제 OkHttp 경계 6개를 포함한 JVM **224개**가
+실패·오류·건너뜀 없이 통과했다. HTTP 검사는 합성 interceptor로 원본 바이트·헤더·one-shot,
+잘못된 MIME/크기/해시·리디렉션·취소 전송 차단을 확인하며 실제 서버나 제공자를 사용하지 않는다.
+APK/release 빌드 뒤 추가한 HTTP 6개는 JVM 전체 224개를 다시 실행해 검증했다.
+
+```bash
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=2 :app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=2 :app:testDebugUnitTest
+```
+
+브라우저 모의시험은 신규 문서 12개 시나리오를 두 화면 크기에서 실행한 **24개**와 기존
+보험·금융·소모품 브리지 **68개**, 총 **92개**가 통과했다. 기본 Playwright 설정의 baseURL과
+webServer만 18754로 바꾼 임시 config를 사용했고 완료 후 제거했다. Vite 정지와 포트 반환도 확인했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test documents-native-bridge.spec.ts homecare-native-bridge.spec.ts insurance-events-native-bridge.spec.ts insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.documents-native.local.config.ts --workers=2
+```
+
+후속 계약 반영에서 homecare 삭제 3개 명령과 `DOCUMENT_UPLOAD_BUSY` 503의 고정 문구를
+추가했다. OkHttp 5.4는 `retryOnConnectionFailure(false)`여도 GET의 `503 / Retry-After: 0`에
+후속 요청을 만들 수 있어 문서 전용 EventListener에서 후속 요청 결정 시 call을 취소한다.
+[고정 버전의 후속 요청 구현](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http/RetryAndFollowUpInterceptor.kt)과
+[공식 EventListener 계약](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/EventListener.kt)을 대조했다.
+자격증명 없는 합성 loopback 서버에서 해당 응답 뒤 실제 HTTP 요청이 한 번뿐임을 검증했다.
+오류 JSON 내부 바이트 버퍼도 지우고, 제공자 MIME 조회 뒤 취소 여부를 다시 확인한다.
+
+후속 `pnpm typecheck`, `pnpm android:sync`와 위 Gradle JVM/debug APK/release Kotlin 명령은
+모두 통과했다. 전체 JVM **226개**는 실패·오류·건너뜀 0이며 새 HTTP 시험 1개와 문서 오류
+정제 시험 1개를 포함한다. homecare 24개 명령 전달을 포함한 브리지 **22개**와 문서 **24개**,
+총 **46개**를 아래 명령으로 다시 통과했다. 임시 config 제거와 18754 포트 반환을 확인했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test homecare-native-bridge.spec.ts documents-native-bridge.spec.ts --config playwright.documents-native.local.config.ts --workers=2
+```
+
+실제 Galaxy의 파일 제공자·URI 권한·선택기/회전/잠금·부분 저장·취소 시험,
+정식 서명·배포는 실행하지 않았다. 빌드와 합성 JVM 검사를 실기기 성공으로 해석하지 않는다.
+
+
+## 20. Android 카드 보관함과 로컬 보안코드 (SB-028/029/030/032)
+
+`nativeVault.open`은 action과 해당 card/member/offer/rotation ID만 받는 `openVaultUI`를 호출한다.
+보호 화면은 설정·기기 등록·번호/유효기간 입력과 보기·비밀 purge·암호 변경·복구·공유 수락/취소·
+접근 철회·키 회전 시작/재개/중단을 처리하고 completed/cancelled 상태만 반환한다.
+입력은 TS와 Kotlin 양쪽에서 정확한 필드를 검증한다. 암호·PAN·복구코드·암호문·CVC는 bridge에 없다.
+일반 상태 화면은 `getVaultStatus`, `listVaultShares`, `getVaultRotation` 세 생성 DTO만 조회한다.
+23개 vault API의 opaque wrapping/envelope와 모든 변경은 private native 경로로 제한한다.
+
+`NativeVaultActivity`는 현재 계정·활성 기기·가계·키 버전을 서버에서 재확인하고,
+Keystore strong auth-per-use CryptoObject의 동일 Cipher/실제 doFinal 또는 명시적 보관함 암호로 키를 연다.
+앱 잠금 인증 bool로 복호화하지 않는다. 표시 30초·초점 복귀 1초·작업 60초, 취소/잠금 세대를 적용하고
+늦은 KDF/HTTP 결과를 폐기한다. 로컬 HVK/CVC 암호문은 별도 AAD/키로 noBackupFilesDir에 둔다.
+CVC는 현재 카드 secret ID/revision에 묶고 서버/API/web/backup에 전달하지 않는다.
+실기기 인수 전 CVC 입력·열람 gate는 비활성 상태이며 v1/R-12 완료를 뜻하지 않는다.
+
+설정·복구·회전 준비에는 새 복구코드의 명시적 오프라인 보관 확인을 요구한다. 네트워크 결과가
+불명확하면 같은 Activity의 요청/key를 유지해 수동 재시도하고, 종료 뒤에는 서버 staged wrapping으로
+복원해 회전을 재개한다. 과거 암호문 전체 purge와 일반 새 envelope 교체를 구분한다.
+모든 관리 변경의 최근 인증 만료는 같은 native 화면에서 로그인 암호로 재인증한다. 원문 키와 입력은
+지우고 검증된 암호화 body·version·Idempotency-Key만 유지하며, 같은 계정·기기를 다시 확인한 후
+사용자가 동일 요청을 재제출한다. 회전 준비가 완료되면 저장된 키를 암호로 다시 열어 계속하고,
+보호된 조회 단계의 만료는 원래 폼을 빈 입력으로 다시 연다. 취소·이탈은 보관 요청도 폐기한다.
+세부 보안 경계·공식 근거·검증 명령·미실행 Galaxy 항목은 [native 보관함 수명주기](testing/native-vault-lifecycle.md)를 따른다.
+
+재등록/CVC 재저장 prompt는 기존 기기 키를 재사용하며 취소·실패로 기존 암호문을 지우지 않는다.
+영구 무효화된 기기 등록만 별도 확인과 플랫폼 예외 검증 뒤 삭제할 수 있다. 이 후속 수정은
+요청별 토큰 갱신·카드별 회전 작업 분할·모든 관리 변경의 계정 재인증 연속성을 포함해 JVM **299개**와 debug APK·release Kotlin 검증을
+통과했고 실제 기기 검증은 보류되어 있다.
+
+브라우저 브리지 모의시험 **52개**(vault 28개 + 문서 24개)가 통과했다. 서버 quota 후속 계약의
+`DOCUMENT_STORAGE_QUOTA_EXCEEDED` 413과 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE` 503도
+문서 native 고정 오류 문구로 보존한다. 이 검증은 실제 Keystore·생체인증·백업·캡처 실패 시험을 대신하지 않는다.
+
+## 21. SB-037 사용자 ZIP 내보내기
+
+`nativeExports.export({ input: ExportRequest })` / `exportArchiveUI`는 생성 스키마의 형식/문서 ID 선택만
+받고 `{ status: "exported" | "cancelled" }`만 반환한다. 네이티브 확인·로그인 암호 재인증·SAF 선택 뒤
+private 고정 POST를 수행하며 ZIP 원문·URI·path·토큰·header·다운로드 URL은 bridge에 나오지 않는다.
+전체 64MiB bound, Content-Length/MIME/ID/disposition/no-store/SHA-256 검증 이후에만 provider에 쓰고,
+기존 선택기 foreground/취소 세대와 별도 작업 제한을 적용한다. 실패 시 외부 부분 파일 삭제는 최선의 노력이다.
+
+JVM **308개**, debug APK·release Kotlin, 브라우저 **58개**(신규 export 34개 + 문서 24개)를 통과했다.
+실제 서버/Android 파일 제공자 권한·실기기 실패·운영 복원 성공을 뜻하지 않는다.
+세부 구현·검증 명령·남은 인수는 [native 사용자 내보내기](testing/native-exports.md)를 따른다.
