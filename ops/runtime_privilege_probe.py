@@ -34,6 +34,25 @@ def main(service_file):
             "ALTER FUNCTION public.protect_document() OWNER TO sallimbook_app",
             "ALTER FUNCTION public.protect_document() OWNER TO sallimbook_admin",
         ),
+        (
+            "REVOKE SELECT ON documents FROM sallimbook_app",
+            "GRANT SELECT ON documents TO sallimbook_app",
+        ),
+        (
+            "CREATE TABLE public.ops_privilege_probe (id integer); "
+            "REVOKE INSERT ON public.ops_privilege_probe FROM sallimbook_app",
+            "DROP TABLE public.ops_privilege_probe",
+        ),
+        (
+            "CREATE SEQUENCE public.ops_privilege_probe; "
+            "REVOKE USAGE ON public.ops_privilege_probe FROM sallimbook_app",
+            "DROP SEQUENCE public.ops_privilege_probe",
+        ),
+        (
+            "CREATE SEQUENCE public.ops_privilege_probe; "
+            "REVOKE SELECT ON public.ops_privilege_probe FROM sallimbook_app",
+            "DROP SEQUENCE public.ops_privilege_probe",
+        ),
     ]
     with connect(env) as conn:
         for grant, undo in cases:
@@ -50,7 +69,7 @@ def main(service_file):
             assert verify_runtime()["status"] == "runtime-role-verified"
     print(
         "PASS: runtime verifier rejects Alembic INSERT/DELETE, audit TRUNCATE, "
-        "immutable guard-function ownership"
+        "immutable guard-function ownership, missing document/new-table/new-sequence grants"
     )
 
 

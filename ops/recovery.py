@@ -7,7 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ops.backup import (
     OperationError,
@@ -31,6 +31,14 @@ AUTH_REVOKE = {
 
 def write_receipt(path, value):
     publish_json(path, value)
+
+
+def write_verification_receipt(directory, value):
+    identifier = str(uuid4())
+    receipt = "recovery-check-" + identifier + ".json"
+    result = {**value, "verification_id": identifier, "receipt": receipt}
+    write_receipt(directory / receipt, result)
+    return result
 
 
 def context(service_file, directory):
@@ -346,7 +354,7 @@ def verify(service_file, directory, keyring_file, evidence_file):
         "acceptance_sha256": digest(Path(evidence_file)),
         "prepared_sha256": digest(directory / "prepared.json"),
     }
-    write_receipt(directory / "recovery-check.json", result)
+    result = write_verification_receipt(directory, result)
     # Do not remove QUARANTINE or start/rename a database. The report is an
     # observed instant, not a capability to promote a later modified database.
     return result

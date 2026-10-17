@@ -93,7 +93,7 @@ python -m ops.database provision \
 uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/RENDERED_DIRECTORY --verify-database
 ```
 
-`admin-service.conf`는 아래 백업 service 형식에서 user를 `sallimbook_admin`으로 설정한다. `provision`은 전용 cluster_name/DB 소유자/단일 애플리케이션 DB를 검사하고 기존 app 역할이 있으면 덮어쓰지 않는다. 기존 역할은 `verify-runtime`으로 검사한다. 비밀번호는 libpq의 표준 SCRAM 변환 후 SQL에 전달하여 평문을 SQL·활동 조회·서버 명령 로그에 넣지 않는다. migration은 계속 admin 역할로만 수행한다. `preflight --verify-database`는 프로젝트 label이 맞는 내부 DB 네트워크에서 일회용 읽기 전용 client로 실제 역할을 확인하며, 기존 서비스를 시작/재설정하지 않는다.
+`admin-service.conf`는 아래 백업 service 형식에서 user를 `sallimbook_admin`으로 설정한다. `provision`은 전용 cluster_name/DB 소유자/단일 애플리케이션 DB를 검사하고 기존 app 역할이 있으면 덮어쓰지 않는다. 기존 역할은 `verify-runtime`으로 검사한다. 이 검사는 모든 public 업무 테이블의 SELECT/INSERT/UPDATE/DELETE, 모든 시퀀스의 USAGE/SELECT, public USAGE, DB CONNECT를 확인하고 Alembic 테이블은 SELECT만 허용한다. 비밀번호는 libpq의 표준 SCRAM 변환 후 SQL에 전달하여 평문을 SQL·활동 조회·서버 명령 로그에 넣지 않는다. migration은 계속 admin 역할로만 수행한다. `preflight --verify-database`는 프로젝트 label이 맞는 내부 DB 네트워크에서 일회용 읽기 전용 client로 실제 역할을 확인하며, 기존 서비스를 시작/재설정하지 않는다.
 
 ## 4. 일관된 암호화 백업
 
@@ -140,7 +140,7 @@ age는 기밀성과 암호문 변조 검사를 제공하며 백업 작성자의 
 
 ## 5. 새 환경으로 격리 복원
 
-동일 PostgreSQL 18.6의 **새 빈** `sallimbook_*_restorecheck` DB를 준비한다. 기존 DB/첨부 경로를 재사용하지 않는다. 새 DB는 외부 API·Tailscale 노드에 연결하지 않는다. operator service 파일과 age identity는 각각 0600으로 별도 전달한다.
+동일 PostgreSQL 18.6에서 `CREATE DATABASE … TEMPLATE template0`으로 **새 빈** `sallimbook_*_restorecheck` DB를 준비한다. 기존 DB/첨부 경로를 재사용하지 않는다. 새 DB는 외부 API·Tailscale 노드에 연결하지 않는다. operator service 파일과 age identity는 각각 0600으로 별도 전달한다.
 
 ```bash
 uv run --project services/api python -m ops.backup restore \
@@ -151,7 +151,7 @@ uv run --project services/api python -m ops.backup restore \
   --output /PRIVATE_RESTORE_PARENT/NEW_RESTORE_DIRECTORY
 ```
 
-도구는 archive digest, age 무결성, 제한된 tar 경로/형식, 모든 entry SHA/크기를 검사한다. symlink/hardlink/상위 경로/임의 파일/중복 entry를 추출하지 않는다. 암호화 dump는 age→pg_restore pipe를 사용하고 `--single-transaction --exit-on-error --no-owner --no-acl`로 복구한다. schema revision과 전체 public 테이블 목록/행 수를 대조하고 `QUARANTINE`, `restore.json`, `backup-manifest.json`을 남긴다. 실패한 DB/디렉터리는 격리 상태이며 자동 삭제·재시도 덮어쓰기를 하지 않는다.
+도구는 archive digest, age 무결성, 제한된 tar 경로/형식, 모든 entry SHA/크기를 검사한다. symlink/hardlink/상위 경로/임의 파일/중복 entry를 추출하지 않는다. 복원 전에 PostgreSQL 18 initdb의 기본 객체만 허용하고 사용자 테이블·함수·타입·확장·event trigger·빈 사용자 schema·large object·DB별 subscription/설정을 거부한다. 기존 객체를 지우거나 `--clean`으로 맞추지 않는다. 암호화 dump는 age→pg_restore pipe를 사용하고 `--single-transaction --exit-on-error --no-owner --no-acl`로 복구한다. schema revision과 전체 public 테이블 목록/행 수를 대조하고 `QUARANTINE`, `restore.json`, `backup-manifest.json`을 남긴다. 실패한 DB/디렉터리는 격리 상태이며 자동 삭제·재시도 덮어쓰기를 하지 않는다.
 
 백업 시점 이후의 기록이 원본 손실로 사라졌다면 최신 삭제/철회/금전 이력을 자동으로 재구성할 수 없다. 복원 시각을 현재 시각으로 바꾸거나 자동 재전송으로 채우지 않는다. 두 사용자가 RPO 구간의 자산 스냅샷·수입/보험금/납부·재고·삭제 기록·가계 구성원을 다시 확인한다. 확인 결과와 수용한 손실 범위를 비밀 원문 없는 인수 기록에 남긴다.
 
@@ -183,7 +183,7 @@ uv run --project services/api python -m ops.recovery verify \
 
 검사는 이전 인증 폐기, 새 비밀번호 버전·새 기기 로그인, 완료된 새 vault 버전, 두 구성원 wrapping/recovery, pending rotation/share 부재를 대조한다. 서버 keyring으로 모든 ready 첨부의 AEAD/원본 checksum과 계좌·증권번호 복호화를 메모리에서 확인하고 평문을 출력/저장하지 않는다. 클라이언트 소유 HVK의 실제 복호화/재암호화는 별도 사용자 인수 증거이며 서버 metadata 검사로 대체하지 않는다.
 
-성공해도 `QUARANTINE`은 남고 결과는 `ready-for-operator-review`다. 원본 노드/서버가 다시 접속하지 않는지, RP ID/서명 연속성, 앱 호환성, 두 기기 동작, RPO 손실 수용을 확인한 후 운영자가 승인된 배포 단계에서 전환한다. 검사 후 DB가 변경되면 결과를 그대로 재사용하지 말고 다시 검사한다. DB downgrade나 과거 이미지 실행은 데이터 복원과 다른 작업이다.
+성공해도 `QUARANTINE`은 남고 결과는 `ready-for-operator-review`다. 성공할 때마다 새 `verification_id`와 `recovery-check-UUID.json`을 기록하며 반환값의 `receipt`로 해당 파일을 확인한다. 이전 인수 기록은 덮어쓰거나 삭제하지 않고 실패한 검사는 성공 receipt를 추가하지 않는다. 원본 노드/서버가 다시 접속하지 않는지, RP ID/서명 연속성, 앱 호환성, 두 기기 동작, RPO 손실 수용을 확인한 후 운영자가 승인된 배포 단계에서 전환한다. 검사 후 DB가 변경되면 결과를 그대로 재사용하지 말고 다시 검사한다. DB downgrade나 과거 이미지 실행은 데이터 복원과 다른 작업이다.
 
 ## 7. 서명 APK와 업데이트
 
