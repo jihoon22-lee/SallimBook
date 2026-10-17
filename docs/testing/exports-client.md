@@ -106,3 +106,8 @@ PostgreSQL과 고정 ClamAV/parser/OCR를 사용해 합성 PNG 원본을 검사�
 151초 경과 후에도 native status를 받는 회귀와 pagehide 취소 회귀를 함께 확인했다.
 실제 Android provider 검증은 여전히 두 Galaxy 인수 단계에 남아 있다.
 CI의 격리 문서 도구 job에도 `scripts/test_web_auth.py --exports`를 추가했다.
+
+첫 PR 검토 뒤 native `AUTH_FAILED`를 `REAUTHENTICATION_FAILED`, `KEY_INVALIDATED`를
+`NATIVE_KEY_INVALIDATED`로 전달하도록 수정했다. 잘못된 비밀번호를 앱 미지원으로 안내하지 않고
+키 무효화 시 인증 상태를 폐기한다. native bridge/UI **60개**와 typecheck를 통과했으며,
+재인증 실패 안내·키 무효화·HTTP 우회 없음·동일 상태 반환을 확인했다.
