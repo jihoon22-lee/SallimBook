@@ -186,6 +186,8 @@ missing_value/unconfirmed/verified 금액 상태를 구분한다. `observed_amou
 같은 월·구성원·종류의 일별/월합계 혼용은 후보 조회와 명시 확인을 요구한다. 정밀도 전환은 해당 범위의 모든 활성 원본과 버전을 받아 합계 보존·원본 무효·대체 기록 생성을 원자적으로 수행한다.
 반환 합계는 원본 이하이며, 활성 반환이 있으면 원본 정정·무효·전환을 막는다. 정정·무효·반환·전환은 사유를 남긴다.
 계좌·구성원은 가계 FK와 API 권한을 함께 검증한다. 수입·반환 입력은 자산 월 스냅샷이나 계좌 잔액을 자동으로 변경하지 않는다.
+`editable`/`voidable`은 현재 상세·목록·중복 후보 조회에서 활성 반환까지 반영한 작업 가능 표시다. 반환을 모두 무효화하면 다시 허용된다. 변경 응답(재전송 포함)·전환 결과·과거 이력은 불변 영수증이므로 두 값이 항상 false이며, 작업 전 현재 상세를 조회한다. 현재 조회는 가계 잠금 안에서 원본과 반환 상태를 읽고 목록의 반환 상태는 일괄 조회한다.
+
 목록·이력은 cursor를 지원하고 요약은 근로·부수입과 실제 보험금 유입/반환을 분리한다. 웹/Android 수입 화면 연결은 후속 client 변경에서 진행한다.
 
 ### 10) 카드 일반정보와 결제수단 (SB-017)
@@ -275,7 +277,7 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 키 관리 | POST /vault/enroll-member, /vault/rotate, /vault/recovery-wrap | 계정 step-up, 원자적 버전 전환 |
 | 계약 | GET/POST /insurance/policies, GET/PATCH /insurance/policies/{id} | 보험료는 연결 규칙 참조 |
 | 사건 | GET/POST /insurance/cases, GET/PATCH /insurance/cases/{id} | 치료·정산 상태 분리 |
-| 진료 노드 | POST /insurance/cases/{id}/nodes, PATCH/DELETE /insurance/nodes/{id} | 트리 순환·동일 사건 검사 |
+| 진료 노드 | POST /insurance/cases/{id}/nodes, GET/PATCH/DELETE /insurance/cases/{case_id}/nodes/{node_id} | 트리 순환·동일 사건 검사 |
 | 의료비 | POST /insurance/cases/{id}/expenses, POST /insurance/expenses/{id}/refunds | 실제 지불 원본 1건 |
 | 청구 | POST /insurance/cases/{id}/claims, PATCH /insurance/claims/{id} | 비용 N개 연결 |
 | 지급 | POST /insurance/payouts, POST /insurance/payouts/{id}/returns | 현금 원본+배분; 청구ID 선택 |
@@ -341,6 +343,18 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 다운로드는 권한 확인 후 스트림 또는 매우 짧은 만료의 목적 제한 링크를 사용한다.
 치료명이나 실제 이름을 object storage key에 포함하지 않는다.
 카드 앞뒷면 이미지 첨부는 secret 경계를 우회하므로 지원하지 않는다.
+
+### SB-019/SB-020 보험계약·독립 사건·진료 트리
+
+보험계약은 `/api/v1/insurance/policies`의 생성/목록과 `/{policy_id}`의 상세/PATCH로 관리한다. 계약·보장·납입 시작/종료일을 각각 저장하고, 보장은 `/{policy_id}/coverages` 목록/생성 및 `/{coverage_id}` PATCH로 관리한다. 금액 미입력과 0원을 구분한다. 정책 상태는 active/ended/lapsed이며 과거 계약은 보존한다.
+
+`/{policy_id}/premium-links` 목록/생성과 `/{link_id}` PATCH(active)로 기존 고정비 규칙에 연결한다. 한 계약은 여러 규칙을 가질 수 있고 한 규칙은 한 계약에 귀속한다. 연결 해제는 이력을 남기며 규칙·납부를 삭제하거나 금액을 복제하지 않는다. 연결 응답의 보험료·주기·결제수단은 현재와 과거의 동일한 recurring rule version에서 읽으며 금액 수정도 기존 고정비 규칙 변경 API를 사용한다. 납부 누계로 자산을 자동 생성하지 않는다. 확인된 평가액용 금융 자산을 선택해 연결할 수 있다.
+
+증권번호는 create/PATCH의 `policy_number`로 저장하되 일반 응답은 `masked_number`/`has_number`만 반환한다. `/policies/{policy_id}/reveal` POST는 현재 세션의 최근 로그인 검증·가계 권한·감사와 no-store를 거쳐 30초 표시용 값을 반환한다. 서버 필드 키 파일이 없어도 번호 없는 메타데이터와 번호 삭제는 사용할 수 있다. Android 원문 입력/표시는 후속 네이티브 보호 화면에서 연결하며 JS 메타데이터 bridge에 번호를 포함하지 않는다.
+
+사건 `/insurance/cases`와 `/{case_id}`는 계약에 종속되지 않는다. 환자·실제 날짜·치료 상태(ongoing/ended)와 정산 상태(open/settled)를 독립 관리한다. PATCH에는 If-Match와 사유가 필요하며 변경 전후 내용은 삭제 불가능한 typed 이력으로 보존한다. `/{case_id}/history`는 version cursor를 제공한다. 목록에는 진단명/코드를 포함하지 않는다. 치료 종료에는 종료일이 필요하며 재개방 시 종료일을 비운다.
+
+진료 노드의 목록/생성은 `/{case_id}/nodes`, 상세/수정/삭제는 `/{case_id}/nodes/{node_id}`다. 외래·입원·수술·처방·약국·재진·그룹을 표현하고 노드 자체에 금액을 저장하지 않는다. 동일 사건 부모만 허용하며 가계 잠금 안에서 전체 부모 관계를 검사해 순환과 동시 교차 이동을 막는다. 자식/비용/문서가 연결된 노드 삭제는 409다. 상세 갱신·삭제에는 해당 자원의 If-Match가 필요하다.
 
 ### SB-018 결제수단 연결 조회와 종료 확인
 

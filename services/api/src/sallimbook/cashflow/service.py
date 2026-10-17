@@ -82,7 +82,10 @@ def lock_cash_household(session: Session, principal: Principal) -> None:
         raise DomainError("NOT_FOUND", "요청한 가계를 찾을 수 없습니다.", 404)
 
 
-def _response(row: CashRecordRevision) -> CashResponse:
+def _response(
+    row: CashRecordRevision, *, current: bool = False, has_returns: bool = False
+) -> CashResponse:
+    # Command replays and historical revisions are immutable receipts, never action targets.
     values = {name: getattr(row, name) for name in _VALUES}
     values["amount_krw"] = krw_string(row.amount_krw)
     values["period_month"] = row.period_month.strftime("%Y-%m")
@@ -93,9 +96,39 @@ def _response(row: CashRecordRevision) -> CashResponse:
         action=row.action,
         reason=row.reason,
         conversion_id=row.conversion_id,
-        editable=row.kind in INCOME_KINDS and row.state == "active",
-        voidable=row.kind in (*INCOME_KINDS, "income_return") and row.state == "active",
+        editable=current and not has_returns and row.kind in INCOME_KINDS and row.state == "active",
+        voidable=(
+            current
+            and not has_returns
+            and row.kind in (*INCOME_KINDS, "income_return")
+            and row.state == "active"
+        ),
     )
+
+
+def _current_responses(
+    session: Session, principal: Principal, rows: list[CashRecordRevision]
+) -> list[CashResponse]:
+    # Caller holds the household lock, so revisions and return presence share one state.
+    ids = [row.cash_record_id for row in rows]
+    returned_ids = (
+        set(
+            session.scalars(
+                select(CashRecord.reverses_id)
+                .where(
+                    CashRecord.household_id == principal.household_id,
+                    CashRecord.reverses_id.in_(ids),
+                    CashRecord.state == "active",
+                )
+                .distinct()
+            )
+        )
+        if ids
+        else set()
+    )
+    return [
+        _response(row, current=True, has_returns=row.cash_record_id in returned_ids) for row in rows
+    ]
 
 
 def _revision(session: Session, principal: Principal, record_id: UUID, version: int):
@@ -594,8 +627,11 @@ def convert_income(session, principal, payload: IncomeConvert, key):
 
 
 def get_income(session, principal, record_id):
+    lock_cash_household(session, principal)
     row = _income_record(session, principal, record_id)
-    response = _response(_revision(session, principal, row.id, row.version))
+    response = _current_responses(
+        session, principal, [_revision(session, principal, row.id, row.version)]
+    )[0]
     session.commit()
     return response
 
@@ -603,6 +639,7 @@ def get_income(session, principal, record_id):
 def list_income(
     session, principal, month, *, member_id=None, kind=None, state="active", cursor=None, limit=50
 ):
+    lock_cash_household(session, principal)
     if member_id is not None:
         scoped_entity(session, HouseholdMember, member_id, principal)
     query = (
@@ -631,7 +668,7 @@ def list_income(
         query = query.where(CashRecord.id < cursor)
     rows = list(session.scalars(query.order_by(CashRecord.id.desc()).limit(limit + 1)))
     response = IncomeListResponse(
-        items=[_response(row) for row in rows[:limit]],
+        items=_current_responses(session, principal, rows[:limit]),
         next_cursor=rows[limit - 1].cash_record_id if len(rows) > limit else None,
     )
     session.commit()
@@ -656,6 +693,7 @@ def history(session, principal, record_id, *, cursor=None, limit=50):
 
 
 def duplicates(session, principal, *, month, kind, member_id, date_precision):
+    lock_cash_household(session, principal)
     scoped_entity(session, HouseholdMember, member_id, principal)
     rows = _duplicate_rows(
         session,
@@ -665,10 +703,26 @@ def duplicates(session, principal, *, month, kind, member_id, date_precision):
         member_id=member_id,
         date_precision=date_precision,
     )
+    revisions = {
+        row.cash_record_id: row
+        for row in session.scalars(
+            select(CashRecordRevision)
+            .join(
+                CashRecord,
+                (CashRecordRevision.household_id == CashRecord.household_id)
+                & (CashRecordRevision.cash_record_id == CashRecord.id)
+                & (CashRecordRevision.version == CashRecord.version),
+            )
+            .where(
+                CashRecord.household_id == principal.household_id,
+                CashRecord.id.in_([row.id for row in rows[:20]]),
+            )
+        )
+    }
     response = DuplicateResponse(
         suspected=bool(rows),
         truncated=len(rows) > 20,
-        items=[_response(_revision(session, principal, row.id, row.version)) for row in rows[:20]],
+        items=_current_responses(session, principal, [revisions[row.id] for row in rows[:20]]),
     )
     session.commit()
     return response

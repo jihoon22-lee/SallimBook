@@ -30,6 +30,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.identity.auth_models import HouseholdMember
+from sallimbook.insurance.models import InsurancePolicy
 
 
 def _editable_values(asset: Asset) -> dict:
@@ -187,6 +188,19 @@ def update_asset(
     ):
         raise DomainError(
             "ASSET_KIND_IN_USE", "월 기록이 있는 자산의 자산·부채 구분은 바꿀 수 없습니다.", 409
+        )
+    if (candidate.kind != "asset" or candidate.category != "financial") and session.scalar(
+        select(InsurancePolicy.id)
+        .where(
+            InsurancePolicy.household_id == principal.household_id,
+            InsurancePolicy.valuation_asset_id == asset.id,
+        )
+        .limit(1)
+    ) is not None:
+        raise DomainError(
+            "INSURANCE_ASSET_REQUIRED",
+            "보험 평가액 연결을 해제한 뒤 자산 구분을 변경해 주세요.",
+            422,
         )
     # Account edits and asset lifecycle changes share Asset -> FinancialAccount order.
     account = session.scalar(

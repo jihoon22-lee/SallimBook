@@ -93,6 +93,7 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 
 월의 current revision과 이전 revision은 가계·월 복합 FK로 연결한다. 값 행도 가계·revision·자산을 복합 FK로 검증한다.
 확정 revision/값의 UPDATE·DELETE 및 확정본에 대한 값 INSERT는 DB trigger로 거부한다. 값의 소속 identity 이동도 거부한다.
+revision의 이전 변경본·재개방 사유·작성자·작성 시각은 생성 시점부터 고정한다. 확정과 동시에 이 이력을 바꾸는 SQL도 거부한다.
 값을 수정할 때 revision 행을 함께 잠그므로 확정과 동시 편집은 한쪽만 성공한다.
 자산 집합/지분 변경과 월 확인은 가계 행 잠금을 공유한다. 순서는 가계 → 월 → revision → 자산/계좌이며,
 인증 세션 잠금이 앞선다. 금액 확인 행의 수정도 revision version을 증가시켜 열린 확정 화면의 충돌을 검출한다.
@@ -259,3 +260,7 @@ erDiagram
 
 `0009_recurring`은 규칙·기간별 규칙 변경본·예상 회차·회차 이력·실제 납부·생성 묶음/참조의 7개 테이블을 추가한다. 기간 중복은 household/rule/daterange GiST exclusion으로 막는다. PostgreSQL 18.6 이미지에 포함된 btree_gist 1.8을 public에 설치하고 명시적 public UUID operator class를 사용하여 테스트 schema 격리를 유지한다. downgrade는 다른 schema도 쓰는 extension을 제거하지 않는다.
 규칙 조건·회차 이력·실납부 분해·생성 응답 참조는 불변이며 규칙의 열린 적용 종료일만 처음 한 번 닫을 수 있다. 실납부 insert trigger는 같은 가계의 fixed_payment cash 종류·방향·활성 상태·금액 합계와 회차 경제 유형을 확인한다. 금전 원본의 취소는 원본 cash 이력과 연결 회차 갱신을 한 트랜잭션으로 수행한다.
+
+### SB-019/SB-020 구현 상태
+
+`0010_insurance_core`는 insurance_policies, insurance_coverages, policy_premium_links, insurance_cases, insurance_case_revisions, medical_nodes를 추가한다. 계약에는 독립 contract/coverage/payment 기간과 AES-GCM 증권번호 envelope만 저장하고, 보험료는 규칙 링크에서 조회한다. 종료한 링크와 정책은 삭제하지 않는다. `insurance_case_revisions`의 UPDATE/DELETE는 DB trigger가 거부한다. 노드의 `(household_id, case_id, parent_id)` 복합 FK가 다른 사건의 부모를 차단하고 API의 가계 잠금·부모 탐색이 순환을 차단한다. 보험 평가액에 연결된 자산은 연결 해제 전 금융 자산 종류를 유지하며, 사용 종료는 과거 연결을 보존한다. 의료비·청구·입금/반환은 후속 금전 이벤트 테이블에서 연결한다.

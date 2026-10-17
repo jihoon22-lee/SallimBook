@@ -65,6 +65,11 @@ def record_event(
         "obligation",
         "fixed_settlement",
         "card",
+        "insurance_policy",
+        "insurance_coverage",
+        "policy_premium_link",
+        "insurance_case",
+        "medical_node",
     ],
     entity_id: UUID,
     action: Literal[
@@ -108,6 +113,11 @@ def record_event(
         "obligation",
         "fixed_settlement",
         "card",
+        "insurance_policy",
+        "insurance_coverage",
+        "policy_premium_link",
+        "insurance_case",
+        "medical_node",
     } or action not in {
         "create",
         "update",

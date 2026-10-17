@@ -187,6 +187,11 @@ Android 월 adapter는 별도 연결 중이며 JS fetch로 네이티브 인증 �
 
 `0009_recurring`의 기간 배타 제약은 고정 PostgreSQL 이미지의 btree_gist 1.8을 사용한다. 마이그레이션 역할에 대상 DB의 CREATE 권한이 필요하고 런타임 API 역할에는 확장 설치 권한을 주지 않는다. public의 기존 확장 버전/위치가 다르면 자동 이동·업그레이드하지 않고 마이그레이션을 중단한다. [PostgreSQL btree_gist 문서](https://www.postgresql.org/docs/18/btree-gist.html), [CREATE EXTENSION 문서](https://www.postgresql.org/docs/18/sql-createextension.html)를 확인했다.
 
+SB-019/SB-020 보험 서버의 합성 계약·암호화20개, API/권한/동시성23개, DB 보존4개 총47개가 통과했다.
+최초 실행의 fixture3건(종료 상태·적용일·기존400계약)을 수정한 뒤 47개 전체와 Alembic drift/왕복을 다시 통과했다.
+실제 잠금 대기 중 인증 만료, 기기 철회, 복호화/감사 후 만료, 다른 가계 참조와 깊은 진료 트리를 포함한다.
+웹/Android 보험 화면과 운영 키·실기기 검증은 후속 단계이며 이 결과로 완료 처리하지 않는다.
+
 SB-018 결제수단 연결 조회·종료 확인은 새 migration 없이 `0009_recurring` 위에 연결했다.
 `test_payment_links.py`42개, 카드30개, 자산61개, 고정비69개, 계좌68개가 현재 코드에서 통과했다
 (총270개, 종료 확인이 필요한 기존 fixture 수정 후 분리 재검증 포함). Alembic drift 없음과
