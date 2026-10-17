@@ -21,6 +21,7 @@ def test_concurrent_database_runner_refuses_before_any_docker_call(tmp_path, mon
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)
     monkeypatch.setattr(runner, "ROOT", tmp_path)
+    monkeypatch.setattr(runner, "LOCK_DIRECTORY", tmp_path / "host-lock")
 
     def forbidden(*args, **kwargs):
         pytest.fail("A concurrent runner attempted to operate Docker")
@@ -28,6 +29,8 @@ def test_concurrent_database_runner_refuses_before_any_docker_call(tmp_path, mon
     monkeypatch.setattr(runner.subprocess, "run", forbidden)
     monkeypatch.setattr(runner.subprocess, "check_output", forbidden)
     with runner.test_service_lock():
+        # A second checkout still controls the same host Compose resources.
+        monkeypatch.setattr(runner, "ROOT", tmp_path / "another-worktree")
         with pytest.raises(SystemExit, match="Another SallimBook database test"):
             runner.main()
 
@@ -50,6 +53,7 @@ def test_runner_rejects_redirected_database_before_any_command(url, tmp_path, mo
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)
     monkeypatch.setattr(runner, "ROOT", tmp_path)
+    monkeypatch.setattr(runner, "LOCK_DIRECTORY", tmp_path / "host-lock")
     (tmp_path / ".env").write_text(f"SALLIMBOOK_TEST_DATABASE_URL={url}\n")
     monkeypatch.setattr("sys.argv", ["test_database.py"])
 

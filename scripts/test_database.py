@@ -12,6 +12,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 ROOT = Path(__file__).resolve().parents[1]
+LOCK_DIRECTORY = Path.home() / ".cache" / "sallimbook"
 COMPOSE = [
     "docker",
     "compose",
@@ -44,8 +45,9 @@ def validate_test_url(raw: str) -> None:
 
 @contextmanager
 def test_service_lock():
-    directory = ROOT / ".cache"
-    directory.mkdir(mode=0o700, exist_ok=True)
+    # Every checkout controls the same Compose project/ports on this host.
+    directory = LOCK_DIRECTORY
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     with (directory / "database-test.lock").open("a") as lock:
         try:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)

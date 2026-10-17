@@ -206,8 +206,8 @@
       "git_sha1": "f0b61e34ad240976219d1abf815c3e565e1c2bcd"
     },
     "scripts/test_database.py": {
-      "sha256": "c983fa9cc02676912bfe20453b0f23c467597f64fd92cef02ec29bce9208fcef",
-      "git_sha1": "a2e07616c1e3f4591fd15a96824a401475bd2cda"
+      "sha256": "429775febbbca7beeb2aa6251e19c544dcda25b4d69d420288e22b7f32af8253",
+      "git_sha1": "8accf5f4e9f214fff7ec99bd87c472cc16629c9f"
     }
   }
 }
