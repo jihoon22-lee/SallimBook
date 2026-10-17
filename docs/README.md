@@ -55,3 +55,5 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다. 게시기 재실행은 사람이 수정한 이슈 본문·상태를 덮어쓰지 않는다.
 
 - [가전·공용 재고·교체·홈 화면 검증](testing/homecare-client.md): SB-024~SB-027/SB-033 화면과 계산·충돌·플랫폼 검증.
+
+- [첨부 문서 화면 검증](testing/documents-client.md): SB-023의 7개 부모 연결과 웹 원본/Android 보호 화면 검증.

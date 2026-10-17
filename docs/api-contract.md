@@ -372,6 +372,7 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유 부족은 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
 예약에는 암호문 tag·실패 업로드·삭제 후 유예 파일도 포함하며 물리 정리 확인 뒤 용량을 반환한다.
 정리 명령·기본 한도·설정·검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
+7개 부모 상세의 공유 패널·원본 전송·응답 유실 재시도·Android 보호 화면 연결은 [첨부 UI 검증](testing/documents-client.md)을 따른다.
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.

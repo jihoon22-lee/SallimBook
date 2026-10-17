@@ -1,3 +1,4 @@
+import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback } from "react";
 import { Link, useParams } from "react-router";
 import { ApiError } from "../../../platform/api";
@@ -26,7 +27,7 @@ function CaseList() {
 }
 function CaseDetail({ id, edit, nodeId }: { id: string; edit: boolean; nodeId?: string }) {
   const members = useHouseholdMembers(); const api = useInsuranceApi(); const record = useResource(useCallback(() => isUuid(id) ? api.case(id) : Promise.reject(new ApiError(404, "NOT_FOUND")), [api, id])); const row = record.data;
-  return <><InsuranceError error={record.error} />{record.error && <button onClick={() => void record.reload()}>보험 사건 다시 확인</button>}{record.loading && <p role="status">사건을 확인하고 있어요.</p>}{row && !record.loading && !record.error && (edit ? <CaseEditor initial={row} /> : <><section className="card"><h2>{row.title}</h2><CaseSummary row={row} members={members.members} /><Link to={`/insurance/cases/${id}/edit`}>사건 상태·내용 변경</Link></section><CaseMoneySummary caseId={id} /><MedicalTree key={`${id}:${nodeId ?? ""}`} caseId={id} selectedId={nodeId} /><ExpenseList caseId={id} /><ClaimsList caseId={id} /><PayoutList caseId={id} /><CaseHistory id={id} /></>)}</>;
+  return <><InsuranceError error={record.error} />{record.error && <button onClick={() => void record.reload()}>보험 사건 다시 확인</button>}{record.loading && <p role="status">사건을 확인하고 있어요.</p>}{row && !record.loading && !record.error && (edit ? <CaseEditor initial={row} /> : <><section className="card"><h2>{row.title}</h2><CaseSummary row={row} members={members.members} /><Link to={`/insurance/cases/${id}/edit`}>사건 상태·내용 변경</Link></section><DocumentPanel kind="case" id={id} /><CaseMoneySummary caseId={id} /><MedicalTree key={`${id}:${nodeId ?? ""}`} caseId={id} selectedId={nodeId} /><ExpenseList caseId={id} /><ClaimsList caseId={id} /><PayoutList caseId={id} /><CaseHistory id={id} /></>)}</>;
 }
 export function CaseListPage() { return <InsurancePage title="보험 사건" description="치료와 청구 정산을 독립적으로 관리해요."><CaseList /></InsurancePage>; }
 export function CaseNewPage() { return <InsurancePage title="보험 사건 등록" description="계약 선택 없이 사건과 환자부터 기록해요."><CaseEditor /></InsurancePage>; }

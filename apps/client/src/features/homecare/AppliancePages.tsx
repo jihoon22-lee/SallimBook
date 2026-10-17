@@ -1,3 +1,4 @@
+import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -34,6 +35,6 @@ export function ApplianceListPage() { return <HomecarePage title="가전 관리"
 export function ApplianceNewPage() { return <HomecarePage title="가전 등록" description="구매일과 교체일은 각각 기록해요."><ApplianceEditor /></HomecarePage>; }
 function ApplianceDetail({ id, edit }: { id: string; edit: boolean }) {
   const api = useHomecareApi(); const navigate = useNavigate(); const resource = useResource(useCallback(() => isUuid(id) ? api.getAppliance({ applianceId: id }) : Promise.reject(new ApiError(404, "NOT_FOUND")), [api, id])); const row = resource.data;
-  return <><ResourceFeedback resource={resource} />{row && !resource.error && !resource.loading && (edit ? <ApplianceEditor key={`${row.id}:${row.version}`} initial={row} /> : <><section className="card"><h2>{row.name}</h2><ApplianceSummary row={row} /><Link to={`/appliances/${id}/edit`}>가전 정보 수정·사용 종료</Link><DeleteHomecare initial={row} label="가전" name={row.name} read={() => api.getAppliance({ applianceId: id })} remove={(current, signal) => api.deleteAppliance({ applianceId: id, ifMatch: etag(current.version) }, signal)} render={(current) => <ApplianceSummary row={current} />} deleted={() => navigate("/appliances")} listPath="/appliances?status=all" /></section><DeviceLinks appliance={row} /></>)}</>;
+  return <><ResourceFeedback resource={resource} />{row && !resource.error && !resource.loading && (edit ? <ApplianceEditor key={`${row.id}:${row.version}`} initial={row} /> : <><section className="card"><h2>{row.name}</h2><ApplianceSummary row={row} /><Link to={`/appliances/${id}/edit`}>가전 정보 수정·사용 종료</Link><DeleteHomecare initial={row} label="가전" name={row.name} read={() => api.getAppliance({ applianceId: id })} remove={(current, signal) => api.deleteAppliance({ applianceId: id, ifMatch: etag(current.version) }, signal)} render={(current) => <ApplianceSummary row={current} />} deleted={() => navigate("/appliances")} listPath="/appliances?status=all" /></section><DocumentPanel kind="appliance" id={id} /><DeviceLinks appliance={row} /></>)}</>;
 }
 export function ApplianceDetailPage({ edit = false }: { edit?: boolean }) { const { id = "" } = useParams(); return <HomecarePage title={edit ? "가전 정보 수정" : "가전 상세"} description="구매·보증·수리 메모와 기기별 교체 기준을 확인해요."><ApplianceDetail key={`${id}:${edit}`} id={id} edit={edit} /></HomecarePage>; }
