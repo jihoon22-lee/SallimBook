@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ApiError, toApiError } from "../../../platform/api";
-import { isNativeAuth } from "../../../platform/nativeAuth";
 import { formatMonth, isValidMonth, useMonth } from "../../../shared/MonthContext";
 import { SessionStatus } from "../../auth/AuthFeedback";
 import { useAuth } from "../../auth/AuthProvider";
@@ -66,5 +65,5 @@ function ComparisonWorkspace() {
 }
 export function AssetComparisonPage() {
   const { state } = useAuth(); const { month } = useMonth();
-  return <><div className="intro"><p className="eyebrow">기록한 금액의 변화</p><h1>월간 자산 비교</h1><p>전체 변화와 같은 비교 대상의 변화를 나눠 확인해요.</p></div>{state.status !== "authenticated" ? <><p>{formatMonth(month)} · 서울 기준</p><SessionStatus /></> : isNativeAuth() ? <section className="card"><h2>앱의 비교 연결 준비 중</h2><p>검증된 네이티브 비교 연결을 준비하고 있어요. 웹에서 월간 비교를 확인할 수 있어요.</p></section> : <ComparisonWorkspace />}</>;
+  return <><div className="intro"><p className="eyebrow">기록한 금액의 변화</p><h1>월간 자산 비교</h1><p>전체 변화와 같은 비교 대상의 변화를 나눠 확인해요.</p></div>{state.status !== "authenticated" ? <><p>{formatMonth(month)} · 서울 기준</p><SessionStatus /></> : <ComparisonWorkspace />}</>;
 }

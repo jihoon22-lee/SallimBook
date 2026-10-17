@@ -238,12 +238,12 @@
       "git_sha1": "cc99d9219cc23eb80159791a85e3edf58b91d2ef"
     },
     "docs/testing/monthly-assets-client.md": {
-      "sha256": "cb3488f308d1533e0fccfb97e36977139bb1fe4e1dbb571321ac5a854d944b80",
-      "git_sha1": "b0f9aed1882627b68a5c4703e3dcd6c55a4edaf0"
+      "sha256": "d1f8af7845fa22f3ecb85d8db595254c7cc6bcaf18864ffb99cf55dbb9e0e916",
+      "git_sha1": "f4ca9f527aef0a213cf38ff21c48098d2c077287"
     },
     "docs/testing/assets-comparison-client.md": {
-      "sha256": "9de715591b160deea4c433018e3bd14184c4ad0b4776269459e91eca18fe9dd3",
-      "git_sha1": "659128e6dd813b2e7e1fc383cf4a55c6de8fd9cf"
+      "sha256": "194b6af52d1a252f086a047981975c2b1308147da4f13a55a478da9f9238f8a0",
+      "git_sha1": "11f99093528166d831c3c23c39f32352a61d6561"
     }
   }
 }

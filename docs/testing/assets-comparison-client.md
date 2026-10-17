@@ -38,4 +38,25 @@ TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp uv run --project services/api pyt
 펼쳐 기본 서버와 전용 서버가 함께 시작되지 않게 한다. 전체 회귀 최초 실행은 217개 통과,
 Android 크기 route 반복 검사 1개 실패였다. trace에 의존 모듈의 `net::ERR_NETWORK_CHANGED`가
 있었고 동시에 실제 HTTPS 검사용 Docker DB를 생성했다. 브라우저 회귀와 Docker 네트워크 생성은
-순서대로 실행한다. 같은 코드로 Android route 검사 8개를 단독 재실행해 모두 통과했다. Android 네이티브 bridge 연결과 해당 최종 검증은 통합 이후 결과로 갱신한다.
+순서대로 실행한다. 같은 코드로 Android route 검사 8개를 단독 재실행해 모두 통과했다.
+
+## Android 연결
+
+월 기록 8개와 비교·추이 2개 동작을 생성 API 타입을 따르는 네이티브 메서드에 연결했다.
+비교 화면·홈·자산 및 계좌 상세의 앱 준비 안내를 실제 조회로 교체했다. 요청 취소는 Android 작업의
+서버 반영을 취소했다고 간주하지 않으며 늦은 응답을 버리고 저장 결과 불확실성과 재시도를 유지한다.
+
+React bridge 시뮬레이션은 월·revision 조회, 값 변경의 ID/If-Match, 범위 반영, 확정·재개방의 멱등키,
+응답 유실·늦은 취소 후 동일 요청 재시도, 비교·추이 query, 홈·계좌의 같은 자산 조회를 검사한다.
+잠금·세션 만료·네트워크 실패에서 보호 화면 전환과 WebView HTTP 요청 0건을 확인한다.
+이 검사는 Android Keystore·생체인증·실기기 동작을 대신하지 않는다.
+
+통합 후 `pnpm typecheck`, `pnpm build`, 문서 검증과 `git diff --check`가 통과했다.
+전용 18750에서 전체 회귀 248개를 실행해 244개가 통과했다. 기존 계좌 네이티브 테스트의 가짜 bridge에
+새 비교 조회가 빠져 부수적인 오류가 생긴 4개는 비교·추이 응답을 추가한 뒤 해당 파일 10개 전체를
+다시 실행해 통과했다. 신규 네이티브 화면 16개와 비교 UI 28개는 전체 실행에서 모두 통과했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp pnpm --filter @sallimbook/client exec playwright test --config playwright.comparison.config.ts --workers 1
+TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp pnpm --filter @sallimbook/client exec playwright test --config playwright.comparison.config.ts tests/accounts-native.spec.ts --workers 1
+```

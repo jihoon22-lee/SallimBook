@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
-import { isNativeAuth } from "../../platform/nativeAuth";
 import { formatMonth, useMonth } from "../../shared/MonthContext";
 import { useAuth } from "../auth/AuthProvider";
 import { useAssetComparisonApi } from "../assets/comparison/api";
@@ -17,7 +16,7 @@ function CurrentAssetSummary() {
 export function HomeAssetSummary() {
   const { state } = useAuth(); const { month } = useMonth();
   return <section className="card" aria-labelledby="assets-title"><p className="eyebrow">월간 기록 · {formatMonth(month)}</p><h2 id="assets-title">자산의 변화</h2>
-    {state.status === "authenticated" ? isNativeAuth() ? <p>앱의 월간 자산 연결을 준비하고 있어요. 웹에서 같은 기록을 확인할 수 있어요.</p> : <CurrentAssetSummary /> : state.status === "loading" ? <p role="status">로그인 상태를 확인하고 있어요.</p> : <><p className="empty-value" aria-label="로그인 후 자산 기록 확인">—</p><p>로그인하면 우리 가계의 월간 자산 변화를 확인할 수 있어요.</p><Link to="/login">로그인하기</Link></>}
+    {state.status === "authenticated" ? <CurrentAssetSummary /> : state.status === "loading" ? <p role="status">로그인 상태를 확인하고 있어요.</p> : <><p className="empty-value" aria-label="로그인 후 자산 기록 확인">—</p><p>로그인하면 우리 가계의 월간 자산 변화를 확인할 수 있어요.</p><Link to="/login">로그인하기</Link></>}
     <div className="form-actions"><Link className="button-link" to={`/assets/compare?to=${month}`}>월간 비교 자세히 보기</Link><Link to={`/assets/months/${month}`}>이 달 기록 확인</Link><Link to="/assets">자산 관리</Link></div>
   </section>;
 }

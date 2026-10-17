@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { ApiError, toApiError } from "../../../platform/api";
-import { isNativeAuth } from "../../../platform/nativeAuth";
 import { formatMonth, MonthPicker, useMonth } from "../../../shared/MonthContext";
 import { MemberLoadError, useHouseholdMembers } from "../../finance/FinanceSupport";
 import { ComparisonDates, ComparisonError, ComparisonStatus, PeriodLabels } from "./ComparisonFeedback";
@@ -23,4 +22,4 @@ function MonthlyData({ assetId }: { assetId: string }) {
     <div className="form-actions"><Link to={`/assets/months/${month}`}>월 기록 입력·정정</Link><Link to={`/assets/compare?to=${month}&asset_id=${assetId}`}>이 자산의 비교 상세</Link></div>
   </section>{data && <TrendPanel to={month} filters={filters} comparison={data} refreshComparison={() => setRetry((value) => value + 1)} title="이 자산의 보유금액 추이" />}</>;
 }
-export function AssetMonthlyData({ assetId }: { assetId: string }) { return isNativeAuth() ? <section className="card"><h2>월별 금액</h2><p>앱의 월별 금액 연결을 준비하고 있어요. 웹에서 같은 자산 기록을 확인할 수 있어요.</p></section> : <MonthlyData assetId={assetId} />; }
+export function AssetMonthlyData({ assetId }: { assetId: string }) { return <MonthlyData assetId={assetId} />; }

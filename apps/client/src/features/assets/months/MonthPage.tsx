@@ -2,7 +2,6 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { components } from "@sallimbook/api-client";
 import { ApiError, toApiError } from "../../../platform/api";
-import { isNativeAuth } from "../../../platform/nativeAuth";
 import { formatMonth, isValidMonth, useMonth } from "../../../shared/MonthContext";
 import { useAuth } from "../../auth/AuthProvider";
 import { SessionStatus, useMounted } from "../../auth/AuthFeedback";
@@ -91,6 +90,6 @@ export function AssetMonthPage() {
   return <><div className="intro"><p className="eyebrow">우리 집의 월말 확인</p><h1>월별 자산 확인</h1><p>금액을 실제로 확인한 날짜와 함께 기록해요. 수입·납부·보험금 입력으로 잔액을 자동 가감하지 않아요.</p></div>
     <div className="month-picker"><label htmlFor={id}>확인할 월</label><input id={id} type="month" min="0001-01" max="9999-12" value={month} disabled={editing} onChange={(event) => { if (isValidMonth(event.target.value)) navigate(`/assets/months/${event.target.value}`); }} /><span className="muted">서울 기준 · {formatMonth(month)}</span></div>
     {editing && <p className="muted">입력이나 검토를 마치고 닫으면 다른 월로 이동할 수 있어요.</p>}<p className="month-caption">{formatMonth(month)} · 서울 기준</p>
-    {state.status !== "authenticated" ? <SessionStatus /> : isNativeAuth() ? <section className="card"><h2>앱의 월 기록 연결 준비 중</h2><p>월 기록은 웹에서 확인할 수 있어요. 앱의 검증된 월 기록 연결을 준비하고 있어요.</p></section> : <MonthWorkspace key={`${month}:${revision ?? "current"}`} month={month} revisionNo={revision === null ? undefined : Number(revision)} setEditing={setEditing} />}
+    {state.status !== "authenticated" ? <SessionStatus /> : <MonthWorkspace key={`${month}:${revision ?? "current"}`} month={month} revisionNo={revision === null ? undefined : Number(revision)} setEditing={setEditing} />}
   </>;
 }
