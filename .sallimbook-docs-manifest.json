@@ -62,8 +62,8 @@
       "git_sha1": "8b1efc9af0109b44edebba0787076a0962c6dfd9"
     },
     "docs/data-model.md": {
-      "sha256": "12bfebee1cb54fbd3f886111ce8408799c60880e3a615734dc988144589e5396",
-      "git_sha1": "39cfa3386d563e1fd60a4a299078a15cfed89f4b"
+      "sha256": "800185f7c20f23ca4721f79751e0c258f10c54482492cebb0a9269271c8158f1",
+      "git_sha1": "88562e58eade97908344eb5444d7f43cdb06ddee"
     },
     "docs/api-contract.md": {
       "sha256": "4eda7e9155ed7cc870a856eb875ed23a2b998b973fc1b761a6c40b0957918490",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "3a9554a4aa7b42092317652b6c5b1dee11fa8cb42f8182e8a418a21c42ed5b84",
-      "git_sha1": "8e8c61420d043bc800b7c69dde7f1d89503e1a85"
+      "sha256": "56cb58938bf8ddf94ecd17bfe60b92590bf1cb9b19a17f7c458dd30effd043d6",
+      "git_sha1": "2c4867869898916918d5dbe73cfb2dc6a3120fc0"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -122,8 +122,8 @@
       "git_sha1": "34cb6de1be33e6f786516c326ef84fd6f722d021"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "063c57761dc9811ae1641ef50030e07671dca8eb1323ba3fa8e982c418710d58",
-      "git_sha1": "3c6fed8dfa1cd89eb090c0d9469d85db06fbffab"
+      "sha256": "5e4b7ffcdccc3547598b5eda46a14e3293141985579792b66aefebc20c9cdd32",
+      "git_sha1": "d6d7d1cbf7c87ff276e1817bb932787d76a706f6"
     },
     "docs/README.md": {
       "sha256": "b13e6961bd239149808d4258cd53648fa754625177d04c521931576f6ec8aec1",
@@ -222,12 +222,16 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "5ce2cdc1621a3fbb1563f25be5f6c0c930ac2b80b0469052e6b74f7d4b502966",
-      "git_sha1": "017496e96ffea7a72ad4fdfc8cc4aacb1d38b4e7"
+      "sha256": "a89da28144101a0a19364d8b787737ff4e5c328b76b45d7b3aa751c651693226",
+      "git_sha1": "044a75fda09a9bf7470c814ad334190cb9883ef8"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "75e50c296b96865b339ad3604d9c2573b64df85fde44ea3312df6774d41c394f",
       "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
+    },
+    "docs/testing/passkeys-web.md": {
+      "sha256": "0efece15a939fbda00d9cf96fa8c42a63aa4d40e9ec25874cb49a81cad436e60",
+      "git_sha1": "cfde913f5abf050ad7a28ba4ff90f59953aeb4b4"
     }
   }
 }

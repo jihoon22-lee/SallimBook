@@ -93,6 +93,7 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 
 월의 current revision과 이전 revision은 가계·월 복합 FK로 연결한다. 값 행도 가계·revision·자산을 복합 FK로 검증한다.
 확정 revision/값의 UPDATE·DELETE 및 확정본에 대한 값 INSERT는 DB trigger로 거부한다. 값의 소속 identity 이동도 거부한다.
+revision의 이전 변경본·재개방 사유·작성자·작성 시각은 생성 시점부터 고정한다. 확정과 동시에 이 이력을 바꾸는 SQL도 거부한다.
 값을 수정할 때 revision 행을 함께 잠그므로 확정과 동시 편집은 한쪽만 성공한다.
 자산 집합/지분 변경과 월 확인은 가계 행 잠금을 공유한다. 순서는 가계 → 월 → revision → 자산/계좌이며,
 인증 세션 잠금이 앞선다. 금액 확인 행의 수정도 revision version을 증가시켜 열린 확정 화면의 충돌을 검출한다.
