@@ -413,10 +413,27 @@
       "AssetArchive": {
         "additionalProperties": false,
         "properties": {
+          "closure_ack": {
+            "default": false,
+            "title": "Closure Ack",
+            "type": "boolean"
+          },
           "ended_on": {
             "format": "date",
             "title": "Ended On",
             "type": "string"
+          },
+          "usage_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage Digest"
           }
         },
         "required": [
@@ -736,6 +753,11 @@
             "$ref": "#/components/schemas/AssetCategory",
             "title": "Category"
           },
+          "closure_ack": {
+            "default": false,
+            "title": "Closure Ack",
+            "type": "boolean"
+          },
           "ended_on": {
             "anyOf": [
               {
@@ -800,6 +822,18 @@
             "format": "date",
             "title": "Started On",
             "type": "string"
+          },
+          "usage_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage Digest"
           }
         },
         "title": "AssetPatch",
@@ -1163,10 +1197,27 @@
       "CardArchive": {
         "additionalProperties": false,
         "properties": {
+          "closure_ack": {
+            "default": false,
+            "title": "Closure Ack",
+            "type": "boolean"
+          },
           "ended_on": {
             "format": "date",
             "title": "Ended On",
             "type": "string"
+          },
+          "usage_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage Digest"
           }
         },
         "required": [
@@ -1343,6 +1394,11 @@
             "$ref": "#/components/schemas/CardType",
             "title": "Card Type"
           },
+          "closure_ack": {
+            "default": false,
+            "title": "Closure Ack",
+            "type": "boolean"
+          },
           "ended_on": {
             "anyOf": [
               {
@@ -1434,6 +1490,18 @@
               }
             ],
             "title": "Started On"
+          },
+          "usage_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage Digest"
           }
         },
         "title": "CardPatch",
@@ -3249,6 +3317,433 @@
         "title": "InvitationResponse",
         "type": "object"
       },
+      "LinkedCard": {
+        "properties": {
+          "active_for_closure": {
+            "title": "Active For Closure",
+            "type": "boolean"
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alias"
+          },
+          "ended_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended On"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issuer_name": {
+            "title": "Issuer Name",
+            "type": "string"
+          },
+          "last_four": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Four"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "issuer_name",
+          "product_name",
+          "alias",
+          "last_four",
+          "ended_on",
+          "active_for_closure"
+        ],
+        "title": "LinkedCard",
+        "type": "object"
+      },
+      "LinkedCardPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedCard"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total_count",
+          "next_cursor"
+        ],
+        "title": "LinkedCardPage",
+        "type": "object"
+      },
+      "LinkedObligation": {
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "actual_paid_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Actual Paid Krw",
+            "type": "string"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "expected_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount Krw"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payment_basis": {
+            "$ref": "#/components/schemas/PaymentBasis"
+          },
+          "rule_id": {
+            "format": "uuid",
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "rule_version_id": {
+            "format": "uuid",
+            "title": "Rule Version Id",
+            "type": "string"
+          },
+          "scheduled_date": {
+            "format": "date",
+            "title": "Scheduled Date",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unpaid",
+              "partial"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "rule_id",
+          "rule_version_id",
+          "title",
+          "category",
+          "scheduled_date",
+          "expected_amount_krw",
+          "actual_paid_krw",
+          "status",
+          "account_id",
+          "card_id",
+          "payment_basis"
+        ],
+        "title": "LinkedObligation",
+        "type": "object"
+      },
+      "LinkedObligationPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedObligation"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total_count",
+          "next_cursor"
+        ],
+        "title": "LinkedObligationPage",
+        "type": "object"
+      },
+      "LinkedRule": {
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount_mode": {
+            "enum": [
+              "fixed",
+              "variable"
+            ],
+            "title": "Amount Mode",
+            "type": "string"
+          },
+          "anchor_date": {
+            "format": "date",
+            "title": "Anchor Date",
+            "type": "string"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "economic_type": {
+            "enum": [
+              "expense",
+              "loan",
+              "asset_transfer"
+            ],
+            "title": "Economic Type",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Until"
+          },
+          "expected_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount Krw"
+          },
+          "frequency": {
+            "enum": [
+              "monthly",
+              "annual",
+              "days"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "interval_count": {
+            "title": "Interval Count",
+            "type": "integer"
+          },
+          "payment_basis": {
+            "$ref": "#/components/schemas/PaymentBasis"
+          },
+          "period": {
+            "enum": [
+              "current",
+              "future"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "rule_id": {
+            "format": "uuid",
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "rule_version": {
+            "title": "Rule Version",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rule_id",
+          "rule_version",
+          "title",
+          "category",
+          "amount_mode",
+          "expected_amount_krw",
+          "economic_type",
+          "account_id",
+          "card_id",
+          "payment_basis",
+          "period",
+          "effective_from",
+          "effective_until",
+          "anchor_date",
+          "frequency",
+          "interval_count"
+        ],
+        "title": "LinkedRule",
+        "type": "object"
+      },
+      "LinkedRulePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedRule"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total_count",
+          "next_cursor"
+        ],
+        "title": "LinkedRulePage",
+        "type": "object"
+      },
       "LoginOptionsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4672,6 +5167,95 @@
           "joint"
         ],
         "type": "string"
+      },
+      "PaymentBasis": {
+        "enum": [
+          "account_payment_plan",
+          "card_approval_plan"
+        ],
+        "type": "string"
+      },
+      "PaymentLinksResponse": {
+        "properties": {
+          "account_withdrawal_total_available": {
+            "const": false,
+            "default": false,
+            "title": "Account Withdrawal Total Available",
+            "type": "boolean"
+          },
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "cards": {
+            "$ref": "#/components/schemas/LinkedCardPage"
+          },
+          "coverage": {
+            "const": "registered_recurring_only",
+            "default": "registered_recurring_only",
+            "title": "Coverage",
+            "type": "string"
+          },
+          "obligations": {
+            "$ref": "#/components/schemas/LinkedObligationPage"
+          },
+          "requires_confirmation": {
+            "title": "Requires Confirmation",
+            "type": "boolean"
+          },
+          "resource_id": {
+            "format": "uuid",
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_kind": {
+            "enum": [
+              "card",
+              "account"
+            ],
+            "title": "Resource Kind",
+            "type": "string"
+          },
+          "resource_version": {
+            "title": "Resource Version",
+            "type": "integer"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/LinkedRulePage"
+          },
+          "usage_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Usage Digest",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_kind",
+          "resource_id",
+          "resource_version",
+          "asset_id",
+          "as_of_date",
+          "usage_digest",
+          "requires_confirmation",
+          "rules",
+          "obligations",
+          "cards"
+        ],
+        "title": "PaymentLinksResponse",
+        "type": "object"
       },
       "PercentUnavailable": {
         "enum": [
@@ -6553,6 +7137,209 @@
         "summary": "Reveal Account Number",
         "tags": [
           "accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{resource_id}/payment-links": {
+      "get": {
+        "operationId": "getAccountPaymentLinks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Resource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rule_cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rule Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "obligation_cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Obligation Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinksResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Handler",
+        "tags": [
+          "payment-links"
         ]
       }
     },
@@ -12408,6 +13195,209 @@
         "summary": "Archive",
         "tags": [
           "cards"
+        ]
+      }
+    },
+    "/api/v1/cards/{resource_id}/payment-links": {
+      "get": {
+        "operationId": "getCardPaymentLinks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Resource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rule_cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rule Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "obligation_cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Obligation Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinksResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Handler",
+        "tags": [
+          "payment-links"
         ]
       }
     },

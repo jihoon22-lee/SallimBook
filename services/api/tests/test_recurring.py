@@ -18,6 +18,7 @@ from test_income import CATALOG, headers, make_account
 
 from sallimbook.cashflow import recurring_service as service
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision
+from sallimbook.cashflow.payment_links import get_usage
 from sallimbook.cashflow.recurring_models import (
     FixedSettlement,
     ObligationGeneration,
@@ -1087,11 +1088,22 @@ class TestRecurringDatabase:
                 with pytest.raises(DomainError) as rejected:
                     cards.delete_card(session, actor.principal, own_card.id, '"1"')
                 assert getattr(rejected.value, "code", None) == "CARD_IN_USE"
+                links = get_usage(
+                    session,
+                    actor.principal,
+                    "card",
+                    own_card.id,
+                    as_of_date=date(2026, 1, 31),
+                )
                 cards.update_card(
                     session,
                     actor.principal,
                     own_card.id,
-                    CardPatch(ended_on="2026-01-31"),
+                    CardPatch(
+                        ended_on="2026-01-31",
+                        closure_ack=True,
+                        usage_digest=links.usage_digest,
+                    ),
                     '"1"',
                     archive=True,
                 )
