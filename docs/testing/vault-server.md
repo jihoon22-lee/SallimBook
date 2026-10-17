@@ -55,6 +55,21 @@ cd apps/client/android
 ANDROID_HOME=/home/jihoon/Android/Sdk ./gradlew --no-daemon :app:testDebugUnitTest --tests '*CardMetadataPolicyTest' --tests '*PaymentLinksPolicyTest'
 ```
 
+## 카드 목록 조회 보강
+
+첫 코드 리뷰의 N+1 지적에 따라 일반 카드 목록은 페이지의 카드 ID를 한 번에 조회해
+current key/current envelope/non-purged 조건을 만족하는 ID 집합만 응답에 사용한다.
+조회에는 암호문 열을 적재하지 않는다. 단건 조회의 보안 의미는 유지한다.
+
+```bash
+uv run --project services/api python scripts/test_database.py services/api/tests/test_vault.py services/api/tests/test_vault_database.py services/api/tests/test_cards.py -q
+```
+
+추가 회귀를 포함한 **60개 통과**(vault23 + DB7 + cards30), drift 없음·마이그레이션 왕복 통과.
+현재/교체/폐기/비밀 없음/종료 카드와 다른 가계 카드, 배우자 조회를 함께 대조하고
+목록의 비밀 존재 판정 SELECT가 한 번이며 암호문 열을 조회하지 않음을 확인했다.
+처음 명령의 파일명 오타(test_vault_storage.py)는 테스트를 실행하지 못했고 올바른 파일명으로 재실행했다.
+
 ## 남은 검증
 
 Android/PC의 실제 암호화·보호 화면·공유/복구/재개 UI는 별도 변경에서 검증한다.
