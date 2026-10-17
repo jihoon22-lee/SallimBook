@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { formatMonth, isValidMonth, MonthPicker, useMonth } from "./MonthContext";
 import type { PlannedScreen, ScreenLink } from "./screens";
@@ -14,7 +15,11 @@ export function RelatedLinks({ links }: { links: ScreenLink[] }) {
 
 export function PlannedPage({ screen }: { screen: PlannedScreen }) {
   const params = useParams();
-  const { month } = useMonth();
+  const { month, setMonth } = useMonth();
+  const routeMonth = screen.id === "UI-06" && params.month && isValidMonth(params.month) ? params.month : null;
+  useEffect(() => {
+    if (routeMonth) setMonth(routeMonth);
+  }, [routeMonth, setMonth]);
   if (screen.id === "UI-06" && (!params.month || !isValidMonth(params.month))) {
     return <><div className="intro"><h1>월을 확인해 주세요</h1><p>올바른 연도와 월로 이동해 주세요.</p></div><Link className="button-link" to="/assets">자산 목록으로</Link></>;
   }

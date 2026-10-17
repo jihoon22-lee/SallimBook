@@ -40,7 +40,7 @@ def main() -> None:
                 executable.chmod(0o755)
     subprocess.run(
         [str(destination / "bin/sdkmanager"), f"--sdk_root={args.sdk_root}",
-         "platform-tools", "platforms;android-36", "build-tools;36.0.0"],
+         "platforms;android-36", "build-tools;36.0.0"],
         input="y\n" * 100 if args.accept_licenses else None,
         text=True,
         check=True,

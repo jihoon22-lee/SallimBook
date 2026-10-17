@@ -63,6 +63,10 @@ tasks.register('validateBundledRuntimeConfig') {
         if (config.server?.url != null) {
             throw new GradleException('Remote WebView URLs are forbidden; bundle local web assets.')
         }
+        def allowNavigation = config.server?.allowNavigation
+        if (allowNavigation != null && (!(allowNavigation instanceof List) || !allowNavigation.isEmpty())) {
+            throw new GradleException('Remote WebView navigation is forbidden; server.allowNavigation must be absent or empty.')
+        }
         if (config.server?.cleartext == true || config.android?.allowMixedContent == true) {
             throw new GradleException('Cleartext and mixed content are forbidden.')
         }

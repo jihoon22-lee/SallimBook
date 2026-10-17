@@ -8,8 +8,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from dotenv import dotenv_values
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 ROOT = Path(__file__).resolve().parents[1]
+LOCK_DIRECTORY = Path.home() / ".cache" / "sallimbook"
 COMPOSE = [
     "docker",
     "compose",
@@ -22,10 +25,29 @@ COMPOSE = [
 ]
 
 
+def validate_test_url(raw: str) -> None:
+    try:
+        url = make_url(raw)
+        valid = (
+            url.drivername == "postgresql+psycopg"
+            and url.host == "127.0.0.1"
+            and url.port == 18745
+            and url.database == "sallimbook_test"
+            and url.username == "sallimbook"
+            and bool(url.password)
+            and not url.query
+        )
+    except (ArgumentError, ValueError):
+        valid = False
+    if not valid:
+        raise SystemExit("Test URL must target the isolated SallimBook test service.")
+
+
 @contextmanager
 def test_service_lock():
-    directory = ROOT / ".cache"
-    directory.mkdir(mode=0o700, exist_ok=True)
+    # Every checkout controls the same Compose project/ports on this host.
+    directory = LOCK_DIRECTORY
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     with (directory / "database-test.lock").open("a") as lock:
         try:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -51,6 +73,8 @@ def run_checks() -> None:
         if value is not None
     }
     environment = {**os.environ, **values}
+    url = values.get("SALLIMBOOK_TEST_DATABASE_URL", "")
+    validate_test_url(url)
     running = subprocess.check_output(
         COMPOSE + ["ps", "--status", "running", "-q", "db-test"],
         cwd=ROOT,
@@ -59,9 +83,6 @@ def run_checks() -> None:
     ).strip()
     if running:
         raise SystemExit("SallimBook test DB is already running; it was not changed.")
-    url = values.get("SALLIMBOOK_TEST_DATABASE_URL", "")
-    if not url.endswith("@127.0.0.1:18745/sallimbook_test"):
-        raise SystemExit("Test URL must target the isolated SallimBook test service.")
     environment["SALLIMBOOK_DATABASE_URL"] = url
     alembic = [
         "uv",

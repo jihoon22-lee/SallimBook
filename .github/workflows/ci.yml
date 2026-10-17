@@ -56,7 +56,7 @@ jobs:
           python-version: "3.14.7"
           enable-cache: false
       - run: uv sync --project services/api --frozen
-      - run: uv run --project services/api ruff check services/api/src services/api/tests
+      - run: uv run --project services/api ruff check services/api/src services/api/tests services/api/migrations
       # PostgreSQL tests are exercised separately with an explicit disposable test DB.
       - run: uv run --project services/api pytest services/api/tests -m 'not database'
 
@@ -197,3 +197,4 @@ jobs:
       # NO-SOURCE means no native unit cases exist yet, not that device security passed.
       # The debug APK remains on this disposable runner; no signing secrets or uploads.
       - run: uv run --no-project pnpm android:build
+      - run: uv run --no-project python scripts/test_android_runtime_config.py
