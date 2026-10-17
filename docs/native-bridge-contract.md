@@ -433,6 +433,18 @@ JVM **203개**가 실패·오류·건너뜀 없이 통과했고 디버그 APK �
 JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin
 ```
 
-`homecare-native-bridge.spec.ts`의 명령 전달/재전송 참조/실패 경계 11개 시나리오는 작성했으며
-브라우저 실행은 Docker 작업과의 순서 조정을 기다리는 상태다. 실기기 잠금·백그라운드·늦은 응답,
+`homecare-native-bridge.spec.ts`의 명령 전달/재전송 참조/실패 경계 11개 시나리오를 desktop과
+Android 크기에서 실행해 신규 **22개**, 기존 보험·금융·계좌 **46개**, 총 **68개**가 통과했다.
+소스 `648d9b7`의 독립 검토에서도 21개 경로/헤더/본문/응답, 재고·연결 버전 구분,
+멱등 참조·cursor·부모 ID 검증과 기존 네이티브 gate 연결을 대조해 추가 차단 문제는 없었다.
+아래 실행에는 기본 Playwright 설정의 baseURL/webServer만 18754로 바꾼 임시 config를 사용했다.
+Docker 시험 정지 후 실행했고 완료 후 Vite 정지와 포트 반환을 확인했다. 임시 config는 제거했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test homecare-native-bridge.spec.ts insurance-events-native-bridge.spec.ts insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.homecare-native.local.config.ts --workers=2
+python3 scripts/validate_docs.py
+git diff --check
+```
+
+브라우저 모의시험은 실제 Android 기기 검증을 대신하지 않는다. 실기기 잠금·백그라운드·늦은 응답,
 화면 캡처·백업 시험과 정식 APK 서명·배포는 실행하지 않았다.
