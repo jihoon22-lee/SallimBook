@@ -101,3 +101,9 @@ TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp uv run --project services/api pyt
 
 18753 포트 하나를 사용하며 Docker 시험 DB 수명주기와 브라우저 검사를 순차 실행한다.
 production build는 성공하며 Vite의 500KB 초과 단일 chunk 경고가 남는다. Android 실기기 실패 시나리오·운영 키·서명 배포는 실행하지 않았다.
+
+최신 main의 부모 우선 진료 정렬과 카드 종료일 보완을 통합한 뒤 보험 core/events/model/native UI 및
+카드 회귀 104개를 다시 통과했다. 실제 보험 HTTPS 흐름도 CI의 별도 명령으로 유지한다.
+
+PR 리뷰 보완: 청구 상세의 수령 목록에서 추가할 때도 사건·계약·청구를 모두 이어받는다.
+해당 경로에서 저장한 원본이 청구 목록에 나타나는 회귀를 포함해 금전 화면 32개를 통과했다.
