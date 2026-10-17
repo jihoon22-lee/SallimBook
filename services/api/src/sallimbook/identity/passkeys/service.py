@@ -295,6 +295,57 @@ def _descriptors(
     ]
 
 
+def _lock_registration_identity(session: Session, principal: Principal) -> None:
+    """Serialize durable credential enrollment with logout and device revocation.
+
+    Lock session -> device before challenge/credential rows. A request principal is only
+    a snapshot: device revocation can commit after HTTP authentication has produced it.
+    Do not move these locks after credential/grant locks or release them before enrollment.
+    """
+    auth = session.scalar(
+        select(AuthSession)
+        .where(
+            AuthSession.id == principal.session_id,
+            AuthSession.household_id == principal.household_id,
+            AuthSession.user_id == principal.user_id,
+            AuthSession.device_id == principal.device_id,
+            AuthSession.kind == principal.transport,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    device = session.scalar(
+        select(RegisteredDevice)
+        .where(
+            RegisteredDevice.id == principal.device_id,
+            RegisteredDevice.household_id == principal.household_id,
+            RegisteredDevice.user_id == principal.user_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    # Both locks may have waited: use the time and persisted state actually authorized now.
+    now = identity.utcnow()
+    if (
+        auth is None
+        or device is None
+        or auth.revoked_at is not None
+        or auth.expires_at <= now
+        or device.status != "active"
+        or device.revoked_at is not None
+        or (auth.kind == "web" and auth.last_seen_at <= now - identity.WEB_IDLE)
+        or (
+            auth.kind == "native"
+            and (auth.access_expires_at is None or auth.access_expires_at <= now)
+        )
+    ):
+        raise DomainError("UNAUTHENTICATED", "로그인이 필요합니다.", 401)
+    age = now - auth.authenticated_at
+    if age < timedelta(0) or age > timedelta(minutes=5):
+        raise DomainError("REAUTHENTICATION_REQUIRED", "다시 로그인한 후 진행해 주세요.", 403)
+    _active_account(session, principal.user_id, principal.household_id)
+
+
 def registration_options(
     session: Session,
     principal: Principal,
@@ -302,6 +353,7 @@ def registration_options(
     policy: VerificationPolicy,
 ) -> OptionsResponse:
     require_recent_login(principal, now=identity.utcnow())
+    _lock_registration_identity(session, principal)
     user, _ = _active_account(session, principal.user_id, principal.household_id)
     _prune_expired_ceremonies(session)
     raw = secrets.token_bytes(32)
@@ -513,6 +565,7 @@ def register_credential(
     policy: VerificationPolicy,
 ) -> CredentialResponse:
     require_recent_login(principal, now=identity.utcnow())
+    _lock_registration_identity(session, principal)
     challenge = _consume_challenge(
         session, payload.challenge_id, "register", policy, principal=principal
     )

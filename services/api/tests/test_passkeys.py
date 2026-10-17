@@ -3,10 +3,11 @@
 import hashlib
 import json
 import secrets
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import timedelta
-from threading import Barrier
+from threading import Barrier, Event
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -23,7 +24,7 @@ from sqlalchemy.orm import Session
 from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 
 from sallimbook.config import Settings
-from sallimbook.core.authorization import Principal, require_recent_login
+from sallimbook.core.authorization import Principal, require_recent_login, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.identity import service as identity
@@ -612,6 +613,141 @@ def seed_expired_ceremonies(session, account, credential_id, count):
 
 @pytest.mark.database
 class TestPasskeyDatabase:
+    @pytest.mark.parametrize(
+        "invalid_state",
+        [
+            "session_revoked",
+            "session_expired",
+            "access_expired",
+            "device_revoked",
+            "login_old",
+        ],
+    )
+    def test_registration_revalidates_live_identity_instead_of_a_cached_principal(
+        self, db_engine, passkey_account, invalid_state
+    ):
+        authenticator = SyntheticAuthenticator.create()
+        with Session(db_engine) as session:
+            options = service.registration_options(
+                session,
+                passkey_account.principal,
+                RegisterOptionsRequest(label="합성 대기 등록"),
+                NATIVE_POLICY,
+            )
+            payload = RegisterVerification(
+                challenge_id=options.challenge_id,
+                credential=authenticator.registration(
+                    base64url_to_bytes(options.public_key["challenge"]), origin=NATIVE_ORIGIN
+                ),
+            )
+            auth = session.get(AuthSession, passkey_account.principal.session_id)
+            now = identity.utcnow()
+            if invalid_state == "session_revoked":
+                auth.revoked_at = now
+            elif invalid_state == "session_expired":
+                auth.expires_at = now - timedelta(seconds=1)
+                auth.access_expires_at = auth.expires_at
+            elif invalid_state == "access_expired":
+                auth.access_expires_at = now - timedelta(seconds=1)
+            elif invalid_state == "device_revoked":
+                device = session.get(RegisteredDevice, passkey_account.principal.device_id)
+                device.status = "revoked"
+                device.revoked_at = now
+            else:
+                auth.authenticated_at = now - timedelta(minutes=6)
+            session.commit()
+            with pytest.raises(DomainError) as failure:
+                service.register_credential(
+                    session, passkey_account.principal, payload, NATIVE_POLICY
+                )
+            assert failure.value.code == (
+                "REAUTHENTICATION_REQUIRED" if invalid_state == "login_old" else "UNAUTHENTICATED"
+            )
+            session.rollback()
+            assert session.scalar(select(func.count()).select_from(AuthCredential)) == 0
+
+    def test_registration_waits_for_device_revocation_then_rejects_the_stale_principal(
+        self, db_engine, passkey_account
+    ):
+        authenticator = SyntheticAuthenticator.create()
+        with Session(db_engine) as session:
+            options = service.registration_options(
+                session,
+                passkey_account.principal,
+                RegisterOptionsRequest(label="합성 경합 등록"),
+                NATIVE_POLICY,
+            )
+            payload = RegisterVerification(
+                challenge_id=options.challenge_id,
+                credential=authenticator.registration(
+                    base64url_to_bytes(options.public_key["challenge"]), origin=NATIVE_ORIGIN
+                ),
+            )
+            other_login = identity.login(
+                session,
+                LoginRequest(
+                    login_name=passkey_account.login_name,
+                    password=passkey_account.password,
+                    device_label="합성 폐기 요청 기기",
+                ),
+                "synthetic-device-revoker",
+                "native",
+            )
+
+        authenticated, begin_registration = Event(), Event()
+        backend = []
+
+        def enroll():
+            with Session(db_engine) as session:
+                principal = identity.authenticate(session, passkey_account.token, "native")
+                backend.append(session.scalar(select(func.pg_backend_pid())))
+                authenticated.set()
+                assert begin_registration.wait(timeout=10)
+                try:
+                    service.register_credential(session, principal, payload, NATIVE_POLICY)
+                    return "registered"
+                except DomainError as failure:
+                    return failure.code
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            enrollment = pool.submit(enroll)
+            try:
+                assert authenticated.wait(timeout=10)
+                with Session(db_engine) as revocation:
+                    revoker = identity.authenticate(revocation, other_login.token, "native")
+                    device = scoped_entity(
+                        revocation,
+                        RegisteredDevice,
+                        passkey_account.principal.device_id,
+                        revoker,
+                        for_update=True,
+                    )
+                    device.status = "revoked"
+                    device.revoked_at = identity.utcnow()
+                    revocation.flush()
+                    revoker_pid = revocation.scalar(select(func.pg_backend_pid()))
+                    begin_registration.set()
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline:
+                        blockers = revocation.scalar(select(func.pg_blocking_pids(backend[0])))
+                        if revoker_pid in blockers or enrollment.done():
+                            break
+                        time.sleep(0.01)
+                    assert revoker_pid in blockers, (
+                        "Enrollment must serialize on the revoking device row"
+                    )
+                    identity.revoke_device(revocation, revoker, device)
+                assert enrollment.result(timeout=10) == "UNAUTHENTICATED"
+            finally:
+                begin_registration.set()
+        with Session(db_engine) as session:
+            assert (
+                session.get(RegisteredDevice, passkey_account.principal.device_id).status
+                == "revoked"
+            )
+            assert session.scalar(select(func.count()).select_from(AuthCredential)) == 0
+            assert session.get(AuthChallenge, options.challenge_id).consumed_at is None
+
     @pytest.mark.parametrize("ceremony", ["register", "login", "step_up"])
     def test_ceremony_creation_prunes_a_bounded_batch_and_preserves_active_rows(
         self, db_engine, passkey_account, enrolled, ceremony
