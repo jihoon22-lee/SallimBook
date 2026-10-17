@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "b8372460cba0690c0bc8f19cf40345a2bf33675a2b071ba0712abf4346913ed0",
-      "git_sha1": "1582a1fc56e84e39593b117e58d6ae804a695226"
+      "sha256": "bd989d11287a3f7c1a3b3ab929db9910246287380d5959e3fdc1cc4a4a6d0e00",
+      "git_sha1": "43d039840d91eef254bd13add72a3c98c431057b"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -62,12 +62,12 @@
       "git_sha1": "5295b42faf4cc729d600f80d563839d7a3420612"
     },
     "docs/data-model.md": {
-      "sha256": "b227987ee4b540b141eeb81d62e986c49cd2a1b89f7a95ea4479d81d60c3eba7",
-      "git_sha1": "a1e8ad1f2e3658f2a130f4ff61121dd3cfcf7c53"
+      "sha256": "b3b41390402a2064f73a537401c2ae16d7b3c3309a0bf045daf226c48dc3ce1b",
+      "git_sha1": "14d3ccdfde9c9fa36ebdcecadaaacbc0054e3cf1"
     },
     "docs/api-contract.md": {
-      "sha256": "6721b1bd59abbb1daf214f72e050559a247b67e4eda151b502d24fa5349625ce",
-      "git_sha1": "c70dd7f9c1ddd2d4bcafa37fee886a33e3ec9530"
+      "sha256": "47519403114e24ed7326a647379c93efb09ff17e7ad67666c14689b1e4cbc21d",
+      "git_sha1": "75b87c4ace856a79b0aaa2ae5ec0eb0838bcc9e4"
     },
     "docs/screen-specifications.md": {
       "sha256": "59077e081e1df8ea015932e8c5563bce89f52b1ead217f86d1d20abd02084e4f",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "9224906a71fd834c42f5f962d27a979543d04b580193b0893d7cb89f48be29fe",
-      "git_sha1": "aa6caccfb1bd8bafe1852bc091b8c9647d40450f"
+      "sha256": "87fbbb8504e3e85717ee9f066cb0bb9617c4cb7a0d59df256eb2c910ccf469db",
+      "git_sha1": "7376f529f93df8eefec6d206802c4ae1fcbc57c2"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "a9d764228ed99f1ab8e9c2e73686d8599c46d5947ff3d2c53670093346b2f5e9",
@@ -200,6 +200,14 @@
     "tests/test_tool_safety.py": {
       "sha256": "dd729d97a3d1fbd938b837916f32d6d46d4f77b32409ae7c79072cf3fea34e94",
       "git_sha1": "4720047af3e9663869d3b9c3c8e82b7d4ed77c5d"
+    },
+    "scripts/setup_dev.py": {
+      "sha256": "dd91e3c7a4c659b515af053066b5efa723a105f29b04848d129fb115b849b71d",
+      "git_sha1": "f0b61e34ad240976219d1abf815c3e565e1c2bcd"
+    },
+    "scripts/test_database.py": {
+      "sha256": "429775febbbca7beeb2aa6251e19c544dcda25b4d69d420288e22b7f32af8253",
+      "git_sha1": "8accf5f4e9f214fff7ec99bd87c472cc16629c9f"
     }
   }
 }

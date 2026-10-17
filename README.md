@@ -4,7 +4,7 @@
 
 문서 기준일: **2026-10-17** · 목표 릴리스: **v1.0.0** · 현재 상태: **M0 기초 구현 진행**
 
-> React 웹·Android 개발 빌드, FastAPI health API와 생성 TS client가 추가되었습니다.
+> React 웹·Android 개발 빌드, FastAPI health/readiness API, PostgreSQL 기반과 생성 TS client가 추가되었습니다.
 > 현재 화면은 기록 없는 기본 화면이며 금융·보험·재고·인증·보관함은 후속 Issue에서 구현합니다.
 > 개발 APK와 기본 빌드 성공은 v1 기능·보안·실기기 인수 완료를 뜻하지 않습니다.
 
@@ -78,6 +78,9 @@ WSL에 있는 기존 서버를 유지하며, 아래 명령은 SallimBook 전용 
 ```bash
 pnpm install --frozen-lockfile
 uv sync --project services/api --frozen
+python3 scripts/setup_dev.py  # 최초 한 번; 기존 .env 보존, 개발 비밀번호 자동 생성
+pnpm db:up                  # SallimBook 개발 DB만 시작: 127.0.0.1:18744
+pnpm db:migrate
 pnpm dev:api  # 127.0.0.1:18741, 별도 터미널
 pnpm dev      # http://127.0.0.1:18742
 ```
@@ -92,6 +95,7 @@ pnpm api:generate
 pnpm typecheck
 pnpm build
 pnpm test:api
+pnpm test:database  # 일회용 *_test DB: 18745, 시험 후 이 컨테이너만 중지
 pnpm --filter @sallimbook/client exec playwright install chromium
 pnpm test:web  # 전용 시험 포트 18743, 다른 실행 중인 서버를 재사용하지 않음
 ```
@@ -113,6 +117,9 @@ SDK 설치기는 고정된 빌드 도구만 설치하며 `platform-tools`와 ADB
 운영 앱 ID는 접미사가 없는 `io.github.jihoon22lee.sallimbook`이며 정식 서명·배포는 SB-038에서 검증합니다.
 
 자세한 환경·검증 범위는 [개발 환경](docs/development-environment.md)을 참고합니다.
+`pnpm db:stop`은 SallimBook 개발 DB만 중지하며 데이터 볼륨은 유지합니다.
+DB 시험은 개별 격리 schema에 실제 migration을 적용합니다. `pnpm test:api`만 실행하여
+DB 환경이 없을 때 표시되는 skip을 DB 검증 통과로 간주하지 않습니다.
 
 ## 문서 도구 명령
 

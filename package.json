@@ -6,7 +6,10 @@
   "engines": { "node": ">=24.18.0 <25", "pnpm": "9.15.9" },
   "scripts": {
     "dev": "pnpm --filter @sallimbook/client dev",
-    "dev:api": "uv run --project services/api uvicorn sallimbook.main:app --host 127.0.0.1 --port 18741 --reload",
+    "dev:api": "uv run --env-file .env --project services/api uvicorn sallimbook.main:app --host 127.0.0.1 --port 18741 --reload",
+    "db:up": "docker compose --env-file .env -f infra/compose.dev.yaml -p sallimbook-dev up -d --wait db",
+    "db:migrate": "uv run --env-file .env --project services/api alembic -c services/api/alembic.ini upgrade head",
+    "db:stop": "docker compose --env-file .env -f infra/compose.dev.yaml -p sallimbook-dev stop db",
     "build": "pnpm --filter @sallimbook/client build",
     "typecheck": "pnpm -r typecheck",
     "api:generate": "uv run --project services/api python scripts/export_openapi.py && pnpm --filter @sallimbook/api-client generate",
@@ -14,6 +17,7 @@
     "android:build": "pnpm android:sync && python3 scripts/build_android.py",
     "test:docs": "python3 scripts/validate_docs.py && python3 -m unittest discover -s tests -v",
     "test:api": "uv run --project services/api pytest services/api/tests",
+    "test:database": "uv run --project services/api python scripts/test_database.py",
     "test:web": "pnpm --filter @sallimbook/client exec playwright test"
   }
 }

@@ -1,6 +1,6 @@
 # API 계약
 
-상태: 구현 명세. SB-001에서 `/api/v1/health`를 구현했고 아래 업무 API는 후속 Issue 대상이다.
+상태: 구현 명세. SB-001~002에서 health/readiness와 공통 오류·타입 기반을 구현했다. 아래 업무 API는 후속 Issue 대상이다.
 기본 경로 `/api/v1`, JSON UTF-8, 원화는 정수 문자열, ID는 UUID.
 FastAPI OpenAPI를 구현 시 단일 계약으로 관리하고 TS client를 생성한다([S11](references.md)).
 
@@ -8,6 +8,11 @@ FastAPI OpenAPI를 구현 시 단일 계약으로 관리하고 TS client를 생�
 
 `GET /api/v1/health`는 미인증으로 `200 {"status":"ok"}`를 반환한다.
 프로세스 생존 확인이며 DB 준비·로그인·가계 데이터 상태를 뜻하지 않는다.
+`GET /api/v1/ready`는 PostgreSQL 연결 및 요구하는 Alembic revision 확인 후 같은 200 응답을 반환한다.
+DB 미설정·접속 실패·스키마 미준비는 503이며 내부 연결 정보는 반환하지 않는다.
+업무 API 응답은 서버가 생성한 `X-Request-ID`, `Cache-Control: no-store`를 포함한다.
+422 검증 오류는 오류 코드와 body/query 등 요청 위치만 포함한다. 동적 객체 key·추가 필드명·
+입력값·검증 context·SQL을 노출하지 않는다.
 개발 OpenAPI는 `/api/openapi.json`, 운영 환경에서는 대화형 문서·OpenAPI HTTP 공개를 끈다.
 `pnpm api:generate`로 구현에서 OpenAPI와 TypeScript client를 생성한다.
 
