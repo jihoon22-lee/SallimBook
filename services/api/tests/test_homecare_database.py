@@ -678,9 +678,13 @@ def test_future_actual_dates_invalid_quantity_overflow_and_reason_reject_atomica
         )
         assert stock_at(client, actor, stock["id"])["stock_quantity"] == 1_000_000
         missing_version = headers(actor)
-        assert client.post(path, headers=missing_version, json=base).status_code == 422
+        no_version = client.post(path, headers=missing_version, json=base)
+        assert no_version.status_code == 400
+        assert no_version.json()["error"]["code"] == "VERSION_REQUIRED"
         missing_key = actor.headers | {"If-Match": '"2"'}
-        assert client.post(path, headers=missing_key, json=base).status_code == 422
+        no_key = client.post(path, headers=missing_key, json=base)
+        assert no_key.status_code == 400
+        assert no_key.json()["error"]["code"] == "INVALID_IDEMPOTENCY_KEY"
     with Session(db_engine) as session:
         assert session.scalar(select(func.count()).select_from(StockMovement)) == 1
         assert session.scalar(select(func.count()).select_from(IdempotencyRecord)) == 1

@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from pydantic import ValidationError
 from sqlalchemy import exists, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import aliased
 
 from sallimbook.assets.locking import lock_asset_scope
@@ -326,7 +327,7 @@ def _latest_replacements(session, principal, link_ids):
                 )
             ),
         )
-        .distinct(ConsumableReplacement.appliance_consumable_id)
+        .ext(distinct_on(ConsumableReplacement.appliance_consumable_id))
         .order_by(
             ConsumableReplacement.appliance_consumable_id,
             ConsumableReplacement.replaced_on.desc(),
