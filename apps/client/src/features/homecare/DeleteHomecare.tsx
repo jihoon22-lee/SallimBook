@@ -5,7 +5,12 @@ import { toApiError } from "../../platform/api";
 import { useMonthCommand } from "../assets/months/useMonthCommand";
 import { SaveControls } from "../finance/FinancialFeedback";
 import { HomecareError } from "./HomecareSupport";
-export function DeleteHomecare<T extends { id: string; version: number }>({ initial, label, name, read, remove, render, deleted, listPath }: { initial: T; label: string; name: string; read: () => Promise<T>; remove: (row: T, signal: AbortSignal) => Promise<unknown>; render: (row: T) => ReactNode; deleted: () => void; listPath: string }) {
+type DeleteHomecareProps<T> = { initial: T; label: string; name: string; read: () => Promise<T>; remove: (row: T, signal: AbortSignal) => Promise<unknown>; render: (row: T) => ReactNode; deleted: () => void; listPath: string };
+export function DeleteHomecare<T extends { id: string; version: number }>(props: DeleteHomecareProps<T>) {
+  // A new parent snapshot requires a new review, even when a fast reload never shows loading.
+  return <DeleteHomecareReview key={`${props.initial.id}:${props.initial.version}`} {...props} />;
+}
+function DeleteHomecareReview<T extends { id: string; version: number }>({ initial, label, name, read, remove, render, deleted, listPath }: DeleteHomecareProps<T>) {
   const [open, setOpen] = useState(false); const [row, setRow] = useState(initial); const [latest, setLatest] = useState<T | null>(null); const [ack, setAck] = useState(false); const command = useMonthCommand(); const recoverable = command.error?.code === "VERSION_CONFLICT" || command.error?.status === 0;
   async function compare() { try { const current = await read(); if (command.mounted.current) setLatest(current); } catch (e) { if (command.mounted.current) command.setError(toApiError(e)); } }
   async function submit() { if (!ack || command.error) return; const result = await command.run((signal) => remove(row, signal)); if (result.ok && command.mounted.current) deleted(); }

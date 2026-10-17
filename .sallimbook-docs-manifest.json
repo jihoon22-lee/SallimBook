@@ -290,8 +290,8 @@
       "git_sha1": "0a3a0daffa7713b1f410c8f01c9994de94545c42"
     },
     "docs/testing/homecare-client.md": {
-      "sha256": "0581401abb980f338b8287d83087f6a9c56aa2314eaaec02c0c86d591152bb12",
-      "git_sha1": "f54d8cadd50e9da934d0330ad2641b310db3c4a3"
+      "sha256": "aa1d5ca629bdd35c14b589f33d6783f2a90e08136ece569e2fef4ee4ef449920",
+      "git_sha1": "eb3032c2fb0a808045d2b4dbc1fc100ff8d6ce2e"
     },
     "docs/testing/documents-client.md": {
       "sha256": "d16ed4714c03b925925f318442584a8491f88bd6a3d2710b860a66eedf9d19df",
