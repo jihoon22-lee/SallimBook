@@ -28,14 +28,25 @@ def verify_role(conn):
         "SELECT has_schema_privilege('public','CREATE'), "
         "has_database_privilege(current_database(),'CREATE'), "
         "has_database_privilege(current_database(),'TEMP'), "
-        "has_table_privilege('alembic_version','UPDATE'), "
-        "has_table_privilege('users','TRUNCATE')"
+        "has_table_privilege('public.alembic_version','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'), "
+        "EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+        "WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','f') "
+        "AND has_table_privilege(c.oid,'TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')), "
+        "EXISTS (SELECT 1 FROM pg_namespace n WHERE has_schema_privilege(n.oid,'CREATE'))"
     ).fetchone()
     if any(privileges):
         raise OperationError("Runtime database role has schema/owner-level privileges")
+    # Ownership dependencies cover pg_class, pg_proc (including guard functions),
+    # pg_namespace, pg_type, pg_database and other owned objects, not a sample table.
     owners = conn.execute(
-        "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
-        "WHERE n.nspname='public' AND pg_get_userbyid(c.relowner)=current_user"
+        "WITH me AS (SELECT oid FROM pg_roles WHERE rolname=current_user) "
+        "SELECT EXISTS (SELECT 1 FROM pg_shdepend d,me WHERE d.refclassid='pg_authid'::regclass "
+        "AND d.refobjid=me.oid AND d.deptype='o') OR "
+        "EXISTS (SELECT 1 FROM pg_class,me WHERE relowner=me.oid) OR "
+        "EXISTS (SELECT 1 FROM pg_proc,me WHERE proowner=me.oid) OR "
+        "EXISTS (SELECT 1 FROM pg_namespace,me WHERE nspowner=me.oid) OR "
+        "EXISTS (SELECT 1 FROM pg_type,me WHERE typowner=me.oid) OR "
+        "EXISTS (SELECT 1 FROM pg_database,me WHERE datdba=me.oid)"
     ).fetchone()[0]
     if owners:
         raise OperationError("Runtime database role must not own application objects")

@@ -163,6 +163,10 @@ def build(
         )
     if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,64}", alias):
         raise OperationError("Invalid signing alias")
+    if Path(store_password_file).absolute() == Path(key_password_file).absolute():
+        raise OperationError(
+            "Use separate store/key password files; apksigner consumes each source sequentially"
+        )
     for path in (keystore, store_password_file, key_password_file):
         secret = private_file(path)
         if secret.is_relative_to(ROOT):

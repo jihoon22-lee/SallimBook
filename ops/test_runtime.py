@@ -160,6 +160,18 @@ p.chmod(0o600); os.chown(p,10001,10001)
                 "/run/operator/app-db-password",
             ],
         }
+        services["privilege_probe"] = {
+            **services["provision"],
+            "env_file": [str(env)],
+            "environment": {"SALLIMBOOK_OPS_SYNTHETIC": "1"},
+            "command": [
+                "python",
+                "-m",
+                "ops.runtime_privilege_probe",
+                "--admin-service-file",
+                "/run/operator/admin-service.conf",
+            ],
+        }
         compose = {
             "name": project,
             "services": services,
@@ -183,6 +195,7 @@ p.chmod(0o600); os.chown(p,10001,10001)
             run(command + ["up", "-d", "--wait", "db", "scanner"])
             run(command + ["run", "--rm", "--no-deps", "migrate"])
             run(command + ["run", "--rm", "--no-deps", "provision"])
+            run(command + ["run", "--rm", "--no-deps", "privilege_probe"], report=True)
             run(command + ["up", "-d", "--wait", "--wait-timeout", "90", "api"])
             run(
                 command + ["exec", "-T", "api", "python", "-m", "ops.runtime_probe"],

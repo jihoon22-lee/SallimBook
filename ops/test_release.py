@@ -24,6 +24,9 @@ def main(sdk):
         password_file = directory / "synthetic-password"
         password_file.write_text(secrets.token_urlsafe(32))
         password_file.chmod(0o600)
+        key_password_file = directory / "synthetic-key-password"
+        key_password_file.write_bytes(password_file.read_bytes())
+        key_password_file.chmod(0o600)
         keystore = directory / "synthetic-only.p12"
         result = subprocess.run(
             [
@@ -87,7 +90,7 @@ def main(sdk):
             sdk,
             keystore,
             password_file,
-            password_file,
+            key_password_file,
             "synthetic",
             previous,
             0,
@@ -103,7 +106,7 @@ def main(sdk):
             sdk,
             keystore,
             password_file,
-            password_file,
+            key_password_file,
             "synthetic",
             directory / "next.apk",
             2,
