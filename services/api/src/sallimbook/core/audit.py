@@ -70,6 +70,11 @@ def record_event(
         "policy_premium_link",
         "insurance_case",
         "medical_node",
+        "appliance",
+        "consumable",
+        "appliance_consumable",
+        "stock_movement",
+        "consumable_replacement",
     ],
     entity_id: UUID,
     action: Literal[
@@ -118,6 +123,11 @@ def record_event(
         "policy_premium_link",
         "insurance_case",
         "medical_node",
+        "appliance",
+        "consumable",
+        "appliance_consumable",
+        "stock_movement",
+        "consumable_replacement",
     } or action not in {
         "create",
         "update",
