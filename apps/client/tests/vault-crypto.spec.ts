@@ -1,0 +1,108 @@
+import { expect, test } from "@playwright/test";
+import vector from "../../../packages/test-fixtures/vault-v1.json" with { type: "json" };
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/**", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "synthetic" } }) }));
+  await page.goto("/");
+});
+
+test("WebCrypto matches public Python/Android vectors, original Unicode bytes and every AAD", async ({ page }) => {
+  const result = await page.evaluate(async (fixture) => {
+    const c = await import("/src/features/vault/crypto.ts");
+    const hex = (bytes: Uint8Array) => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const scope = { householdId: fixture.household_id, keyVersion: fixture.key_version };
+    const check = { format_version: 1, key_version: fixture.key_version, ...fixture.key_check };
+    const envelope = { format_version: 1, key_version: fixture.key_version, payload_schema_version: 1, last_four: "4242", ...fixture.card };
+    const proofs = [];
+    for (const row of fixture.members) {
+      const password = c.passwordBytes(row.password);
+      const wrap = { format_version: 1, key_version: fixture.key_version, kdf: "PBKDF2-HMAC-SHA256", ...row };
+      const key = await c.unwrapMember(password, scope, row.member_id, wrap, check);
+      const plain = await c.decryptCard(key, scope, fixture.card.card_id, envelope);
+      proofs.push({ password: hex(password), aad: hex(c.memberAad(scope, row.member_id, row.generation, row.iterations, c.decode64(row.salt, 16))), plain: hex(plain), cipher: c.encode64(await key.encrypt(c.decode64(fixture.card.nonce, 12), c.cardAad(scope, fixture.card.card_id), plain)) });
+      c.wipe(password); c.wipe(plain); key.destroy();
+    }
+    const recovery = { format_version: 1, key_version: fixture.key_version, kdf: "HKDF-SHA256", ...fixture.recovery };
+    const code = c.decode64(fixture.recovery.code, 32);
+    const key = await c.unwrapRecovery(code, scope, recovery, check);
+    const plain = await c.decryptCard(key, scope, fixture.card.card_id, envelope);
+    const output = { proofs, recoveryPlain: hex(plain), cardAad: hex(c.cardAad(scope, fixture.card.card_id)), recoveryAad: hex(c.recoveryAad(scope, recovery.generation, c.decode64(recovery.salt, 16))), checkAad: hex(c.checkAad(scope)) };
+    c.wipe(plain); c.wipe(code); key.destroy(); return output;
+  }, vector);
+  expect(result.proofs).toEqual(vector.members.map((row) => ({ password: row.password_utf8_hex, aad: row.aad_hex, plain: vector.card.payload_hex, cipher: vector.card.ciphertext })));
+  expect(result.recoveryPlain).toBe(vector.card.payload_hex);
+  expect(result.cardAad).toBe(vector.card.aad_hex);
+  expect(result.recoveryAad).toBe(vector.recovery.aad_hex);
+  expect(result.checkAad).toBe(vector.key_check.aad_hex);
+});
+
+test("fresh client keys and independent wrappers decrypt without sharing passwords or plaintext", async ({ page }) => {
+  expect(await page.evaluate(async (fixture) => {
+    const c = await import("/src/features/vault/crypto.ts");
+    const scope = { householdId: fixture.household_id, keyVersion: 1 };
+    const key = c.VaultKey.generate(), password = c.passwordBytes(fixture.members[0].password, true), code = c.randomBytes(32);
+    const check = await c.makeKeyCheck(key, scope);
+    const first = await c.wrapMember(key, password, scope, fixture.members[0].member_id, 1);
+    const second = await c.wrapMember(key, password, scope, fixture.members[0].member_id, 2);
+    const recovery = await c.wrapRecovery(key, code, scope, 1);
+    const plain = c.cardPayload(fixture.card.pan, fixture.card.expiry_year, fixture.card.expiry_month);
+    const envelope = await c.encryptCard(key, scope, fixture.card.card_id, plain);
+    key.destroy();
+    const fromMember = await c.unwrapMember(password, scope, fixture.members[0].member_id, first, check);
+    const fromCode = await c.unwrapRecovery(code, scope, recovery, check);
+    const memberPlain = await c.decryptCard(fromMember, scope, fixture.card.card_id, envelope);
+    const recoveryPlain = await c.decryptCard(fromCode, scope, fixture.card.card_id, envelope);
+    const ok = c.displayCard(memberPlain) === `${fixture.card.pan} · 2032/12` && memberPlain.every((byte, i) => byte === recoveryPlain[i]) && first.nonce !== second.nonce && first.salt !== second.salt && envelope.last_four === "4242";
+    [plain, memberPlain, recoveryPlain, password, code].forEach(c.wipe); fromMember.destroy(); fromCode.destroy();
+    return ok && !plain.some(Boolean) && !password.some(Boolean) && !code.some(Boolean);
+  }, vector)).toBe(true);
+});
+
+test("wrong credentials, scope, tag, metadata and format fail closed", async ({ page }) => {
+  const rejected = await page.evaluate(async (fixture) => {
+    const c = await import("/src/features/vault/crypto.ts");
+    const scope = { householdId: fixture.household_id, keyVersion: fixture.key_version }, row = fixture.members[0];
+    const wrap = { format_version: 1, key_version: fixture.key_version, kdf: "PBKDF2-HMAC-SHA256", ...row };
+    const check = { format_version: 1, key_version: fixture.key_version, ...fixture.key_check };
+    const password = c.passwordBytes(row.password), badPassword = c.passwordBytes(row.password.trim());
+    const key = await c.unwrapMember(password, scope, row.member_id, wrap, check);
+    const envelope = { format_version: 1, key_version: fixture.key_version, payload_schema_version: 1, last_four: "4242", ...fixture.card };
+    const corrupted = c.decode64(envelope.ciphertext, 43); corrupted[42] ^= 1;
+    const cases = [
+      () => c.unwrapMember(badPassword, scope, row.member_id, wrap, check),
+      () => c.unwrapMember(password, { ...scope, householdId: fixture.card.card_id }, row.member_id, wrap, check),
+      () => c.unwrapMember(password, scope, fixture.members[1].member_id, wrap, check),
+      () => c.unwrapMember(password, scope, row.member_id, { ...wrap, iterations: 2_000_001 }, check),
+      () => c.unwrapMember(password, scope, row.member_id, { ...wrap, kdf: "other" }, check),
+      () => c.decryptCard(key, { ...scope, keyVersion: 8 }, fixture.card.card_id, envelope),
+      () => c.decryptCard(key, scope, fixture.household_id, envelope),
+      () => c.decryptCard(key, scope, fixture.card.card_id, { ...envelope, ciphertext: c.encode64(corrupted) }),
+      () => c.decryptCard(key, scope, fixture.card.card_id, { ...envelope, last_four: "0000" }),
+      () => c.decryptCard(key, scope, fixture.card.card_id, { ...envelope, payload_schema_version: 2 }),
+      () => c.decryptCard(key, scope, fixture.card.card_id, { ...envelope, nonce: envelope.nonce + "=" }),
+    ];
+    let count = 0;
+    for (const work of cases) { try { await work(); } catch (error) { if (error instanceof c.VaultCryptoError) count++; } }
+    key.destroy();
+    try { await c.decryptCard(key, scope, fixture.card.card_id, envelope); } catch (error) { if (error instanceof c.VaultCryptoError) count++; }
+    c.wipe(password); c.wipe(badPassword); return count;
+  }, vector);
+  expect(rejected).toBe(12);
+});
+
+test("input bounds reject malformed Unicode, lossy encodings and invalid payloads", async ({ page }) => {
+  expect(await page.evaluate(async () => {
+    const c = await import("/src/features/vault/crypto.ts");
+    const cases = [
+      () => c.passwordBytes("short", true), () => c.passwordBytes("\ud800"), () => c.passwordBytes("\udc00"),
+      () => c.passwordBytes("한".repeat(342)), () => c.passwordBytes(""),
+      () => c.decode64("AB", 1), () => c.decode64("AA=", 1),
+      () => c.cardPayload("4242424242424243", 2032, 12), () => c.cardPayload("4242 4242 4242 4242", 2032, 12),
+      () => c.cardPayload("4242424242424242", 2200, 12), () => c.cardPayload("4242424242424242", 2032, 0),
+      () => c.cardAad({ householdId: "not-a-uuid", keyVersion: 1 }, "not-a-uuid"),
+      () => c.checkAad({ householdId: "00000000-0000-4000-8000-000000000001", keyVersion: Number.MAX_SAFE_INTEGER + 1 }),
+    ];
+    let count = 0; for (const work of cases) { try { work(); } catch (error) { if (error instanceof c.VaultCryptoError) count++; } }
+    return count;
+  })).toBe(13);
+});
