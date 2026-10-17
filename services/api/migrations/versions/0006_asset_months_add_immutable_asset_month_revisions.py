@@ -265,7 +265,8 @@ def upgrade() -> None:
         LANGUAGE plpgsql AS $$
         BEGIN
             IF TG_OP = 'INSERT' THEN
-                IF NEW.state = 'confirmed' THEN
+                IF (NEW.revision_no = 1 AND NEW.state <> 'draft') OR
+                    (NEW.revision_no > 1 AND NEW.state <> 'reopened') THEN
                     RAISE EXCEPTION 'A revision must start unconfirmed' USING ERRCODE = '55000';
                 END IF;
                 RETURN NEW;
@@ -274,9 +275,17 @@ def upgrade() -> None:
                 RAISE EXCEPTION 'A confirmed revision is immutable' USING ERRCODE = '55000';
             END IF;
             IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
-            IF (OLD.id, OLD.household_id, OLD.month_id, OLD.revision_no)
-                IS DISTINCT FROM (NEW.id, NEW.household_id, NEW.month_id, NEW.revision_no) THEN
-                RAISE EXCEPTION 'A revision identity is immutable' USING ERRCODE = '55000';
+            IF (OLD.id, OLD.household_id, OLD.month_id, OLD.revision_no,
+                OLD.previous_revision_id, OLD.reopened_reason, OLD.created_by_member_id,
+                OLD.created_at) IS DISTINCT FROM
+                (NEW.id, NEW.household_id, NEW.month_id, NEW.revision_no,
+                NEW.previous_revision_id, NEW.reopened_reason, NEW.created_by_member_id,
+                NEW.created_at) THEN
+                RAISE EXCEPTION 'A revision origin is immutable' USING ERRCODE = '55000';
+            END IF;
+            IF NEW.state <> OLD.state AND NEW.state <> 'confirmed' THEN
+                RAISE EXCEPTION 'An existing revision can only be confirmed'
+                    USING ERRCODE = '55000';
             END IF;
             RETURN NEW;
         END
