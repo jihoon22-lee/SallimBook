@@ -20,6 +20,7 @@ from sallimbook.core.types import SEOUL
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.insurance.crypto import decrypt_number, encrypt_number
+from sallimbook.insurance.event_models import MedicalExpense
 from sallimbook.insurance.models import (
     InsuranceCase,
     InsuranceCaseRevision,
@@ -659,6 +660,21 @@ def update_node(session, principal, case_id, node_id, payload, if_match):
     row = _child(session, principal, MedicalNode, node_id, "case_id", case_id, lock=True)
     require_version(row, if_match)
     candidate = _candidate(row, MedicalNodeInput, payload)
+    if (
+        candidate.kind == "prescription"
+        and session.scalar(
+            select(MedicalExpense.id)
+            .where(
+                MedicalExpense.household_id == principal.household_id,
+                MedicalExpense.node_id == row.id,
+            )
+            .limit(1)
+        )
+        is not None
+    ):
+        raise DomainError(
+            "MEDICAL_NODE_IN_USE", "비용 이력이 있는 항목은 처방으로 바꿀 수 없습니다.", 409
+        )
     _actual_dates(candidate.start_on, candidate.end_on)
     _parent(session, principal, case_id, candidate.parent_id, node_id)
     before = _touch(row, principal)
