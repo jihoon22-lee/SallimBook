@@ -49,6 +49,7 @@ def execute(
     insurance: bool = False,
     homecare: bool = False,
     documents: bool = False,
+    vault: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -79,6 +80,7 @@ def execute(
             insurance=insurance,
             homecare=homecare,
             documents=documents,
+            vault=vault,
         )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
@@ -95,6 +97,7 @@ def run_browser(
     insurance: bool = False,
     homecare: bool = False,
     documents: bool = False,
+    vault: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -202,7 +205,7 @@ def run_browser(
                 app.router.lifespan_context = lifespan
                 dist = (ROOT / "apps/client/dist").resolve()
                 control = secrets.token_urlsafe(32)
-                if passkeys:
+                if passkeys or vault:
 
                     @app.post("/__test/expire-freshness", include_in_schema=False)
                     def expire_freshness(
@@ -296,6 +299,7 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_INSURANCE": "1" if insurance else "0",
                         "SALLIMBOOK_HTTPS_HOMECARE": "1" if homecare else "0",
                         "SALLIMBOOK_HTTPS_DOCUMENTS": "1" if documents else "0",
+                        "SALLIMBOOK_HTTPS_VAULT": "1" if vault else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -306,7 +310,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents|vault)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -377,6 +381,7 @@ if __name__ == "__main__":
         help="Verify appliances, shared stock, replacement and dashboard with real HTTPS.",
     )
     parser.add_argument("--documents", action="store_true", help="Verify attachments with the real pinned scanner/OCR tool container and HTTPS API.")
+    parser.add_argument("--vault", action="store_true", help="Verify real WebCrypto vault sharing, recovery, rotation and purge through HTTPS.")
     args = parser.parse_args()
     with test_service_lock():
         execute(
@@ -388,4 +393,5 @@ if __name__ == "__main__":
             insurance=args.insurance,
             homecare=args.homecare,
             documents=args.documents,
+            vault=args.vault,
         )

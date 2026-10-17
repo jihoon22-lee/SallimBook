@@ -23,6 +23,7 @@ export type VaultInputs = {
   reason: S["VaultRotationStart"]["reason"];
 };
 export type WorkflowResult = "completed" | "displayed" | "confirm-recovery";
+export const needsReauthentication = (error: unknown) => error instanceof ApiError && ["REAUTHENTICATION_REQUIRED", "STEP_UP_REQUIRED"].includes(error.code);
 function check(value: unknown, conflict = false): asserts value {
   if (!value) throw new ApiError(conflict ? 409 : 403, conflict ? "VERSION_CONFLICT" : "FORBIDDEN");
 }
@@ -34,6 +35,8 @@ export class VaultWorkflow {
   context: VaultPublicContext | null = null;
   #prepared: (() => Promise<void>) | null = null;
   #retry: (() => Promise<unknown>) | null = null;
+  // Only immutable manifest identifiers and digests survive a same-screen reauthentication.
+  #cursor: { binding: string; oldKey: string; newKey: string; verified: Set<string> } | null = null;
   constructor(
     private readonly api: PrivateVaultApi,
     private readonly me: S["MemberResponse"],
@@ -43,7 +46,7 @@ export class VaultWorkflow {
     private readonly cardOutput: (text: string) => void,
   ) {}
   get canRetry(): boolean { return this.#retry !== null; }
-  dispose() { this.#prepared = null; this.#retry = null; this.context = null; }
+  dispose() { this.#prepared = null; this.#retry = null; this.#cursor = null; this.context = null; }
   private get signal() { return this.life.signal; }
   private current(): VaultPublicContext { check(this.context); this.life.assert(); return this.context; }
   private scope(status = this.current().status): Scope {
@@ -99,6 +102,7 @@ export class VaultWorkflow {
     if ("memberId" in r) check(status.members.some((member) => member.member_id === r.memberId));
     if ("rotationId" in r) {
       context.rotation = await this.api.rotation(r.rotationId, this.signal);
+      check(context.rotation.id === r.rotationId);
       this.checkRotation(context.rotation, status);
     }
     this.life.assert(); this.context = context; return context;
@@ -131,11 +135,35 @@ export class VaultWorkflow {
   private async mutate<T>(operation: () => Promise<T>): Promise<T> {
     this.life.assert(); this.#retry = operation;
     try { const result = await operation(); this.life.assert(); this.#retry = null; return result; }
-    catch (error) { if (error instanceof ApiError && error.status > 0 && error.status < 500) this.#retry = null; throw error; }
+    catch (error) { if (error instanceof ApiError && error.status > 0 && error.status < 500 && error.status !== 408 && !needsReauthentication(error)) this.#retry = null; throw error; }
   }
-  async retry(): Promise<void> {
+  private async refreshRotation(): Promise<boolean> {
+    const previous = this.current(), status = await this.api.status(this.signal);
+    this.validateStatus(status); this.life.assert();
+    check(status.id === previous.status.id && status.own_membership === "active", true);
+    if (!status.pending_rotation_id) return false;
+    check(!previous.rotation || status.pending_rotation_id === previous.rotation.id, true);
+    const rotation = await this.api.rotation(status.pending_rotation_id, this.signal);
+    check(rotation.id === status.pending_rotation_id); this.checkRotation(rotation, status);
+    this.life.assert(); this.context = { ...previous, status, rotation }; return true;
+  }
+  async reauthenticate(password: string): Promise<void> {
+    this.life.clearSecrets(); this.life.beginStep();
+    const member = await this.api.reauthenticate(password, this.signal); this.life.assert();
+    check(member.household_id === this.me.household_id && member.member_id === this.me.member_id && member.user_id === this.me.user_id);
+    if (["rotate", "resume-rotation"].includes(this.request.action)) {
+      // A pending opaque retry must be resolved before deciding whether finalization completed.
+      if (!await this.refreshRotation()) check(this.#retry || !this.context?.rotation, true);
+    } else await this.fresh();
+    this.life.waitForInput();
+  }
+  async retry(): Promise<"completed" | "rotation-pending"> {
     this.life.beginStep(); const operation = this.#retry; check(operation);
     await this.mutate(operation); this.life.clearSecrets();
+    if (["rotate", "resume-rotation"].includes(this.request.action) && await this.refreshRotation()) {
+      this.life.waitForInput(); return "rotation-pending";
+    }
+    return "completed";
   }
   async confirmRecovery(): Promise<void> {
     this.life.beginStep(); const operation = this.#prepared; check(operation); this.#prepared = null;
@@ -233,10 +261,11 @@ export class VaultWorkflow {
     }
     check(r.action === "rotate" || r.action === "resume-rotation");
     let rotation = context.rotation;
-    if (r.action === "rotate") {
+    if (r.action === "rotate" && !rotation) {
       const idempotency = crypto.randomUUID();
       const reference = await this.mutate(() => this.api.startRotation(input.reason, status.version!, idempotency, this.signal));
       rotation = await this.api.rotation(reference.id, this.signal);
+      check(rotation.id === reference.id);
       const now = await this.api.status(this.signal); this.validateStatus(now); this.checkRotation(rotation, now);
       check(now.current_key_version === scope.keyVersion && now.own_membership === "active");
       this.context = { ...context, status: now, rotation };
@@ -262,11 +291,24 @@ export class VaultWorkflow {
       await this.migrateCards(prepared, unlocked.key, nextKey);
     });
   }
+  private rotationBinding(rotation: S["VaultRotationResponse"]): string {
+    return JSON.stringify({ household: rotation.household_id, id: rotation.id, source: rotation.source_key_version, target: rotation.key_version,
+      members: rotation.members.map(({ member_id, source_membership_version }) => ({ member_id, source_membership_version })).sort((a, b) => a.member_id.localeCompare(b.member_id)),
+      cards: rotation.cards.map(({ card_id, source_envelope_id, source_revision, last_four }) => ({ card_id, source_envelope_id, source_revision, last_four })).sort((a, b) => a.card_id.localeCompare(b.card_id)) });
+  }
   private async migrateCards(rotation: S["VaultRotationResponse"], oldKey: VaultKey, newKey: VaultKey) {
     const oldScope = this.scope(), nextScope = { ...oldScope, keyVersion: rotation.key_version };
     const current = await this.api.status(this.signal); this.validateStatus(current); this.checkRotation(rotation, current);
     check(current.own_membership === "active" && rotation.key_check_prepared && rotation.recovery_prepared && rotation.members.every((member) => member.prepared));
+    const binding = this.rotationBinding(rotation), oldDigest = await oldKey.fingerprint(), newDigest = await newKey.fingerprint();
+    this.life.assert();
+    if (this.#cursor) check(this.#cursor.binding === binding && this.#cursor.oldKey === oldDigest && this.#cursor.newKey === newDigest, true);
+    else this.#cursor = { binding, oldKey: oldDigest, newKey: newDigest, verified: new Set() };
+    const cursor = this.#cursor;
+    check([...cursor.verified].every((id) => rotation.cards.some((card) => card.card_id === id && card.prepared)), true);
+    this.context = { ...this.current(), status: current, rotation };
     for (const target of rotation.cards) {
+      if (cursor.verified.has(target.card_id)) continue;
       // A rotation advances across bounded foreground steps. A large prepared prefix
       // must not consume one fixed timeout on every resume and starve the suffix.
       this.life.beginStep();
@@ -285,12 +327,15 @@ export class VaultWorkflow {
         const verified = this.life.ownBytes(await decryptCard(newKey, nextScope, target.card_id, staged));
         try { check(verified.length === plain.length && verified.every((byte, index) => byte === plain[index])); }
         finally { this.life.forgetBytes(verified); }
+        this.life.assert(); cursor.verified.add(target.card_id);
+        this.context = { ...this.current(), rotation };
       } finally { this.life.forgetBytes(plain); }
     }
     this.life.beginStep();
     const final = await this.api.rotation(rotation.id, this.signal);
     const latest = await this.api.status(this.signal); this.validateStatus(latest); this.checkRotation(final, latest);
     check(final.id === rotation.id && final.key_version === rotation.key_version && final.version === rotation.version && final.cards.length === rotation.cards.length && final.cards.every((card) => card.prepared && rotation.cards.some((original) => original.card_id === card.card_id && original.source_envelope_id === card.source_envelope_id && original.source_revision === card.source_revision && original.last_four === card.last_four)), true);
+    check(this.rotationBinding(final) === binding && cursor.verified.size === final.cards.length, true);
     const key = crypto.randomUUID();
     await this.mutate(() => this.api.finalize(final.id, { key_version: final.key_version, key_check_confirmed: true }, final.version, key, this.signal));
   }

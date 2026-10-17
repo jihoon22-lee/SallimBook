@@ -222,8 +222,8 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "67c9d3b807aa9d22c8846cabddb8296d9c18a84569b2da00312f2261e85b2f25",
-      "git_sha1": "4b2c02ddf3afa66b9e4d58774e23faa3b80223f9"
+      "sha256": "5f566de73bdee1565e9b61f09a76cd16e3866dd44f6cb41bc04f5de3ab285876",
+      "git_sha1": "c7bc88fb44a9ca51b43acba7cbe92938c6cf2fb2"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
@@ -288,6 +288,10 @@
     "docs/testing/vault-overview.md": {
       "sha256": "546db5996e046fc5b32c1df3a09d6b87d104f42216a87db1593df99bb6eb7e83",
       "git_sha1": "c8d785f25257c30141e59008be46acc0711197b4"
+    },
+    "docs/testing/vault-web.md": {
+      "sha256": "9fae13d99feb75eb0ea7ee0b837a4b24b1a76815bafe25f7ae152a2154ac588f",
+      "git_sha1": "16b9505313db7d548c0d3616a1c404a1027fe7c8"
     }
   }
 }

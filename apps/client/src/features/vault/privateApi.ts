@@ -16,6 +16,7 @@ export function usePrivateVaultApi() {
     const read: typeof domainApi.read = (web) => { requireWebAuth(); return domainApi.read(web); };
     const write: typeof domainApi.write = (web) => { requireWebAuth(); return domainApi.write(web); };
     return {
+      reauthenticate: (password: string, signal: AbortSignal) => write((c) => c.POST("/api/v1/auth/web/reauthenticate", { body: { password }, signal })),
       status: (signal: AbortSignal) => read((c) => c.GET("/api/v1/vault/status", { signal })),
       own: (signal: AbortSignal) => read((c) => c.GET("/api/v1/vault/wrappings/me", { signal })),
       recovery: (signal: AbortSignal) => read((c) => c.GET("/api/v1/vault/recovery-wrap", { signal })),

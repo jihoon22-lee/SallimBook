@@ -13,6 +13,8 @@ export class VaultLifetime {
   #poll: ReturnType<typeof setInterval> | undefined;
   #polling = false;
   #started = performance.now();
+  #expiresAt = 0;
+  #displayExpiresAt: number | null = null;
   constructor(private readonly root: HTMLElement, private readonly locked: () => void) {
     window.addEventListener("blur", this.close);
     window.addEventListener("pagehide", this.close);
@@ -27,19 +29,21 @@ export class VaultLifetime {
     // User input extends an idle form up to five minutes; network/KDF work does not.
     const remaining = Math.min(60_000, 300_000 - (performance.now() - this.#started));
     if (remaining <= 0) { this.close(); return; }
+    this.#expiresAt = performance.now() + remaining;
     this.#deadline = setTimeout(this.close, remaining);
   };
   assert() {
-    if (this.#closed || this.signal.aborted || document.visibilityState !== "visible" || !document.hasFocus()) {
+    const now = performance.now();
+    if (this.#closed || this.signal.aborted || now >= this.#expiresAt || this.#displayExpiresAt !== null && now >= this.#displayExpiresAt || document.visibilityState !== "visible" || !document.hasFocus()) {
       this.close(); throw new VaultCryptoError();
     }
   }
   ownKey(key: VaultKey): VaultKey {
-    if (this.#closed) { key.destroy(); throw new VaultCryptoError(); }
+    try { this.assert(); } catch { key.destroy(); throw new VaultCryptoError(); }
     this.#keys.add(key); return key;
   }
   ownBytes(value: Bytes): Bytes {
-    if (this.#closed) { wipe(value); throw new VaultCryptoError(); }
+    try { this.assert(); } catch { wipe(value); throw new VaultCryptoError(); }
     this.#bytes.add(value); return value;
   }
   forgetBytes(value: Bytes) { wipe(value); this.#bytes.delete(value); }
@@ -56,12 +60,14 @@ export class VaultLifetime {
   beginStep() {
     this.assert();
     if (this.#deadline) clearTimeout(this.#deadline);
+    this.#expiresAt = performance.now() + 60_000;
     this.#deadline = setTimeout(this.close, 60_000);
   }
   waitForInput() { this.assert(); this.#started = performance.now(); this.touch(); }
   showFor30Seconds(revalidate: () => Promise<void>) {
     this.assert();
     if (this.#display) clearTimeout(this.#display);
+    this.#displayExpiresAt = performance.now() + 30_000;
     this.#display = setTimeout(this.close, 30_000);
     if (this.#poll) clearInterval(this.#poll);
     this.#poll = setInterval(() => {
