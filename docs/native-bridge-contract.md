@@ -448,3 +448,64 @@ git diff --check
 
 브라우저 모의시험은 실제 Android 기기 검증을 대신하지 않는다. 실기기 잠금·백그라운드·늦은 응답,
 화면 캡처·백업 시험과 정식 APK 서명·배포는 실행하지 않았다.
+
+## 19. 문서 첨부와 사본 저장 (SB-023, Refs #32)
+
+R-13/R-15/R-20의 9개 서버 API 중 `nativeFinance`의 JSON 메타데이터 명령은
+`listDocuments`, `getDocument`, `deleteDocument`, `createDocumentLink`, `listDocumentLinks`,
+`endDocumentLink` 6개다. 입력·조회·응답은 생성 API 타입을 참조하고 Kotlin에서 경로·필드·
+버전·멱등키·typed target·문서 상태·부모 ID·페이지를 검증한다. 연결 생성의 If-Match는 문서,
+연결 해제의 If-Match는 연결 자체의 버전이다. 변경 응답은 원래 요청 당시의 불변 참조다.
+
+`uploadDocument({target})`와 `downloadDocument({documentId})`는 각각
+`uploadDocumentUI`/`downloadDocumentUI`를 통해 비공개 `NativeDocumentActivity`를 연다.
+JS는 URI·파일명·크기·해시·바이트·토큰이나 카드자료 미포함 bool을 입력하지 않으며,
+결과에는 uploaded/downloaded/cancelled 상태 또는 고정 오류 코드만 있다.
+`createDocument`와 raw content 전송은 일반 bridge 명령으로 노출하지 않는다.
+
+네이티브 업로드는 `ACTION_OPEN_DOCUMENT`로 PDF/JPEG/PNG 한 개를 선택하고 파일명·형식·
+크기를 보여준다. 사용자가 카드 사진·전체 카드번호·보안코드가 없음을 직접 확인한 뒤에만
+본문을 읽는다. 제공자 크기가 null일 수 있으므로 실제 읽기량을 20MiB로 제한하고, 같은
+네이티브 버퍼에서 SHA-256을 계산해 메타데이터 POST와 raw PUT을 수행한다. URI를 다시 열어
+다른 바이트를 전송하지 않는다. 앱의 평문 임시 파일·base64·영구 URI 권한은 만들지 않는다.
+서버의 포맷·악성파일·카드자료 검사를 대신했다고 주장하지 않는다.
+[공식 SAF 안내](https://developer.android.com/training/data-storage/shared/documents-files)를 확인했다.
+
+다운로드는 선택한 위치에 앱 밖의 사본을 저장하는 동작으로 안내한다. `ACTION_CREATE_DOCUMENT`
+선택 뒤 현재 문서와 접근 권한을 다시 확인하고, 다운로드 MIME·실제 크기·SHA-256이 메타데이터와
+일치한 바이트만 목적지에 쓴다. 자동 외부 뷰어 실행이나 공개 URL 전달은 하지 않는다.
+취소·실패 시 이번에 생성한 목적지 파일의 삭제를 시도하지만 제공자/프로세스 종료에 따른
+부분 파일 제거를 보장하지 않는다. 이 한계와 서버 삭제가 외부 사본을 지우지 않는다는 점을
+저장 전에 안내한다. [ContentResolver 계약](https://developer.android.com/reference/android/content/ContentResolver)과
+[DocumentsContract 삭제 계약](https://developer.android.com/reference/android/provider/DocumentsContract#deleteDocument(android.content.ContentResolver,android.net.Uri))을 따른다.
+
+Activity는 FLAG_SECURE와 저장 상태·자동완성·content capture 차단을 적용한다. 파일 선택기는
+기존 앱 잠금의 60초 한도 안에서만 기다리고 그동안 파일 I/O·HTTP를 하지 않는다. 복귀는 같은
+요청 세대와 resumed·focus·기기 잠금을 확인하며 1초 안에 포커스가 돌아오지 않으면 취소한다.
+일반 포커스 상실·pause·화면 꺼짐·앱 잠금·명시 취소·재생성은 작업을 폐기한다. Activity Result
+callback은 매번 등록하지만 재생성된 인스턴스에 URI나 진행 상태를 복원하지 않는다.
+[공식 Activity Result 지침](https://developer.android.com/training/basics/intents/result)을 확인했다.
+FLAG_SECURE는 앱의 창에 적용되며 외부 제공자 화면이나 저장된 사본을 보호한다고 표현하지 않는다.
+[Android 화면 보호 지침](https://developer.android.com/security/fraud-prevention/activities)
+
+파일 읽기·쓰기와 HTTP는 한 요청의 owner별 취소 처리로 연결한다. 제공자 CancellationSignal/
+descriptor와 HTTP 취소가 서로 덮어쓰지 않으며 취소된 gate에 새 소유자를 등록해도 즉시 취소한다.
+고정 HTTPS·쿠키/리디렉션/로그/캐시 없음·one-shot 본문·자동 재시도 금지를 유지하고 파일 전용
+HTTP call/read 제한은 180초다. 서버 검사 최악 105초를 고려한 값이며 기존 JSON 15초는 유지한다.
+업로드 결과가 불명확하면 자동 재등록하지 않고 목록 재확인을 안내한다. 파일 버퍼는 사용 종료와
+실패 경로에서 지우며, 늦은 다운로드 버퍼도 화면/JS에 전달하지 않는다.
+
+`pnpm typecheck`, `pnpm android:sync`, 디버그 APK 조립과 release Kotlin 컴파일이 통과했다.
+신규 문서 정책 7개·선택기/버퍼/복합 취소 8개·실제 OkHttp 경계 6개를 포함한 JVM **224개**가
+실패·오류·건너뜀 없이 통과했다. HTTP 검사는 합성 interceptor로 원본 바이트·헤더·one-shot,
+잘못된 MIME/크기/해시·리디렉션·취소 전송 차단을 확인하며 실제 서버나 제공자를 사용하지 않는다.
+APK/release 빌드 뒤 추가한 HTTP 6개는 JVM 전체 224개를 다시 실행해 검증했다.
+
+```bash
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=2 :app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=2 :app:testDebugUnitTest
+```
+
+브라우저 모의시험 `documents-native-bridge.spec.ts`의 12개 시나리오는 작성했으며 실행 순서를
+조율 중이다. 실제 Galaxy의 파일 제공자·URI 권한·선택기/회전/잠금·부분 저장·취소 시험,
+정식 서명·배포는 실행하지 않았다. 빌드와 합성 JVM 검사를 실기기 성공으로 해석하지 않는다.

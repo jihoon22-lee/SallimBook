@@ -46,6 +46,14 @@ function metadataOnly(input: NativeAccountCreate | NativeAccountPatch): void {
 
 /** Tokenless, generated-schema metadata operations. No URL, bearer token or raw body API. */
 export const nativeFinance = {
+  createDocumentLink: (options: Parameters<SallimBookAuth["createDocumentLink"]>[0]) => metadata(() => plugin.createDocumentLink(options)),
+  endDocumentLink: (options: Parameters<SallimBookAuth["endDocumentLink"]>[0]) => metadata(() => plugin.endDocumentLink(options)),
+  listDocuments: (options: Parameters<SallimBookAuth["listDocuments"]>[0]) => metadata(() => plugin.listDocuments(options)),
+  getDocument: (options: Parameters<SallimBookAuth["getDocument"]>[0]) => metadata(() => plugin.getDocument(options)),
+  deleteDocument: (options: Parameters<SallimBookAuth["deleteDocument"]>[0]) => metadata(() => plugin.deleteDocument(options)),
+  listDocumentLinks: (options: Parameters<SallimBookAuth["listDocumentLinks"]>[0]) => metadata(() => plugin.listDocumentLinks(options)),
+  uploadDocument: (options: Parameters<SallimBookAuth["uploadDocumentUI"]>[0]) => invoke(() => plugin.uploadDocumentUI(options)),
+  downloadDocument: (options: Parameters<SallimBookAuth["downloadDocumentUI"]>[0]) => invoke(() => plugin.downloadDocumentUI(options)),
   listApplianceConsumables: (options: Parameters<SallimBookAuth["listApplianceConsumables"]>[0]) => metadata(() => plugin.listApplianceConsumables(options)),
   createApplianceConsumable: (options: Parameters<SallimBookAuth["createApplianceConsumable"]>[0]) => metadata(() => plugin.createApplianceConsumable(options)),
   getApplianceConsumable: (options: Parameters<SallimBookAuth["getApplianceConsumable"]>[0]) => metadata(() => plugin.getApplianceConsumable(options)),

@@ -303,7 +303,7 @@ internal object AuthPolicy {
             "ACCOUNT_NUMBER_NOT_SET" to (409 to "등록된 계좌번호가 없습니다."),
             "FIELD_ENCRYPTION_UNAVAILABLE" to (503 to "계좌번호 보호 설정을 확인해 주세요."),
             "ACCOUNT_NUMBER_UNAVAILABLE" to (503 to "계좌번호를 열 수 없습니다."),
-        )
+        ) + NativeDocumentPolicy.errorMessages
         val serverError = (body as? Map<*, *>)?.get("error") as? Map<*, *>
         val suppliedCode = serverError?.get("code") as? String
         val knownCode = suppliedCode?.takeIf { messages[it]?.first == status }
@@ -333,7 +333,8 @@ internal object AuthPolicy {
 /** Cancellation controls request lifetime only; it is not authentication evidence. */
 internal class ForegroundRequest {
     private var active = true
-    private var cancelNetwork: (() -> Unit)? = null
+    private val networkOwner = Any()
+    private val cancellation = mutableMapOf<Any, () -> Unit>()
     private var lockPolicy: AppLockPolicy? = null
     private var lockTicket: AppLockTicket? = null
     private var deviceUnlocked: (() -> Boolean)? = null
@@ -365,16 +366,23 @@ internal class ForegroundRequest {
         if (lockPolicy?.httpAllowed(ticket, method, path) != true) throw AuthFailure(AuthCode.APP_LOCKED)
     }
 
-    @Synchronized fun cancel() {
-        active = false
-        cancelNetwork?.invoke()
-        cancelNetwork = null
+    fun cancel() {
+        val actions = synchronized(this) {
+            active = false
+            cancellation.values.toList().also { cancellation.clear() }
+        }
+        actions.forEach { try { it() } catch (_: Exception) { /* Continue cancelling other owners. */ } }
     }
     @Synchronized fun isActive(): Boolean = active
-    @Synchronized fun bindNetworkCancellation(cancel: () -> Unit) {
-        if (active) cancelNetwork = cancel else cancel()
+    fun bindCancellation(owner: Any, cancel: () -> Unit) {
+        val cancelled = synchronized(this) {
+            if (active) { cancellation[owner] = cancel; false } else true
+        }
+        if (cancelled) cancel()
     }
-    @Synchronized fun releaseNetworkCancellation() { cancelNetwork = null }
+    @Synchronized fun releaseCancellation(owner: Any) { cancellation.remove(owner) }
+    fun bindNetworkCancellation(cancel: () -> Unit) = bindCancellation(networkOwner, cancel)
+    fun releaseNetworkCancellation() = releaseCancellation(networkOwner)
 
     @Synchronized fun <T> whileActive(action: () -> T): T {
         if (!active) throw AuthFailure(AuthCode.AUTH_CANCELLED)
