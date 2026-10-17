@@ -2,6 +2,10 @@
 
 상태: 구현용 논리 모델. 실제 DDL/Alembic migration은 개발 단계에서 작성·검증한다.
 테이블 명세에 없는 임의의 PAN/CVC 평문 칼럼을 추가하지 않는다.
+SB-002의 실제 migration `0001_households`는 가계 루트와 KRW/Asia·Seoul/version 제약만 생성한다.
+아래의 나머지 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
+공통 ORM은 UUID·UTC timestamp·낙관적 version을 제공하며, `KrwNumeric` 바인딩은
+float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. 새 DB에 사용자 가계를 자동 생성하지 않는다.
 
 ## 1. 공통 타입과 규칙
 

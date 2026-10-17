@@ -1,0 +1,42 @@
+name: sallimbook-dev
+
+x-database: &database
+  image: postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c
+  restart: "no"
+  mem_limit: 384m
+  cpus: 1.0
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sallimbook -d $$POSTGRES_DB"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+  networks: [database, local_access]
+
+services:
+  db:
+    <<: *database
+    environment:
+      POSTGRES_USER: sallimbook
+      POSTGRES_DB: sallimbook_dev
+      POSTGRES_PASSWORD: ${SALLIMBOOK_DATABASE_PASSWORD:?Run scripts/setup_dev.py first}
+    ports: ["127.0.0.1:18744:5432"]
+    volumes: ["db_data:/var/lib/postgresql"]
+  db-test:
+    <<: *database
+    profiles: [test]
+    environment:
+      POSTGRES_USER: sallimbook
+      POSTGRES_DB: sallimbook_test
+      POSTGRES_PASSWORD: ${SALLIMBOOK_TEST_DATABASE_PASSWORD:?Run scripts/setup_dev.py first}
+    ports: ["127.0.0.1:18745:5432"]
+    tmpfs: [/var/lib/postgresql]
+
+networks:
+  database:
+    internal: true
+  # Development API runs on the host. Docker does not publish ports for a
+  # container connected only to internal networks; bind these ports to loopback.
+  local_access:
+    driver: bridge
+volumes:
+  db_data:

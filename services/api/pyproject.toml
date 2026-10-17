@@ -7,6 +7,9 @@ dependencies = [
   "fastapi==0.143.3",
   "uvicorn==0.54.0",
   "pydantic-settings==2.16.0",
+  "sqlalchemy==2.1.5",
+  "alembic==1.20.0",
+  "psycopg[binary]==3.3.6",
 ]
 
 [build-system]
@@ -22,6 +25,7 @@ packages = ["src/sallimbook"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = ["database: requires an isolated PostgreSQL *_test database"]
 
 [tool.ruff]
 target-version = "py314"

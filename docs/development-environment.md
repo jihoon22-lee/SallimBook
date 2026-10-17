@@ -48,7 +48,9 @@ Android는 compile/target SDK 36, 앱 Build Tools 36.0.0,
 AGP 8.13.0, Gradle 8.14.3(checksum 고정), Kotlin 2.2.20이다.
 CLI SDK 설치기는 공식 명령 도구 build 15859902의 SHA-256을 검증하며 기존 SDK 설치를 덮어쓰지 않는다.
 앱 Gradle dependency lock은 `apps/client/android/app/gradle.lockfile`에 저장한다.
-DB와 운영 이미지 버전은 해당 Issue에서 호환 시험 후 별도로 고정한다.
+SB-002에서 SQLAlchemy 2.1.5, Alembic 1.20.0, psycopg 3.3.6을 추가했다.
+개발 PostgreSQL 18.6-bookworm 이미지는 Compose에서 digest까지 고정한다.
+운영 이미지 버전은 해당 Issue에서 호환 시험 후 별도로 고정한다.
 
 버전 선택 근거: [Vite 환경](https://vite.dev/guide/),
 [Capacitor 8 Android 환경](https://capacitorjs.com/docs/updating/8-0),
@@ -66,8 +68,16 @@ Windows의 별도 checkout이 필요하면 Git으로 동기화하고 생성 파�
 ## 5. 목표 개발 흐름
 
 현재 실행 명령은 [README](../README.md#개발-실행)에 있다.
-SB-001은 기본 화면·프로세스 health·웹/Android 빌드까지 포함하고 PostgreSQL·migration은 SB-002에서 추가한다.
-개발 포트는 API 18741, Vite 18742, 웹 E2E 18743이다. 기존 서버를 종료하거나 점유 포트를 빼앗지 않는다.
+SB-001은 기본 화면·프로세스 health·웹/Android 빌드, SB-002는 PostgreSQL·migration·공통 계약을 포함한다.
+개발 포트는 API 18741, Vite 18742, 웹 E2E 18743, 개발 DB 18744, 일회용 시험 DB 18745다.
+기존 서버를 종료하거나 점유 포트를 빼앗지 않는다.
+`scripts/setup_dev.py`는 기존 `.env`를 덮어쓰지 않고 새 파일에만 난수 개발 비밀번호를 저장한다(mode 0600).
+`pnpm db:up`과 `db:stop`은 Compose 프로젝트 `sallimbook-dev`의 `db` 서비스만 제어한다.
+개발 DB 포트는 loopback에만 바인딩한다. 내부 전용 bridge는 host 포트를 게시하지 않으므로
+별도 개발용 `local_access` bridge도 연결한다. 운영 DB의 네트워크 설계와 구분한다.
+`pnpm test:database`는 tmpfs의 `sallimbook_test`만 사용하고 마지막에 시험 서비스만 중지한다.
+각 DB 시험은 `sallimbook_test_<UUID>` schema를 생성·migration·폐기하며 다른 schema를 지우지 않는다.
+테스트 DB 이름이 `_test`로 끝나지 않으면 시험을 거부한다. 운영 DB로 시험하지 않는다.
 앱은 정적 웹 자산을 번들하며 `server.url`로 원격 UI를 로드하지 않는다.
 Capacitor sync 전에 web production build가 완료되어야 앱에 최신 웹 자산이 포함된다.
 Gradle wrapper의 CLI 빌드는 공식 지원 경로다([S18](references.md)).
