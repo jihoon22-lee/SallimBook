@@ -1,3 +1,4 @@
+import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -42,7 +43,7 @@ export function ClaimsList({ caseId, policyId }: { caseId?: string; policyId?: s
 }
 function ClaimDetail({ id, edit }: { id: string; edit: boolean }) {
   const api = useInsuranceEventsApi(); const result = useResource(useCallback(() => isUuid(id) ? api.getInsuranceClaim({ claimId: id }) : Promise.reject(new ApiError(404, "NOT_FOUND")), [api, id])); const row = result.data;
-  return <><InsuranceError error={result.error} />{result.error && <button onClick={() => void result.reload()}>청구 다시 확인</button>}{result.loading && <p role="status">청구 기록을 확인하고 있어요.</p>}{row && !result.loading && !result.error && (edit ? <ClaimEditor initial={row} /> : <><section className="card"><h2>{row.claim_reference || "접수번호 미입력 청구"}</h2><ClaimSummary row={row} /><div className="form-actions"><Link to={`/insurance/claims/${id}/edit`}>청구 상태·근거 정정</Link><Link to={`/insurance/payouts/new?case=${row.case_id}&policy=${row.policy_id}&claim=${id}`}>이 청구의 실제 수령 기록</Link></div></section><PayoutList caseId={row.case_id} claimId={id} policyId={row.policy_id} /><ClaimHistory id={id} /></>)}</>;
+  return <><InsuranceError error={result.error} />{result.error && <button onClick={() => void result.reload()}>청구 다시 확인</button>}{result.loading && <p role="status">청구 기록을 확인하고 있어요.</p>}{row && !result.loading && !result.error && (edit ? <ClaimEditor initial={row} /> : <><section className="card"><h2>{row.claim_reference || "접수번호 미입력 청구"}</h2><ClaimSummary row={row} /><div className="form-actions"><Link to={`/insurance/claims/${id}/edit`}>청구 상태·근거 정정</Link><Link to={`/insurance/payouts/new?case=${row.case_id}&policy=${row.policy_id}&claim=${id}`}>이 청구의 실제 수령 기록</Link></div></section><PayoutList caseId={row.case_id} claimId={id} policyId={row.policy_id} /><DocumentPanel kind="claim" id={id} /><ClaimHistory id={id} /></>)}</>;
 }
 export function ClaimNewPage() { const [query] = useSearchParams(); return <InsurancePage title="보험 청구 기록" description="접수와 심사 결과를 실제 수령과 구분해요."><ClaimEditor caseId={query.get("case") ?? ""} policyId={query.get("policy") ?? ""} /></InsurancePage>; }
 export function ClaimDetailPage({ edit = false }: { edit?: boolean }) { const { id = "" } = useParams(); return <InsurancePage title={edit ? "보험 청구 정정" : "보험 청구 상세"} description="근거 비용과 청구 상태·정정 이력을 확인해요."><ClaimDetail key={`${id}:${edit}`} id={id} edit={edit} /></InsurancePage>; }

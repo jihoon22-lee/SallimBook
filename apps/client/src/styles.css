@@ -219,3 +219,7 @@ footer { font-size: .75rem; color: var(--muted); padding-top: 32px; }
 .home-warranties { margin-block: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
 .home-warranties summary { cursor: pointer; padding-block: 8px; font-weight: 700; }
 .home-warranties li { overflow-wrap: anywhere; }
+
+.document-panel { min-width: 0; overflow-wrap: anywhere; }
+.document-panel button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.document-upload input[type="file"] { display: block; width: 100%; min-width: 0; max-width: 100%; }

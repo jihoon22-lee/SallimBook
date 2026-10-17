@@ -225,7 +225,7 @@ SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 �
 SB-024~SB-027의 가전·재고 API 24개와 `0012_homecare`를 구현했다.
 관련 순수 계산/스키마 33개, 실제 PostgreSQL API 34개와 DB 불변식 15개, 총 82개 검사와
 migration drift 및 전체 downgrade/upgrade가 통과했다. 상세 범위는 [가전·재고 검증](testing/homecare-server.md)을 참고한다.
-웹·Android 가전·재고·홈 화면은 별도 client 검증을 따르며 가전 구매 문서의 부모 연결 화면은 후속 통합 범위다.
+웹·Android 가전·재고·홈 화면은 별도 client 검증을 따르며 가전 구매 문서는 공통 첨부 패널에 연결했다.
 
 ### 첨부 저장과 검사
 
@@ -233,7 +233,7 @@ SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외
 검사 설정은 `SALLIMBOOK_DOCUMENT_SCANNER_SOCKET`, `SALLIMBOOK_DOCUMENT_TESSERACT_PATH`,
 `SALLIMBOOK_DOCUMENT_PDFTOPPM_PATH`이며 기본 미설정 상태는 업로드 503으로 실패한다.
 호스트에 도구를 임의 설치하거나 운영 키를 생성하지 않았다. 격리된 [실제 검사 도구 이미지](../infra/documents/README.md)와
-[서버 141개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
+[서버 150개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
 정리 명령 `uv run --project services/api python scripts/cleanup_documents.py`는 기본 dry-run이다.
 검토 후 `--apply`를 명시하면 24시간이 지난 DB 미참조/삭제 암호문만 제거하며 metadata 이력은 유지한다.
 
@@ -242,3 +242,10 @@ SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외
 `pnpm --filter @sallimbook/client exec playwright test --config playwright.homecare.config.ts`는 전용 18755 포트를 사용한다.
 `uv run --project services/api python scripts/test_web_auth.py --homecare`는 기존 격리 HTTPS harness에서 실제 가전/재고/교체와 홈을 검사한다.
 Docker 시험 DB 시작·중지와 브라우저 검사를 병행하지 않는다. 구체적인 실행 결과는 [가전·재고 UI 검증](testing/homecare-client.md)을 따른다.
+
+### 첨부 문서 화면 검증
+
+`playwright.documents.config.ts`는 전용 18756 포트를 사용한다.
+`uv run --project services/api python scripts/test_web_auth.py --documents`는 실제 ClamAV/Poppler/Tesseract 고정 이미지와
+생산 parser를 사용하는 임시 검사 환경 및 실제 HTTPS API로 문서를 검증한다.
+도구 image를 미리 준비하고 DB/문서 도구 잠금을 조정한다. 실행 경계·결과는 [첨부 UI 검증](testing/documents-client.md)을 따른다.
