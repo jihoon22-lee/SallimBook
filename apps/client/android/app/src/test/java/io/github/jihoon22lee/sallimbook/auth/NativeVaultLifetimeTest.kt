@@ -92,4 +92,35 @@ class NativeVaultLifetimeTest {
         assertTrue(life.consumeWork(current,true,{ true }) { deliveries++ })
         assertFalse(life.consumeWork(current,true,{ true }) { deliveries++ }); assertEquals(1,deliveries)
     }
+    @Test fun cryptoThatCrossesRequestDeadlineCannotPassPrecommitCheck() {
+        foreground(); val id = life.beginPrompt()!!
+        clock += 59_998
+        assertTrue(life.promptSucceeded(id)); assertTrue(life.claimCipher(id))
+        // Actual doFinal/AtomicFile.write can block after the initial claim. Check the
+        // request again at commit, without extending the original request's deadline.
+        clock++
+        assertTrue(life.cipherActive(id))
+        clock++
+        assertFalse(life.cipherActive(id))
+        assertFalse(life.finishCipher(id, true))
+        assertEquals(0L, life.displayRemaining())
+    }
+    @Test fun staleCryptoCannotCommitAfterANewRequestClaimsTheCipherSlot() {
+        foreground(); val old = life.beginPrompt()!!
+        assertTrue(life.promptSucceeded(old)); assertTrue(life.claimCipher(old))
+        life.lock()
+        val current = life.beginPrompt()!!
+        assertTrue(life.promptSucceeded(current)); assertTrue(life.claimCipher(current))
+        assertFalse(life.cipherActive(old))
+        assertTrue(life.cipherActive(current))
+        assertTrue(life.finishCipher(current, false))
+        assertFalse(life.cipherActive(current))
+    }
+    @Test fun precommitCheckRejectsPresentationLossAndCannotAuthorizePromptSuccessAlone() {
+        foreground(); val unclaimed = life.beginPrompt()!!
+        assertTrue(life.promptSucceeded(unclaimed)); assertFalse(life.cipherActive(unclaimed))
+        assertTrue(life.claimCipher(unclaimed)); assertTrue(life.cipherActive(unclaimed))
+        life.presentation(true, false, true, true); foreground()
+        assertFalse(life.cipherActive(unclaimed)); assertFalse(life.finishCipher(unclaimed, false))
+    }
 }

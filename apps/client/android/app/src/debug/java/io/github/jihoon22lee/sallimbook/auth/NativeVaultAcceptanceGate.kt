@@ -45,7 +45,10 @@ internal object NativeVaultAcceptanceGate {
         return true
     }
     @Synchronized fun beforeCommit(context: Context, binding: NativeVaultBinding, namespace: String) {
-        if (!allows(context, binding, namespace)) return
+        if (namespace != CvcAcceptanceFixtures.NAMESPACE || !binding.localCode) return
+        val activity = owner?.activity?.get()
+        if (!allows(context, binding, namespace) || activity?.syntheticCommitActive() != true)
+            throw IOException("Synthetic request no longer permits commit")
         if (owner?.failWrite == true) {
             owner?.failWrite = false
             throw IOException("Synthetic AtomicFile acceptance failure")

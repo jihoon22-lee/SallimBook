@@ -235,3 +235,15 @@ Galaxy S25 Ultra와 S24 Ultra의 모델·Android/One UI·보안 패치·WebView 
 산출물은 `apps/client/android/app/build/outputs/apk/` 아래 `debug/app-debug.apk`,
 `androidTest/debug/app-debug-androidTest.apk`, `release/app-release-unsigned.apk`다.
 현재 빌드의 API origin/RP/cert는 모두 공란이며 실제 서버 로그인 검증용 APK가 아니다.
+
+PR #84 첫 코드 리뷰의 P2 후속 수정에서는 debug 저장 hook이 `AtomicFile.finishWrite` 직전에
+현재 요청 ID/CRYPTO 단계/60초 시한/foreground를 다시 확인한다. 인증이나 `write`가 오래 걸려
+시한을 넘으면 `failWrite` 경로로 종료하며 기존 암호문을 유지한다. 시한 내에 시작한 `finishWrite`
+자체가 오래 걸려 완료 시한을 넘는 경우에는 이미 완료한 저장을 실패로 안내하지 않고,
+저장 완료·세션 종료·새 세션에서 별도 읽기로 확인하도록 구분한다.
+
+이 수정은 공통 lifetime의 비소비 조회 조건을 추가하고 debug gate에서 사용하며 일반 저장 로직과
+release gate의 no-op은 유지한다. fake-clock 회귀 3개(crypto claim 뒤 정확한 60초 경계,
+이전 요청 generation, 초점 이탈)를 포함해 JVM **333개**(실패·오류·건너뜀 0), debug/테스트/unsigned
+release APK 재생성, release DEX의 검증 marker 9개 제외, 문서 테스트 40개를 통과했다.
+이 시간 경계 단위 검사는 실제 기기 `AtomicFile` 실패 복원이나 생체 인증 시험을 대체하지 않는다.
