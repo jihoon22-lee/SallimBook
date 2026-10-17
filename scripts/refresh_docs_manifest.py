@@ -13,6 +13,8 @@ def main() -> None:
     parser.add_argument('--add', action='append', default=[], help='Reviewed documentation path to add')
     args = parser.parse_args()
     path = ROOT / MANIFEST
+    if path.is_symlink():
+        raise SystemExit('Documentation manifest must not be a symlink.')
     manifest = json.loads(path.read_text(encoding='utf-8'))
     names = set(manifest['files']) | set(args.add)
     for name in sorted(names):

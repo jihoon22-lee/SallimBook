@@ -190,12 +190,16 @@
       "git_sha1": "52eea430ac7d681f8f387e22f4826efe783b290a"
     },
     "scripts/refresh_docs_manifest.py": {
-      "sha256": "b82232c6bb8555e1b17021f24dd2af8c731cf0a08c4663f47b2a9c047896094c",
-      "git_sha1": "41da30140ecde0173088be81348ba56c477630fd"
+      "sha256": "2f6f897819e03e0be015ad29267213fa8342a60e9e9b4764b30be1dc909c06b2",
+      "git_sha1": "e7636beb259eac01e72f40a01d14c031c45ec234"
     },
     "scripts/setup_android_sdk.py": {
-      "sha256": "fe72ba3f5b086d862e62065ab041b4c28a6ef209786a9361a55bdabc29ab78d7",
-      "git_sha1": "ec9c5af45038ddde0403b8d43704860d4deae581"
+      "sha256": "1c18dda27fdb2ec41fe09f812f69bf7e917c3c3573773f8820e8936f6c248c97",
+      "git_sha1": "277111af1e937f3b4ba2d1bf2cdbc00bc873ac7a"
+    },
+    "tests/test_tool_safety.py": {
+      "sha256": "ae67405b91f2a170b8acddf7709692090d435c1be2beb9dab14411b8a1730200",
+      "git_sha1": "3caa898c4201967edf0403566f65a43eb73dcb40"
     }
   }
 }

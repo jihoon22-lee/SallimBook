@@ -16,7 +16,11 @@ TOOLS_URL = f"https://dl.google.com/android/repository/commandlinetools-linux-{T
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sdk-root", type=Path, default=Path.home() / "Android/Sdk")
+    parser.add_argument(
+        "--sdk-root", type=Path,
+        default=Path(os.environ.get("ANDROID_HOME", str(Path.home() / "Android/Sdk"))),
+        help="SDK directory (default: ANDROID_HOME, then ~/Android/Sdk)",
+    )
     parser.add_argument("--accept-licenses", action="store_true", help="Accept SDK licenses explicitly")
     args = parser.parse_args()
     if not os.environ.get("JAVA_HOME"):
