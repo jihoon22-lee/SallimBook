@@ -264,8 +264,11 @@ class CardSecretEnvelope(OpaqueFields, ActorFields, EntityMixin, Base):
         CheckConstraint("payload_schema_version = 1", name="payload_schema"),
         CheckConstraint("last_four ~ '^[0-9]{4}$'", name="last_four"),
         CheckConstraint(
-            f"octet_length(ciphertext) = {CARD_CIPHERTEXT_BYTES}", name="ciphertext_length"
+            f"ciphertext IS NULL OR octet_length(ciphertext) = {CARD_CIPHERTEXT_BYTES}",
+            name="ciphertext_length",
         ),
+        CheckConstraint("(ciphertext IS NULL) = (purged_at IS NOT NULL)", name="purged_ciphertext"),
+        CheckConstraint("purged_at IS NULL OR NOT is_current", name="purged_not_current"),
         Index(
             "uq_card_secret_envelopes_current",
             "household_id",
@@ -279,7 +282,8 @@ class CardSecretEnvelope(OpaqueFields, ActorFields, EntityMixin, Base):
     revision: Mapped[int] = mapped_column(BigInteger)
     payload_schema_version: Mapped[int]
     last_four: Mapped[str] = mapped_column(String(4))
-    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_current: Mapped[bool]
 
 
