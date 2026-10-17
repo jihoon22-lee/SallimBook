@@ -310,7 +310,7 @@ internal class NativeAuthSession private constructor(context: Context) {
         requireAvailable()
         val request = FinancePolicy.prepare(operation, http.jsonValue(arguments))
         val response = http.send(request.method, request.path, gate,
-            body = request.body?.let { JSONObject(it) }, accessToken = access(gate), ifMatch = request.ifMatch)
+            body = request.body?.let { JSONObject(it) }, accessToken = access(gate), ifMatch = request.ifMatch, idempotencyKey = request.idempotencyKey)
         if (response.status == 401) clearLocal()
         val safe = if (response.status in 200..299) FinancePolicy.response(operation, request, response.status, response.body)
             else AuthPolicy.safeError(response.status, response.body, response.requestId)
