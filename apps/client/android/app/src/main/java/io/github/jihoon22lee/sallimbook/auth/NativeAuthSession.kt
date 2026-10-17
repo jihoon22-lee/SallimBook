@@ -46,6 +46,7 @@ internal class NativeAuthSession private constructor(context: Context) {
 
     private val store by lazy { RefreshStore(app, origin.orEmpty()) }
     private val http by lazy { NativeAuthHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val auditHttp by lazy { NativeAuditHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     private val vaultHttp by lazy { NativeVaultHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     private val vaultLocal by lazy { NativeVaultStore.get(app) }
     private val documentHttp by lazy { NativeDocumentHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
@@ -327,6 +328,30 @@ internal class NativeAuthSession private constructor(context: Context) {
             else AuthPolicy.safeError(response.status, response.body, response.requestId)
                 ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         AuthOutcome.success(mapOf("status" to response.status, "body" to safe))
+    }
+
+    /** Fixed current-household audit read; raw audit values and credentials never enter bridge data. */
+    fun auditMetadata(arguments: JSONObject, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) = execute(gate, callback) {
+        requireAvailable()
+        val request=NativeAuditWire.prepare(http.jsonValue(arguments))
+        fun read(path:String):NativeHttpResponse {
+            val response=http.send("GET",path,gate,accessToken=access(gate))
+            if(response.status==401) clearLocal()
+            return response
+        }
+        fun failure(response:NativeHttpResponse)=AuthOutcome.success(mapOf("status" to response.status,"body" to
+            (AuthPolicy.safeError(response.status,response.body,response.requestId) ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE))))
+        val me=read("/api/v1/me")
+        if(me.status!=200) return@execute failure(me)
+        val before=NativeAuditWire.identity(me.body)
+        val response=auditHttp.send(request,access(gate,20_000L),gate)
+        if(response.status==401) clearLocal()
+        if(response.status!=200) return@execute failure(response)
+        val safe=NativeAuditWire.response(request,response.status,response.body)
+        val after=read("/api/v1/me")
+        if(after.status!=200) return@execute failure(after)
+        if(before!=NativeAuditWire.identity(after.body)) throw AuthFailure(AuthCode.ACCESS_DENIED)
+        AuthOutcome.success(mapOf("status" to 200,"body" to safe))
     }
 
     fun vaultMetadata(operation: VaultOperation, arguments: JSONObject, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) {

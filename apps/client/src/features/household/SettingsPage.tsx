@@ -1,0 +1,39 @@
+import { useState } from "react";
+import { Link } from "react-router";
+import { version } from "../../../package.json";
+import { toApiError } from "../../platform/api";
+import type { ApiError } from "../../platform/api";
+import { isNativeAuth, nativeAuth } from "../../platform/nativeAuth";
+import { RelatedLinks } from "../../shared/PlannedPage";
+import { AuthError, SessionStatus } from "../auth/AuthFeedback";
+import { useAuth } from "../auth/AuthProvider";
+import { MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport";
+
+function HouseholdSummary() {
+  const household = useHouseholdMembers();
+  return <section className="card"><h2>함께 쓰는 가계</h2><p>두 계정이 하나의 가계를 함께 사용해요. 로그인 계정과 금융상품의 소유자는 별도로 관리해요.</p>
+    <MemberLoadError error={household.error} retry={household.retry} />
+    {household.loading && <p role="status">가계 구성원을 확인하고 있어요.</p>}
+    {!household.loading && !household.error && <ul className="record-list">{household.members.map((member) => <li key={member.member_id}><p>{member.display_name} · {member.role === "owner" ? "가계 관리자" : "가계 구성원"}</p></li>)}</ul>}
+    <Link to="/settings/auth">구성원 초대와 기기 관리</Link>
+  </section>;
+}
+
+export function SettingsPage() {
+  const { state } = useAuth(); const native = isNativeAuth();
+  const [busy, setBusy] = useState(false), [error, setError] = useState<ApiError | null>(null);
+  async function lock() { if (busy) return; setBusy(true); setError(null); try { await nativeAuth.lock(); } catch (failure) { setError(toApiError(failure)); } finally { setBusy(false); } }
+  return <><div className="intro"><p className="eyebrow">함께 쓰는 환경</p><h1>설정</h1><p>계정과 기기, 공동 가계, 보호된 정보와 자료 기록을 관리해요.</p></div>
+    <RelatedLinks links={[
+      { to: "/settings/auth", label: "계정과 기기", description: "로그인 계정·패스키·등록 기기·구성원 초대" },
+      { to: "/vault", label: "보관함", description: "보호된 카드 정보·복구·기기 상태" },
+      { to: "/exports", label: "자료 내보내기", description: "JSON·CSV와 선택 문서 ZIP" },
+      { to: "/settings/audit", label: "감사 이력", description: "구성원·기간·대상별 작업 기록" },
+    ]} />
+    {state.status === "authenticated" ? <HouseholdSummary key={state.member.member_id} /> : <SessionStatus />}
+    <section className="card"><h2>잠금과 로그인</h2>{native ? <><p>앱을 잠그면 이 기기의 보호된 화면과 세션 접근을 막아요. 다시 사용하려면 기기에 등록된 인증수단으로 확인해 주세요.</p><AuthError error={error} /><button type="button" disabled={busy} onClick={() => void lock()}>{busy ? "잠그는 중…" : "이 Android 앱 잠그기"}</button></> : <p>웹 보관함은 보호 화면을 닫으면 비밀과 키를 정리해요. 공용 PC에서 사용을 마쳤다면 계정과 기기에서 로그아웃해 주세요.</p>}
+      <RelatedLinks links={[{ to: "/login", label: "로그인·재인증" }, { to: "/onboarding", label: "초대받은 계정 등록" }]} />
+    </section>
+    <section className="card"><h2>앱 정보</h2><p>SallimBook · 웹 클라이언트 버전 {version}</p><p className="muted">Android 설치 앱의 버전과 빌드 번호는 기기의 앱 정보에서 확인해 주세요.</p></section>
+  </>;
+}

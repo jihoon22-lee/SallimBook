@@ -270,6 +270,10 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun createDocumentLink(call: PluginCall) = finance(call, FinanceOperation.CREATE_DOCUMENT_LINK)
     @PluginMethod fun endDocumentLink(call: PluginCall) = finance(call, FinanceOperation.END_DOCUMENT_LINK)
 
+    @PluginMethod fun listAuditEvents(call: PluginCall) { main.post {
+        begin(call) { gate, callback -> auth.auditMetadata(call.data, gate, callback) }
+    } }
+
     @PluginMethod fun getVaultStatus(call: PluginCall) = vaultMetadata(call, VaultOperation.STATUS)
     @PluginMethod fun listVaultShares(call: PluginCall) = vaultMetadata(call, VaultOperation.SHARES)
     @PluginMethod fun getVaultRotation(call: PluginCall) = vaultMetadata(call, VaultOperation.ROTATION_GET)
