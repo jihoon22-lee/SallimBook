@@ -47,6 +47,8 @@ SB-006 서버는 `webauthn==3.0.1`의 등록·서명 검증을 사용한다.
 RP ID, 정확한 origin, user presence/verification, credential ID/소유권, 공개키 서명과 카운터를 검증한다.
 cross-origin/top-origin assertion은 거부한다. 등록 요청은 현재 계정의 5분 이내 실제 로그인과
 동일 세션·기기 범위를 요구한다. 로그인 성공은 비밀번호 로그인과 같은 세션 발급기를 사용한다.
+등록 옵션/검증은 세션 → 등록 기기 순서로 행을 잠그고 현재 만료·폐기·최근 로그인 상태를 다시 확인한다.
+이 잠금은 credential 생성까지 유지하므로 HTTP 인증 직후 기기 폐기가 완료된 요청은 패스키를 추가할 수 없다.
 공개키·카운터·인증기 공개 메타데이터만 저장하며 attestation `none`을 하드웨어 신뢰 증명으로 해석하지 않는다.
 
 운영 RP/domain/certificate를 추정해서 넣지 않는다. `SALLIMBOOK_WEBAUTHN_RP_ID`와 해당 transport의

@@ -74,8 +74,8 @@
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "c8b3dcf93becf5459f70dcd1aa13ceca7db816234ed4b199724aa9a8ad1b4e2d",
-      "git_sha1": "1a8081a977662318d8d743afef907967021108f2"
+      "sha256": "42870896e9360416064c72dc0a7bb8feba15ccd7f5ba645ee7aa4164bc318920",
+      "git_sha1": "f713d70eb002501eb6bf289765837831d33caf7d"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "4fda7d2fb36ddc154a3ad9a12f7c5f7a199e7895346f6061a0f318f2a0441c21",
