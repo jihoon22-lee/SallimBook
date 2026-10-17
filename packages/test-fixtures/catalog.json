@@ -198,7 +198,7 @@
             "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
             "policy_id": "30500287-dd2c-5a49-b411-45348c1feedc",
             "claim_id": null,
-            "benefit_type": "fixed",
+            "benefit_type": "fixed_benefit",
             "amount_krw": "200000"
           }
         ]
@@ -660,7 +660,7 @@
       "inputs": {
         "medical_krw": "100000",
         "received_krw": "150000",
-        "benefit_type": "fixed"
+        "benefit_type": "fixed_benefit"
       },
       "expected": {
         "net_burden_krw": "-50000"
