@@ -53,9 +53,9 @@ internal object CashflowPolicy {
         return row
     }
     private fun record(fields: Map<String, FieldRule>): FieldRule = { shape(it, fields); Unit }
-    private fun list(rule: FieldRule): FieldRule = {
+    private fun list(rule: FieldRule, maximum: Int = 200, minimum: Int = 0): FieldRule = {
         val items = it as? List<*> ?: invalid()
-        if (items.size > 200) invalid()
+        if (items.size !in minimum..maximum) invalid()
         items.forEach(rule)
     }
     private fun tag(value: Any?): String {
@@ -78,6 +78,16 @@ internal object CashflowPolicy {
         FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE to Route("POST", "/api/v1/asset-months/{month}/sync-scope", version = true),
         FinanceOperation.CONFIRM_ASSET_MONTH to Route("POST", "/api/v1/asset-months/{month}/confirm", version = true, idempotent = true),
         FinanceOperation.REOPEN_ASSET_MONTH to Route("POST", "/api/v1/asset-months/{month}/reopen", version = true, idempotent = true, status = 201),
+        FinanceOperation.LIST_INCOME to Route("GET", "/api/v1/income", query = true),
+        FinanceOperation.INCOME_SUMMARY to Route("GET", "/api/v1/income/summary", query = true),
+        FinanceOperation.INCOME_DUPLICATE_CANDIDATES to Route("GET", "/api/v1/income/duplicates", query = true),
+        FinanceOperation.GET_INCOME to Route("GET", "/api/v1/income/{recordId}"),
+        FinanceOperation.INCOME_HISTORY to Route("GET", "/api/v1/income/{recordId}/history", query = true),
+        FinanceOperation.CREATE_INCOME to Route("POST", "/api/v1/income", idempotent = true, status = 201),
+        FinanceOperation.CORRECT_INCOME to Route("PATCH", "/api/v1/income/{recordId}", version = true, idempotent = true),
+        FinanceOperation.VOID_INCOME to Route("POST", "/api/v1/income/{recordId}/void", version = true, idempotent = true),
+        FinanceOperation.RETURN_INCOME to Route("POST", "/api/v1/income/{recordId}/returns", version = true, idempotent = true, status = 201),
+        FinanceOperation.CONVERT_INCOME_PRECISION to Route("POST", "/api/v1/income/convert", idempotent = true, status = 201),
     )
     fun supports(operation: FinanceOperation) = operation in routes
 
@@ -96,13 +106,60 @@ internal object CashflowPolicy {
             if (row["input_amount_krw"] != null && row["as_of_date"] == null) invalid()
             row
         }
+        FinanceOperation.CREATE_INCOME -> incomeInput(value, create = true)
+        FinanceOperation.CORRECT_INCOME -> {
+            val row = shape(value, cashInputFields() + mapOf("kind" to incomeKind, "member_id" to id,
+                "reason" to text(500), "duplicate_acknowledged" to bool), setOf("reason"))
+            if ((row.keys - setOf("reason", "duplicate_acknowledged")).isEmpty()) invalid()
+            row
+        }
+        FinanceOperation.VOID_INCOME -> shape(value, mapOf("reason" to text(500)))
+        FinanceOperation.RETURN_INCOME -> {
+            val row = shape(value, cashInputFields() + mapOf("reason" to text(500), "member_id" to { if (it != null) invalid() }),
+                setOf("amount_krw", "period_month", "date_precision", "reason"))
+            precision(row)
+            row
+        }
+        FinanceOperation.CONVERT_INCOME_PRECISION -> {
+            val row = shape(value, mapOf("reason" to text(500), "sources" to list(record(mapOf("id" to id, "version" to positive)), 100, 1),
+                "replacements" to list({ incomeInput(it); Unit }, 100, 1)))
+            val sources = row["sources"] as List<*>
+            if (sources.map { obj(it)["id"] }.distinct().size != sources.size) invalid()
+            row
+        }
         else -> invalid()
     }
 
+    private val incomeKind = choice("salary", "bonus", "other_income")
+    private val projectedIncomeKind = choice("salary", "bonus", "other_income", "income_return", "insurance_receipt", "insurance_return")
+    private val positiveMoney: FieldRule = { money(it); if (it == "0") invalid() }
+    private fun cashInputFields() = mapOf("amount_krw" to positiveMoney, "period_month" to month, "date_precision" to choice("day", "month"),
+        "occurred_on" to nullable(date), "member_id" to nullable(id), "account_id" to nullable(id), "note" to nullable(text(2000, true)))
+    private fun precision(row: Map<String, Any?>) {
+        if ((row["date_precision"] == "day") != (row["occurred_on"] != null)) invalid()
+    }
+    private fun incomeInput(value: Any?, create: Boolean = false): Map<String, Any?> {
+        val row = shape(value, cashInputFields() + mapOf("kind" to incomeKind, "member_id" to id) +
+            if (create) mapOf("duplicate_acknowledged" to bool) else emptyMap(),
+            setOf("amount_krw", "period_month", "date_precision", "kind", "member_id"))
+        precision(row)
+        return row
+    }
+
+    private fun integerCursor(operation: FinanceOperation) = operation in setOf(FinanceOperation.LIST_ASSET_MONTH_REVISIONS, FinanceOperation.INCOME_HISTORY)
+    private fun requiredQuery(operation: FinanceOperation) = operation in setOf(FinanceOperation.LIST_INCOME, FinanceOperation.INCOME_SUMMARY, FinanceOperation.INCOME_DUPLICATE_CANDIDATES)
+
     private fun query(operation: FinanceOperation, value: Any?): String {
-        if (value == null) return ""
-        val row = shape(value, mapOf("cursor" to nullable(if (operation == FinanceOperation.LIST_ASSET_MONTH_REVISIONS) positive else id),
-            "limit" to { integer(it, 1, 200) }), emptySet()).filterValues { it != null }
+        if (value == null) { if (requiredQuery(operation)) invalid(); return "" }
+        val paging = mapOf("cursor" to nullable(if (integerCursor(operation)) positive else id), "limit" to { item: Any? -> integer(item, 1, 200) })
+        val fields = when (operation) {
+            FinanceOperation.INCOME_SUMMARY -> mapOf("month" to month)
+            FinanceOperation.LIST_INCOME -> paging + mapOf("month" to month, "member_id" to nullable(id), "kind" to nullable(projectedIncomeKind), "state" to choice("active", "void", "all"))
+            FinanceOperation.INCOME_DUPLICATE_CANDIDATES -> mapOf("month" to month, "kind" to incomeKind, "member_id" to id, "date_precision" to choice("day", "month"))
+            else -> paging
+        }
+        val required = if (operation == FinanceOperation.INCOME_DUPLICATE_CANDIDATES) fields.keys else if (requiredQuery(operation)) setOf("month") else emptySet()
+        val row = shape(value, fields, required).filterValues { it != null }
         return if (row.isEmpty()) "" else "?" + row.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }
     }
 
@@ -152,7 +209,7 @@ internal object CashflowPolicy {
                     for (part in raw.split('&')) {
                         val pair = part.split('=', limit = 2)
                         if (pair.size != 2 || pair[0] in values) invalid()
-                        values[pair[0]] = if (pair[0] == "limit" || pair[0] == "cursor" && operation == FinanceOperation.LIST_ASSET_MONTH_REVISIONS)
+                        values[pair[0]] = if (pair[0] == "limit" || pair[0] == "cursor" && integerCursor(operation))
                             pair[1].toLongOrNull() ?: invalid() else pair[1]
                     }
                     args["query"] = values
@@ -179,6 +236,7 @@ internal object CashflowPolicy {
 
     fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
         if (status != routes.getValue(operation).status) invalid()
+        if (routes.getValue(operation).path.startsWith("/api/v1/income")) return incomeResponse(operation, request, value)
         val segments = URI(request.path).path.split('/')
         val row = when (operation) {
             FinanceOperation.GET_ASSET_MONTH, FinanceOperation.GET_ASSET_MONTH_REVISION -> shape(value, historyFields() + mapOf(
@@ -202,5 +260,42 @@ internal object CashflowPolicy {
         if (operation in setOf(FinanceOperation.CONFIRM_ASSET_MONTH, FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE) &&
             row["revision_id"] != request.body?.get("revision_id")) invalid()
         return row
+    }
+
+    private fun cashFields() = cashInputFields() + mapOf("id" to id, "household_id" to id, "kind" to projectedIncomeKind,
+        "flow" to choice("in", "out"), "reverses_id" to nullable(id), "state" to choice("active", "void"),
+        "created_by_member_id" to id, "updated_by_member_id" to id, "created_at" to timestamp, "updated_at" to timestamp,
+        "version" to positive, "action" to choice("create", "correct", "void", "convert_source", "convert_result"),
+        "reason" to nullable(text(500)), "conversion_id" to nullable(id), "editable" to bool, "voidable" to bool)
+    private val cash: FieldRule = { val row = shape(it, cashFields()); precision(row) }
+    private fun incomeTotalsFields() = mapOf("salary_krw" to money, "bonus_krw" to money, "other_income_krw" to money,
+        "income_returns_krw" to money, "insurance_receipts_krw" to money, "insurance_returns_krw" to money,
+        "earned_net_krw" to signedMoney, "insurance_net_krw" to signedMoney, "net_inflow_krw" to signedMoney, "record_count" to count)
+    private fun incomeResponse(operation: FinanceOperation, request: FinanceRequest, value: Any?): Map<String, Any?> {
+        val uri = URI(request.path)
+        val recordId = uri.path.split('/').getOrNull(4)
+        return when (operation) {
+            FinanceOperation.LIST_INCOME, FinanceOperation.INCOME_HISTORY -> {
+                val row = shape(value, mapOf("items" to list(cash), "next_cursor" to nullable(if (operation == FinanceOperation.INCOME_HISTORY) positive else id)))
+                if (operation == FinanceOperation.INCOME_HISTORY && (row["items"] as List<*>).any { obj(it)["id"] != recordId }) invalid()
+                row
+            }
+            FinanceOperation.INCOME_SUMMARY -> {
+                val row = shape(value, mapOf("period_month" to month, "totals" to record(incomeTotalsFields()),
+                    "members" to list(record(mapOf("member_id" to nullable(id), "totals" to record(incomeTotalsFields()))))))
+                if (row["period_month"] != uri.rawQuery.removePrefix("month=")) invalid()
+                row
+            }
+            FinanceOperation.INCOME_DUPLICATE_CANDIDATES -> shape(value, mapOf("suspected" to bool, "items" to list(cash), "truncated" to bool))
+            FinanceOperation.CONVERT_INCOME_PRECISION -> shape(value, mapOf("id" to id, "version" to { integer(it, 1, 1) },
+                "reason" to text(500), "created_at" to timestamp, "sources" to list(cash, 100, 1), "replacements" to list(cash, 100, 1)))
+            else -> {
+                cash(value)
+                val row = obj(value)
+                if (operation in setOf(FinanceOperation.GET_INCOME, FinanceOperation.CORRECT_INCOME, FinanceOperation.VOID_INCOME) && row["id"] != recordId) invalid()
+                if (operation == FinanceOperation.RETURN_INCOME && (row["reverses_id"] != recordId || row["kind"] != "income_return")) invalid()
+                row
+            }
+        }
     }
 }

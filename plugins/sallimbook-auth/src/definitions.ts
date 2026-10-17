@@ -70,6 +70,16 @@ export interface SallimBookAuth {
   synchronizeAssetMonthScope(options: { month: string; input: components["schemas"]["MonthScopeSync"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
   confirmAssetMonth(options: { month: string; input: components["schemas"]["MonthConfirm"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
   reopenAssetMonth(options: { month: string; input: components["schemas"]["MonthReopen"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  listIncome(options: { query: NonNullable<operations["listIncome"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeListResponse"]>>>;
+  incomeSummary(options: { query: NonNullable<operations["incomeSummary"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeSummaryResponse"]>>>;
+  incomeDuplicateCandidates(options: { query: NonNullable<operations["incomeDuplicateCandidates"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DuplicateResponse"]>>>;
+  getIncome(options: { recordId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  incomeHistory(options: { recordId: string; query?: NonNullable<operations["incomeHistory"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeHistoryResponse"]>>>;
+  createIncome(options: { input: components["schemas"]["IncomeCreate"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  correctIncome(options: { recordId: string; input: components["schemas"]["IncomePatch"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  voidIncome(options: { recordId: string; input: components["schemas"]["IncomeVoid"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  returnIncome(options: { recordId: string; input: components["schemas"]["IncomeReturn"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  convertIncomePrecision(options: { input: components["schemas"]["IncomeConvert"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConversionResponse"]>>>;
   /** Number plaintext and ciphertext never appear in arguments or return values. */
   editAccountNumberUI(options: { accountId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "saved" | "deleted" | "cancelled" }>>;
   showAccountNumberUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
