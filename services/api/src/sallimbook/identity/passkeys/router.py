@@ -222,10 +222,14 @@ def revoke_passkey(
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ):
     require_recent_login(principal, now=identity.utcnow())
+    auth, devices = identity.lock_session_devices(session, principal)
     credential = scoped_entity(session, AuthCredential, credential_id, principal, for_update=True)
     if credential.user_id != principal.user_id:
         raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
     require_version(credential, if_match)
+    identity.validate_locked_session(
+        principal, auth, devices[principal.device_id], recent_login=True
+    )
     credential.revoked_at = identity.utcnow()
     session.commit()
     return Response(status_code=204)

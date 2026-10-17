@@ -4,8 +4,11 @@ import base64
 import json
 import os
 import secrets
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
+from threading import Event
 from uuid import UUID, uuid4
 
 import pytest
@@ -32,10 +35,10 @@ from sallimbook.core.authorization import Principal
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.identity import service as identity
-from sallimbook.identity.auth_models import AuthSession, HouseholdMember, User
+from sallimbook.identity.auth_models import AuthSession, HouseholdMember, RegisteredDevice, User
 from sallimbook.identity.models import Household
 from sallimbook.identity.passkeys import service as passkeys
-from sallimbook.identity.passkeys.models import StepUpGrant, StepUpPurpose
+from sallimbook.identity.passkeys.models import AuthCredential, StepUpGrant, StepUpPurpose
 from sallimbook.identity.passkeys.schemas import (
     AssertionVerification,
     RegisterOptionsRequest,
@@ -709,6 +712,221 @@ class TestAccountsDatabase:
             assert (
                 session.get(AuthSession, account_actor.principal.session_id).authenticated_at
                 == old_login
+            )
+
+    @pytest.mark.parametrize("with_grant", [False, True])
+    @pytest.mark.parametrize("invalid_state", ["session", "device"])
+    def test_stale_principal_cannot_reveal_number(
+        self,
+        db_engine,
+        account_actor,
+        key_file,
+        with_grant,
+        invalid_state,
+        monkeypatch,
+    ):
+        with Session(db_engine) as session:
+            item = service.create_account(
+                session, account_actor.principal, AccountCreate(**account_payload()), key_file
+            )
+            grant = account_grant(session, account_actor, item.id) if with_grant else None
+            if invalid_state == "session":
+                session.get(
+                    AuthSession, account_actor.principal.session_id
+                ).revoked_at = identity.utcnow()
+            else:
+                device = session.get(RegisteredDevice, account_actor.principal.device_id)
+                device.status, device.revoked_at = "revoked", identity.utcnow()
+            session.commit()
+
+            def forbidden_decryption(*args):
+                pytest.fail("A revoked source must fail before decryption")
+
+            monkeypatch.setattr(service, "decrypt_number", forbidden_decryption)
+            with pytest.raises(DomainError) as rejected:
+                service.reveal_number(
+                    session,
+                    account_actor.principal,
+                    item.id,
+                    key_file,
+                    step_up_token=grant.grant_token if grant else None,
+                )
+            assert rejected.value.code == "UNAUTHENTICATED"
+            session.rollback()
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(AuditEvent.action == "reveal")
+                )
+                == 0
+            )
+            if grant:
+                assert session.scalar(select(StepUpGrant.consumed_at)) is None
+
+    @pytest.mark.parametrize(
+        "blocked_on,change,with_grant,expected",
+        [
+            ("device", "revoke", False, "UNAUTHENTICATED"),
+            ("device", "revoke", True, "UNAUTHENTICATED"),
+            ("credential", "revoke", True, "STEP_UP_REQUIRED"),
+            ("asset", "expire_recent", False, "REAUTHENTICATION_REQUIRED"),
+            ("account", "expire_recent", False, "REAUTHENTICATION_REQUIRED"),
+            ("asset", "expire_grant", True, "STEP_UP_REQUIRED"),
+            ("account", "expire_access", True, "UNAUTHENTICATED"),
+            ("grant", "expire_grant", True, "STEP_UP_REQUIRED"),
+        ],
+    )
+    def test_reveal_revalidates_after_real_lock_wait_without_plaintext(
+        self,
+        db_engine,
+        account_actor,
+        key_file,
+        monkeypatch,
+        caplog,
+        blocked_on,
+        change,
+        with_grant,
+        expected,
+    ):
+        with Session(db_engine) as session:
+            item = service.create_account(
+                session, account_actor.principal, AccountCreate(**account_payload()), key_file
+            )
+            grant = account_grant(session, account_actor, item.id)
+            grant_id = session.scalar(select(StepUpGrant.id))
+            credential_id = session.scalar(select(AuthCredential.id))
+            auth = session.get(AuthSession, account_actor.principal.session_id)
+            access_expiry, authenticated_at = auth.access_expires_at, auth.authenticated_at
+
+        def forbidden_decryption(*args):
+            pytest.fail("Rejected requests must not decrypt")
+
+        monkeypatch.setattr(service, "decrypt_number", forbidden_decryption)
+        ready, proceed = Event(), Event()
+        pids = []
+
+        def reveal():
+            with Session(db_engine) as session:
+                principal = identity.authenticate(session, account_actor.token, "native")
+                cached = [
+                    session.get(RegisteredDevice, principal.device_id),
+                    session.get(AuthCredential, credential_id),
+                    session.get(StepUpGrant, grant_id),
+                ]
+                pids.append(session.scalar(select(func.pg_backend_pid())))
+                ready.set()
+                assert proceed.wait(timeout=10)
+                try:
+                    result = service.reveal_number(
+                        session,
+                        principal,
+                        item.id,
+                        key_file,
+                        step_up_token=grant.grant_token if with_grant else None,
+                    )
+                    return result.model_dump_json()
+                except DomainError as failure:
+                    assert len(cached) == 3
+                    return failure.code
+
+        targets = {
+            "device": (RegisteredDevice, account_actor.principal.device_id),
+            "credential": (AuthCredential, credential_id),
+            "grant": (StepUpGrant, grant_id),
+            "asset": (Asset, item.asset_id),
+            "account": (FinancialAccount, item.id),
+        }
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(reveal)
+            try:
+                assert ready.wait(timeout=10)
+                with Session(db_engine) as blocker:
+                    model, target = targets[blocked_on]
+                    row = blocker.scalar(select(model).where(model.id == target).with_for_update())
+                    blocker_pid = blocker.scalar(select(func.pg_backend_pid()))
+                    proceed.set()
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline:
+                        blockers = blocker.scalar(select(func.pg_blocking_pids(pids[0])))
+                        if blocker_pid in blockers or future.done():
+                            break
+                        time.sleep(0.01)
+                    assert blocker_pid in blockers
+                    if change == "revoke":
+                        row.revoked_at = identity.utcnow()
+                        if blocked_on == "device":
+                            row.status = "revoked"
+                    else:
+                        after = {
+                            "expire_recent": authenticated_at + timedelta(minutes=5),
+                            "expire_access": access_expiry,
+                            "expire_grant": grant.expires_at,
+                        }[change] + timedelta(seconds=1)
+                        monkeypatch.setattr(identity, "utcnow", lambda: after)
+                    blocker.commit()
+                result = future.result(timeout=10)
+                assert result == expected and SYNTHETIC_NUMBER not in result
+            finally:
+                proceed.set()
+        assert SYNTHETIC_NUMBER not in caplog.text
+        with Session(db_engine) as session:
+            assert session.get(StepUpGrant, grant_id).consumed_at is None
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(AuditEvent.action == "reveal")
+                )
+                == 0
+            )
+
+    @pytest.mark.parametrize("phase", ["decryption", "audit"])
+    @pytest.mark.parametrize("expiry", ["recent", "grant", "access"])
+    def test_expiry_before_response_rolls_back_grant_and_audit_without_plaintext(
+        self,
+        accounts_app,
+        account_actor,
+        db_engine,
+        monkeypatch,
+        caplog,
+        phase,
+        expiry,
+    ):
+        with TestClient(accounts_app) as client:
+            item = create_account(client, account_actor)
+            with Session(db_engine) as session:
+                grant = account_grant(session, account_actor, UUID(item["id"]))
+                auth = session.get(AuthSession, account_actor.principal.session_id)
+                after = {
+                    "recent": auth.authenticated_at + timedelta(minutes=5),
+                    "grant": grant.expires_at,
+                    "access": auth.access_expires_at,
+                }[expiry] + timedelta(seconds=1)
+            function = "decrypt_number" if phase == "decryption" else "record_event"
+            original = getattr(service, function)
+
+            def advance_after_work(*args, **kwargs):
+                result = original(*args, **kwargs)
+                monkeypatch.setattr(identity, "utcnow", lambda: after)
+                return result
+
+            monkeypatch.setattr(service, function, advance_after_work)
+            headers = account_actor.headers
+            if expiry != "recent":
+                headers = {**headers, "X-Step-Up-Token": grant.grant_token}
+            response = client.post(f"/api/v1/accounts/{item['id']}/reveal", headers=headers)
+            assert response.status_code == (401 if expiry == "access" else 403)
+            assert SYNTHETIC_NUMBER not in response.text and SYNTHETIC_NUMBER not in caplog.text
+        with Session(db_engine) as session:
+            assert session.scalar(select(StepUpGrant.consumed_at)) is None
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(AuditEvent.action == "reveal")
+                )
+                == 0
             )
 
     def test_audit_failure_never_returns_plaintext(

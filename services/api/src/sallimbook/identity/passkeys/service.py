@@ -295,55 +295,14 @@ def _descriptors(
     ]
 
 
-def _lock_registration_identity(session: Session, principal: Principal) -> None:
-    """Serialize durable credential enrollment with logout and device revocation.
-
-    Lock session -> device before challenge/credential rows. A request principal is only
-    a snapshot: device revocation can commit after HTTP authentication has produced it.
-    Do not move these locks after credential/grant locks or release them before enrollment.
-    """
-    auth = session.scalar(
-        select(AuthSession)
-        .where(
-            AuthSession.id == principal.session_id,
-            AuthSession.household_id == principal.household_id,
-            AuthSession.user_id == principal.user_id,
-            AuthSession.device_id == principal.device_id,
-            AuthSession.kind == principal.transport,
-        )
-        .with_for_update()
-        .execution_options(populate_existing=True)
+def _lock_registration_identity(
+    session: Session, principal: Principal
+) -> tuple[AuthSession, dict[UUID, RegisteredDevice]]:
+    auth, devices = identity.lock_session_devices(session, principal)
+    identity.validate_locked_session(
+        principal, auth, devices[principal.device_id], recent_login=True
     )
-    device = session.scalar(
-        select(RegisteredDevice)
-        .where(
-            RegisteredDevice.id == principal.device_id,
-            RegisteredDevice.household_id == principal.household_id,
-            RegisteredDevice.user_id == principal.user_id,
-        )
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    # Both locks may have waited: use the time and persisted state actually authorized now.
-    now = identity.utcnow()
-    if (
-        auth is None
-        or device is None
-        or auth.revoked_at is not None
-        or auth.expires_at <= now
-        or device.status != "active"
-        or device.revoked_at is not None
-        or (auth.kind == "web" and auth.last_seen_at <= now - identity.WEB_IDLE)
-        or (
-            auth.kind == "native"
-            and (auth.access_expires_at is None or auth.access_expires_at <= now)
-        )
-    ):
-        raise DomainError("UNAUTHENTICATED", "로그인이 필요합니다.", 401)
-    age = now - auth.authenticated_at
-    if age < timedelta(0) or age > timedelta(minutes=5):
-        raise DomainError("REAUTHENTICATION_REQUIRED", "다시 로그인한 후 진행해 주세요.", 403)
-    _active_account(session, principal.user_id, principal.household_id)
+    return auth, devices
 
 
 def registration_options(
@@ -463,6 +422,7 @@ def step_up_options(
     payload: StepUpOptionsRequest,
     policy: VerificationPolicy,
 ) -> OptionsResponse:
+    identity.lock_session_devices(session, principal)
     _active_account(session, principal.user_id, principal.household_id)
     credentials = _descriptors(session, principal, policy.rp_id)
     if not credentials:
@@ -565,13 +525,19 @@ def register_credential(
     policy: VerificationPolicy,
 ) -> CredentialResponse:
     require_recent_login(principal, now=identity.utcnow())
-    _lock_registration_identity(session, principal)
+    auth, devices = _lock_registration_identity(session, principal)
     challenge = _consume_challenge(
         session, payload.challenge_id, "register", policy, principal=principal
     )
     try:
         _active_account(session, principal.user_id, principal.household_id)
+        identity.validate_locked_session(
+            principal, auth, devices[principal.device_id], recent_login=True
+        )
         verified = verify_registration_proof(payload.credential, challenge.challenge_hash, policy)
+        identity.validate_locked_session(
+            principal, auth, devices[principal.device_id], recent_login=True
+        )
     except PasskeyProofError, DomainError:
         _failed_proof(session)
     credential = AuthCredential(
@@ -592,10 +558,15 @@ def register_credential(
         with session.begin_nested():
             session.add(credential)
             session.flush()
+            identity.validate_locked_session(
+                principal, auth, devices[principal.device_id], recent_login=True
+            )
     except IntegrityError:
         # Keep consumption while rolling back only the duplicate credential insert.
         session.commit()
         raise DomainError("CREDENTIAL_UNAVAILABLE", "다른 패스키를 등록해 주세요.", 409) from None
+    except DomainError:
+        _failed_proof(session)
     result = credential_response(credential)
     session.commit()
     return result
@@ -626,7 +597,7 @@ def _verify_owned_assertion(
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        if credential is None:
+        if credential is None or challenge.expires_at <= identity.utcnow():
             raise PasskeyProofError()
         verified = verify_assertion_proof(
             payload,
@@ -679,12 +650,14 @@ def verify_step_up(
     payload: AssertionVerification,
     policy: VerificationPolicy,
 ) -> StepUpResponse:
+    auth, devices = identity.lock_session_devices(session, principal)
     challenge = _consume_challenge(
         session, payload.challenge_id, "step_up", policy, principal=principal
     )
     credential, _, _ = _verify_owned_assertion(
         session, challenge, payload.credential, policy, discoverable=False
     )
+    identity.validate_locked_session(principal, auth, devices[principal.device_id])
     token = secrets.token_urlsafe(32)
     grant = StepUpGrant(
         household_id=principal.household_id,
@@ -716,69 +689,63 @@ def consume_step_up(
     token: str | None,
     purpose: StepUpPurpose,
     target_id: UUID,
-) -> None:
-    """Consume once in the protected operation's transaction, after its own object authorization.
+) -> StepUpGrant:
+    """Consume in the protected mutation's transaction: Device -> Credential -> Grant.
 
-    This does not commit and does not authorize the target resource. An operation rollback
-    rolls back consumption; a successful operation cannot reuse the grant.
+    Operations must acquire their complete device barrier BEFORE other resource locks.
+    In particular device DELETE locks source+target together in sorted order beforehand.
+    Reacquiring its already-held source row here is harmless; direct callers acquire their
+    source barrier here before any credential/grant lock. No commit releases these locks.
+    Return the locked row so a caller can recheck its deadline after subsequent work.
     """
     if token is None or not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", token):
         raise DomainError("STEP_UP_REQUIRED", "이 작업을 다시 인증해 주세요.", 403)
-    grant = session.scalar(
-        select(StepUpGrant)
+    auth, devices = identity.lock_session_devices(session, principal)
+    binding = (
+        StepUpGrant.grant_hash == identity.token_hash("step-up-grant", token),
+        StepUpGrant.household_id == principal.household_id,
+        StepUpGrant.user_id == principal.user_id,
+        StepUpGrant.session_id == principal.session_id,
+        StepUpGrant.device_id == principal.device_id,
+        StepUpGrant.purpose == purpose.value,
+        StepUpGrant.target_id == target_id,
+    )
+    # Discovery is not authorization. Revalidate the complete binding under the final lock.
+    candidate = session.execute(
+        select(StepUpGrant.id, StepUpGrant.credential_record_id).where(*binding)
+    ).one_or_none()
+    if candidate is None:
+        raise DomainError("STEP_UP_REQUIRED", "이 작업을 다시 인증해 주세요.", 403)
+    credential = session.scalar(
+        select(AuthCredential)
         .where(
-            StepUpGrant.grant_hash == identity.token_hash("step-up-grant", token),
-            StepUpGrant.household_id == principal.household_id,
-            StepUpGrant.user_id == principal.user_id,
-            StepUpGrant.session_id == principal.session_id,
-            StepUpGrant.device_id == principal.device_id,
-            StepUpGrant.purpose == purpose.value,
-            StepUpGrant.target_id == target_id,
+            AuthCredential.id == candidate.credential_record_id,
+            AuthCredential.household_id == principal.household_id,
+            AuthCredential.user_id == principal.user_id,
         )
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    now = identity.utcnow()
-    if grant is None or grant.consumed_at is not None or grant.expires_at <= now:
-        raise DomainError("STEP_UP_REQUIRED", "이 작업을 다시 인증해 주세요.", 403)
-    # Recheck the granting credential and live identity even for non-HTTP service callers.
-    credential = session.scalar(
-        select(AuthCredential).where(
-            AuthCredential.id == grant.credential_record_id,
-            AuthCredential.user_id == principal.user_id,
-            AuthCredential.household_id == principal.household_id,
-            AuthCredential.revoked_at.is_(None),
-        )
-    )
-    auth = session.scalar(
-        select(AuthSession)
-        .where(AuthSession.id == principal.session_id)
-        .execution_options(populate_existing=True)
-    )
-    device = session.scalar(
-        select(RegisteredDevice)
+    grant = session.scalar(
+        select(StepUpGrant)
         .where(
-            RegisteredDevice.id == principal.device_id,
-            RegisteredDevice.household_id == principal.household_id,
-            RegisteredDevice.user_id == principal.user_id,
+            *binding,
+            StepUpGrant.id == candidate.id,
+            StepUpGrant.credential_record_id == candidate.credential_record_id,
         )
+        .with_for_update()
         .execution_options(populate_existing=True)
     )
+    now = identity.validate_locked_session(principal, auth, devices[principal.device_id])
     if (
         credential is None
-        or auth is None
-        or device is None
-        or auth.revoked_at is not None
-        or auth.expires_at <= now
-        or device.revoked_at is not None
-        or device.status != "active"
-        or auth.user_id != principal.user_id
-        or auth.household_id != principal.household_id
-        or auth.device_id != principal.device_id
-        or (auth.kind == "web" and auth.last_seen_at <= now - identity.WEB_IDLE)
-        or (auth.kind == "native" and auth.access_expires_at <= now)
+        or credential.revoked_at is not None
+        or grant is None
+        or grant.consumed_at is not None
+        or grant.expires_at <= now
     ):
         raise DomainError("STEP_UP_REQUIRED", "이 작업을 다시 인증해 주세요.", 403)
     _active_account(session, principal.user_id, principal.household_id)
     grant.consumed_at = now
     session.flush()
+    return grant

@@ -28,7 +28,13 @@ from sallimbook.core.authorization import Principal, require_recent_login, scope
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.identity import service as identity
-from sallimbook.identity.auth_models import AuthSession, HouseholdMember, RegisteredDevice, User
+from sallimbook.identity.auth_models import (
+    AuthSession,
+    HouseholdMember,
+    Invitation,
+    RegisteredDevice,
+    User,
+)
 from sallimbook.identity.dependencies import NATIVE_HEADER, SESSION_COOKIE
 from sallimbook.identity.models import Household
 from sallimbook.identity.passkeys import service
@@ -48,8 +54,9 @@ from sallimbook.identity.passkeys.schemas import (
     RegistrationCredential,
     StepUpOptionsRequest,
 )
+from sallimbook.identity.router import revoke_device as revoke_device_route
 from sallimbook.identity.router import router as identity_router
-from sallimbook.identity.schemas import InvitationAcceptance, LoginRequest
+from sallimbook.identity.schemas import InvitationAcceptance, InvitationRequest, LoginRequest
 
 RP_ID = "sallimbook-passkeys.invalid"
 WEB_ORIGIN = "https://sallimbook-passkeys.invalid:8443"
@@ -747,6 +754,270 @@ class TestPasskeyDatabase:
             )
             assert session.scalar(select(func.count()).select_from(AuthCredential)) == 0
             assert session.get(AuthChallenge, options.challenge_id).consumed_at is None
+
+    @pytest.mark.parametrize(
+        "blocked_on,change,with_grant,expected",
+        [
+            ("credential", "revoke", True, "STEP_UP_REQUIRED"),
+            ("device", "revoke", True, "UNAUTHENTICATED"),
+            ("device", "revoke", False, "UNAUTHENTICATED"),
+            ("grant", "expire_grant", True, "STEP_UP_REQUIRED"),
+            ("credential", "expire_access", True, "UNAUTHENTICATED"),
+            ("household", "expire_recent", False, "REAUTHENTICATION_REQUIRED"),
+        ],
+    )
+    def test_invitation_rechecks_after_real_lock_wait(
+        self,
+        db_engine,
+        passkey_account,
+        enrolled,
+        monkeypatch,
+        blocked_on,
+        change,
+        with_grant,
+        expected,
+    ):
+        authenticator, credential_id = enrolled
+        with Session(db_engine) as session:
+            grant = issue_grant(
+                session,
+                passkey_account,
+                authenticator,
+                purpose=StepUpPurpose.HOUSEHOLD_INVITE,
+                target=passkey_account.household_id,
+            )
+            grant_id = session.scalar(select(StepUpGrant.id))
+            auth = session.get(AuthSession, passkey_account.principal.session_id)
+            access_expiry, authenticated_at = auth.access_expires_at, auth.authenticated_at
+        ready, proceed = Event(), Event()
+        backend = []
+
+        def invite():
+            with Session(db_engine) as session:
+                principal = identity.authenticate(session, passkey_account.token, "native")
+                cached = [
+                    session.get(AuthCredential, credential_id),
+                    session.get(RegisteredDevice, principal.device_id),
+                    session.get(StepUpGrant, grant_id),
+                ]
+                backend.append(session.scalar(select(func.pg_backend_pid())))
+                ready.set()
+                assert proceed.wait(timeout=10)
+                try:
+                    identity.create_partner_invitation(
+                        session,
+                        principal,
+                        InvitationRequest(intended_login="synthetic_partner"),
+                        step_up_token=grant.grant_token if with_grant else None,
+                    )
+                    return "created"
+                except DomainError as failure:
+                    assert len(cached) == 3
+                    return failure.code
+
+        targets = {
+            "credential": (AuthCredential, credential_id),
+            "device": (RegisteredDevice, passkey_account.principal.device_id),
+            "grant": (StepUpGrant, grant_id),
+            "household": (Household, passkey_account.household_id),
+        }
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(invite)
+            try:
+                assert ready.wait(timeout=10)
+                with Session(db_engine) as blocker:
+                    model, target = targets[blocked_on]
+                    row = blocker.scalar(select(model).where(model.id == target).with_for_update())
+                    blocker_pid = blocker.scalar(select(func.pg_backend_pid()))
+                    proceed.set()
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline:
+                        blockers = blocker.scalar(select(func.pg_blocking_pids(backend[0])))
+                        if blocker_pid in blockers or future.done():
+                            break
+                        time.sleep(0.01)
+                    assert blocker_pid in blockers, "Protected operation must wait on its barrier"
+                    if change == "revoke":
+                        row.revoked_at = identity.utcnow()
+                        if blocked_on == "device":
+                            row.status = "revoked"
+                    else:
+                        after = {
+                            "expire_grant": grant.expires_at,
+                            "expire_access": access_expiry,
+                            "expire_recent": authenticated_at + timedelta(minutes=5),
+                        }[change] + timedelta(seconds=1)
+                        monkeypatch.setattr(identity, "utcnow", lambda: after)
+                    blocker.commit()
+                assert future.result(timeout=10) == expected
+            finally:
+                proceed.set()
+        with Session(db_engine) as session:
+            assert (
+                session.scalar(
+                    select(func.count()).select_from(Invitation).where(Invitation.kind == "partner")
+                )
+                == 0
+            )
+            assert session.get(StepUpGrant, grant_id).consumed_at is None
+
+    @pytest.mark.parametrize("reverse_submission", [False, True])
+    def test_opposite_device_revocations_lock_sorted_complete_set(
+        self,
+        db_engine,
+        passkey_account,
+        reverse_submission,
+    ):
+        with Session(db_engine) as session:
+            other_login = identity.login(
+                session,
+                LoginRequest(
+                    login_name=passkey_account.login_name,
+                    password=passkey_account.password,
+                    device_label="합성 두 번째 기기",
+                ),
+                "synthetic-opposite",
+                "native",
+            )
+            other = identity.authenticate(session, other_login.token, "native")
+            session.commit()
+        actors = sorted(
+            [
+                (passkey_account.token, passkey_account.principal.device_id),
+                (other_login.token, other.device_id),
+            ],
+            key=lambda actor: actor[1],
+            reverse=reverse_submission,
+        )
+        ready = Barrier(2)
+
+        def revoke(actor, target):
+            with Session(db_engine) as session:
+                session.execute(text("SET LOCAL lock_timeout = '5s'"))
+                principal = identity.authenticate(session, actor[0], "native")
+                ready.wait(timeout=10)
+                try:
+                    return revoke_device_route(
+                        target[1], principal, session, '"1"', None
+                    ).status_code
+                except DomainError as failure:
+                    return failure.code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(revoke, actors[0], actors[1])
+            second = pool.submit(revoke, actors[1], actors[0])
+            results = [first.result(timeout=15), second.result(timeout=15)]
+        assert sorted(map(str, results)) == ["204", "UNAUTHENTICATED"]
+        with Session(db_engine) as session:
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(RegisteredDevice)
+                    .where(RegisteredDevice.status == "revoked")
+                )
+                == 1
+            )
+
+    def test_step_up_issuance_device_fk_does_not_invert_concurrent_device_revocation(
+        self,
+        db_engine,
+        passkey_account,
+        enrolled,
+    ):
+        authenticator, credential_id = enrolled
+        with Session(db_engine) as session:
+            options = service.step_up_options(
+                session,
+                passkey_account.principal,
+                StepUpOptionsRequest(
+                    purpose=StepUpPurpose.HOUSEHOLD_INVITE, target_id=passkey_account.household_id
+                ),
+                NATIVE_POLICY,
+            )
+            proof = authenticator.assertion(
+                base64url_to_bytes(options.public_key["challenge"]),
+                passkey_account.user_id,
+                origin=NATIVE_ORIGIN,
+            )
+            payload = AssertionVerification(challenge_id=options.challenge_id, credential=proof)
+            other_login = identity.login(
+                session,
+                LoginRequest(
+                    login_name=passkey_account.login_name,
+                    password=passkey_account.password,
+                    device_label="합성 폐기 기기",
+                ),
+                "synthetic-fk-lock-order",
+                "native",
+            )
+        verifier_ready, revoker_ready = Event(), Event()
+        pids = {}
+
+        def verify():
+            with Session(db_engine) as session:
+                session.execute(text("SET LOCAL lock_timeout = '8s'"))
+                principal = identity.authenticate(session, passkey_account.token, "native")
+                pids["verify"] = session.scalar(select(func.pg_backend_pid()))
+                verifier_ready.set()
+                return service.verify_step_up(session, principal, payload, NATIVE_POLICY)
+
+        def revoke():
+            with Session(db_engine) as session:
+                session.execute(text("SET LOCAL lock_timeout = '8s'"))
+                principal = identity.authenticate(session, other_login.token, "native")
+                pids["revoke"] = session.scalar(select(func.pg_backend_pid()))
+                revoker_ready.set()
+                return revoke_device_route(
+                    passkey_account.principal.device_id, principal, session, '"1"', None
+                ).status_code
+
+        def wait_blocked(observer, waiter, blocker, future):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                blockers = observer.scalar(select(func.pg_blocking_pids(waiter)))
+                if blocker in blockers or future.done():
+                    break
+                time.sleep(0.01)
+            assert blocker in blockers
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            with Session(db_engine) as blocker:
+                blocker.scalar(
+                    select(AuthCredential)
+                    .where(AuthCredential.id == credential_id)
+                    .with_for_update()
+                )
+                blocker_pid = blocker.scalar(select(func.pg_backend_pid()))
+                verification = pool.submit(verify)
+                assert verifier_ready.wait(timeout=10)
+                wait_blocked(blocker, pids["verify"], blocker_pid, verification)
+                revocation = pool.submit(revoke)
+                assert revoker_ready.wait(timeout=10)
+                wait_blocked(blocker, pids["revoke"], pids["verify"], revocation)
+                blocker.commit()
+            grant = verification.result(timeout=15)
+            assert revocation.result(timeout=15) == 204
+        with Session(db_engine) as session:
+            with pytest.raises(DomainError) as rejected:
+                service.consume_step_up(
+                    session,
+                    passkey_account.principal,
+                    grant.grant_token,
+                    grant.purpose,
+                    grant.target_id,
+                )
+            assert rejected.value.code == "UNAUTHENTICATED"
+
+    def test_self_revocation_uses_single_device_barrier(self, db_engine, passkey_account):
+        with Session(db_engine) as session:
+            principal = identity.authenticate(session, passkey_account.token, "native")
+            assert (
+                revoke_device_route(
+                    principal.device_id, principal, session, '"1"', None
+                ).status_code
+                == 204
+            )
+            assert session.get(RegisteredDevice, principal.device_id).status == "revoked"
 
     @pytest.mark.parametrize("ceremony", ["register", "login", "step_up"])
     def test_ceremony_creation_prunes_a_bounded_batch_and_preserves_active_rows(
