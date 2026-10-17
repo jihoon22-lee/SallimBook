@@ -55,10 +55,22 @@ def record_event(
     session: Session,
     principal: Principal,
     *,
-    entity_type: Literal["asset", "financial_account", "cash_record", "income_conversion"],
+    entity_type: Literal[
+        "asset", "financial_account", "asset_month", "cash_record", "income_conversion"
+    ],
     entity_id: UUID,
     action: Literal[
-        "create", "update", "archive", "delete", "reveal", "correct", "void", "convert"
+        "create",
+        "update",
+        "archive",
+        "delete",
+        "reveal",
+        "correct",
+        "void",
+        "convert",
+        "confirm",
+        "reopen",
+        "sync_scope",
     ],
     before_version: int | None,
     after_version: int | None,
@@ -74,6 +86,7 @@ def record_event(
     if entity_type not in {
         "asset",
         "financial_account",
+        "asset_month",
         "cash_record",
         "income_conversion",
     } or action not in {
@@ -85,6 +98,9 @@ def record_event(
         "correct",
         "void",
         "convert",
+        "confirm",
+        "reopen",
+        "sync_scope",
     }:
         raise ValueError("Audit operation is not registered")
     event = AuditEvent(

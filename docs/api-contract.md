@@ -111,6 +111,29 @@ metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받�
 목록은 유형·소유자·active/closed/all 및 UUID cursor를 지원한다. 개설일과 자산 종료일을 양쪽 수정 경로에서 검증한다.
 금액·잔액은 받지 않으며 계좌의 종료일과 상태는 자산에서 파생한다. Android 번호 입력/전체 보기 화면 연결과 실기기 검증은 후속 client 변경에서 완료한다.
 
+### 8) 월간 자산 확인·정정 (SB-012)
+
+아래는 `/api/v1` 아래 실제 구현된 계약이다. 월은 `YYYY-MM`, 금액은 음수 없는 정수 원 문자열 또는 null이다.
+
+| 메서드·경로 | 동작 |
+|---|---|
+| POST /asset-months/{month}/draft | `copy_previous`; 멱등키 필수, 새 작성본의 불변 참조 반환 |
+| GET /asset-months/{month} | 현재 revision·전체 합계·확인 건수·범위 변경 상태와 최대 200행 cursor 조회 |
+| PATCH /asset-months/{month}/values/{asset_id} | `revision_id`, `value_id`, 입력 금액 또는 `unchanged`, 기준일·사유; 값 행 If-Match 필수 |
+| POST /asset-months/{month}/sync-scope | `revision_id`, revision If-Match; 현재 자산 범위를 명시 반영하고 변경된 행을 미확인으로 돌림 |
+| POST /asset-months/{month}/confirm | `revision_id`, revision If-Match·멱등키; 미확인 거부, 날짜/비교 범위 변화 확인 필요 |
+| POST /asset-months/{month}/reopen | `revision_id`, 필수 `reason`, revision If-Match·멱등키; 이전 확정본을 보존한 새 revision |
+| GET /asset-months/{month}/revisions | 정정 사유·확정 시각을 포함한 revision 목록 |
+| GET /asset-months/{month}/revisions/{revision_no} | 해당 변경본의 당시 범위·금액 조회 |
+
+draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `version`만 가진다. 이후 편집해도 같은 멱등키는
+같은 참조를 반환한다. 값 PATCH는 수정 행·현재 revision version·전체 합계를 반환한다.
+월 GET의 `version`은 현재 revision version이고 값 행마다 별도 version이 있다. 부모 revision이 바뀌면
+`REVISION_CONFLICT`, 범위 재생성으로 행 UUID가 바뀌면 `VALUE_CONFLICT`, 기존 행 버전 충돌이면 `VERSION_CONFLICT`로 409를 반환한다.
+포함된 항목이 미입력이면 해당 합계는 null이다. 전월 복사값은 숫자를 보여도 `provisional=true`이고 확정할 수 없다.
+확정할 때 `acknowledge_non_month_end_dates`, `acknowledge_scope_change`로 표시된 차이를 명시 확인한다.
+Android/웹 월 입력·비교·홈 화면 연결은 후속 client 변경에서 진행한다.
+
 ## 1. 공통 규약
 
 모든 가계 자원은 인증 사용자 membership에서 가계를 결정한다.
