@@ -18,9 +18,7 @@ async function setup(page: Page, scenario = "success") {
         if (scenario === "locked") return { ok: false, code: "APP_LOCKED" };
         if (scenario === "reauthenticate") return { ok: false, code: "REAUTHENTICATION_REQUIRED" };
         if (scenario === "conflict") return { ok: true, value: { status: 409, body: { error: { code: "MEDICAL_EXPENSE_IN_CLAIM", message: "synthetic private detail" } } } };
-        if (method.endsWith("UI")) return { ok: true, value: { status: method.startsWith("edit") ? "saved" : "completed" } };
-        if (method === "deleteMedicalNode") return { ok: true, value: { status: 204, body: null } };
-        return { ok: true, value: { status: 200, body: { marker: method, insured_amount_krw: "99999999999999999999", missing: null, zero: "0" } } };
+        return { ok: true, value: { status: 200, body: { marker: method, amount_krw: "99999999999999999999", missing: null, zero: "0" } } };
       },
     } });
     const original = window.fetch;
@@ -92,7 +90,7 @@ test("34 insurance event commands preserve arguments and avoid web HTTP and stor
   expect(result.calls).toEqual(result.expected);
   expect(result.calls).toHaveLength(34);
   expect(result.values).toHaveLength(34);
-  expect(result.values[0]).toMatchObject({ insured_amount_krw: "99999999999999999999", missing: null, zero: "0" });
+  expect(result.values[0]).toMatchObject({ amount_krw: "99999999999999999999", missing: null, zero: "0" });
   expect(result.http).toBe(0); expect(result.storage).toBe(0);
 });
 
