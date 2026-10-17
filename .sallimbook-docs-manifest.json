@@ -58,16 +58,16 @@
       "git_sha1": "a859a5895a58d90b2c4f945c80f5ff17c571853d"
     },
     "docs/domain-and-calculation-rules.md": {
-      "sha256": "bc27fed3ed021a29700dbc716c9b2ee33a5b3c0d3a29797cee4c1e8bfdbf36f0",
-      "git_sha1": "5295b42faf4cc729d600f80d563839d7a3420612"
+      "sha256": "f37f48c573a6ea930d72a29b48d2877572c1c1c683cc348ea4729bfc7cbac5ed",
+      "git_sha1": "8b1efc9af0109b44edebba0787076a0962c6dfd9"
     },
     "docs/data-model.md": {
-      "sha256": "ef4b790a59ea631057c81f4a175b8e167a283748a6173103f1910987c6bcc0e2",
-      "git_sha1": "0140c9483d11818be204056d9906ed03faa74e59"
+      "sha256": "5dee018d1feef931f22686db34a8e78e36bc2c3bb436f7d89364c299be66fdc4",
+      "git_sha1": "78eb263cda0ed806e2d2cbacace96dbd36c76b11"
     },
     "docs/api-contract.md": {
-      "sha256": "e92fc5ded7742f4da8501624b4b1f6a2a1428f551bccaf8ef4fb31dd39a866a2",
-      "git_sha1": "647b2fba97ff68c283a4bfa32c5885564342c71a"
+      "sha256": "e77d47b374c4be06d57c7235370963341b26108b2038af01e1fee89c4e254e3b",
+      "git_sha1": "6bb492d88da13dc4d48b750b325b34b8a7fe5f84"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "820aaab9a21694c81fd6f5af87425a5d614f9d3c7d20852653337d48da092709",
-      "git_sha1": "d21e14b0e80bade7dea34ad42078cfd3c5432421"
+      "sha256": "56cb58938bf8ddf94ecd17bfe60b92590bf1cb9b19a17f7c458dd30effd043d6",
+      "git_sha1": "2c4867869898916918d5dbe73cfb2dc6a3120fc0"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -134,8 +134,8 @@
       "git_sha1": "ba20afe8971e29f28548e785695e9709f37a0c54"
     },
     "docs/adr/snapshot-first-not-ledger.md": {
-      "sha256": "769490febd740e1ae372ed19b1733a78997a40286a379d6140b986176850de06",
-      "git_sha1": "8261ee3b5ebc31a4c705afa7688d193619506dda"
+      "sha256": "2f85fb913acde72d46ceba5fa270a3d3a691eae87a12dd57633422749bbc59d6",
+      "git_sha1": "9225ad9bcc93bdfa5020500577fe453f68554264"
     },
     "docs/adr/insurance-case-and-payment.md": {
       "sha256": "9c70f90a401abab198dfc1d7e07b3dc9092b6af4cc6cb24df42193b9fa329030",
