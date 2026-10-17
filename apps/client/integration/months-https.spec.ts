@@ -54,4 +54,21 @@ test("real monthly workflow preserves null zero copied values scope and immutabl
     return first.noStore && corrected.noStore && january.noStore && first.value.state === "confirmed" && corrected.value.state === "confirmed" && corrected.value.previous_revision_id === first.value.revision_id && corrected.value.reopened_reason === "합성 확인 당시 평가액 정정" && old.id !== next.id && old.input_amount_krw === "100000001" && next.input_amount_krw === "100000003" && /^0\.750*$/.test(old.household_share) && old.household_share === next.household_share && first.value.totals.net_assets_krw === "75000001" && corrected.value.totals.net_assets_krw === "75000002" && january.value.totals.net_assets_krw === "20000001";
   }, house);
   expect(invariant).toBe(true); expect(await page.evaluate(() => localStorage.length === 0 && sessionStorage.length === 0 && document.documentElement.scrollWidth <= innerWidth)).toBe(true); console.log("SAFE_PHASE=MONTH_IMMUTABLE_HISTORY");
+  if (process.env.SALLIMBOOK_HTTPS_COMPARISON === "1") {
+    await page.goto("/assets/compare?to=2025-02&from=2025-01"); const summary = page.getByRole("region", { name: "월간 자산 변화", exact: true });
+    await expect(summary).toContainText("75,000,002원"); await expect(summary).toContainText("+55,000,001원"); await expect(summary).toContainText("+30,000,000원"); await expect(summary).toContainText("지분 변경 1개"); await expect(summary).toContainText("서로 다른 기준일이 섞여 있어요");
+    await expect(page.getByRole("region", { name: "월별 추이 금액 표" })).toContainText("월 기록 없음"); await expect(page.locator("circle.chart-point")).toHaveCount(2); await expect(page.locator("polyline.chart-line")).toHaveCount(1);
+    const projection = await page.evaluate(async () => {
+      const comparison = await fetch("/api/v1/asset-comparison?to=2025-02&from=2025-01"); const trends = await fetch("/api/v1/asset-trends?from=2024-12&to=2025-02"); const a = await comparison.json(); const b = await trends.json();
+      return comparison.headers.get("cache-control")?.includes("no-store") && trends.headers.get("cache-control")?.includes("no-store") && a.current.revision.revision_no === 2 && a.total_delta_krw === "55000001" && a.common_scope_delta_krw === "30000000" && b.points[0].confirmed_amount_krw === null && b.points[2].confirmed_amount_krw === "75000002";
+    }); expect(projection).toBe(true);
+    await page.getByRole("link", { name: "합성 월 확인 주택", exact: true }).click(); await expect(page.getByRole("region", { name: "이 자산의 월 기록", exact: true })).toContainText("75,000,002원");
+    await page.goto("/assets/compare?to=2025-01"); await expect(page.getByRole("region", { name: "월간 자산 변화", exact: true })).toContainText("첫 기록을 0원 대비 증가로 표시하지 않아요");
+    await page.goto("/assets/compare?to=2025-03"); await expect(page.getByRole("region", { name: "월간 자산 변화", exact: true })).toContainText("자산이 0원으로 줄어든 것으로 계산하지 않아요");
+    await page.goto("/assets/months/2025-02"); await page.getByRole("button", { name: "정정 사유 남기고 다시 열기", exact: true }).click(); await page.getByLabel("정정 사유", { exact: true }).fill("합성 비교 미확정 검증"); await page.getByRole("button", { name: "사유를 남기고 정정 시작", exact: true }).click(); await expect(page.getByRole("heading", { name: "과거 범위를 유지하는 정정본", exact: true })).toBeVisible();
+    await page.goto("/assets/compare?to=2025-02"); await expect(page.getByRole("region", { name: "월간 자산 변화", exact: true })).toContainText("두 월을 확정하기 전에는 증감을 계산하지 않아요"); await expect(page.locator("circle.chart-point")).toHaveCount(1); await expect(page.getByRole("region", { name: "월별 추이 금액 표" })).toContainText("미확정 참고값");
+    await page.getByRole("link", { name: "홈", exact: true }).click(); await expect(page.getByRole("region", { name: "자산의 변화", exact: true })).toContainText("두 월을 확정하기 전에는 증감을 계산하지 않아요");
+    expect(await page.evaluate(() => localStorage.length === 0 && sessionStorage.length === 0 && document.documentElement.scrollWidth <= innerWidth)).toBe(true); console.log("SAFE_PHASE=COMPARISON_TREND_HOME_VERIFIED");
+  }
+
 });

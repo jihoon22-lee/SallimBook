@@ -7,6 +7,7 @@ import { SessionStatus, useMounted } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import { dateLabel, FinanceError, isDateOnly, isUuid, MemberLoadError, MissingAmount, todaySeoul, useHouseholdMembers } from "../finance/FinanceSupport";
 import type { HouseholdMember } from "../finance/FinanceSupport";
+import { AssetMonthlyData } from "./comparison/AssetMonthlyData";
 import { AssetEditor } from "./AssetEditor";
 import { useAssetsApi } from "./api";
 import { amountBases, assetKinds, categories, shareToPercent } from "./model";
@@ -128,9 +129,10 @@ function AssetDetail({ id }: { id: string }) {
   return <>
     {location.state?.saved && <p role="status">자산 정보를 저장했어요.</p>}
     <section className="card"><h2>{asset.name}</h2><AssetSummary asset={asset} members={members.members} /><MemberLoadError error={members.error} retry={members.retry} />
-      {asset.note && <div className="plain-note"><h3>메모</h3><p>{asset.note}</p></div>}<MissingAmount monthLink />
+      {asset.note && <div className="plain-note"><h3>메모</h3><p>{asset.note}</p></div>}
       <div className="form-actions"><Link className="button-link" to={`/assets/${id}/edit`}>자산 정보 수정</Link>{asset.status === "active" && <button type="button" className="secondary-button" onClick={() => { setError(null); setClosing(true); }}>사용 종료하기</button>}<Link className="button-link secondary-button" to="/assets">자산 목록</Link></div>
     </section>
+    <AssetMonthlyData assetId={id} />
     {closing && <section className="card" aria-labelledby="asset-archive-title"><h2 id="asset-archive-title">자산 사용 종료</h2><p>자산 항목과 과거 연결 기록은 남겨두고 사용 종료 상태로 바꿔요.</p>
       <form className="finance-form" onSubmit={(event) => void archive(event)}><div className="form-field"><label htmlFor="asset-ended-on">종료일</label><input id="asset-ended-on" type="date" value={endedOn} onChange={(event) => setEndedOn(event.target.value)} min={asset.started_on} max="9999-12-31" required disabled={busy} /></div>
         {formError && <p role="alert">{formError}</p>}<FinanceError error={error} />

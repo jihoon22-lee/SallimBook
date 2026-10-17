@@ -222,8 +222,8 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "97f9c27ceecf9f97fe3fbab555fe541e5d6fac50ddf073f150aa455c04c55aeb",
-      "git_sha1": "616137f1bb35641f263dc625744b8f2a857be681"
+      "sha256": "c38d6cdc4e5e7ab360d8f5821cde8472e69a220d8b69b712b57ae9eee38e4098",
+      "git_sha1": "7250499e9fb779754bba02d0a83d475e3d8ca427"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "cf830c8b8af6c26e3ab07d7fe4c9843ea602cf2afba217e50e9407dfdf26c9a3",
@@ -240,6 +240,10 @@
     "docs/testing/monthly-assets-client.md": {
       "sha256": "cb3488f308d1533e0fccfb97e36977139bb1fe4e1dbb571321ac5a854d944b80",
       "git_sha1": "b0f9aed1882627b68a5c4703e3dcd6c55a4edaf0"
+    },
+    "docs/testing/assets-comparison-client.md": {
+      "sha256": "9de715591b160deea4c433018e3bd14184c4ad0b4776269459e91eca18fe9dd3",
+      "git_sha1": "659128e6dd813b2e7e1fc383cf4a55c6de8fd9cf"
     }
   }
 }

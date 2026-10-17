@@ -33,7 +33,7 @@ test("all 26 specified routes support direct entry and reload without inventing 
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-      if (!["/login", "/onboarding", "/assets", "/assets/synthetic-asset", "/accounts", "/accounts/synthetic-account"].includes(path) && !path.startsWith("/assets/months/")) {
+      if (!["/", "/assets/compare", "/login", "/onboarding", "/assets", "/assets/synthetic-asset", "/accounts", "/accounts/synthetic-account"].includes(path) && !path.startsWith("/assets/months/")) {
         await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -92,7 +92,7 @@ test("month selection follows monthly records while consumables remain today-bas
   await page.getByLabel("확인할 월").fill("2025-02");
   await expect(page.getByText("월간 기록 · 2025년 2월")).toBeVisible();
   await expect(page.getByText("오늘 기준", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "자산 관리 둘러보기" }).click();
+  await page.getByRole("link", { name: "자산 관리", exact: true }).click();
   await expect(page.getByLabel("확인할 월")).toHaveValue("2025-02");
   await page.getByRole("link", { name: "2025년 2월 월 기록 확인" }).click();
   await expect(page).toHaveURL(/\/assets\/months\/2025-02$/);

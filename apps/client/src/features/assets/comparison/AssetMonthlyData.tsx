@@ -1,0 +1,26 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
+import { ApiError, toApiError } from "../../../platform/api";
+import { isNativeAuth } from "../../../platform/nativeAuth";
+import { formatMonth, MonthPicker, useMonth } from "../../../shared/MonthContext";
+import { MemberLoadError, useHouseholdMembers } from "../../finance/FinanceSupport";
+import { ComparisonDates, ComparisonError, ComparisonStatus, PeriodLabels } from "./ComparisonFeedback";
+import { SnapshotObservation } from "./ComparisonPage";
+import { useAssetComparisonApi } from "./api";
+import { signedKrw } from "./model";
+import type { Comparison, ComparisonFilters } from "./model";
+import { TrendPanel } from "./TrendPanel";
+
+function MonthlyData({ assetId }: { assetId: string }) {
+  const api = useAssetComparisonApi(); const { month } = useMonth(); const members = useHouseholdMembers(); const filters = useMemo<ComparisonFilters>(() => ({ asset_id: assetId }), [assetId]); const [data, setData] = useState<Comparison | null>(null); const [error, setError] = useState<ApiError | null>(null); const [loading, setLoading] = useState(true); const [retry, setRetry] = useState(0);
+  useEffect(() => { const controller = new AbortController(); setData(null); setError(null); setLoading(true);
+    void api.all({ ...filters, to: month }, controller.signal).then((value) => { if (!controller.signal.aborted) setData(value); }).catch((failure) => { if (!controller.signal.aborted) setError(toApiError(failure)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort();
+  }, [api, filters, month, retry]);
+  const item = data?.items.find((value) => value.asset_id === assetId);
+  return <><section className="card" aria-labelledby="asset-monthly-title"><h2 id="asset-monthly-title">이 자산의 월 기록</h2><MonthPicker /><p>계좌와 연결된 자산도 같은 원본 금액을 사용해요. 수입·납부·보험금으로 잔액을 자동 가감하지 않아요.</p><ComparisonError error={error} /><MemberLoadError error={members.error} retry={members.retry} />
+    {loading && <p role="status">이 자산의 월 기록을 확인하고 있어요.</p>}{error && <button type="button" onClick={() => setRetry((value) => value + 1)}>자산 월 기록 다시 불러오기</button>}
+    {data && <><PeriodLabels data={data} /><ComparisonStatus data={data} />{item ? <><p>항목 보유금액 변화: {item.amount_delta_krw === null ? "비교할 수 없음" : signedKrw(item.amount_delta_krw)}</p>{item.share_changed && <p className="month-warning">가계 지분이 달라 동일 범위 변화에서는 제외돼요.</p>}<div className="comparison-observations"><section><h3>{data.from_month ? formatMonth(data.from_month) : "이전 기록 없음"}</h3><SnapshotObservation row={item.before} members={members.members} /></section><section><h3>{formatMonth(month)}</h3><SnapshotObservation row={item.after} members={members.members} /></section></div></> : <p>선택한 두 월에 이 항목의 기록이 없어요. 금액을 0원으로 채우지 않아요.</p>}<ComparisonDates data={data} /></>}
+    <div className="form-actions"><Link to={`/assets/months/${month}`}>월 기록 입력·정정</Link><Link to={`/assets/compare?to=${month}&asset_id=${assetId}`}>이 자산의 비교 상세</Link></div>
+  </section>{data && <TrendPanel to={month} filters={filters} comparison={data} refreshComparison={() => setRetry((value) => value + 1)} title="이 자산의 보유금액 추이" />}</>;
+}
+export function AssetMonthlyData({ assetId }: { assetId: string }) { return isNativeAuth() ? <section className="card"><h2>월별 금액</h2><p>앱의 월별 금액 연결을 준비하고 있어요. 웹에서 같은 자산 기록을 확인할 수 있어요.</p></section> : <MonthlyData assetId={assetId} />; }
