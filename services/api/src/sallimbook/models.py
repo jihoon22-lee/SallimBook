@@ -1,5 +1,6 @@
 """Explicit model registry for migrations; no dynamic import of arbitrary modules."""
 
+from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
 from sallimbook.core.audit import AuditEvent
 from sallimbook.core.idempotency import IdempotencyRecord
@@ -21,6 +22,7 @@ __all__ = [
     "AuthChallenge",
     "AuthCredential",
     "AuthSession",
+    "FinancialAccount",
     "Household",
     "HouseholdMember",
     "IdempotencyRecord",

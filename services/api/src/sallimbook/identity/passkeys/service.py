@@ -689,13 +689,14 @@ def consume_step_up(
     token: str | None,
     purpose: StepUpPurpose,
     target_id: UUID,
-) -> None:
+) -> StepUpGrant:
     """Consume in the protected mutation's transaction: Device -> Credential -> Grant.
 
     Operations must acquire their complete device barrier BEFORE other resource locks.
     In particular device DELETE locks source+target together in sorted order beforehand.
     Reacquiring its already-held source row here is harmless; direct callers acquire their
     source barrier here before any credential/grant lock. No commit releases these locks.
+    Return the locked row so a caller can recheck its deadline after subsequent work.
     """
     if token is None or not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", token):
         raise DomainError("STEP_UP_REQUIRED", "이 작업을 다시 인증해 주세요.", 403)
@@ -747,3 +748,4 @@ def consume_step_up(
     _active_account(session, principal.user_id, principal.household_id)
     grant.consumed_at = now
     session.flush()
+    return grant

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from sallimbook.accounts.router import router as accounts_router
 from sallimbook.assets.router import router as assets_router
 from sallimbook.config import Settings
 from sallimbook.core.database import REQUIRED_SCHEMA_REVISION, make_engine
@@ -94,6 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(identity_router)
     app.include_router(passkey_router)
     app.include_router(assets_router)
+    app.include_router(accounts_router)
     return app
 
 
