@@ -66,16 +66,16 @@
       "git_sha1": "52ea5e8a386ab36df1aefa2f1b46e26220b8ace7"
     },
     "docs/api-contract.md": {
-      "sha256": "dd406b3eee4384e1694a4d3df7a51cb532959ed985d1fe3cf4a5460e636bf090",
-      "git_sha1": "ae6d90e037f1d798f14ba48860c40682f62bcd41"
+      "sha256": "ccb1d0ead933670f014e28e43edc02e360ad5e7a6cc43cf9728766f6395d4ff4",
+      "git_sha1": "34ac9f566d654a441271f81dcaaef7714362d1fc"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "42870896e9360416064c72dc0a7bb8feba15ccd7f5ba645ee7aa4164bc318920",
-      "git_sha1": "f713d70eb002501eb6bf289765837831d33caf7d"
+      "sha256": "02110b7901a7a351f6bf08eb31a3ae458b62e6c7e408f82e11bbac00b2a1b356",
+      "git_sha1": "27d8a6f611752efb42fbeb95a830a7b0172ee30c"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "4fda7d2fb36ddc154a3ad9a12f7c5f7a199e7895346f6061a0f318f2a0441c21",
@@ -218,16 +218,16 @@
       "git_sha1": "92f6d43b8f73f1a998304733736b8bf131e9562d"
     },
     "docs/testing/browser-authentication.md": {
-      "sha256": "e752ccef30e8242ab2b50c7bfdac0f27aa6eb5dec3d601116b4086a9e1693cea",
-      "git_sha1": "5c1b46d7e76a8bd475c0e2afef80159019363e46"
+      "sha256": "a8b269278f808b5a5214281bd3f3dce71344272ca03e87d48dbb814c3b0171ac",
+      "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
       "sha256": "a89da28144101a0a19364d8b787737ff4e5c328b76b45d7b3aa751c651693226",
       "git_sha1": "044a75fda09a9bf7470c814ad334190cb9883ef8"
     },
     "docs/testing/passkeys-web.md": {
-      "sha256": "645adbd1b1256dc193b7cbfe2779b8c668527a5512bbe8644a44185da1cb19b8",
-      "git_sha1": "afa8ae4ceee39c5e9bf7c664c9a4555443caf489"
+      "sha256": "1849ff6fd5abebd066f447155c5fc544362d795497ee7e002fbc5ea52cdb9b57",
+      "git_sha1": "2586100a2484ae28d8208643e595f90bc6d4e780"
     }
   }
 }

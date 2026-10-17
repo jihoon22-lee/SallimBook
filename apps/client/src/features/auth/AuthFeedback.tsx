@@ -19,6 +19,7 @@ export function authErrorMessage(error: ApiError, login = false): string {
     case "PASSKEY_REQUIRED": return "먼저 패스키를 등록하거나 다시 로그인한 뒤 진행해 주세요.";
     case "CREDENTIAL_UNAVAILABLE": return "이 패스키를 등록할 수 없어요. 등록 목록을 확인하거나 다른 패스키를 선택해 주세요.";
     case "STEP_UP_REQUIRED": return "이 작업의 인증이 만료되었거나 사용할 수 없어요. 작업과 대상을 확인하고 다시 인증해 주세요.";
+    case "REAUTHENTICATION_FAILED": return "현재 계정의 비밀번호를 다시 확인해 주세요. 기존 로그인은 유지돼요.";
     case "CSRF_FAILED": return "인증 상태가 다시 변경되어 요청을 완료하지 않았어요. 세션을 다시 확인한 뒤 시도해 주세요.";
     case "VERSION_CONFLICT": return "정보가 다른 곳에서 변경됐어요. 목록을 다시 불러온 뒤 확인해 주세요.";
     case "HOUSEHOLD_FULL": return "이 가계에는 이미 두 계정이 등록되어 있어요.";

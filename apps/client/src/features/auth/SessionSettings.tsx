@@ -47,6 +47,15 @@ function InvitationPanel() {
     return () => window.clearTimeout(timeout);
   }, [invitation]);
 
+  useEffect(() => {
+    if (!invitation || !revealed) return;
+    // The bearer invitation's lifetime and its visible lifetime are separate limits.
+    const remaining = Date.parse(invitation.expires_at) - Date.now();
+    const timeout = window.setTimeout(() => { setInvitation(null); setRevealed(false); },
+      Number.isFinite(remaining) ? Math.max(0, Math.min(remaining, 30_000)) : 0);
+    return () => window.clearTimeout(timeout);
+  }, [invitation, revealed]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;

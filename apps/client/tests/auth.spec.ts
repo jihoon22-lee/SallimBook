@@ -26,6 +26,9 @@ async function mockIdentity(page: Page, loggedIn = false) {
     csrfFailuresRemaining: 0,
     csrfRenewals: 0,
     loginAttempts: 0,
+    reauthAttempts: 0,
+    rejectReauth: false,
+    validReauthShape: false,
     logoutAttempts: 0,
     invitationAttempts: 0,
     acceptAttempts: 0,
@@ -100,6 +103,13 @@ async function mockIdentity(page: Page, loggedIn = false) {
       state.loggedIn = false;
       return route.fulfill({ status: 204 });
     }
+    if (path === "/api/v1/auth/web/reauthenticate") {
+      state.reauthAttempts++;
+      if (await csrfRejected(route)) return;
+      state.validReauthShape = Object.keys(route.request().postDataJSON()).join(",") === "password";
+      if (state.rejectReauth) return failure(route, 403, "REAUTHENTICATION_FAILED");
+      return route.fulfill({ json: member });
+    }
     if (path === "/api/v1/devices" && method === "GET") {
       if (state.devicesUnauthorized) return failure(route, 401, "UNAUTHENTICATED");
       return route.fulfill({ json: { items: state.devices, next_cursor: null } });
@@ -147,6 +157,43 @@ async function fillLogin(page: Page) {
   await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
   await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 브라우저");
 }
+
+test("current web account reauthenticates without another login or changing devices", async ({ page }) => {
+  const api = await mockIdentity(page, true);
+  api.rejectReauth = true;
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "패스키로 로그인", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("로그인 이름", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("이 기기 이름", { exact: true })).toHaveCount(0);
+  await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
+  await page.getByRole("button", { name: "다시 인증", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("기존 로그인은 유지");
+  expect(api.loggedIn).toBe(true);
+  api.rejectReauth = false;
+  await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
+  await page.getByRole("button", { name: "다시 인증", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/auth$/);
+  expect(api.validReauthShape).toBe(true);
+  expect(api.reauthAttempts).toBe(2);
+  expect(api.loginAttempts).toBe(0);
+  await expectNoPersistence(page);
+});
+
+test("revealed invitation disappears within thirty seconds", async ({ page }) => {
+  await page.clock.install();
+  await mockIdentity(page, true);
+  await page.goto("/settings/auth");
+  await page.getByLabel("초대할 로그인 이름").fill("synthetic.partner");
+  await page.getByRole("button", { name: "초대 만들기", exact: true }).click();
+  await page.clock.fastForward(60_000);
+  await page.getByRole("button", { name: "초대 코드 보기", exact: true }).click();
+  await expect(page.getByLabel("생성된 초대 코드")).toBeVisible();
+  await page.clock.fastForward(29_000);
+  await expect(page.getByLabel("생성된 초대 코드")).toBeVisible();
+  await page.clock.fastForward(1_000);
+  await expect(page.getByLabel("생성된 초대 코드")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "초대 코드 보기", exact: true })).toHaveCount(0);
+});
 
 test("web login uses generated request fields and logout clears the displayed member without persistence", async ({ page }) => {
   const api = await mockIdentity(page);

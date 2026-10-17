@@ -27,6 +27,8 @@ export interface NativeMetadataRequest {
 export interface SallimBookAuth {
   getSession(): Promise<NativeAuthResult<NativeSessionState>>;
   loginUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
+  /** Confirms the current account password without creating another device or session. */
+  reauthenticateUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
   /** Accepts the invitation in native UI; sign-in is a separate action. */
   acceptInvitationUI(): Promise<NativeAuthResult<{ status: "accepted" | "cancelled" }>>;
   /** Intended login and the generated invitation secret are handled/displayed only in native UI. */

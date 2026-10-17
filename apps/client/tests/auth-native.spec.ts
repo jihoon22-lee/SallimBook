@@ -16,12 +16,13 @@ async function nativeMock(page: Page, scenario: Scenario = {}) {
       __nativeMock: state,
       CapacitorCustomPlatform: { name: "android" },
       Capacitor: {
-        PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "loginUI", "acceptInvitationUI", "createInvitationUI", "logout", "request", "passkeyLoginUI", "registerPasskeyUI", "revokePasskeyUI", "revokeDeviceUI", "createInvitationWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })) }],
+        PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "loginUI", "reauthenticateUI", "acceptInvitationUI", "createInvitationUI", "logout", "request", "passkeyLoginUI", "registerPasskeyUI", "revokePasskeyUI", "revokeDeviceUI", "createInvitationWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })) }],
         nativePromise: async (_plugin: string, method: string, args: Record<string, unknown> = {}) => {
           state.calls.push({ method, args });
           const success = (value: unknown) => ({ ok: true, value });
           if (method === "getSession") return success({ available: true, authenticated: state.authenticated });
           if (method === "loginUI" || method === "passkeyLoginUI") { if (!initial.cancelled) state.authenticated = true; return success({ status: initial.cancelled ? "cancelled" : "authenticated" }); }
+          if (method === "reauthenticateUI") return success({ status: initial.cancelled ? "cancelled" : "authenticated" });
           if (method === "acceptInvitationUI") return success({ status: initial.cancelled ? "cancelled" : "accepted" });
           if (method === "createInvitationUI" || method === "createInvitationWithPasskeyUI") return success({ status: initial.cancelled ? "cancelled" : "created" });
           if (method === "registerPasskeyUI" && initial.expiredRegistration) return { ok: false, code: "SESSION_EXPIRED" };
@@ -72,6 +73,20 @@ test("native login uses parameterless UI and restores only metadata", async ({ p
   await expect(page.getByText("합성 앱 구성원", { exact: true })).toBeVisible();
   await noWebCredentials(page);
   expect((await bridgeState(page)).calls.some((call) => call.method === "loginUI")).toBe(true);
+});
+
+for (const cancelled of [false, true]) test(`native password reauthentication preserves session on ${cancelled ? "cancellation" : "success"}`, async ({ page }) => {
+  await nativeMock(page, { authenticated: true, cancelled });
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "앱 패스키로 로그인", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "비밀번호로 다시 인증", exact: true }).click();
+  await expect(page).toHaveURL(cancelled ? /\/login$/ : /\/settings\/auth$/);
+  const calls = (await bridgeState(page)).calls;
+  expect(calls.some((call) => call.method === "reauthenticateUI")).toBe(true);
+  expect(calls.some((call) => call.method === "loginUI")).toBe(false);
+  await page.goto("/settings/auth");
+  await expect(page.getByText("합성 앱 구성원", { exact: true })).toBeVisible();
+  await noWebCredentials(page);
 });
 
 test("cancelled native login stays signed out and permits retry", async ({ page }) => {

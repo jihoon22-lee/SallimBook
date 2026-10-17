@@ -88,6 +88,7 @@ class SallimBookAuthPlugin : Plugin() {
     } }
 
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
+    @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
     @PluginMethod fun createInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.CREATE_INVITATION) } }
     @PluginMethod fun passkeyLoginUI(call: PluginCall) { main.post { launchForm(call, NativePasskeyActivity.LOGIN) } }
@@ -137,7 +138,7 @@ class SallimBookAuthPlugin : Plugin() {
     private fun authActivityResult(call: PluginCall?, result: ActivityResult) {
         if (call == null || call !== uiCall) return
         val expected = when (uiMode) {
-            NativeAuthActivity.LOGIN, NativePasskeyActivity.LOGIN -> "authenticated"
+            NativeAuthActivity.LOGIN, NativeAuthActivity.REAUTHENTICATE, NativePasskeyActivity.LOGIN -> "authenticated"
             NativeAuthActivity.CREATE_INVITATION, NativePasskeyActivity.INVITE -> "created"
             NativePasskeyActivity.REGISTER -> "registered"
             NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE -> "revoked"

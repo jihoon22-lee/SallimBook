@@ -61,20 +61,20 @@ function LoginForm() {
   }
 
   return <section className="card">
-    {state.status === "authenticated" && <p>{state.member.display_name} 님으로 로그인되어 있어요. 아래에서 다시 로그인하면 최근 인증을 확인할 수 있어요.</p>}
+    {state.status === "authenticated" && <p>{state.member.display_name} 님으로 로그인되어 있어요. 현재 계정의 비밀번호를 확인하면 최근 인증을 갱신해요.</p>}
     <form ref={formRef} className="auth-form" onSubmit={(event) => void submit(event)}>
-      <div className="form-field"><label htmlFor="login-name">로그인 이름</label>
+      {state.status !== "authenticated" && <div className="form-field"><label htmlFor="login-name">로그인 이름</label>
         <input id="login-name" name="login_name" autoComplete="username" autoCapitalize="none" spellCheck={false} required minLength={3} maxLength={64} pattern="[a-zA-Z][a-zA-Z0-9_.\-]{2,63}" disabled={busy} />
-      </div>
+      </div>}
       <div className="form-field"><label htmlFor="login-password">비밀번호</label>
         <input id="login-password" name="password" type="password" autoComplete="current-password" required maxLength={128} disabled={busy} />
       </div>
-      <div className="form-field"><label htmlFor="login-device">이 기기 이름</label>
+      {state.status !== "authenticated" && <div className="form-field"><label htmlFor="login-device">이 기기 이름</label>
         <input id="login-device" name="device_label" autoComplete="off" required maxLength={80} defaultValue="웹 브라우저" disabled={busy} aria-describedby="login-device-help" />
         <p id="login-device-help" className="muted">등록 기기 목록에서 알아볼 수 있는 이름을 적어 주세요.</p>
-      </div>
+      </div>}
       <AuthError error={error} login={passwordError} />
-      <button type="submit" disabled={busy}>{busy ? "로그인 중…" : "로그인"}</button>
+      <button type="submit" disabled={busy}>{busy ? "확인 중…" : state.status === "authenticated" ? "다시 인증" : "로그인"}</button>
       {state.status !== "authenticated" && <button type="button" disabled={busy || !supportsWebAuthn()} onClick={() => void passkeyLogin()}>패스키로 로그인</button>}
       {busy && !passwordError && <button type="button" onClick={ceremony.cancel}>패스키 인증 취소</button>}
     </form>

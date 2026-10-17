@@ -37,6 +37,7 @@ class NativeAuthActivity : AppCompatActivity() {
         internal const val EXTRA_STATUS = "sallimbook.auth.status"
         internal const val EXTRA_ERROR = "sallimbook.auth.error"
         internal const val LOGIN = "login"
+        internal const val REAUTHENTICATE = "reauthenticate"
         internal const val INVITATION = "invitation"
         internal const val CREATE_INVITATION = "create-invitation"
     }
@@ -76,7 +77,7 @@ class NativeAuthActivity : AppCompatActivity() {
         } catch (_: Exception) { false }
         mode = intent.getStringExtra(EXTRA_MODE) ?: ""
         if (savedInstanceState != null || !notExported || !auth.available ||
-            mode !in setOf(LOGIN, INVITATION, CREATE_INVITATION) || intent.extras?.keySet() != setOf(EXTRA_MODE)) {
+            mode !in setOf(LOGIN, REAUTHENTICATE, INVITATION, CREATE_INVITATION) || intent.extras?.keySet() != setOf(EXTRA_MODE)) {
             setResult(Activity.RESULT_CANCELED, Intent().putExtra(EXTRA_ERROR, AuthCode.AUTH_UNAVAILABLE.name))
             finish()
             return
@@ -129,17 +130,18 @@ class NativeAuthActivity : AppCompatActivity() {
         }
         label(when (mode) {
             LOGIN -> "SallimBook · 로그인"
+            REAUTHENTICATE -> "SallimBook · 현재 계정 다시 인증"
             CREATE_INVITATION -> "SallimBook · 구성원 초대"
             else -> "SallimBook · 초대 수락"
         }, 24f)
         label("이 화면을 벗어나면 입력한 비밀번호와 초대 코드를 지웁니다.")
-        identity = field(when (mode) {
+        if (mode != REAUTHENTICATE) identity = field(when (mode) {
             LOGIN -> "로그인 이름"
             CREATE_INVITATION -> "초대할 구성원의 로그인 이름"
             else -> "초대 코드"
         }, mode == INVITATION, if (mode == INVITATION) 128 else 64)
         if (mode != CREATE_INVITATION) {
-            password = field(if (mode == LOGIN) "비밀번호" else "새 비밀번호 · 15자 이상", true, 128)
+            password = field(if (mode in setOf(LOGIN, REAUTHENTICATE)) "비밀번호" else "새 비밀번호 · 15자 이상", true, 128)
         }
         if (mode == INVITATION) {
             passwordConfirmation = field("새 비밀번호 확인", true, 128)
@@ -150,7 +152,7 @@ class NativeAuthActivity : AppCompatActivity() {
         }
         status = label("")
         submit = Button(this).apply {
-            text = when (mode) { LOGIN -> "로그인"; CREATE_INVITATION -> "초대 만들기"; else -> "초대 수락" }
+            text = when (mode) { LOGIN -> "로그인"; REAUTHENTICATE -> "다시 인증"; CREATE_INVITATION -> "초대 만들기"; else -> "초대 수락" }
             minimumHeight = 48.dp()
             filterTouchesWhenObscured = true
             setOnClickListener { submitNative() }
@@ -185,7 +187,7 @@ class NativeAuthActivity : AppCompatActivity() {
             }
             return
         }
-        val identifier = identity.text.toString().trim()
+        val identifier = if (mode == REAUTHENTICATE) "" else identity.text.toString().trim()
         if (mode == CREATE_INVITATION) { createNativeInvitation(identifier); return }
         val secret = CharArray(password.length()).also { password.text.getChars(0, password.length(), it, 0) }
         val confirmation = if (mode == INVITATION) CharArray(passwordConfirmation.length()).also {
@@ -195,7 +197,7 @@ class NativeAuthActivity : AppCompatActivity() {
         val passwordsMatch = confirmation == null || secret.contentEquals(confirmation)
         confirmation?.fill('\u0000')
         val name = if (mode == INVITATION) displayName.text.toString().trim() else ""
-        val valid = if (mode == LOGIN) {
+        val valid = if (mode == REAUTHENTICATE) secret.isNotEmpty() else if (mode == LOGIN) {
             Regex("[A-Za-z][A-Za-z0-9_.-]{2,63}").matches(identifier) && secret.isNotEmpty()
         } else {
             Regex("[A-Za-z0-9_-]{32,128}").matches(identifier) && secret.size >= 15 && name.isNotEmpty() && passwordsMatch
@@ -222,7 +224,7 @@ class NativeAuthActivity : AppCompatActivity() {
                     submit.isEnabled = true
                     if (outcome.code == null) {
                         setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_STATUS,
-                            if (mode == LOGIN) "authenticated" else "accepted"))
+                            if (mode in setOf(LOGIN, REAUTHENTICATE)) "authenticated" else "accepted"))
                         clearInputs()
                         finish()
                     } else status.text = message(outcome.code)
@@ -230,6 +232,7 @@ class NativeAuthActivity : AppCompatActivity() {
             }
         }
         if (mode == LOGIN) auth.login(identifier, secret, "Android", gate, completion)
+        else if (mode == REAUTHENTICATE) auth.reauthenticate(secret, gate, completion)
         else {
             val invitation = identifier.toCharArray()
             pendingSecrets.add(invitation)

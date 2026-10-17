@@ -67,6 +67,7 @@ internal class NativeAuthHttp(private val origin: String) {
             "/api/v1/auth/native/passkeys/options", "/api/v1/auth/native/passkeys/verify",
             "/api/v1/auth/passkeys/register/options", "/api/v1/auth/passkeys/register/verify",
             "/api/v1/auth/step-up/options", "/api/v1/auth/step-up/verify",
+            "/api/v1/auth/native/reauthenticate",
         ) && method == "POST" && ifMatch == null
         val internalRevoke = method == "DELETE" && PasskeyPolicy.revokePath(path) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && body == null

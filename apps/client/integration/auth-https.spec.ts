@@ -18,6 +18,14 @@ test("real browser login restores HttpOnly Secure Strict cookie and logout revok
   await page.reload();
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "합성 HTTPS 브라우저 현재 기기" })).toBeVisible();
+  await page.goto("/login");
+  await expect(page.getByLabel("로그인 이름", { exact: true })).toHaveCount(0);
+  await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
+  await page.getByRole("button", { name: "다시 인증", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
+  await expect(page.locator(".device-card")).toHaveCount(1);
+  const originalCookie = cookies.find((cookie) => cookie.name === "__Host-sallimbook_session");
+  expect((await context.cookies()).some((cookie) => cookie.name === originalCookie?.name && cookie.value === originalCookie?.value)).toBe(true);
   // localhost and 127.0.0.1 are different sites; the Strict cookie must not accompany
   // this cross-site iframe navigation. The response remains observable without CORS.
   const crossSite = await context.newPage();
