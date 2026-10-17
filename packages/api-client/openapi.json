@@ -1599,6 +1599,175 @@
         ],
         "type": "string"
       },
+      "AssetComparisonResponse": {
+        "properties": {
+          "added_asset_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Added Asset Ids",
+            "type": "array"
+          },
+          "change_percent": {
+            "anyOf": [
+              {
+                "maxLength": 27,
+                "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Percent"
+          },
+          "change_percent_unavailable_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PercentUnavailable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changed_share_asset_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Changed Share Asset Ids",
+            "type": "array"
+          },
+          "common_scope_delta_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Common Scope Delta Krw"
+          },
+          "current": {
+            "$ref": "#/components/schemas/ComparisonPeriod"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/ComparisonFilters"
+          },
+          "from_month": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Month"
+          },
+          "item_count": {
+            "minimum": 0.0,
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonPeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "removed_asset_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Removed Asset Ids",
+            "type": "array"
+          },
+          "scope_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Changed"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ComparisonState"
+          },
+          "to_month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "To Month",
+            "type": "string"
+          },
+          "total_delta_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Delta Krw"
+          }
+        },
+        "required": [
+          "from_month",
+          "to_month",
+          "filters",
+          "state",
+          "previous",
+          "current",
+          "total_delta_krw",
+          "common_scope_delta_krw",
+          "change_percent",
+          "change_percent_unavailable_reason",
+          "scope_changed",
+          "added_asset_ids",
+          "removed_asset_ids",
+          "changed_share_asset_ids",
+          "item_count",
+          "items",
+          "next_cursor"
+        ],
+        "title": "AssetComparisonResponse",
+        "type": "object"
+      },
       "AssetCreate": {
         "additionalProperties": false,
         "properties": {
@@ -1967,6 +2136,157 @@
           "archived"
         ],
         "type": "string"
+      },
+      "AssetTrendPoint": {
+        "properties": {
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "confirmed_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Amount Krw"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/ObservationDates"
+          },
+          "included_in_total": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Included In Total"
+          },
+          "month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          },
+          "observed_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Amount Krw"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthState"
+              },
+              {
+                "const": "missing",
+                "type": "string"
+              }
+            ],
+            "title": "State"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value_state": {
+            "$ref": "#/components/schemas/TrendValueState"
+          }
+        },
+        "required": [
+          "month",
+          "state",
+          "revision",
+          "totals",
+          "value_state",
+          "observed_amount_krw",
+          "confirmed_amount_krw",
+          "included_in_total",
+          "as_of_date",
+          "dates"
+        ],
+        "title": "AssetTrendPoint",
+        "type": "object"
+      },
+      "AssetTrendResponse": {
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/ComparisonFilters"
+          },
+          "from_month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "From Month",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/AssetTrendPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "series_kind": {
+            "enum": [
+              "household_net_assets",
+              "asset_owned_amount"
+            ],
+            "title": "Series Kind",
+            "type": "string"
+          },
+          "to_month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "To Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_month",
+          "to_month",
+          "filters",
+          "series_kind",
+          "points"
+        ],
+        "title": "AssetTrendResponse",
+        "type": "object"
       },
       "AuthenticationCredential": {
         "additionalProperties": false,
@@ -4072,6 +4392,249 @@
         },
         "title": "ClientExtensions",
         "type": "object"
+      },
+      "ComparisonFilters": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_member_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Member Id"
+          },
+          "ownership_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnershipKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ComparisonFilters",
+        "type": "object"
+      },
+      "ComparisonItem": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthValueResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after_in_scope": {
+            "title": "After In Scope",
+            "type": "boolean"
+          },
+          "amount_delta_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Delta Krw"
+          },
+          "asset_id": {
+            "format": "uuid",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthValueResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "before_in_scope": {
+            "title": "Before In Scope",
+            "type": "boolean"
+          },
+          "membership": {
+            "enum": [
+              "common",
+              "added",
+              "removed",
+              "excluded",
+              "unavailable"
+            ],
+            "title": "Membership",
+            "type": "string"
+          },
+          "net_assets_effect_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Assets Effect Krw"
+          },
+          "same_scope": {
+            "title": "Same Scope",
+            "type": "boolean"
+          },
+          "scope_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScopeReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "share_changed": {
+            "title": "Share Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "asset_id",
+          "before",
+          "after",
+          "before_in_scope",
+          "after_in_scope",
+          "membership",
+          "share_changed",
+          "same_scope",
+          "scope_reason",
+          "amount_delta_krw",
+          "net_assets_effect_krw"
+        ],
+        "title": "ComparisonItem",
+        "type": "object"
+      },
+      "ComparisonPeriod": {
+        "properties": {
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/ObservationDates"
+          },
+          "month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthState"
+              },
+              {
+                "const": "missing",
+                "type": "string"
+              }
+            ],
+            "title": "State"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MonthTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "month",
+          "state",
+          "revision",
+          "confirmed_at",
+          "totals",
+          "dates"
+        ],
+        "title": "ComparisonPeriod",
+        "type": "object"
+      },
+      "ComparisonState": {
+        "enum": [
+          "available",
+          "no_previous_month",
+          "current_missing",
+          "unconfirmed"
+        ],
+        "type": "string"
       },
       "ConsumableInput": {
         "additionalProperties": false,
@@ -8996,6 +9559,37 @@
         "title": "ObligationResponse",
         "type": "object"
       },
+      "ObservationDates": {
+        "properties": {
+          "missing_date_asset_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Missing Date Asset Ids",
+            "type": "array"
+          },
+          "mixed_dates": {
+            "title": "Mixed Dates",
+            "type": "boolean"
+          },
+          "non_month_end_asset_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Non Month End Asset Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "non_month_end_asset_ids",
+          "missing_date_asset_ids",
+          "mixed_dates"
+        ],
+        "title": "ObservationDates",
+        "type": "object"
+      },
       "OptionsResponse": {
         "additionalProperties": false,
         "properties": {
@@ -9498,6 +10092,16 @@
         ],
         "title": "PayoutResponse",
         "type": "object"
+      },
+      "PercentUnavailable": {
+        "enum": [
+          "no_previous_month",
+          "current_missing",
+          "unconfirmed",
+          "zero_previous_total",
+          "negative_previous_total"
+        ],
+        "type": "string"
       },
       "PolicyCreate": {
         "additionalProperties": false,
@@ -11608,6 +12212,20 @@
         "title": "RuleVersionResponse",
         "type": "object"
       },
+      "ScopeReason": {
+        "enum": [
+          "previously_held_added",
+          "started_after_previous_period",
+          "ended_before_current_period",
+          "not_in_previous_scope",
+          "not_in_current_scope",
+          "inclusion_changed",
+          "filter_membership_changed",
+          "household_share_changed",
+          "excluded_from_total"
+        ],
+        "type": "string"
+      },
       "SettlementCreate": {
         "additionalProperties": false,
         "properties": {
@@ -12144,6 +12762,17 @@
         "enum": [
           "ongoing",
           "ended"
+        ],
+        "type": "string"
+      },
+      "TrendValueState": {
+        "enum": [
+          "missing_month",
+          "missing_item",
+          "outside_filter",
+          "missing_value",
+          "unconfirmed",
+          "verified"
         ],
         "type": "string"
       },
@@ -14907,6 +15536,257 @@
         ]
       }
     },
+    "/api/v1/asset-comparison": {
+      "get": {
+        "operationId": "getAssetComparison",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AssetKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AssetCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ownership_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OwnershipKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ownership Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "owner_member_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Owner Member Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetComparisonResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Compare Assets",
+        "tags": [
+          "asset-comparison"
+        ]
+      }
+    },
     "/api/v1/asset-months/{month}": {
       "get": {
         "operationId": "getAssetMonth",
@@ -16191,6 +17071,221 @@
         "summary": "Update Value",
         "tags": [
           "asset-months"
+        ]
+      }
+    },
+    "/api/v1/asset-trends": {
+      "get": {
+        "operationId": "getAssetTrends",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AssetKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AssetCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ownership_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OwnershipKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ownership Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "owner_member_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Owner Member Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetTrendResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Asset Trends",
+        "tags": [
+          "asset-comparison"
         ]
       }
     },

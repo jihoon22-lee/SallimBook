@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from sallimbook.accounts.router import router as accounts_router
+from sallimbook.assets.comparison_router import router as asset_comparison_router
 from sallimbook.assets.month_router import router as asset_months_router
 from sallimbook.assets.router import router as assets_router
 from sallimbook.cards.router import router as cards_router
@@ -112,6 +113,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(insurance_events_router)
     app.include_router(homecare_router)
 
+    app.include_router(asset_comparison_router)
     app.include_router(payment_links_router)
     return app
 
