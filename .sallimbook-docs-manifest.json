@@ -256,6 +256,14 @@
     "docs/testing/cashflow-client.md": {
       "sha256": "0c996a88ec7970a964b1ac9b684329e25d8027e40dd73e137126955a8bfbc4c5",
       "git_sha1": "fbc10ac28ce7ed8e0e808a45e9b8a35991ec7c03"
+    },
+    "docs/adr/vault-format-v1.md": {
+      "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
+      "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
+    },
+    "docs/testing/native-vault-crypto.md": {
+      "sha256": "83fdb551874d1837aa434d1fe8ca9cd62a82b5db82d0e59cc73660d331390cc5",
+      "git_sha1": "7d5006f6bfdf758f87b80384c0cea9fefdc19aac"
     }
   }
 }
