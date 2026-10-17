@@ -17,6 +17,24 @@ for (const failure of ["cancelled", "AUTH_CANCELLED", "APP_LOCKED", "SESSION_EXP
   else await expect(page.getByRole("alert")).toBeVisible();
   expect(state.calls.filter((row) => row.method === "exportArchiveUI")).toHaveLength(1); expect(state.http).toEqual([]); expect(state.writes).toEqual([]);
 });
+test("native phase deadlines retain status completion beyond the web transfer timer", async ({ page }) => {
+  const state = await mockExports(page, true);
+  let release!: () => void;
+  state.nativeWait = new Promise<void>((resolve) => { release = resolve; });
+  await page.clock.install();
+  try {
+    await page.goto("/exports"); await page.getByLabel(ack).check();
+    await page.getByRole("button", { name: "Android에서 ZIP 내보내기", exact: true }).click();
+    await expect.poll(() => state.calls.filter((row) => row.method === "exportArchiveUI").length).toBe(1);
+    await page.clock.fastForward(151_000);
+    await expect(page.getByText("Android 보호 화면에서 인증과 저장을 진행해 주세요.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally { release(); }
+  await expect(page.getByText(/Android 보호 화면에서 내보내기를 마쳤어요/)).toBeVisible();
+  expect(state.calls.filter((row) => row.method === "exportArchiveUI")).toHaveLength(1);
+  expect(state.http).toEqual([]); expect(state.writes).toEqual([]);
+});
+
 test("native late completion after pagehide does not produce web bytes or success", async ({ page }) => {
   const state = await mockExports(page, true); state.delay = 600; await page.goto("/exports"); await page.getByLabel(ack).check(); await page.getByRole("button", { name: "Android에서 ZIP 내보내기", exact: true }).click(); await expect.poll(() => state.calls.filter((row) => row.method === "exportArchiveUI").length).toBe(1); await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide"))); await expect(page.getByRole("alert")).toBeVisible(); await page.waitForTimeout(700); await expect(page.getByText(/Android 보호 화면에서 내보내기를 마쳤어요/)).toHaveCount(0); expect(state.http).toEqual([]);
 });

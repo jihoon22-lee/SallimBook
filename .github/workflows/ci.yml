@@ -89,6 +89,7 @@ jobs:
       - run: uv run --project services/api ruff check scripts/test_document_runtime.py scripts/test_web_auth.py
       - run: uv run --project services/api python scripts/setup_dev.py
       - run: uv run --project services/api python scripts/test_web_auth.py --documents
+      - run: uv run --project services/api python scripts/test_web_auth.py --exports
 
   types-contract:
     name: Type checks and generated API contract

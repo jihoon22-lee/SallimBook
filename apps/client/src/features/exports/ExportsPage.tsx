@@ -49,7 +49,9 @@ function ExportForm() {
     const current = new AbortController(); controller.current = current; setBusy(true); setError(null); setNotice("");
     setProgress({ phase: "preparing", received: 0, total: null });
     let timedOut = false; let file: ExportFile | undefined;
-    const timeout = setTimeout(() => { timedOut = true; current.abort(); }, EXPORT_TIMEOUT_MS);
+    // Native authentication, picker, transfer and provider writes own separate
+    // deadlines. A web transfer timer must not discard a valid native completion.
+    const timeout = native ? undefined : setTimeout(() => { timedOut = true; current.abort(); }, EXPORT_TIMEOUT_MS);
     try {
       const input = { formats: [...formats].sort() as ExportFormat[], document_ids: selected.map((row) => row.id) };
       if (native) {

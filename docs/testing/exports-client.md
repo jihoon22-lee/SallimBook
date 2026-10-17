@@ -95,3 +95,14 @@ PostgreSQL과 고정 ClamAV/parser/OCR를 사용해 합성 PNG 원본을 검사�
 실제 Android SAF·실기기 인증/취소와 실제 WebAuthn 서명은 이 HTTPS 시험 범위가 아니다.
 
 [보안 정책](../security-authentication.md) · [운영 백업과 사용자 내보내기](../deployment-backup-operations.md)
+
+## Android 구현과 최종 통합
+
+네이티브 내보내기 구현과 UI를 함께 통합하고 전용 browser 설정의 포트만 18757로 지정해
+`exports-native-ui.spec.ts`, `exports-ui.spec.ts`, `exports-download.spec.ts`,
+`exports-native-bridge.spec.ts`를 workers=2로 실행했다. **114개 모두 통과**했다.
+웹의 150초 제한은 웹 전송에만 적용한다. Android는 인증·선택기·전송·provider 쓰기의
+네이티브 단계별 제한을 사용하며 웹 timer 때문에 유효한 완료 응답을 버리지 않는다.
+151초 경과 후에도 native status를 받는 회귀와 pagehide 취소 회귀를 함께 확인했다.
+실제 Android provider 검증은 여전히 두 Galaxy 인수 단계에 남아 있다.
+CI의 격리 문서 도구 job에도 `scripts/test_web_auth.py --exports`를 추가했다.

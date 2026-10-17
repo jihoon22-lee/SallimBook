@@ -7,7 +7,7 @@ export async function mockExports(page: Page, native = false) {
   const documents = await mockDocuments(page);
   const state = { documents, writes: [] as { body: any; headers: Record<string, string> }[], issued: 0, failure: "", status: 503,
     headers: {} as Record<string, string | null>, corrupt: false, delay: 0, csrfOnce: false,
-    nativeStatus: "exported", nativeFailure: "", calls: [] as { method: string; args: any }[], http: [] as string[] };
+    nativeStatus: "exported", nativeFailure: "", nativeWait: null as Promise<void> | null, calls: [] as { method: string; args: any }[], http: [] as string[] };
   await page.route("**/api/v1/exports", async (route) => {
     const request = route.request(); state.writes.push({ body: request.postDataJSON(), headers: request.headers() });
     if (state.delay) await new Promise((resolve) => setTimeout(resolve, state.delay));
@@ -35,6 +35,7 @@ export async function mockExports(page: Page, native = false) {
     if (method === "getSession") return { ok: true, value: { available: true, authenticated: true } };
     if (method === "request") return metadata(args.path === "/api/v1/me" ? members[0] : members);
     if (method === "exportArchiveUI") {
+      if (state.nativeWait) await state.nativeWait;
       if (state.delay) await new Promise((resolve) => setTimeout(resolve, state.delay));
       return state.nativeFailure ? { ok: false, code: state.nativeFailure } : { ok: true, value: { status: state.nativeStatus } };
     }
