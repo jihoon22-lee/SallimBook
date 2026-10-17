@@ -226,8 +226,8 @@
       "git_sha1": "31821e6c78de26bd0e643896ebb238d5c0caa957"
     },
     "docs/testing/native-security-proof.md": {
-      "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
-      "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
+      "sha256": "d75115e8222f75b0d12035b4c0c240c0841bf1027e4725221042ee572b8c8585",
+      "git_sha1": "ecdb1270586433902b11fa97f65b5963a1f0b872"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
@@ -286,8 +286,8 @@
       "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
     },
     "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "405e7fc14623811fa8333054ed6481f1ef480a7a32309d93b8f59f9e283dcfb6",
-      "git_sha1": "0a3a0daffa7713b1f410c8f01c9994de94545c42"
+      "sha256": "5f0d2f7e8b524085404ed176a5140b0db7e99b11e50861743c83bbf82e54f86c",
+      "git_sha1": "b3212efcd703aadeb676be25602c455480f5aca2"
     },
     "docs/testing/homecare-client.md": {
       "sha256": "0581401abb980f338b8287d83087f6a9c56aa2314eaaec02c0c86d591152bb12",
