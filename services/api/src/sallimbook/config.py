@@ -19,3 +19,7 @@ class Settings(BaseSettings):
         )
     )
     database_url: SecretStr | None = None
+    # Passkeys require the actual HTTPS RP and signed Android origins to be configured.
+    webauthn_rp_id: str | None = None
+    webauthn_web_origins: list[str] = Field(default_factory=list)
+    webauthn_native_origins: list[str] = Field(default_factory=list)

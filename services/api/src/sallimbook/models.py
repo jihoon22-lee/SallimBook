@@ -11,8 +11,11 @@ from sallimbook.identity.auth_models import (
     User,
 )
 from sallimbook.identity.models import Household
+from sallimbook.identity.passkeys.models import AuthChallenge, AuthCredential, StepUpGrant
 
 __all__ = [
+    "AuthChallenge",
+    "AuthCredential",
     "AuthSession",
     "Household",
     "HouseholdMember",
@@ -21,5 +24,6 @@ __all__ = [
     "LoginThrottle",
     "RefreshToken",
     "RegisteredDevice",
+    "StepUpGrant",
     "User",
 ]

@@ -4,6 +4,7 @@
 테이블 명세에 없는 임의의 PAN/CVC 평문 칼럼을 추가하지 않는다.
 SB-002의 `0001_households`는 가계 루트와 KRW/Asia·Seoul/version 제약을 생성한다.
 SB-005/007의 `0002_identity_auth`는 사용자·구성원·초대·기기·세션·refresh 이력·요청 제한·멱등 기록을 추가한다.
+SB-006의 `0003_passkeys`는 `auth_credentials`, `auth_challenges`, `auth_step_up_grants` 세 테이블을 추가한다.
 아래 나머지 업무 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
 공통 ORM은 UUID·UTC timestamp·낙관적 version을 제공하며, `KrwNumeric` 바인딩은
 float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. 새 DB에 사용자 가계를 자동 생성하지 않는다.
@@ -34,18 +35,33 @@ float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. �
 | households | id, name, timezone, base_currency | v1 Asia/Seoul, KRW |
 | household_members | id, household_id, user_id, slot, role, status | slot 1/2 CHECK + 활성 (가계,slot) partial UNIQUE; 가계 잠금과 함께 최대 2명 보장 |
 | invitations | token_hash, household_id, intended_login, expires_at, used_at | 일회성 초대; 원본 토큰 영구 저장 금지 |
-| auth_credentials | user_id, credential_id, public_key, sign_count, transports, backed_up | 패스키 credential_id unique; 비밀키 없음 |
+| auth_credentials | household_id, user_id, created_device_id, credential_id, public_key, rp_id, label, sign_count, aaguid, transports, device_type, backed_up, last_used_at, revoked_at | credential_id 전역 unique; 구성원·등록 기기/사용자 복합 FK; 비밀키 없음 |
 | auth_sessions | user_id, device_id?, session_hash, refresh_hash?, expires_at, revoked_at, last_seen_at | 웹 세션/Android refresh 갱신·폐기 |
 | refresh_tokens | household_id, session_id, token_hash, expires_at, consumed_at | 소비한 해시도 보존해 이전 refresh 재사용 탐지; 세션 복합 FK |
 | login_throttles | key_hash, window_started_at, attempts | 로그인/초대/갱신 시도 제한; 인증 실패에도 카운터는 유지 |
 | registered_devices | user_id, household_id, label, platform, status, last_seen_at | 기기 해지와 세션 제거 연계; 키 원문 없음 |
-| auth_challenges | user_id?, kind, challenge_hash, expires_at, consumed_at | 등록·로그인·step-up 재생 방지 |
+| auth_challenges | household_id?, user_id?, session_id?, device_id?, pending_device_id?, kind, transport, label?, challenge_hash, binding_hash?, policy_hash, action?, target_id?, expires_at, consumed_at | 5분 일회성; ceremony 종류별 필드 조합 CHECK·세션/기기/구성원 FK |
+| auth_step_up_grants | household_id, user_id, session_id, device_id, credential_record_id, grant_hash, purpose, target_id, expires_at, consumed_at | 2분 일회성; 목적/대상/세션/기기 바인딩·credential/사용자 복합 FK |
 
 부부의 법적 실명·연락처는 필수값으로 강제하지 않는다. 초기 데이터에는 합성 표시명만 둔다.
 실제 `auth_sessions`는 web/native를 구분하고 웹 CSRF 해시와 native access 만료를 분리한다.
 refresh 해시는 세션 칼럼 대신 `refresh_tokens` 이력 테이블에 둔다. 기기는 반드시 등록되며 가계·사용자와 복합 FK로 묶는다.
 기기 상태는 모든 인증/refresh의 폐기 기준이다. 요청 중 기기 행 갱신과 세션 잠금의 순서 역전을 피하기 위해
 활동 시각은 세션에서 집계하고, 기기 폐기 시 다른 세션을 일괄 잠그지 않는다.
+
+패스키의 `credential_id`는 1~1023바이트, 공개키는 1~8192바이트, sign_count는 0~4294967295로 제한한다.
+등록 시 검증한 `device_type`을 보존하고 인증 시 같은 유형인지 확인한다. 동기화 패스키의 0 카운터와
+양수 카운터의 증가 검증은 WebAuthn 라이브러리 규칙을 따른다. 비밀키·생체정보·평문 challenge는 저장하지 않는다.
+`policy_hash`는 RP ID·허용 origin·transport를 연결해 발급 후 정책이 바뀐 challenge를 거부한다.
+로그인 challenge의 기기 바인딩과 step-up 증명도 원문 대신 구분된 토큰 해시를 저장한다.
+`pending_device_id`는 로그인 성공 시 실제 등록 기기 ID로 사용하며, 발급 시에는 아직 기기 행이 없다.
+알 수 없는 계정의 로그인 challenge는 가계·사용자가 함께 null이다. 그 외 등록/step-up과 증명은 가계·사용자를 요구한다.
+따라서 이 미인증 로그인 challenge만 공통 household_id NOT NULL 규칙의 제한적인 예외다.
+challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한다. 증명 소비는 보호 동작과 함께 commit하며,
+검증 실패로 소비된 challenge는 되살리지 않는다. 목적별 증명은 세션의 최근 로그인 시각을 바꾸지 않는다.
+`auth_challenges.expires_at`과 `auth_step_up_grants.expires_at`에 만료 정리 인덱스를 둔다.
+새 ceremony 생성 시 만료 행만 각 100건 이하로 잠금 건너뛰기 방식으로 삭제하며, 정리는 같은 트랜잭션을 사용한다.
+현재 유효하거나 다른 검증/동작이 잠근 행을 정리 때문에 삭제하거나 대기하지 않는다.
 
 ## 3. 자산·금융계좌·월간 기록
 
@@ -198,6 +214,7 @@ erDiagram
 ## 12. 마이그레이션
 
 초기 순서: identity → assets/accounts → cards metadata → insurance contracts → cashflow → insurance cases/claims/payouts → homecare → vault/documents.
+현재 적용 순서는 `0001_households` → `0002_identity_auth` → `0003_passkeys`이며 readiness도 이 revision을 요구한다.
 단계 간 FK 대상은 먼저 만들고, 순환 참조가 필요하면 별도 migration에서 제약을 추가한다.
 각 단계의 테스트 DB 생성·migration round-trip을 검증한다.
 운영 데이터가 있는 migration은 백업/복구와 하위 호환 API 기간을 먼저 계획한다.
