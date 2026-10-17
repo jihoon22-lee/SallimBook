@@ -531,6 +531,27 @@ class TestAccountsDatabase:
             assert session.scalar(select(func.count()).select_from(Asset)) == 10
             assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 10
 
+    @pytest.mark.parametrize("opened_on", [None, "2025-01-01"])
+    def test_archived_existing_asset_cannot_receive_a_new_account(
+        self, accounts_app, account_actor, db_engine, opened_on
+    ):
+        with TestClient(accounts_app) as client:
+            asset = client.post(
+                "/api/v1/assets",
+                json=asset_payload(ended_on="2025-10-01"),
+                headers=account_actor.headers,
+            ).json()
+            rejected = client.post(
+                "/api/v1/accounts",
+                headers=account_actor.headers,
+                json=account_payload(asset=None, asset_id=asset["id"], opened_on=opened_on),
+            )
+            assert rejected.status_code == 422
+            assert rejected.json()["error"]["code"] == "ASSET_UNAVAILABLE"
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 0
+            assert session.scalar(select(func.count()).select_from(Asset)) == 1
+
     def test_existing_asset_link_is_unique_and_restricts_deletion(
         self, accounts_app, account_actor, db_engine
     ):

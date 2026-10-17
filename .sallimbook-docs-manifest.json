@@ -62,12 +62,12 @@
       "git_sha1": "8b1efc9af0109b44edebba0787076a0962c6dfd9"
     },
     "docs/data-model.md": {
-      "sha256": "5dee018d1feef931f22686db34a8e78e36bc2c3bb436f7d89364c299be66fdc4",
-      "git_sha1": "78eb263cda0ed806e2d2cbacace96dbd36c76b11"
+      "sha256": "800185f7c20f23ca4721f79751e0c258f10c54482492cebb0a9269271c8158f1",
+      "git_sha1": "88562e58eade97908344eb5444d7f43cdb06ddee"
     },
     "docs/api-contract.md": {
-      "sha256": "3ff66160625e6afd25b922618a49aa4541afcb6fc9b938fb01fecf3292d206bc",
-      "git_sha1": "76f35c3a2d53a4c1cb8fade97cbd11f87c87498e"
+      "sha256": "0cf3144a1c1d2f74715791b03d3f8f45441bc5db28156901801dffa3ecd71194",
+      "git_sha1": "8db73b2b43ccab40729258820813f9e21f6a7bdc"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -234,8 +234,8 @@
       "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
     },
     "docs/testing/assets-accounts-client.md": {
-      "sha256": "b6380e10d8731ca2b92c9fb5688c86ed6e26852a6663aa094d71436fbe1d941a",
-      "git_sha1": "b857b73a2de28b55ef527603c4e523fef0cf3503"
+      "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",
+      "git_sha1": "88a225ab372b6af9991373b5111a018b7b696aca"
     }
   }
 }

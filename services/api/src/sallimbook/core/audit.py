@@ -55,10 +55,22 @@ def record_event(
     session: Session,
     principal: Principal,
     *,
-    entity_type: Literal["asset", "financial_account", "asset_month"],
+    entity_type: Literal[
+        "asset", "financial_account", "asset_month", "cash_record", "income_conversion"
+    ],
     entity_id: UUID,
     action: Literal[
-        "create", "update", "archive", "delete", "reveal", "confirm", "reopen", "sync_scope"
+        "create",
+        "update",
+        "archive",
+        "delete",
+        "reveal",
+        "correct",
+        "void",
+        "convert",
+        "confirm",
+        "reopen",
+        "sync_scope",
     ],
     before_version: int | None,
     after_version: int | None,
@@ -71,12 +83,21 @@ def record_event(
         raise ValueError("Audit field names must be schema identifiers")
     if request_id is not None and not re.fullmatch(r"[a-zA-Z0-9._-]{1,128}", request_id):
         raise ValueError("Audit request identifier is invalid")
-    if entity_type not in {"asset", "financial_account", "asset_month"} or action not in {
+    if entity_type not in {
+        "asset",
+        "financial_account",
+        "asset_month",
+        "cash_record",
+        "income_conversion",
+    } or action not in {
         "create",
         "update",
         "archive",
         "delete",
         "reveal",
+        "correct",
+        "void",
+        "convert",
         "confirm",
         "reopen",
         "sync_scope",

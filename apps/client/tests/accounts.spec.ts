@@ -119,3 +119,29 @@ test("foreign account never offers edit or sensitive controls", async ({ page })
   await expect(page.getByRole("button", { name: "전체 계좌번호 30초 보기", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "계좌 정보 수정", exact: true })).toHaveCount(0);
 });
+
+
+test("new account linking lists active financial assets and preserves inputs on later closure", async ({ page }) => {
+  const state = await mockFinance(page);
+  state.assets.push({ ...state.assets[1]!, id: uid(71), name: "합성 사용 종료 금융 자산", status: "archived", ended_on: "2026-01-01" });
+  state.assets.push({ ...state.assets[1]!, id: uid(72), name: "합성 새 연결 후보" });
+  await page.goto("/accounts/new");
+  await page.getByLabel("금융기관", { exact: true }).fill("합성 보존 기관");
+  await page.getByLabel("계좌 유형", { exact: true }).selectOption("brokerage");
+  await page.getByLabel("금융 자산 연결", { exact: true }).selectOption("existing");
+  await expect(page.getByLabel("연결할 금융 자산", { exact: true }).locator("option")).toHaveCount(3);
+  await expect(page.getByRole("option", { name: "합성 사용 종료 금융 자산" })).toHaveCount(0);
+  expect(state.queries.at(-1)?.get("status")).toBe("active");
+  await page.getByLabel("연결할 금융 자산", { exact: true }).selectOption(uid(72));
+  await page.route("**/api/v1/accounts", async (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ status: 422, json: { error: { code: "ASSET_UNAVAILABLE", message: "synthetic", request_id: uid(99) } } });
+    return route.fallback();
+  });
+  state.assets.find((item) => item.id === uid(72))!.status = "archived";
+  state.assets.find((item) => item.id === uid(72))!.ended_on = "2026-01-01";
+  await page.getByRole("button", { name: "계좌 등록", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("사용 종료된 자산");
+  await expect(page.getByLabel("금융기관", { exact: true })).toHaveValue("합성 보존 기관");
+  await page.getByRole("button", { name: "금융 자산 다시 불러오기", exact: true }).click();
+  await expect(page.getByRole("option", { name: "합성 새 연결 후보" })).toHaveCount(0);
+});
