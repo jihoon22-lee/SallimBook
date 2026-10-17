@@ -24,8 +24,16 @@ from sallimbook.core.types import YearMonth
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
 router = APIRouter(prefix="/api/v1/income", tags=["income"])
-IdempotencyKey = Annotated[str | None, Header(alias="Idempotency-Key", max_length=128)]
-IfMatch = Annotated[str | None, Header(alias="If-Match")]
+IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", max_length=128)]
+IfMatch = Annotated[str, Header(alias="If-Match")]
+
+ETAG_HEADERS = {
+    "ETag": {"description": "Quoted immutable cash record version.", "schema": {"type": "string"}}
+}
+CREATED_HEADERS = {
+    **ETAG_HEADERS,
+    "Location": {"description": "Created income resource path.", "schema": {"type": "string"}},
+}
 
 
 def _etag(response: Response, result: CashResponse) -> CashResponse:
@@ -92,25 +100,36 @@ def convert(
     payload: IncomeConvert,
     principal: PrincipalDependency,
     session: SessionDependency,
-    idempotency_key: IdempotencyKey = None,
+    idempotency_key: IdempotencyKey,
 ):
     return service.convert_income(session, principal, payload, idempotency_key)
 
 
-@router.post("", response_model=CashResponse, status_code=201, operation_id="createIncome")
+@router.post(
+    "",
+    response_model=CashResponse,
+    status_code=201,
+    operation_id="createIncome",
+    responses={201: {"headers": CREATED_HEADERS}},
+)
 def create(
     payload: IncomeCreate,
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    idempotency_key: IdempotencyKey = None,
+    idempotency_key: IdempotencyKey,
 ):
     result = service.create_income(session, principal, payload, idempotency_key)
     response.headers["Location"] = f"/api/v1/income/{result.id}"
     return _etag(response, result)
 
 
-@router.get("/{record_id}", response_model=CashResponse, operation_id="getIncome")
+@router.get(
+    "/{record_id}",
+    response_model=CashResponse,
+    operation_id="getIncome",
+    responses={200: {"headers": ETAG_HEADERS}},
+)
 def get_income(
     record_id: UUID, principal: PrincipalDependency, session: SessionDependency, response: Response
 ):
@@ -130,15 +149,20 @@ def history(
     return service.history(session, principal, record_id, cursor=cursor, limit=limit)
 
 
-@router.patch("/{record_id}", response_model=CashResponse, operation_id="correctIncome")
+@router.patch(
+    "/{record_id}",
+    response_model=CashResponse,
+    operation_id="correctIncome",
+    responses={200: {"headers": ETAG_HEADERS}},
+)
 def correct(
     record_id: UUID,
     payload: IncomePatch,
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    if_match: IfMatch = None,
-    idempotency_key: IdempotencyKey = None,
+    if_match: IfMatch,
+    idempotency_key: IdempotencyKey,
 ):
     return _etag(
         response,
@@ -146,15 +170,20 @@ def correct(
     )
 
 
-@router.post("/{record_id}/void", response_model=CashResponse, operation_id="voidIncome")
+@router.post(
+    "/{record_id}/void",
+    response_model=CashResponse,
+    operation_id="voidIncome",
+    responses={200: {"headers": ETAG_HEADERS}},
+)
 def void(
     record_id: UUID,
     payload: IncomeVoid,
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    if_match: IfMatch = None,
-    idempotency_key: IdempotencyKey = None,
+    if_match: IfMatch,
+    idempotency_key: IdempotencyKey,
 ):
     return _etag(
         response,
@@ -167,6 +196,7 @@ def void(
     response_model=CashResponse,
     status_code=201,
     operation_id="returnIncome",
+    responses={201: {"headers": CREATED_HEADERS}},
 )
 def return_income(
     record_id: UUID,
@@ -174,8 +204,8 @@ def return_income(
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    if_match: IfMatch = None,
-    idempotency_key: IdempotencyKey = None,
+    if_match: IfMatch,
+    idempotency_key: IdempotencyKey,
 ):
     result = service.return_income(
         session, principal, record_id, payload, if_match, idempotency_key
