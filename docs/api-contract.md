@@ -459,6 +459,46 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 `low_stock`은 별도의 재고 부족 임계와 비교한다. 자산의 선택 월은 입력으로 받지 않는다. 모든 목록은 UUID cursor와 최대 200개 limit로 나눈다.
 첨부파일의 연결·다운로드는 SB-023의 별도 typed 문서 계약을 사용한다.
 
+
+### SB-028~SB-032 보관함 서버
+
+보관함은 클라이언트가 암호화한 opaque envelope만 받는다. 일반 카드 응답에 `has_secret`을 추가하며,
+현재 키의 미폐기 비밀 존재 여부를 나타낸다. PAN·유효기간·CVC 평문은 입력/응답 계약에 없다.
+정확한 포맷·AAD·KDF와 길이는 [보관함 v1 결정](adr/vault-format-v1.md)을 따른다.
+
+| `/api/v1` 아래 경로 | 동작·버전 기준 |
+|---|---|
+| `/vault/status` | GET 가계 상태·본인 권한·구성원·회전 필요 여부 |
+| `/vault/initialize` | POST 초기 key check/member/recovery bundle; If-Match 없음 |
+| `/vault/wrappings/me` | GET 현재 본인 wrapping+key check, PUT 본인 암호 변경; wrapping version |
+| `/vault/recovery-wrap` | GET 현재 복구 wrapping+key check; 최근 인증 필요 |
+| `/vault/recover` | POST 본인 wrapping+복구 wrapping 동시 교체; vault status version |
+| `/vault/members/{member_id}/revoke` | POST 구성원 권한 철회; membership version |
+| `/vault/shares` | GET 본인 관련 공유 이력/cursor, POST 공유 생성; vault status version |
+| `/vault/shares/{offer_id}/wrapping` | GET 대상 본인만 미만료 wrapping 조회; 최근 인증 필요 |
+| `/vault/shares/{offer_id}/accept`, `/cancel` | POST 수락/취소; offer version |
+| `/cards/{card_id}/secret-envelope` | GET 현재 암호문, PUT 새 비밀, DELETE 모든 온라인 버전 비밀 폐기; card version |
+| `/vault/rotations` | POST 새 버전/원본 manifest 예약; vault status version |
+| `/vault/rotations/{rotation_id}` | GET 준비 상태·카드/구성원 manifest |
+| `/vault/rotations/{rotation_id}/prepare` | POST 새 key check/전체 member/recovery bundle; rotation version |
+| `/vault/rotations/{rotation_id}/cards/{card_id}` | PUT 원본 ID/revision에 해당하는 새 암호문, GET 준비된 암호문; rotation version |
+| `/vault/rotations/{rotation_id}/wrappings/me` | GET 준비된 본인 wrapping+key check |
+| `/vault/rotations/{rotation_id}/finalize`, `/abort` | POST 전체 원자 전환/회전 중단; rotation version |
+
+모든 mutation은 Idempotency-Key를 요구하며 재전송 응답은 당시 `{id,version}` 참조다.
+If-Match는 표의 해당 metadata version을 사용하며 key_version이나 카드 secret revision과 다르다.
+공유·복구·rewrap·철회·회전은 최근 5분의 계정 인증 또는 목적/대상에 묶인 일회성 step-up을 요구한다.
+구성원 관리는 `vault.membership`과 대상 member ID, 회전은 `vault.key_rotation`과 household ID다.
+토큰과 평문 비밀을 멱등 해시·감사 원문에 넣지 않는다. 모든 응답은 no-store이며 일반 가계 가입이
+보관함 권한을 주지 않는다. `key_check_confirmed`는 client 동의 기록이며 서버 인증 증거가 아니다.
+
+회전은 종료 카드까지 현재 모든 미폐기 비밀과 활성 구성원을 고정한다. 진행 중인 공유는 종료하고
+준비 중 비밀/권한/rewrap 변경을 동결한다. 현재 키 읽기는 가능하며 모든 새 암호문과 wrapping이
+완성된 뒤 DB에서 current를 한 번에 전환한다. abort 버전과 nonce는 다시 쓰지 않는다.
+철회된 구성원은 즉시 opaque 조회가 막히고, 남은 구성원도 새 비밀 쓰기/재공유 전에 HVK 회전이 필요하다.
+비밀 DELETE는 현재·retired·aborted 암호문을 NULL로 폐기하지만 nonce·원본 참조·감사·카드 metadata는 남긴다.
+온라인 폐기가 이전 백업/기기 사본까지 회수하지는 않는다. 실제 검증 범위는 [서버 기록](testing/vault-server.md)에 있다.
+
 ## SB-037 사용자 내보내기·감사 조회 구현 계약 (R20)
 
 `POST /api/v1/exports`는 현재 공동 가계의 JSON/CSV와 선택 문서 원본을 하나의 ZIP 응답으로 반환한다. 요청 예시는 `{"formats":["json","csv"],"document_ids":[]}`이며 각 목록은 중복을 허용하지 않는다. `formats` 생략 시 두 형식을 모두 생성한다. 임의 가계 ID, SQL, 저장 경로, 출력 파일명은 받지 않는다. 전체 운영 백업과 서버 복원은 별도 작업이다.

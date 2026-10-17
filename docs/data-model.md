@@ -302,3 +302,16 @@ trigger는 identity/version 갱신을 보호하고, 삭제 시 모든 참조를 
 가계·문서 복합 FK의 저장 용량 예약이다. API 트랜잭션 rollback 뒤에도 암호문 크기/개수는 유지된다.
 파일이 실제 제거된 뒤에만 released_at을 한 번 기록한다. 식별자/크기 변경과 예약 삭제는 금지하며
 현재 ready 문서는 해제되지 않은 동일 문서·크기의 예약을 반드시 참조한다.
+
+
+`0014_vault`는 vault_states/versions/memberships/nonce_reservations/key_checks/member_wrappings/
+recovery_wrappings/share_offers/rotation_cards/rotation_members와 card_secret_envelopes 11개 테이블을 추가한다.
+모든 연결은 가계 복합 FK이며 nonce는 가계·키 버전·용도를 보존하는 append-only 원장이다.
+각 암호문은 목적별 원장 FK와 유일 제약을 함께 가지며 salt 재사용도 가계 범위에서 거부한다.
+원본 manifest와 암호문 identity를 덮어쓰거나 삭제할 수 없다. 카드 비밀의 명시 폐기만 ciphertext=NULL,
+purged_at 기록을 허용하며 복구되지 않는다. 다른 이력/nonce는 유지한다.
+
+BEFORE guard는 가계 잠금과 수명주기/동결을 검사하고 deferred trigger는 commit 시 현재 key check,
+복구 wrapping, 1~2명 활성 구성원의 wrapping, 카드 last4 및 회전 원본 전체를 대조한다.
+불완전한 준비를 current로 바꾸는 SQL이나 공유 수락 없이 구성원을 활성화하는 SQL도 실패한다.
+카드의 일반 alias 편집은 가능하지만 비밀이 있는 카드의 last4는 비밀 저장과 원자적으로만 바뀐다.
