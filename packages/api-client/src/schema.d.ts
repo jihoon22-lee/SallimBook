@@ -1354,6 +1354,10 @@ export interface operations {
             /** @description Successful Response */
             201: {
                 headers: {
+                    /** @description Quoted account version for If-Match. */
+                    ETag?: string;
+                    /** @description Created account resource path. */
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1457,6 +1461,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted account version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1549,8 +1555,8 @@ export interface operations {
     updateAccount: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 account_id: string;
@@ -1566,6 +1572,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted account version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
