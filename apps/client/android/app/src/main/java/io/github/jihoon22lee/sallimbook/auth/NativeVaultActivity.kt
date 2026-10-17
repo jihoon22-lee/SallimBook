@@ -408,19 +408,28 @@ class NativeVaultActivity : AppCompatActivity() {
     private fun registerForm() {
         label("이 기기에 강력한 생체인증이 필요합니다. 기기 키는 추출·복사하지 않으며, 지문 등록 변경 뒤에는 보관함 암호로 명시적으로 다시 등록해야 합니다.")
         if(!strongReady()) { label("강력한 생체인증을 사용할 수 없습니다. 카드 보기에서 보관함 암호를 직접 입력할 수 있습니다."); return }
-        passwordHint(); val password=input("보관함 암호"); val confirm=checkbox("이 기기에 등록하고 기존 기기 wrapping이 있으면 교체할게요")
+        passwordHint(); val password=input("보관함 암호"); val confirm=checkbox("인증과 저장이 완료되면 이 기기의 등록 정보를 갱신할게요")
         button("암호 확인 후 기기 등록") {
             if(!confirm.isChecked) { status.text="기기 등록 확인이 필요합니다."; return@button }
             val pw=take(password)
             runNative(discard=NativeVaultMaterial::discard,supplied=listOf(pw),task={ c -> unlock(c,pw).first },done={ material ->
                 try {
-                    val op=local.prepareEncryption(NativeVaultBinding(material.snapshot.requireEnrolled()),true)
+                    val op=local.prepareEncryption(NativeVaultBinding(material.snapshot.requireEnrolled()))
                     beginPrompt(op,material.key) { _ ->
                         runNative(task={ c -> val current=c.snapshot(); sameIdentity(material.snapshot,current)
                             if(current.keyVersion!=material.snapshot.keyVersion) throw NativeVaultFailure("KEY_INVALIDATED"); Unit
                         },done={ completed=true; success("이 기기 보관함 등록을 완료했어요. 이후 보기에는 매번 별도 생체인증이 필요합니다.") })
                     }
                 } catch(_:Exception) { material.discard(); failure("KEY_INVALIDATED") }
+            })
+        }
+        label("지문 등록 변경 등으로 기기 키가 영구 무효화된 경우에만 이전 기기 등록을 별도로 지울 수 있습니다. 삭제 뒤 보관함 암호로 다시 등록하세요.",14f)
+        val reset=checkbox("영구 무효화가 확인된 이 기기의 등록을 삭제할게요")
+        button("무효화 확인 후 기기 등록 삭제") {
+            if(!reset.isChecked) { status.text="무효화된 기기 등록 삭제 확인이 필요합니다."; return@button }
+            runNative(task={ c -> c.snapshot().also { it.requireEnrolled() } },done={ current ->
+                local.clearInvalidatedRegistration(NativeVaultBinding(current.requireEnrolled()),true)
+                status.text="무효화된 기기 등록을 삭제했어요. 보관함 암호를 입력해 다시 등록하세요."
             })
         }
     }
@@ -521,7 +530,7 @@ class NativeVaultActivity : AppCompatActivity() {
                 val data=owned.data
                 try {
                     val binding=NativeVaultBinding(data.snapshot.requireEnrolled(),target!!,NativeVaultWire.id(data.envelope["id"]),NativeVaultWire.version(data.envelope["revision"]))
-                    beginPrompt(local.prepareEncryption(binding,true),owned.bytes) { _ ->
+                    beginPrompt(local.prepareEncryption(binding),owned.bytes) { _ ->
                         runNative(task={ c -> val current=c.snapshot(target); sameIdentity(data.snapshot,current); val envelope=c.cardEnvelope(current,target!!)
                             if(current.keyVersion!=data.snapshot.keyVersion || envelope["id"]!=data.envelope["id"] || envelope["revision"]!=data.envelope["revision"]) throw NativeVaultFailure("KEY_INVALIDATED"); Unit
                         },done={ completed=true; success("이 기기에만 보안코드를 저장했어요.") })

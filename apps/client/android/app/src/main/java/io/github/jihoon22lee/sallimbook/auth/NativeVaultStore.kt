@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.AtomicFile
 import java.io.File
 import java.nio.ByteBuffer
@@ -107,11 +108,19 @@ internal class NativeVaultStore private constructor(context: Context) {
             if (!keyGone && !fileGone) throw NativeVaultFailure("KEY_INVALIDATED")
         }
     }
-    @Synchronized fun prepareEncryption(binding: NativeVaultBinding, replaceConfirmed: Boolean): NativeVaultKeyOperation {
+    @Synchronized fun clearInvalidatedRegistration(binding: NativeVaultBinding, confirmed: Boolean) {
+        if (binding.localCode) throw NativeVaultFailure("INVALID_REQUEST")
+        NativeVaultKeyPreparation.clearInvalidated(confirmed, {
+            try {
+                val key = store.getKey(prefix + binding.name, null) as? SecretKey ?: return@clearInvalidated false
+                Cipher.getInstance("AES/GCM/NoPadding").init(Cipher.ENCRYPT_MODE, key)
+                false
+            } catch (_: KeyPermanentlyInvalidatedException) { true }
+        }, { removeMatching { it == binding.name } })
+    }
+    @Synchronized fun prepareEncryption(binding: NativeVaultBinding): NativeVaultKeyOperation {
         if (binding.localCode && !LOCAL_CVC_ACCEPTANCE_VERIFIED) throw NativeVaultFailure("CVC_GATE_CLOSED")
         val alias = prefix + binding.name
-        if (store.containsAlias(alias) && !replaceConfirmed) throw NativeVaultFailure("KEY_INVALIDATED")
-        if (store.containsAlias(alias)) removeMatching { it == binding.name }
         val specification = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setKeySize(256).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setRandomizedEncryptionRequired(true).setUserAuthenticationRequired(true)
@@ -119,8 +128,18 @@ internal class NativeVaultStore private constructor(context: Context) {
             // Official API notes identify unlocked-device bugs through Android 14. Strong auth-per-use remains required on every supported API.
             .apply { if (Build.VERSION.SDK_INT >= 35) setUnlockedDeviceRequired(true) }.build()
         try {
-            val key = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply { init(specification) }.generateKey()
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) }
+            val cipher = NativeVaultKeyPreparation.encryption(
+                existing = {
+                    if (store.containsAlias(alias)) store.getKey(alias, null) as? SecretKey ?: throw NativeVaultFailure("KEY_INVALIDATED")
+                    else {
+                        // An orphaned record must never cause silent key replacement.
+                        if (exists(binding)) throw NativeVaultFailure("KEY_INVALIDATED")
+                        null
+                    }
+                },
+                create = { KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply { init(specification) }.generateKey() },
+                initialize = { key -> Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) } }
+            )
             return NativeVaultKeyOperation(cipher, binding, true, null)
         } catch (_: Exception) { throw NativeVaultFailure("KEY_INVALIDATED") }
     }

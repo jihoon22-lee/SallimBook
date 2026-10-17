@@ -52,6 +52,14 @@ Device KEK는 Android Keystore AES-256-GCM, `setUserAuthenticationRequired(true)
 사용자 확인이 필요하다. 강력한 생체인증을 사용할 수 없을 때는 명시적 암호 입력으로 카드를 볼 수 있다.
 이 암호 경로는 인증 없는 기기 키나 디스크의 평문 HVK를 만들지 않는다.
 
+재등록·같은 카드의 CVC 수정은 기존 auth-per-use 키를 재사용하고 provider가 새 GCM nonce를
+생성한다. prompt 준비·취소·실패는 기존 별칭과 암호문을 지우지 않으며 실제 인증 연산과
+AtomicFile 저장이 성공한 뒤에만 기존 암호문을 갱신한다. 일시적 키 조회/초기화 오류에도
+새 키를 만들거나 기존 값을 삭제하지 않는다. 영구 무효화된 기기 등록 삭제는 별도의 네이티브
+확인을 받고, 플랫폼의 [KeyPermanentlyInvalidatedException](https://developer.android.com/reference/android/security/keystore/KeyPermanentlyInvalidatedException)을
+확인한 경우에만 수행한다. 정상 키나 일시 오류에는 이 삭제를 거절한다. CVC는 명시적 로컬 삭제 후
+직접 재입력할 수 있다. 이 삭제 작업 자체가 기기 재등록이나 인증 성공을 뜻하지 않는다.
+
 [공식 Keystore Builder 계약](https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder)은
 Android 12~14의 unlocked-device-required 제약을 설명한다. 추가 `setUnlockedDeviceRequired(true)`는
 API 35 이상에서 적용하고, 모든 지원 API에서는 strong auth-per-use 및 foreground/device-lock gate를 유지한다.
@@ -139,7 +147,15 @@ TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec play
 18754로 바꾼 임시 config를 사용했고 Vite 중지·포트 반환을 확인한 뒤 config를 제거했다.
 브라우저는 status/ID 전달과 실패·취소·무우회만 모의 검증하며 실제 OS/Keystore/보안 화면 증명이 아니다.
 
+독립 검토 후 기기 키 보존 회귀 6개를 추가해 JVM **276개**(실패·오류·건너뜀 0), debug APK,
+release Kotlin을 다시 통과했다. 실제 JCA AES-GCM의 기존 키·암호문을 보존한 prompt 폐기,
+새 nonce, 일시적 키 오류에서 교체 금지, 정상 키 재설정 거절, 명시적 영구 무효화 삭제 정책을 검사한다.
+이 JVM adapter 검사는 Android Keystore나 AtomicFile의 실기기 동작을 대신하지 않는다.
+TS 브리지 계약 변경이 없으므로 위 브라우저 52개 결과를 유지하고 이번 Kotlin 수정 후 재실행하지 않았다.
+
 실기기 미실행 항목: 최초 등록/암호화/별도 열람, 지문 추가·삭제·잠금 방식 제거·키 무효화,
+기존 등록/CVC가 있는 재저장 prompt 취소·오류 뒤 원래 값의 열람, 저장 실패 뒤 기존 암호문의 복원,
+정상/일시 오류 키의 재설정 거절과 영구 무효화 확인·명시 삭제·재등록,
 인증 취소/오류/늦은 성공/누락된 terminal callback, 30초 만료·초점 복귀·회전·Home·화면 꺼짐,
 프로세스 종료 중 initialize/recover/prepare/stage/finalize 재개, 두 구성원 공유와 철회,
 CVC 입력·저장·수정·purge·키 변경·로그아웃·재설치/기기 이전, 프록시·로그·backup·bridge 무유출,

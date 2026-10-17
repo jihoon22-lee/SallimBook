@@ -562,6 +562,10 @@ CVC는 현재 카드 secret ID/revision에 묶고 서버/API/web/backup에 전�
 복원해 회전을 재개한다. 과거 암호문 전체 purge와 일반 새 envelope 교체를 구분한다.
 세부 보안 경계·공식 근거·검증 명령·미실행 Galaxy 항목은 [native 보관함 수명주기](testing/native-vault-lifecycle.md)를 따른다.
 
+재등록/CVC 재저장 prompt는 기존 기기 키를 재사용하며 취소·실패로 기존 암호문을 지우지 않는다.
+영구 무효화된 기기 등록만 별도 확인과 플랫폼 예외 검증 뒤 삭제할 수 있다. 이 후속 수정은
+JVM **276개**와 debug APK·release Kotlin 검증을 통과했고 실제 기기 검증은 보류되어 있다.
+
 브라우저 브리지 모의시험 **52개**(vault 28개 + 문서 24개)가 통과했다. 서버 quota 후속 계약의
 `DOCUMENT_STORAGE_QUOTA_EXCEEDED` 413과 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE` 503도
 문서 native 고정 오류 문구로 보존한다. 이 검증은 실제 Keystore·생체인증·백업·캡처 실패 시험을 대신하지 않는다.
