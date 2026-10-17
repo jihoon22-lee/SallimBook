@@ -326,8 +326,8 @@
       "git_sha1": "9080542573ad03a2d7fdbd1a65e83cd325032b2f"
     },
     "docs/testing/settings-audit.md": {
-      "sha256": "de59ff6c674b83f7886c629c79e63af9ab44ca4b3dd8fe86a7094016991462b1",
-      "git_sha1": "289ddeb1afbc5aa5e56eb76dca38c474b7735816"
+      "sha256": "0ade6569f4eb32396eb94ecc40370095a0725fe668d607ebbc7ec2fb3b54e921",
+      "git_sha1": "c7d371efda16791c12fa5d18a6b7c1e0bf8e26dc"
     }
   }
 }

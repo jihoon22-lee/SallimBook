@@ -14,7 +14,7 @@ function HouseholdSummary() {
   return <section className="card"><h2>함께 쓰는 가계</h2><p>두 계정이 하나의 가계를 함께 사용해요. 로그인 계정과 금융상품의 소유자는 별도로 관리해요.</p>
     <MemberLoadError error={household.error} retry={household.retry} />
     {household.loading && <p role="status">가계 구성원을 확인하고 있어요.</p>}
-    {!household.loading && !household.error && <ul className="record-list">{household.members.map((member) => <li key={member.member_id}>{member.display_name} · {member.role === "owner" ? "가계 관리자" : "가계 구성원"}</li>)}</ul>}
+    {!household.loading && !household.error && <ul className="record-list">{household.members.map((member) => <li key={member.member_id}><p>{member.display_name} · {member.role === "owner" ? "가계 관리자" : "가계 구성원"}</p></li>)}</ul>}
     <Link to="/settings/auth">구성원 초대와 기기 관리</Link>
   </section>;
 }

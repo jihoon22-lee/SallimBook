@@ -50,6 +50,7 @@ pnpm typecheck
 pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/settings-audit.spec.ts tests/settings-audit-native.spec.ts tests/routing.spec.ts --workers=1
 pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/settings-audit.spec.ts tests/settings-audit-native.spec.ts --workers=1
 pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/settings-audit-native.spec.ts --workers=1
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/settings-audit.spec.ts --grep "settings long" --workers=1
 pnpm build
 uv run --project services/api ruff check scripts/test_web_auth.py
 uv run --project services/api python scripts/test_web_auth.py --audit
@@ -57,12 +58,14 @@ python3 scripts/validate_docs.py
 git diff --check
 ```
 
-타입 검사와 Ruff가 통과했다. 전용 18756 포트에서 기존 경로 시험 16개가 통과했다.
+타입 검사와 Ruff, 배포용 빌드가 통과했다(165 modules, JS 893.99kB/gzip 231.11kB).
+기존 500kB chunk 경고는 남는다. 전용 18756 포트에서 기존 경로 시험 16개가 통과했다.
 첫 실행의 신규 시험 12개 실패는 select의 암시적 label 범위와 개발 StrictMode의 2회 초기 읽기를
 고려하지 않은 assertion이었다. 필터를 명시적인 label/id로 연결하고 초기 읽기 횟수 대신
 조건·cursor 및 추가 요청 여부를 검증하도록 수정했다. 신규 40개 전체 재실행이 통과했다(34.4초).
 네이티브 미지원 안내를 추가하고 잠금·만료 상태 대기를 강화한 뒤 native 14개도 통과했다(18.8초).
-따라서 신규 고유 42개(웹 28·native UI 14)와 기존 경로 16개가 검증됐다.
+설정의 긴 구성원 이름을 320px·200% 글꼴에서 확인한 추가 2개도 통과했다(3.8초).
+따라서 신규 고유 44개(웹 30·native UI 14)와 기존 경로 16개가 검증됐다.
 
 실제 HTTPS 시험은 공용 테스트 DB 큐가 반환되면 실행한다. 합성 가계·일회용 schema와 임시
 TLS만 사용하며 실제 사용자 자료를 읽지 않는다. 이 기록에는 실행 전 시험을 통과로 기재하지 않는다.

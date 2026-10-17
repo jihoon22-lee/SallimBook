@@ -66,3 +66,8 @@ test("household lookup failure preserves audit availability and offers retry", a
   const state = await mockAudit(page); state.finance.membersFailure = true; await page.goto("/settings/audit"); await expect(records(page).getByRole("listitem")).toHaveCount(2); await expect(page.getByLabel("작업 구성원", { exact: true })).toBeDisabled();
   state.finance.membersFailure = false; await page.getByRole("button", { name: "구성원 목록 다시 불러오기", exact: true }).click(); await expect(page.getByLabel("작업 구성원", { exact: true })).toBeEnabled();
 });
+
+test("settings long member names wrap in enlarged narrow layout", async ({ page }) => {
+  await mockAudit(page); await page.route("**/api/v1/household/members", (route) => route.fulfill({ json: [{ ...members[0], display_name: "S".repeat(80) }] }));
+  await page.setViewportSize({ width: 320, height: 720 }); await page.goto("/settings"); await page.addStyleTag({ content: "html { font-size: 200%; }" }); await expect(page.getByText(`${"S".repeat(80)} · 가계 관리자`, { exact: true })).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
