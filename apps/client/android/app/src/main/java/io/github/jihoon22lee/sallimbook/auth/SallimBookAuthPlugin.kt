@@ -186,6 +186,27 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun getCardPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_CARD_PAYMENT_LINKS)
     @PluginMethod fun getAccountPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_ACCOUNT_PAYMENT_LINKS)
 
+    @PluginMethod fun listInsuranceCases(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_CASES)
+    @PluginMethod fun createInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_CASE)
+    @PluginMethod fun getInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_CASE)
+    @PluginMethod fun updateInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.UPDATE_INSURANCE_CASE)
+    @PluginMethod fun insuranceCaseHistory(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_CASE_HISTORY)
+    @PluginMethod fun listMedicalNodes(call: PluginCall) = finance(call, FinanceOperation.LIST_MEDICAL_NODES)
+    @PluginMethod fun createMedicalNode(call: PluginCall) = finance(call, FinanceOperation.CREATE_MEDICAL_NODE)
+    @PluginMethod fun deleteMedicalNode(call: PluginCall) = finance(call, FinanceOperation.DELETE_MEDICAL_NODE)
+    @PluginMethod fun getMedicalNode(call: PluginCall) = finance(call, FinanceOperation.GET_MEDICAL_NODE)
+    @PluginMethod fun updateMedicalNode(call: PluginCall) = finance(call, FinanceOperation.UPDATE_MEDICAL_NODE)
+    @PluginMethod fun listInsurancePolicies(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_POLICIES)
+    @PluginMethod fun createInsurancePolicy(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_POLICY)
+    @PluginMethod fun getInsurancePolicy(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_POLICY)
+    @PluginMethod fun updateInsurancePolicy(call: PluginCall) = finance(call, FinanceOperation.UPDATE_INSURANCE_POLICY)
+    @PluginMethod fun listInsuranceCoverages(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_COVERAGES)
+    @PluginMethod fun createInsuranceCoverage(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_COVERAGE)
+    @PluginMethod fun updateInsuranceCoverage(call: PluginCall) = finance(call, FinanceOperation.UPDATE_INSURANCE_COVERAGE)
+    @PluginMethod fun listPolicyPremiumLinks(call: PluginCall) = finance(call, FinanceOperation.LIST_POLICY_PREMIUM_LINKS)
+    @PluginMethod fun createPolicyPremiumLink(call: PluginCall) = finance(call, FinanceOperation.CREATE_POLICY_PREMIUM_LINK)
+    @PluginMethod fun updatePolicyPremiumLink(call: PluginCall) = finance(call, FinanceOperation.UPDATE_POLICY_PREMIUM_LINK)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
@@ -206,6 +227,21 @@ class SallimBookAuthPlugin : Plugin() {
         val expected = if (mode == NativeAccountNumberActivity.EDIT) setOf("accountId", "ifMatch") else setOf("accountId")
         if (fields != expected || id == null || !PasskeyPolicy.uuid.matches(id) ||
             mode == NativeAccountNumberActivity.EDIT && !PasskeyPolicy.target(id, tag)) {
+            failure(call, AuthCode.INVALID_REQUEST); return
+        }
+        launchForm(call, mode, id, tag)
+    }
+
+    @PluginMethod fun editInsurancePolicyNumberUI(call: PluginCall) { main.post { launchInsurancePolicyForm(call, NativeInsurancePolicyNumberActivity.EDIT) } }
+    @PluginMethod fun showInsurancePolicyNumberUI(call: PluginCall) { main.post { launchInsurancePolicyForm(call, NativeInsurancePolicyNumberActivity.SHOW) } }
+
+    private fun launchInsurancePolicyForm(call: PluginCall, mode: String) {
+        val fields = call.data.keys().asSequence().toSet()
+        val id = call.data.opt("policyId") as? String
+        val tag = call.data.opt("ifMatch") as? String
+        val expected = if (mode == NativeInsurancePolicyNumberActivity.EDIT) setOf("policyId", "ifMatch") else setOf("policyId")
+        if (fields != expected || id == null || !PasskeyPolicy.uuid.matches(id) ||
+            mode == NativeInsurancePolicyNumberActivity.EDIT && !PasskeyPolicy.target(id, tag)) {
             failure(call, AuthCode.INVALID_REQUEST); return
         }
         launchForm(call, mode, id, tag)
@@ -240,6 +276,7 @@ class SallimBookAuthPlugin : Plugin() {
             val component = when {
                 passkey -> NativePasskeyActivity::class.java
                 mode in setOf(NativeAccountNumberActivity.EDIT, NativeAccountNumberActivity.SHOW) -> NativeAccountNumberActivity::class.java
+                mode in setOf(NativeInsurancePolicyNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.SHOW) -> NativeInsurancePolicyNumberActivity::class.java
                 else -> NativeAuthActivity::class.java
             }
             val intent = Intent(activity, component)
@@ -262,13 +299,13 @@ class SallimBookAuthPlugin : Plugin() {
             NativeAuthActivity.CREATE_INVITATION, NativePasskeyActivity.INVITE -> "created"
             NativePasskeyActivity.REGISTER -> "registered"
             NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE -> "revoked"
-            NativeAccountNumberActivity.EDIT -> "saved"
-            NativeAccountNumberActivity.SHOW, NativePasskeyActivity.ACCOUNT -> "completed"
+            NativeAccountNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.EDIT -> "saved"
+            NativeAccountNumberActivity.SHOW, NativePasskeyActivity.ACCOUNT, NativeInsurancePolicyNumberActivity.SHOW -> "completed"
             else -> "accepted"
         }
         val status = result.data?.getStringExtra(NativeAuthActivity.EXTRA_STATUS)
         uiOutcome = if (result.resultCode == Activity.RESULT_OK &&
-            (status == expected || uiMode == NativeAccountNumberActivity.EDIT && status == "deleted")) {
+            (status == expected || uiMode in setOf(NativeAccountNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.EDIT) && status == "deleted")) {
             AuthOutcome.success(mapOf("status" to status))
         } else if (result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) != null) {
             val code = AuthCode.entries.firstOrNull { it.name == result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) }

@@ -260,3 +260,15 @@ erDiagram
 
 `0009_recurring`은 규칙·기간별 규칙 변경본·예상 회차·회차 이력·실제 납부·생성 묶음/참조의 7개 테이블을 추가한다. 기간 중복은 household/rule/daterange GiST exclusion으로 막는다. PostgreSQL 18.6 이미지에 포함된 btree_gist 1.8을 public에 설치하고 명시적 public UUID operator class를 사용하여 테스트 schema 격리를 유지한다. downgrade는 다른 schema도 쓰는 extension을 제거하지 않는다.
 규칙 조건·회차 이력·실납부 분해·생성 응답 참조는 불변이다. 규칙 적용 종료일만 열린 기간을 닫거나 이미 정한 끝보다 앞당길 수 있으며 DB trigger가 종료일 연장·null 재개방과 다른 열의 변경을 거부한다. 과거 적용일 차단은 서버가 서울 기준 오늘과 마지막 적용 시작일을 확인하여 수행한다. 미래 종료일 안에서 규칙을 변경하면 이전 기간만 단축하고 새 변경본에도 원래 종료일을 유지한다. 실납부 insert trigger는 같은 가계의 fixed_payment cash 종류·방향·활성 상태·금액 합계와 회차 경제 유형을 확인한다. 금전 원본의 취소는 원본 cash 이력과 연결 회차 갱신을 한 트랜잭션으로 수행한다.
+
+### SB-019/SB-020 구현 상태
+
+`0010_insurance_core`는 insurance_policies, insurance_coverages, policy_premium_links, insurance_cases, insurance_case_revisions, medical_nodes를 추가한다. 계약에는 독립 contract/coverage/payment 기간과 AES-GCM 증권번호 envelope만 저장하고, 보험료는 규칙 링크에서 조회한다. 종료한 링크와 정책은 삭제하지 않는다. `insurance_case_revisions`의 UPDATE/DELETE는 DB trigger가 거부한다. 노드의 `(household_id, case_id, parent_id)` 복합 FK가 다른 사건의 부모를 차단하고 API의 가계 잠금·부모 탐색이 순환을 차단한다. 보험 평가액에 연결된 자산은 연결 해제 전 금융 자산 종류를 유지하며, 사용 종료는 과거 연결을 보존한다. 의료비·청구·입금/반환은 후속 금전 이벤트 테이블에서 연결한다.
+
+### SB-021/SB-022 구현 상태
+
+`0011_insurance_events`는 의료비/영수증 상세/환불, 청구/현재 비용 연결/청구 변경본/당시 비용 연결, 지급/배분/배분 변경본/반환의 11개 테이블을 추가한다. 네 금전 원본 테이블은 같은 가계의 cash_record를 유일하게 참조하며 실제 날짜·종류·방향과 원본 환불/반환 관계를 확인한다. 정정은 원본을 무효 처리하고 유일한 correction_of_id를 가진 대체 원본을 생성한다.
+
+금전 메타데이터·상세·이력의 직접 덮어쓰기와 삭제를 DB trigger로 거부한다. 현재 청구는 사건/계약을 유지하고 배분은 지급/사건/금액/성격을 유지한다. 버전 갱신은 한 단계씩 증가한다. 연결된 cash 원본은 사실 변경 없이 활성에서 무효로만 전환하며 활성 반환이나 현재 청구 근거가 남아 있으면 거부한다. 처방과 비용 이력은 양방향 검사한다.
+
+영수증 상세의 선택적 정확한 합계와 지급의 필수 배분 합계는 지연 제약 trigger로 트랜잭션 끝에 확인한다. 여러 행을 생성하는 중간 상태를 허용하되 불일치한 묶음을 커밋하지 않는다. 환불/반환은 원본 cash 잠금과 활성 합계 제약을 사용한다. 모든 관계의 가계와 사건은 typed 복합 FK로 보호하며 사건 집계는 비용 원본·수령 배분·환불/반환을 각각 한 번만 사용한다.
