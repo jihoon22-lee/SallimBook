@@ -37,6 +37,10 @@
             android:name=".auth.NativePasskeyActivity"
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar" />
+        <activity
+            android:name=".auth.NativeAccountNumberActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar" />
     </application>
 
     <!-- Permissions -->

@@ -49,11 +49,12 @@ internal object PasskeyPolicy {
     fun stepUpHeaderAllowed(method: String, path: String, ifMatch: String?, token: String): Boolean =
         Regex("[A-Za-z0-9_-]{32,128}").matches(token) &&
             (method == "POST" && path == "/api/v1/household/invitations" && ifMatch == null ||
+                method == "POST" && FinancePolicy.numberPath(path, true) && ifMatch == null ||
                 method == "DELETE" && AuthPolicy.requestAllowed(method, path, ifMatch))
 
     fun grant(value: Any?, purpose: String, targetId: String?, now: Instant): String {
         val result = value as? Map<*, *> ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
-        if (purpose !in setOf("household.invite", "device.revoke") || targetId == null || !uuid.matches(targetId) ||
+        if (purpose !in setOf("household.invite", "device.revoke", "account.reveal") || targetId == null || !uuid.matches(targetId) ||
             result.keys != setOf("grant_token", "purpose", "target_id", "expires_at") ||
             result["purpose"] != purpose || result["target_id"] != targetId ||
             remaining(result["expires_at"] as? String ?: "", now, 120_000) == 0L) {

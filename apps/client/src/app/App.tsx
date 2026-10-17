@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Link, matchRoutes, NavLink, Route, Routes, useLocation, useNavigate } from "react-router";
+import { AccountListPage, AccountNewPage, AccountDetailPage } from "../features/accounts/AccountPages";
 import { accountScreens } from "../features/accounts/screens";
 import { assetScreens } from "../features/assets/screens";
+import { AssetListPage, AssetNewPage, AssetDetailPage } from "../features/assets/AssetPages";
 import { authScreens } from "../features/auth/screens";
 import { AuthProvider } from "../features/auth/AuthProvider";
 import { InvitationAcceptPage } from "../features/auth/InvitationAcceptPage";
@@ -18,13 +20,19 @@ import { MonthProvider } from "../shared/MonthContext";
 import { PlannedPage } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens, ...accountScreens, ...cardScreens, ...householdScreens, ...insuranceScreens, ...livingScreens];
+const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id"), ...cardScreens, ...householdScreens, ...insuranceScreens, ...livingScreens];
 const screens = [
-  { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, element: <Dashboard /> },
-  { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, element: <VaultPage /> },
-  ...authScreens.map((screen) => ({ ...screen, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
-  { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, element: <SessionSettings /> },
-  ...plannedScreens.map((screen) => ({ ...screen, element: <PlannedPage screen={screen} /> })),
+  { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: false, element: <Dashboard /> },
+  { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: false, element: <VaultPage /> },
+  ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
+  { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <SessionSettings /> },
+  ...assetScreens.filter((screen) => screen.path === "/assets" || screen.path === "/assets/:id").map((screen) => ({ ...screen, live: true, element: screen.path === "/assets" ? <AssetListPage /> : <AssetDetailPage /> })),
+  { path: "/assets/new", title: "자산·부채 등록", group: "assets" as NavigationGroup, parent: { to: "/assets", label: "자산 목록" }, live: true, element: <AssetNewPage /> },
+  { path: "/assets/:id/edit", title: "자산 정보 수정", group: "assets" as NavigationGroup, parent: { to: "/assets", label: "자산 목록" }, live: true, element: <AssetDetailPage edit /> },
+  ...accountScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/accounts" ? <AccountListPage /> : <AccountDetailPage /> })),
+  { path: "/accounts/new", title: "계좌 등록", group: "assets" as NavigationGroup, parent: { to: "/accounts", label: "계좌 목록" }, live: true, element: <AccountNewPage /> },
+  { path: "/accounts/:id/edit", title: "계좌 정보 수정", group: "assets" as NavigationGroup, parent: { to: "/accounts", label: "계좌 목록" }, live: true, element: <AccountDetailPage edit /> },
+  ...plannedScreens.map((screen) => ({ ...screen, live: false, element: <PlannedPage screen={screen} /> })),
 ];
 
 const navigation: { group: NavigationGroup; to: string; label: string; icon: string; children?: ScreenLink[] }[] = [
@@ -101,7 +109,7 @@ function AppShell() {
           <Link className="topbar-link" to="/settings">설정</Link>
         </header>
         <div className="page">
-          {!["/login", "/onboarding", "/settings/auth"].includes(location.pathname) && <p className="preview-notice">기능 준비 중 · 현재는 화면 탐색만 가능해요.</p>}
+          {!current?.live && <p className="preview-notice">기능 준비 중 · 현재는 화면 탐색만 가능해요.</p>}
           {location.pathname !== "/" && <div className="back-row"><button className="back-button" onClick={goBack}><span aria-hidden="true">← </span>뒤로</button><span className="muted">{current?.parent.label ?? "홈"}</span></div>}
           <main id="main-content" ref={mainRef} tabIndex={-1}>
             <Routes>{screens.map((screen) => <Route key={screen.path} path={screen.path} element={screen.element} />)}<Route path="*" element={<NotFound />} /></Routes>
