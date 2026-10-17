@@ -84,6 +84,15 @@ PC의 WebAuthn UI와 Android Credential Manager·Digital Asset Links·실제 서
 step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
 다른 enum 목적(계좌 열람·내보내기·패스키 관리·보관함)은 소비 동작을 연결하기 전까지 권한을 부여하지 않는다.
 
+### 자산 식별 정보 구현
+
+`GET/POST /assets`, `GET/PATCH/DELETE /assets/{asset_id}`, `POST /assets/{asset_id}/archive`를 제공한다.
+목록은 UUID cursor와 최대 200건, 자산/부채·분류·소유자·소유 방식·합산 여부·활성/종료 상태 필터를 사용한다.
+응답의 `household_share`는 정확한 십진 문자열이고 생성·수정 응답은 `ETag`, 생성은 `Location`도 반환한다.
+수정·종료·삭제는 `If-Match`가 필요하며 다른 가계의 자산/소유자는 404, 버전 충돌은 409다.
+종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다.
+metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액과 계좌 연결은 후속 API다.
+
 ## 1. 공통 규약
 
 모든 가계 자원은 인증 사용자 membership에서 가계를 결정한다.
