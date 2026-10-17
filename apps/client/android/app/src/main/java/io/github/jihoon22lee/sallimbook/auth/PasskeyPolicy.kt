@@ -13,6 +13,24 @@ internal object PasskeyPolicy {
     private val domainLabel = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
     private val base64Url = Regex("[A-Za-z0-9_-]+")
 
+    fun reject(status: Int, body: Any?, unauthenticatedLogin: Boolean, clearSession: () -> Unit): Nothing {
+        val code = ((body as? Map<*, *>)?.get("error") as? Map<*, *>)?.get("code")
+        if (status == 401) {
+            // A consumed/rejected ceremony does not revoke the existing account session.
+            if (unauthenticatedLogin || code == "PASSKEY_VERIFICATION_FAILED") {
+                throw AuthFailure(AuthCode.PASSKEY_FAILED)
+            }
+            clearSession()
+            throw AuthFailure(AuthCode.SESSION_EXPIRED)
+        }
+        throw AuthFailure(when (code) {
+            "PASSKEYS_DISABLED", "PASSKEY_CONFIGURATION_INVALID" -> AuthCode.PASSKEYS_DISABLED
+            "PASSKEY_REQUIRED" -> AuthCode.PASSKEY_REQUIRED
+            "REAUTHENTICATION_REQUIRED" -> AuthCode.REAUTHENTICATION_REQUIRED
+            else -> AuthCode.PASSKEY_FAILED
+        })
+    }
+
     fun configuration(apiOrigin: String, rpId: String, configuredCertificate: String, actualCertificate: String): Boolean {
         if (AuthPolicy.apiOrigin(apiOrigin) == null || rpId.length !in 3..253 ||
             rpId.split('.').size < 2 || rpId.split('.').any { !domainLabel.matches(it) }) return false

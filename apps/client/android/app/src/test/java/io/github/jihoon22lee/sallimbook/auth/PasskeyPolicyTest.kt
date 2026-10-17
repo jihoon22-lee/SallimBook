@@ -6,6 +6,35 @@ import java.time.Instant
 import java.util.Base64
 
 class PasskeyPolicyTest {
+    @Test fun rejectedProofPreservesSessionButExpiredSessionClearsIt() {
+        for (code in listOf("PASSKEY_VERIFICATION_FAILED", "UNAUTHENTICATED", "SESSION_EXPIRED", null)) {
+            var clearCount = 0
+            val expected = if (code == "PASSKEY_VERIFICATION_FAILED") AuthCode.PASSKEY_FAILED else AuthCode.SESSION_EXPIRED
+            try {
+                PasskeyPolicy.reject(401, mapOf("error" to mapOf("code" to code)), false) { clearCount++ }
+            } catch (failure: AuthFailure) {
+                assertEquals(expected, failure.code)
+            }
+            assertEquals(if (expected == AuthCode.SESSION_EXPIRED) 1 else 0, clearCount)
+        }
+    }
+
+    @Test fun loginProofFailureNeverClearsAnotherSessionAndKnownErrorsRemainSpecific() {
+        for ((status, code, expected) in listOf(
+            Triple(401, "PASSKEY_VERIFICATION_FAILED", AuthCode.PASSKEY_FAILED),
+            Triple(401, "UNAUTHENTICATED", AuthCode.PASSKEY_FAILED),
+            Triple(403, "REAUTHENTICATION_REQUIRED", AuthCode.REAUTHENTICATION_REQUIRED),
+            Triple(409, "PASSKEY_REQUIRED", AuthCode.PASSKEY_REQUIRED),
+            Triple(503, "PASSKEYS_DISABLED", AuthCode.PASSKEYS_DISABLED),
+        )) {
+            try {
+                PasskeyPolicy.reject(status, mapOf("error" to mapOf("code" to code)), true) {
+                    fail("A proof failure cleared the account session")
+                }
+            } catch (failure: AuthFailure) { assertEquals(expected, failure.code) }
+        }
+    }
+
     private val id = "00000000-0000-4000-8000-000000000001"
     private val other = "00000000-0000-4000-8000-000000000002"
     private val challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32) { 7 })
