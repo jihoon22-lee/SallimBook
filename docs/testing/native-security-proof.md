@@ -144,3 +144,89 @@ JDK 21·compile SDK 36을 사용했으며, 이는 아래 실기기 검증표와 
 - [BiometricPrompt와 CryptoObject](https://developer.android.com/identity/sign-in/biometric-auth)
 - [Keystore 인증 매개변수·등록 변경 무효화](https://developer.android.com/reference/android/security/keystore/KeyGenParameterSpec.Builder)
 - [ADB shell의 DUMP 권한 선언](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/packages/Shell/AndroidManifest.xml)
+
+## SB-039: 실제 저장 경로를 사용하는 합성 CVC 인수 화면
+
+SB-008의 메모리 합성 문자열 화면과 별도로, `debugproof.CvcAcceptanceActivity`는 실제
+`NativeVaultStore`·Android Keystore·플랫폼 `BiometricPrompt.CryptoObject`·`AtomicFile` 경로를 사용한다.
+R-10/R-11/R-12, SB-028/029/030/032/039의 실기기 검증 준비용이며, 이 화면 추가나 APK 생성은 실기기
+인수 통과 또는 출시 CVC 활성화를 뜻하지 않는다. 일반 `NativeVaultActivity`의 CVC 입력/열람 gate와
+`LOCAL_CVC_ACCEPTANCE_VERIFIED=false`는 유지한다.
+
+- `src/debug`에만 Activity·고정 합성 fixture·소유자 활성화·쓰기 실패 주입이 존재한다. 화면은
+  `DUMP` 권한으로 보호하고 빈 Intent만 허용한다. 입력·JS/플러그인 경로·네트워크·로그·클립보드는 없다.
+- 앱 ID는 `.debug`, 대상은 공개 고정 UUID와 `https://localhost` AAD다. 이 주소는 저장 바인딩일 뿐
+  서버 연결 설정이 아니다. API origin/RP/cert 빌드 설정과 기기 호스트·인증서를 변경하지 않는다.
+- 전용 `noBackupFilesDir/sallimbook-debug-cvc-acceptance-v1`와
+  `<debug package>.debug-cvc-acceptance-v1.` Keystore 별칭만 사용한다. 일반 저장 경로와 별칭은 그대로다.
+  삭제 버튼도 이 namespace만 정리한다. 세션 종료·Home·회전·프로세스 종료는 암호문을 삭제하지 않는다.
+- 화면에서 명시적으로 시작한 소유자는 단조 시간 180초 이내, 요청은 60초, 인증 후 초점 대기는 1초,
+  복호화 표시가 30초다. pause/화면 잠금/취소/destroy는 소유자를 폐기한다. 취소된 요청의 늦은 콜백은
+  사용할 수 없고, 종료 콜백 전에는 새 prompt를 시작하지 않는다. 소유자 상태를 디스크에 저장하지 않는다.
+- 저장과 열람은 각각 강한 생체 인증을 요구한다. 반환된 실제 Cipher의 동일성과 완료 시한을 확인한 후
+  `doFinal`을 실행한다. 소유자 활성화 자체는 Keystore 인증을 대체하지 않는다. 강도를 낮추는 fallback은 없다.
+- `다음 쓰기 실패 예약`은 합성 대상의 다음 실제 `AtomicFile.startWrite`/`write` 후 `finishWrite` 전에
+  한 번 실패하여 기존 구현의 `failWrite` 경로를 실행한다. 기존 키를 재생성하거나 일반 저장을 방해하지 않는다.
+- `src/release`의 대응 gate는 `allows=false`, `beforeCommit=Unit`뿐이다. 소유자·활성화·실패 예약 API나
+  상태가 없고, 릴리스 DEX/manifest의 검증 marker 제외 검사를 별도로 수행한다.
+
+### 기기에서의 실행 순서 — 아직 미실행
+
+기존 앱 데이터 보존 여부와 `.debug` 패키지 설치/업데이트 대상을 먼저 정한다. 기존 adb/USB 연결만
+선택하며 에이전트가 연결·설치·초기화·키 변경을 자동 실행하지 않는다. 기기 식별은 로컬 serial 별칭으로
+관리하고 IMEI, 실제 CVC, 계정 암호, 복구코드, 키를 이슈나 채팅에 기록하지 않는다.
+
+승인된 테스트 기기에서 debug APK와 `app-debug-androidTest.apk`를 설치한 뒤 다음 명령을 실행할 수 있다.
+`SALLIMBOOK_TEST_SERIAL`은 사용자가 선택한 기존 테스트 기기다. `am start`에는 추가 데이터를 넣지 않는다.
+
+```sh
+adb -s "$SALLIMBOOK_TEST_SERIAL" shell am instrument -w \
+  io.github.jihoon22lee.sallimbook.debug.test/androidx.test.runner.AndroidJUnitRunner
+adb -s "$SALLIMBOOK_TEST_SERIAL" shell am start -W -n \
+  io.github.jihoon22lee.sallimbook.debug/io.github.jihoon22lee.sallimbook.debugproof.CvcAcceptanceActivity
+```
+
+새 `NativeVaultCvcAcceptanceTest` 7개는 기본/종료 gate, 정확한 합성 대상·namespace, 실제 Keystore의
+미인증 Cipher 거절, 별도 합성 namespace 삭제 격리, 경로 이탈 거절을 검사한다. 미인증 Cipher 검사는
+강한 생체 인증이 없거나 이전 합성 키/기록이 있으면 건너뛴다. 후자는 수동 증거를 지우지 않기 위한 제한이며
+명시적 합성 초기화 후 다시 실행한다. 기존 WebView instrumentation 4개도 같은 테스트 APK에 들어간다.
+instrumentation 성공만으로 정상 생체 인증·복호화·원자적 교체의 성공을 주장하지 않는다.
+
+1. `합성 세션 시작` → `합성 3자리 저장` → 생체 인증 → `저장된 합성 값 읽기` → 별도 생체 인증으로
+   공개 합성 `123`과 30초 이내 가림을 확인한다. 실물 카드 코드는 입력할 곳이 없다.
+2. `합성 4자리로 덮어쓰기`의 시스템 prompt에서 취소한다. 세션을 다시 시작하고 읽으면 기존 `123`이어야 한다.
+3. 세션 시작 → `다음 쓰기 실패 예약` → 4자리 덮어쓰기와 실제 인증을 수행한다. 실패 안내 후 새 세션에서
+   읽으면 기존 `123`이어야 한다. 이어 정상 4자리 덮어쓰기/별도 읽기로 공개 합성 `4567`을 확인한다.
+4. 인증 대기/표시 중 Home·잠금·회전·알림 초점 이탈·시간 만료를 각각 확인한다. 새 세션 없이 열리지 않아야 한다.
+   앱 강제 종료 후 다시 시작하면 암호문은 남지만 소유자는 잠겨 있고, 별도 인증 후에만 읽혀야 한다.
+5. 소유자 세션 종료 및 `합성 저장소만 초기화`/`종료 · 합성 저장소 삭제` 후 합성 파일·키만 제거되는지 확인한다.
+   일반 가계/보관함/앱 설정을 초기화하지 않는다.
+6. 지문 추가/삭제·잠금 방식 제거·재설치·백업/이전은 기기 설정/자료에 영향을 주므로 별도 동의 후 마지막에 수행한다.
+   기존 키 무효화 시 자동 교체가 없고, 합성 초기화를 명시한 뒤에만 새 키를 만들 수 있어야 한다.
+7. FLAG_SECURE와 로그/bridge/네트워크/backup 무유출을 두 Galaxy에서 확인하고 결과를 기록한다.
+
+Galaxy S25 Ultra와 S24 Ultra의 모델·Android/One UI·보안 패치·WebView 버전·검사 일자·APK 해시 및
+서명 공개 지문을 기록한다. 오프라인 합성 화면은 API 설정 없이 검증할 수 있다. 전체 v1의 실제 로그인·
+보관함 공유/회복/철회/회전·첨부 SAF 검증은 승인된 HTTPS origin/RP와 실제 APK 공개 서명 지문을 일치시키고
+두 합성 계정을 준비해야 한다. 계정 암호와 복구코드는 기기에 직접 입력한다.
+
+플랫폼 negative 버튼은 dialog 종료 시 별도 listener로 전달되므로 종료 이벤트로 처리한다.
+[AOSP BiometricPrompt 구현](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/hardware/biometrics/BiometricPrompt.java)의
+`onDialogDismissed`와 기존 `onAuthenticationError` 경로를 함께 고려했다.
+
+### 이번 변경의 실행 증거
+
+2026-10-18, 실제 기기 연결 없이 다음을 실행했다.
+
+| 검사 | 결과와 한계 |
+|---|---|
+| `pnpm install --frozen-lockfile`, `pnpm android:sync` | 성공. 새 의존성/lockfile 변경 없음. sync의 TypeScript 검사와 web bundle 생성 포함 |
+| `:app:testDebugUnitTest` | 기존 JVM **330개**, 실패·오류·건너뜀 0. 새 instrumentation 7개를 이 수에 포함하지 않음 |
+| `:app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease` | debug APK·테스트 APK·unsigned release APK 생성. 서명/배포/기기 설치는 실행하지 않음 |
+| release Kotlin 클래스·전체 DEX 점검 | gate는 false/no-op 메서드만 존재. 새 합성 Activity/fixture/Owner/활성화/실패 예약/표식/테스트 클래스 marker 7개 제외 |
+| `pnpm test:docs`, `git diff --check` | 문서 검증·문서 도구 테스트 40개·diff 검사 성공 |
+| `connectedDebugAndroidTest`, 두 Galaxy의 수동 인수 | **미실행**. 기기/사용자 생체 인증이 필요하며 위 성공으로 대체할 수 없음 |
+
+산출물은 `apps/client/android/app/build/outputs/apk/` 아래 `debug/app-debug.apk`,
+`androidTest/debug/app-debug-androidTest.apk`, `release/app-release-unsigned.apk`다.
+현재 빌드의 API origin/RP/cert는 모두 공란이며 실제 서버 로그인 검증용 APK가 아니다.

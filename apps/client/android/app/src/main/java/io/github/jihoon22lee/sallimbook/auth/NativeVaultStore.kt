@@ -53,7 +53,7 @@ internal class NativeVaultKeyOperation(val cipher: Cipher, val binding: NativeVa
 }
 
 /** Encrypted native-only local storage. No HTTP, bridge, backup, export or plaintext serialization. */
-internal class NativeVaultStore private constructor(context: Context) {
+internal class NativeVaultStore internal constructor(context: Context, private val namespace: String = "vault.v1") {
     companion object {
         @Volatile private var instance: NativeVaultStore? = null
         fun get(context: Context): NativeVaultStore = instance ?: synchronized(this) {
@@ -64,10 +64,17 @@ internal class NativeVaultStore private constructor(context: Context) {
         const val LOCAL_CVC_ACCEPTANCE_VERIFIED = false
     }
     private val app = context.applicationContext
-    private val directory = File(app.noBackupFilesDir, "sallimbook-vault-v1")
-    private val prefix = app.packageName + ".vault.v1."
+    private val directory = File(app.noBackupFilesDir, if (namespace == "vault.v1") "sallimbook-vault-v1" else "sallimbook-$namespace")
+    private val prefix = app.packageName + ".$namespace."
     private val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    init { if ((app.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP) != 0) throw NativeVaultFailure("ACCESS_DENIED") }
+    init {
+        if (!Regex("[a-z][a-z0-9.-]{0,63}").matches(namespace) ||
+            (app.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP) != 0) throw NativeVaultFailure("ACCESS_DENIED")
+    }
+    private fun requireCvcGate(binding: NativeVaultBinding) {
+        if (binding.localCode && !LOCAL_CVC_ACCEPTANCE_VERIFIED && !NativeVaultAcceptanceGate.allows(app, binding, namespace))
+            throw NativeVaultFailure("CVC_GATE_CLOSED")
+    }
     private fun file(binding: NativeVaultBinding): AtomicFile {
         if (!directory.exists() && !directory.mkdirs()) throw NativeVaultFailure("KEY_INVALIDATED")
         if (directory.canonicalFile != directory.absoluteFile) throw NativeVaultFailure("KEY_INVALIDATED")
@@ -119,7 +126,7 @@ internal class NativeVaultStore private constructor(context: Context) {
         }, { removeMatching { it == binding.name } })
     }
     @Synchronized fun prepareEncryption(binding: NativeVaultBinding): NativeVaultKeyOperation {
-        if (binding.localCode && !LOCAL_CVC_ACCEPTANCE_VERIFIED) throw NativeVaultFailure("CVC_GATE_CLOSED")
+        requireCvcGate(binding)
         val alias = prefix + binding.name
         val specification = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setKeySize(256).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -144,7 +151,7 @@ internal class NativeVaultStore private constructor(context: Context) {
         } catch (_: Exception) { throw NativeVaultFailure("KEY_INVALIDATED") }
     }
     @Synchronized fun prepareDecryption(binding: NativeVaultBinding): NativeVaultKeyOperation {
-        if (binding.localCode && !LOCAL_CVC_ACCEPTANCE_VERIFIED) throw NativeVaultFailure("CVC_GATE_CLOSED")
+        requireCvcGate(binding)
         var bytes: ByteArray? = null
         var sealed: VaultSealed? = null
         try {
@@ -165,6 +172,7 @@ internal class NativeVaultStore private constructor(context: Context) {
     }
     /** Called only while the request gate is active, after matching the prompt's actual returned Cipher. */
     @Synchronized fun finish(operation: NativeVaultKeyOperation, returned: Cipher, plaintext: ByteArray? = null): ByteArray? {
+        requireCvcGate(operation.binding)
         if (returned !== operation.cipher || !operation.consumed.compareAndSet(false,true)) throw NativeVaultFailure("ACCESS_DENIED")
         val expected = if(operation.binding.localCode) 3..4 else 32..32
         if (operation.encrypt != (plaintext != null) || plaintext != null && (plaintext.size !in expected || operation.binding.localCode && plaintext.any { it.toInt() !in 48..57 }))
@@ -182,7 +190,12 @@ internal class NativeVaultStore private constructor(context: Context) {
             val record = byteArrayOf(1) + nonce + result
             try {
                 val target = file(operation.binding); val output = target.startWrite()
-                try { output.write(record); target.finishWrite(output) }
+                try {
+                    output.write(record)
+                    NativeVaultAcceptanceGate.beforeCommit(app, operation.binding, namespace)
+                    requireCvcGate(operation.binding)
+                    target.finishWrite(output)
+                }
                 catch (_: Exception) { target.failWrite(output); throw NativeVaultFailure("KEY_INVALIDATED") }
             } finally { record.fill(0) }
             return null

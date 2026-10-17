@@ -230,8 +230,8 @@
       "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
     },
     "docs/testing/native-security-proof.md": {
-      "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
-      "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
+      "sha256": "0c089aeac836039f8c70c459e9c93d1112e56788c94eca8359e989041d63095d",
+      "git_sha1": "4afecaf9d8745a62bd06193b4f9f6c75d1bdb047"
     },
     "docs/testing/assets-accounts-client.md": {
       "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",
@@ -278,8 +278,8 @@
       "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
     },
     "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "405e7fc14623811fa8333054ed6481f1ef480a7a32309d93b8f59f9e283dcfb6",
-      "git_sha1": "0a3a0daffa7713b1f410c8f01c9994de94545c42"
+      "sha256": "5f0d2f7e8b524085404ed176a5140b0db7e99b11e50861743c83bbf82e54f86c",
+      "git_sha1": "b3212efcd703aadeb676be25602c455480f5aca2"
     },
     "docs/testing/insurance-client.md": {
       "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
