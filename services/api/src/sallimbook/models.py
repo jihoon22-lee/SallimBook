@@ -16,6 +16,13 @@ from sallimbook.cashflow.recurring_models import (
 )
 from sallimbook.core.audit import AuditEvent
 from sallimbook.core.idempotency import IdempotencyRecord
+from sallimbook.homecare.models import (
+    Appliance,
+    ApplianceConsumable,
+    Consumable,
+    ConsumableReplacement,
+    StockMovement,
+)
 from sallimbook.identity.auth_models import (
     AuthSession,
     HouseholdMember,
@@ -50,6 +57,11 @@ from sallimbook.insurance.models import (
 )
 
 __all__ = [
+    "Appliance",
+    "Consumable",
+    "ApplianceConsumable",
+    "StockMovement",
+    "ConsumableReplacement",
     "MedicalExpense",
     "MedicalExpenseLine",
     "MedicalRefund",
