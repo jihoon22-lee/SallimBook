@@ -278,8 +278,8 @@
       "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
     },
     "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "f2ae20400fc7039fc592d18f3babae3fcf98a9913136535c516d507b407ec7a5",
-      "git_sha1": "53622d22524c203ebbbdd48d2c2b570e824c5dc4"
+      "sha256": "beda32fdef70cbc9473adfb59eea4b524712d64252693b0bceac4b501d574609",
+      "git_sha1": "12889657072870bf3469c383e9ed8fc54f701115"
     }
   }
 }

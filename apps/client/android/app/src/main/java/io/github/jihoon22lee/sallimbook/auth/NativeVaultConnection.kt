@@ -10,16 +10,17 @@ internal class NativeVaultSnapshot(val me: VaultRecord, val members: List<VaultR
     override fun toString() = "NativeVaultSnapshot(redacted)"
 }
 
-/** Created inside NativeAuthSession's serialized executor. The bearer token cannot leave this class. */
+/** Created inside NativeAuthSession's serialized executor. Tokens stay in native request scope. */
 internal class NativeVaultConnection(
-    private val appId: String, private val origin: String, private val token: String,
+    private val appId: String, private val origin: String, token: (Long) -> String,
     private val account: NativeAuthHttp, private val vault: NativeVaultHttp, private val gate: ForegroundRequest,
     private val local: NativeVaultStore,
 ) {
+    private val access = NativeVaultAccess(gate,token)
     fun check() = gate.check()
     fun call(command: NativeVaultCommand): VaultRecord {
         check()
-        val response = vault.send(command,token,gate)
+        val response = access.send { vault.send(command,it,gate) }
         if(response.status !in 200..299) {
             val code=NativeVaultErrors.code(response.status,response.body)
             if(code in setOf("SESSION_EXPIRED","VAULT_ACCESS_DENIED","VAULT_NOT_INITIALIZED")) local.clearAll()
@@ -29,7 +30,7 @@ internal class NativeVaultConnection(
     }
     @Suppress("UNCHECKED_CAST")
     private fun identity(path: String): Any? {
-        val response=account.send("GET",path,gate,accessToken=token)
+        val response=access.send { account.send("GET",path,gate,accessToken=it) }
         if(response.status != 200) throw NativeVaultFailure(NativeVaultErrors.code(response.status,response.body))
         return AuthPolicy.metadataBody("GET",path,response.status,response.body)
     }
@@ -37,7 +38,7 @@ internal class NativeVaultConnection(
     fun metadata(operation: FinanceOperation, arguments: VaultRecord): Any? {
         if(operation !in setOf(FinanceOperation.GET_CARD,FinanceOperation.LIST_CARDS)) throw NativeVaultFailure("INVALID_REQUEST")
         val request=FinancePolicy.prepare(operation,arguments)
-        val response=account.send(request.method,request.path,gate,accessToken=token)
+        val response=access.send { account.send(request.method,request.path,gate,accessToken=it) }
         if(response.status != 200) throw NativeVaultFailure(NativeVaultErrors.code(response.status,response.body))
         return FinancePolicy.response(operation,request,response.status,response.body)
     }

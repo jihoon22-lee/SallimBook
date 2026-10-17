@@ -37,6 +37,11 @@ JS에 전달한다. 키 wrapping과 카드 envelope API는 private native 전송
 
 `NativeVaultHttp`는 고정 HTTPS와 플랫폼 TLS 검증을 사용한다. 쿠키·리디렉션·캐시·HTTP 로그·
 자동 인증 응답·자동 재전송이 없다. one-shot 본문과 OkHttp 후속 요청 취소를 함께 적용한다.
+bearer는 긴 작업 시작 시 고정하지 않고 각 HTTP 직전에 같은 계정 executor의 private supplier로
+확보한다. 남은 유효시간이 20초(HTTP 제한 15초 + 여유) 이하이면 먼저 refresh를 회전한다.
+정상 만료가 가까운 토큰 때문에 기기 wrapping을 세션 철회처럼 지우지 않으며, 401 응답을 받은
+변경 요청을 자동 재전송하지 않는다. refresh가 발급한 토큰이 이 여유보다 짧으면 유효 refresh는
+보존하고 해당 vault 작업을 거절한다.
 응답은 1MiB 이하의 strict UTF-8 JSON이며 중복 키·깊이·배열/객체 크기·실수가 포함된 숫자를 거부한다.
 이미 Tink 전이 의존성으로 고정한 Gson 2.13.2를 직접 선언해 strict streaming reader를 사용한다.
 [공식 Gson 릴리스](https://github.com/google/gson/releases/tag/gson-parent-2.13.2)를 확인했으며
@@ -152,6 +157,9 @@ release Kotlin을 다시 통과했다. 실제 JCA AES-GCM의 기존 키·암호�
 새 nonce, 일시적 키 오류에서 교체 금지, 정상 키 재설정 거절, 명시적 영구 무효화 삭제 정책을 검사한다.
 이 JVM adapter 검사는 Android Keystore나 AtomicFile의 실기기 동작을 대신하지 않는다.
 TS 브리지 계약 변경이 없으므로 위 브라우저 52개 결과를 유지하고 이번 Kotlin 수정 후 재실행하지 않았다.
+
+요청별 bearer 유효시간 후속 수정은 fake-clock/지연/401 무재전송/취소 회귀 4개를 포함해
+JVM **280개**(실패·오류·건너뜀 0), debug APK, release Kotlin을 통과했다.
 
 실기기 미실행 항목: 최초 등록/암호화/별도 열람, 지문 추가·삭제·잠금 방식 제거·키 무효화,
 기존 등록/CVC가 있는 재저장 prompt 취소·오류 뒤 원래 값의 열람, 저장 실패 뒤 기존 암호문의 복원,

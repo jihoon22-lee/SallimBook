@@ -99,10 +99,10 @@ internal class NativeAuthSession private constructor(context: Context) {
         }
     }
 
-    private fun access(gate: ForegroundRequest): String {
+    private fun access(gate: ForegroundRequest, requiredMillis: Long = 0): String {
         requireAvailable()
         gate.check()
-        accessToken?.let { if (SystemClock.elapsedRealtime() < accessExpiresAt) return it }
+        accessToken?.let { if (NativeAccessLifetime.usable(SystemClock.elapsedRealtime(),accessExpiresAt,requiredMillis)) return it }
         accessToken = null
         accessExpiresAt = 0L
         val refresh = store.takeForRotation() ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
@@ -112,12 +112,14 @@ internal class NativeAuthSession private constructor(context: Context) {
             val response = http.send("POST", "/api/v1/auth/native/refresh", gate, body = payload)
             if (response.status != 200) throw AuthFailure(AuthCode.SESSION_EXPIRED)
             acceptTokens(response.body, gate)
-            return accessToken ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
         } catch (failure: Exception) {
             clearLocal()
             if (failure is AuthFailure) throw failure
             throw AuthFailure(AuthCode.SESSION_EXPIRED)
         } finally { payload.remove("refresh_token") }
+        // A valid but unusually short server lease is retained, not mistaken for session revocation.
+        if (!NativeAccessLifetime.usable(SystemClock.elapsedRealtime(),accessExpiresAt,requiredMillis)) throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
+        return accessToken ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
     }
 
     fun getSession(gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) = execute(gate, callback) {
@@ -355,7 +357,7 @@ internal class NativeAuthSession private constructor(context: Context) {
             var result: T? = null
             try {
                 authorize(gate); requireAvailable(); gate.check()
-                val connection = NativeVaultConnection(app.packageName, origin!!, access(gate), http, vaultHttp, gate, vaultLocal)
+                val connection = NativeVaultConnection(app.packageName, origin!!, { required -> access(gate,required) }, http, vaultHttp, gate, vaultLocal)
                 result = task(connection)
                 gate.check()
                 callback(NativeVaultOutcome(value = result))
