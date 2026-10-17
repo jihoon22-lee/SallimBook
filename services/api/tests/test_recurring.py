@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
-from test_income import headers, make_account
+from test_income import CATALOG, headers, make_account
 
 from sallimbook.cashflow import recurring_service as service
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision
@@ -38,6 +38,10 @@ from sallimbook.core.idempotency import IdempotencyRecord
 from sallimbook.core.types import MAX_KRW
 
 
+def vector(identifier):
+    return next(row for row in CATALOG["vectors"] if row["id"] == identifier)
+
+
 def rule_payload(**overrides):
     return dict(
         title="합성 정기 비용",
@@ -53,9 +57,14 @@ def rule_payload(**overrides):
 
 
 def test_t10_original_month_end_anchor_and_leap_annual_dates():
-    assert occurrence_dates(
-        date(2025, 1, 31), date(2025, 2, 1), date(2025, 3, 31), frequency="monthly"
-    ) == (date(2025, 2, 28), date(2025, 3, 31))
+    t10 = vector("T-10")
+    dates = occurrence_dates(
+        date(2025, 1, t10["inputs"]["anchor_day"]),
+        date(2025, 2, 1),
+        date(2025, 3, 31),
+        frequency=t10["inputs"]["frequency"],
+    )
+    assert [day.isoformat() for day in dates] == t10["expected"]["scheduled_dates"]
     assert occurrence_dates(
         date(2024, 2, 29), date(2025, 1, 1), date(2028, 12, 31), frequency="annual"
     ) == (date(2025, 2, 28), date(2026, 2, 28), date(2027, 2, 28), date(2028, 2, 29))
@@ -86,14 +95,21 @@ def test_bad_recurrence_rejected(frequency, interval):
 
 
 def test_t09_t11_exact_payment_breakdown_and_expected_actual_separation():
+    t09, t11 = vector("T-09"), vector("T-11")
     loan = payment_breakdown(
-        1_000_000, economic_type="loan", principal_krw=700_000, interest_krw=300_000
+        Decimal(t09["inputs"]["payment_krw"]),
+        economic_type="loan",
+        principal_krw=Decimal(t09["inputs"]["principal_krw"]),
+        interest_krw=Decimal(t09["inputs"]["interest_krw"]),
     )
-    assert (loan.cash_payment_krw, loan.consumption_krw, loan.principal_krw) == (
-        1_000_000,
-        300_000,
-        700_000,
+    assert str(loan.cash_payment_krw) == t09["expected"]["cash_payment_krw"]
+    assert str(loan.consumption_krw) == t09["expected"]["consumption_krw"]
+    fixture_totals = settlement_totals(
+        Decimal(t11["inputs"]["expected_krw"]),
+        [Decimal(amount) for amount in t11["inputs"]["actual_payments_krw"]],
     )
+    assert str(fixture_totals.actual_krw) == t11["expected"]["actual_total_krw"]
+    assert str(fixture_totals.difference_krw) == t11["expected"]["difference_krw"]
     transfer = payment_breakdown(100, economic_type="asset_transfer")
     assert transfer.asset_transfer_krw == 100 and transfer.consumption_krw == 0
     totals = settlement_totals(33_000, [30_000, 5_000])
@@ -205,20 +221,43 @@ def settle(client, actor, obligation, *, amount="35000", key=None, **extra):
 class TestRecurringDatabase:
     def test_t10_repeat_generation_and_failure_catchup(self, recurring_app, actors, db_engine):
         actor = actors[0]
+        t10 = vector("T-10")
         with TestClient(recurring_app) as client:
-            rule = post_rule(client, actor)
-            original = generate(client, actor, rule["id"], "synthetic-generate", end="2026-02-28")
+            rule = post_rule(client, actor, anchor_date="2025-01-31", effective_from="2025-01-01")
+            original = generate(
+                client,
+                actor,
+                rule["id"],
+                "synthetic-generate",
+                start="2025-02-01",
+                end="2025-02-28",
+            )
             assert (
-                generate(client, actor, rule["id"], "synthetic-generate", end="2026-02-28")
+                generate(
+                    client,
+                    actor,
+                    rule["id"],
+                    "synthetic-generate",
+                    start="2025-02-01",
+                    end="2025-02-28",
+                )
                 == original
             )
-            generate(client, actor, rule["id"])
-            feb = obligation_for(client, actor, "2026-02")
-            mar = obligation_for(client, actor, "2026-03")
-            assert feb["nominal_date"] == "2026-02-28" and mar["nominal_date"] == "2026-03-31"
+            for _ in range(t10["inputs"]["generation_attempts"]):
+                generate(client, actor, rule["id"], start="2025-02-01", end="2025-03-31")
+            rows = [obligation_for(client, actor, month) for month in t10["inputs"]["months"]]
+            assert [row["nominal_date"] for row in rows] == t10["expected"]["scheduled_dates"]
         with Session(db_engine) as session:
-            assert session.scalar(select(func.count()).select_from(ScheduledObligation)) == 3
-            assert session.scalar(select(func.count()).select_from(ObligationRevision)) == 3
+            counts = [
+                session.scalar(
+                    select(func.count())
+                    .select_from(ScheduledObligation)
+                    .where(ScheduledObligation.nominal_date == date.fromisoformat(day))
+                )
+                for day in t10["expected"]["scheduled_dates"]
+            ]
+            assert counts == t10["expected"]["occurrence_counts"]
+            assert session.scalar(select(func.count()).select_from(ObligationRevision)) == 2
 
     def test_t11_partial_actual_difference_and_void_replay(self, recurring_app, actors, db_engine):
         actor = actors[0]
@@ -924,6 +963,7 @@ class TestRecurringDatabase:
         from sallimbook.assets.schemas import AssetCreate
 
         actor = actors[0]
+        t09 = vector("T-09")
         with Session(db_engine) as session:
             loan = asset_service.create_asset(
                 session,
@@ -954,7 +994,7 @@ class TestRecurringDatabase:
                 MonthValueUpdate(
                     revision_id=draft.revision_id,
                     value_id=value.id,
-                    input_amount_krw="50000000",
+                    input_amount_krw=t09["inputs"]["liability_snapshot_before_krw"],
                     as_of_date="2026-01-31",
                 ),
                 f'"{value.version}"',
@@ -968,22 +1008,26 @@ class TestRecurringDatabase:
                 actor,
                 economic_type="loan",
                 loan_asset_id=str(loan.id),
-                expected_amount_krw="1000000",
+                expected_amount_krw=t09["inputs"]["payment_krw"],
             )
             generate(client, actor, rule["id"])
             settle(
                 client,
                 actor,
                 obligation_for(client, actor, "2026-01"),
-                amount="1000000",
-                principal_krw="700000",
-                interest_krw="300000",
+                amount=t09["inputs"]["payment_krw"],
+                principal_krw=t09["inputs"]["principal_krw"],
+                interest_krw=t09["inputs"]["interest_krw"],
             )
         with Session(db_engine) as session:
             after = month_service.get_month(session, actor.principal, "2026-01").model_dump(
                 mode="json"
             )
-            assert after == before and after["values"][0]["input_amount_krw"] == "50000000"
+            assert (
+                after == before
+                and after["values"][0]["input_amount_krw"]
+                == t09["expected"]["liability_snapshot_after_krw"]
+            )
 
     def test_card_planning_and_actual_method_use_real_scoped_references(
         self, recurring_app, actors, db_engine
