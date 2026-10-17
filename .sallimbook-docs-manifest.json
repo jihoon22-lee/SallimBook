@@ -322,8 +322,8 @@
       "git_sha1": "4f990254002c6e8efc564087cdc56c3bf48b6133"
     },
     "docs/testing/exports-client.md": {
-      "sha256": "72f2ab76b4ec2463c88d7912b55469219679d6a9b14147a4260f14c60efccf37",
-      "git_sha1": "9080542573ad03a2d7fdbd1a65e83cd325032b2f"
+      "sha256": "c129a1d8ad1c5a9465aa8742a6204d1f21eda677414319c965095fc43354331f",
+      "git_sha1": "dab878f0d9b929190600478a8210e7764179ce81"
     }
   }
 }

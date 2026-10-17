@@ -12,7 +12,7 @@ async function setup(page: Page, scenario = "success") {
       nativePromise: async (_plugin: string, method: string, args: unknown) => {
         state.calls.push({ method, args });
         if (scenario === "throws") throw new Error("synthetic private native detail");
-        const failures: Record<string, string> = { cancelled: "AUTH_CANCELLED", locked: "APP_LOCKED", expired: "SESSION_EXPIRED", network: "NETWORK_UNAVAILABLE", invalid: "INVALID_REQUEST", denied: "ACCESS_DENIED", reauth: "REAUTHENTICATION_REQUIRED" };
+        const failures: Record<string, string> = { cancelled: "AUTH_CANCELLED", locked: "APP_LOCKED", expired: "SESSION_EXPIRED", network: "NETWORK_UNAVAILABLE", invalid: "INVALID_REQUEST", denied: "ACCESS_DENIED", reauth: "REAUTHENTICATION_REQUIRED", password: "AUTH_FAILED", key: "KEY_INVALIDATED" };
         if (failures[scenario]) return { ok: false, code: failures[scenario], message: "synthetic private native detail" };
         if (scenario.startsWith("extra-")) return { ok: true, value: { status: "exported", [scenario.slice(6)]: "synthetic private native detail" } };
         return { ok: true, value: { status: scenario === "ui-cancelled" ? "cancelled" : scenario === "wrong-status" ? "downloaded" : "exported" } };
@@ -64,7 +64,7 @@ test("invalid choices secret data paths URLs and headers are rejected before nat
   expect(result.codes).toEqual(Array(34).fill("VALIDATION_ERROR")); expect(result.calls).toEqual([]); expect(result.http).toBe(0); expect(result.storage).toBe(0);
 });
 
-for (const [scenario, expected] of Object.entries({ cancelled: "REQUEST_CANCELLED", locked: "APP_LOCKED", expired: "UNAUTHENTICATED", network: "NETWORK_UNAVAILABLE", invalid: "VALIDATION_ERROR", denied: "FORBIDDEN", reauth: "REAUTHENTICATION_REQUIRED", unavailable: "NATIVE_AUTH_UNAVAILABLE", throws: "NATIVE_AUTH_UNAVAILABLE", "wrong-status": "FORBIDDEN", "extra-bytes": "FORBIDDEN", "extra-uri": "FORBIDDEN", "extra-url": "FORBIDDEN", "extra-token": "FORBIDDEN" })) {
+for (const [scenario, expected] of Object.entries({ cancelled: "REQUEST_CANCELLED", locked: "APP_LOCKED", expired: "UNAUTHENTICATED", network: "NETWORK_UNAVAILABLE", invalid: "VALIDATION_ERROR", denied: "FORBIDDEN", reauth: "REAUTHENTICATION_REQUIRED", password: "REAUTHENTICATION_FAILED", key: "NATIVE_KEY_INVALIDATED", unavailable: "NATIVE_AUTH_UNAVAILABLE", throws: "NATIVE_AUTH_UNAVAILABLE", "wrong-status": "FORBIDDEN", "extra-bytes": "FORBIDDEN", "extra-uri": "FORBIDDEN", "extra-url": "FORBIDDEN", "extra-token": "FORBIDDEN" })) {
   test(`export fails without web fallback retry or private details: ${scenario}`, async ({ page }) => {
     await setup(page, scenario);
     const result = await page.evaluate(async () => {

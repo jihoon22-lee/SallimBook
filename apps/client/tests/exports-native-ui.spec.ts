@@ -9,12 +9,13 @@ test("native export uses only selected formats and document IDs and receives sta
   await expect(page.getByRole("button", { name: "패스키로 확인하고 ZIP 내보내기", exact: true })).toHaveCount(0); await expect(page.locator('input[type="password"], input[type="file"]')).toHaveCount(0);
   expect(await page.evaluate(() => ({ urls: (window as any).__exportURLs.created, local: localStorage.length, session: sessionStorage.length }))).toEqual({ urls: 0, local: 0, session: 0 });
 });
-for (const failure of ["cancelled", "AUTH_CANCELLED", "APP_LOCKED", "SESSION_EXPIRED", "NETWORK_UNAVAILABLE", "REAUTHENTICATION_REQUIRED"]) test(`native export ${failure} stays in protected flow without web retry`, async ({ page }) => {
+for (const failure of ["cancelled", "AUTH_CANCELLED", "APP_LOCKED", "SESSION_EXPIRED", "NETWORK_UNAVAILABLE", "REAUTHENTICATION_REQUIRED", "AUTH_FAILED", "KEY_INVALIDATED"]) test(`native export ${failure} stays in protected flow without web retry`, async ({ page }) => {
   const state = await mockExports(page, true); if (failure === "cancelled") state.nativeStatus = failure; else state.nativeFailure = failure;
   await page.goto("/exports"); await page.getByLabel(ack).check(); await page.getByRole("button", { name: "Android에서 ZIP 내보내기", exact: true }).click();
   if (failure === "cancelled") await expect(page.getByText("내보내기를 취소했어요.", { exact: true })).toBeVisible();
-  else if (["APP_LOCKED", "SESSION_EXPIRED"].includes(failure)) await expect(page.getByLabel(ack)).toHaveCount(0);
+  else if (["APP_LOCKED", "SESSION_EXPIRED", "KEY_INVALIDATED"].includes(failure)) await expect(page.getByLabel(ack)).toHaveCount(0);
   else await expect(page.getByRole("alert")).toBeVisible();
+  if (failure === "AUTH_FAILED") await expect(page.getByRole("alert")).toContainText("현재 계정의 비밀번호를 다시 확인해 주세요");
   expect(state.calls.filter((row) => row.method === "exportArchiveUI")).toHaveLength(1); expect(state.http).toEqual([]); expect(state.writes).toEqual([]);
 });
 test("native phase deadlines retain status completion beyond the web transfer timer", async ({ page }) => {
