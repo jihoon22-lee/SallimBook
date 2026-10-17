@@ -57,6 +57,7 @@ export interface SallimBookAuth {
   listDocumentLinks(options: { documentId: string; query?: NonNullable<operations["listDocumentLinks"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentLinkListResponse"]>>>;
   uploadDocumentUI(options: { target: components["schemas"]["DocumentTarget"] }): Promise<NativeAuthResult<{ status: "uploaded" | "cancelled" }>>;
   downloadDocumentUI(options: { documentId: string }): Promise<NativeAuthResult<{ status: "downloaded" | "cancelled" }>>;
+  exportArchiveUI(options: { input: components["schemas"]["ExportRequest"] }): Promise<NativeAuthResult<{ status: "exported" | "cancelled" }>>;
   /** Homecare metadata; stock If-Match and immutable receipt versions belong to the consumable. */
   listApplianceConsumables(options: { query?: NonNullable<operations["listApplianceConsumables"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableListResponse"]>>>;
   createApplianceConsumable(options: { input: components["schemas"]["ApplianceConsumableCreate"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableResponse"]>>>;
