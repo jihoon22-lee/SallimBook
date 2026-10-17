@@ -92,3 +92,42 @@ uv run --project services/api python scripts/test_web_auth.py --homecare
 
 18755 포트의 브라우저와 Docker 시험 DB 수명주기를 순차 실행한다. 임시 합성 계정·HTTPS 인증서·DB schema는 기존 harness가 관리한다.
 사용자 데이터·기존 서버·기존 DB·호스트 Tailscale 설정을 변경하지 않는다.
+
+## SB-034 삭제 검토 버전 회귀 보완
+
+최종 통합 시험에서 기기별 주기를 수정한 직후 삭제하면, 화면은 새 주기를 표시하지만 삭제는
+이전 `If-Match` 버전을 보내 409가 되는 간헐 오류를 확인했다. 빠른 native 응답에서는
+`useResource.reload`의 loading 시작/종료가 한 render로 묶일 수 있다. 이때 삭제 컴포넌트가
+unmount되지 않으므로 `useState(initial)`이 최초 버전을 계속 보유하는 것이 원인이었다.
+
+공통 `DeleteHomecare` 안에서 대상 ID/version을 key로 삼는 검토 컴포넌트를 생성한다.
+가전·소모품·기기 연결 모두 같은 수정을 적용받는다. 부모의 ID나 버전이 바뀌면 삭제 검토와
+기존 확인을 닫고 새 확인을 받는다. 이미 확인한 요청에 새 버전을 자동 적용하지 않는다.
+진행 중인 이전 요청의 대기는 중단하고 늦은 결과는 현재 화면의 삭제 성공으로 반영하지 않는다.
+같은 ID/version의 단순 rerender와 409 후 명시적 비교·최신 내용 채택·재확인은 유지한다.
+
+```bash
+pnpm typecheck
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/homecare-delete-snapshot.spec.ts --workers=1
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/homecare-delete-snapshot.spec.ts --project desktop --grep 'idle deletion' --workers=1
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/homecare-native-ui.spec.ts tests/homecare-ui.spec.ts --workers=1
+pnpm build
+python3 scripts/validate_docs.py
+git diff --check
+```
+
+- 신규 결정적 회귀 **10/10 통과(8.9초)**: 부모를 unmount하지 않고 version/ID를 교체하며,
+  새 버전 사용·이전 확인 폐기·동일 snapshot의 충돌 비교 유지·늦은 결과 무시를 확인했다.
+  시험은 실제 공통 React 컴포넌트를 별도 root에 렌더하며 서버 권한 검증을 대체하지 않는다.
+- 위 단일 desktop 시험을 `f278719`의 수정 전 삭제 컴포넌트로 실행했을 때 **의도한 1개 실패**를
+  확인했다. 부모 표시 버전은 2인데 삭제 인자는 1이었다(기대 `[2]`, 실제 `[1]`). 시험 종료 시
+  `finally`로 수정된 소스를 복원한 뒤 기존 기능 검증을 진행했다.
+- 기존 웹·native 가전/재고 시험 **60/60 통과(1.4분)**. native 기기 연결 수정→삭제가 최신
+  `If-Match: "2"`를 단 한 번 보내는 assertion도 추가했다. 기존 409 비교와 참조 삭제 거절을 포함한다.
+- 초기 시험 harness의 Vite CommonJS import/중복 runtime 문제는 기존에 로드된 React runtime을
+  재사용하도록 고쳤다. 위 통과 결과는 수정된 harness 기준이다.
+- 타입·빌드 통과(165 modules, JS 894.22kB/gzip 231.17kB). 기존 500kB chunk 경고는 남는다.
+
+API 계약·DB·migration·native 인증 정책 변경은 없다. 이 수정의 전체 통합 브라우저/실제 HTTPS
+재검증은 통합 브랜치에서 별도로 수행하며 위 표적 검증과 구분한다. 18756 브라우저를 종료하고
+검증 큐를 반환했다. 이 단계에서 Docker/DB는 사용하지 않았다.
