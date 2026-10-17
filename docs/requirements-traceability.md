@@ -6,7 +6,7 @@
 | 요구사항 | 구현 Issue | 주요 검증 | 근거 문서 |
 |---|---|---|---|
 | R-01 | SB-005, SB-006, SB-007, SB-032 | 부부 공동 접근/타가계 차단 | [인증 HTTPS](testing/browser-authentication.md), [패스키](testing/passkeys-web.md) |
-| R-02 | SB-001, SB-003, SB-031, SB-034, SB-038 | Android/PC 교차조회·업데이트 | [웹·Android adapter](native-bridge-contract.md), [실기기 게이트](testing/native-security-proof.md) |
+| R-02 | SB-001, SB-003, SB-031, SB-034, SB-038 | Android/PC 교차조회·업데이트 | [웹·Android adapter](native-bridge-contract.md), [설정·26개 경로](testing/settings-audit.md), [실기기 게이트](testing/native-security-proof.md) |
 | R-03 | SB-003, SB-013, SB-027, SB-033 | T-24 / 홈 레이아웃 | [월 비교](testing/assets-comparison-client.md), [오늘 소모품·홈](testing/homecare-client.md) |
 | R-04 | SB-010 | T-01/T-03 | [자산·계좌](testing/assets-accounts-client.md) |
 | R-05 | SB-012, SB-013 | T-05~T-07 | [월 기록](testing/monthly-assets-client.md), [비교](testing/assets-comparison-client.md) |
@@ -23,7 +23,7 @@
 | R-16 | SB-024 | 제품 CRUD·보증·문서 | [가전 서버](testing/homecare-server.md), [가전 화면](testing/homecare-client.md) |
 | R-17 | SB-025, SB-026, SB-027 | T-20~T-22 | [재고 불변식](testing/homecare-server.md), [입고·교체 화면](testing/homecare-client.md) |
 | R-18 | SB-011, SB-014, SB-015, SB-017, SB-018, SB-019, SB-021, SB-022, SB-028, SB-033, SB-035 | 도메인 연결 E2E | [생활비 연결](testing/cashflow-client.md), [보험 연결](testing/insurance-client.md), [재고/홈](testing/homecare-client.md) |
-| R-19 | SB-002, SB-005, SB-007, SB-012, SB-017, SB-026, SB-034, SB-035 | T-22/T-23 / 종료·정정 | [월 정정](testing/monthly-assets-client.md), [재전송·충돌](testing/cashflow-client.md), [재고 동시성](testing/homecare-server.md) |
+| R-19 | SB-002, SB-005, SB-007, SB-012, SB-017, SB-026, SB-034, SB-035 | T-22/T-23 / 종료·정정 | [월 정정](testing/monthly-assets-client.md), [재전송·충돌](testing/cashflow-client.md), [재고 동시성](testing/homecare-server.md), [감사 조회](testing/settings-audit.md), [네이티브 감사 경계](testing/native-audit.md) |
 | R-20 | SB-009, SB-023, SB-032, SB-037, SB-039 | G6 / 복원·민감export 제외 | [첨부 권한](testing/documents-server.md), [내보내기 서버](testing/exports-server.md), [웹](testing/exports-client.md), [Android](testing/native-exports.md) |
 | R-21 | SB-001, SB-036, SB-038 | 정식서명·HTTPS·업그레이드 | [고정 도구/실행](development-environment.md), [운영·배포 인수 기준](deployment-backup-operations.md) |
 | R-22 | SB-002, SB-004, SB-007, SB-010, SB-013, SB-014, SB-016, SB-021, SB-022, SB-026, SB-035 | T-01~T-24 | [T-01~24 명세](testing-and-acceptance.md), [공통 fixture](../packages/test-fixtures/README.md) |
