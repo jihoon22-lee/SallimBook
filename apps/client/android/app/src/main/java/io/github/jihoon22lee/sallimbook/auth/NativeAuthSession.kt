@@ -362,17 +362,7 @@ internal class NativeAuthSession private constructor(context: Context) {
     }
 
     private fun passkeyFailure(response: NativeHttpResponse, unauthenticatedLogin: Boolean = false): Nothing {
-        if (response.status == 401) {
-            if (!unauthenticatedLogin) clearLocal()
-            throw AuthFailure(if (unauthenticatedLogin) AuthCode.PASSKEY_FAILED else AuthCode.SESSION_EXPIRED)
-        }
-        val code = ((response.body as? Map<*, *>)?.get("error") as? Map<*, *>)?.get("code")
-        throw AuthFailure(when (code) {
-            "PASSKEYS_DISABLED", "PASSKEY_CONFIGURATION_INVALID" -> AuthCode.PASSKEYS_DISABLED
-            "PASSKEY_REQUIRED" -> AuthCode.PASSKEY_REQUIRED
-            "REAUTHENTICATION_REQUIRED" -> AuthCode.REAUTHENTICATION_REQUIRED
-            else -> AuthCode.PASSKEY_FAILED
-        })
+        PasskeyPolicy.reject(response.status, response.body, unauthenticatedLogin, ::clearLocal)
     }
 
     fun beginPasskey(

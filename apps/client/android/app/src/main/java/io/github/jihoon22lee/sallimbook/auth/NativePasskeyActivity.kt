@@ -204,27 +204,53 @@ class NativePasskeyActivity : AppCompatActivity() {
     private fun loadTarget() {
         if (!ready() || gate != null || targetLoaded || mode !in setOf(REVOKE, DEVICE, ACCOUNT)) return
         val request = ForegroundRequest().also { gate = it }
-        val path = if (mode == REVOKE) "/api/v1/auth/passkeys?limit=200" else "/api/v1/devices?limit=200"
-        val completion: (AuthOutcome) -> Unit = { outcome -> runOnUiThread {
+        if (mode == ACCOUNT) { loadAccountTarget(request); return }
+        loadTargetPage(request, PasskeyTargetPages(mode == REVOKE, targetId!!, ifMatch!!))
+    }
+
+    private fun loadTargetPage(request: ForegroundRequest, pages: PasskeyTargetPages) {
+        if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return }
+        val path = pages.nextPath ?: return
+        auth.request("GET", path, null, request) { outcome -> runOnUiThread {
+            if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
+            if (outcome.code != null || outcome.value?.get("status") != 200) {
+                gate = null
+                showFailure(outcome.code ?: AuthCode.ACCESS_DENIED)
+                return@runOnUiThread
+            }
+            val row = try { pages.accept(outcome.value["body"]) } catch (failure: AuthFailure) {
+                gate = null
+                showFailure(failure.code)
+                return@runOnUiThread
+            }
+            if (row != null) {
+                gate = null
+                targetLoaded = true
+                status.text = "대상: ${row["label"]}\n아래 버튼으로 이 항목의 해제를 확인해 주세요."
+                submit.isEnabled = true
+            } else if (pages.nextPath != null) {
+                loadTargetPage(request, pages)
+            } else {
+                gate = null
+                showFailure(AuthCode.ACCESS_DENIED)
+            }
+        } }
+    }
+
+    private fun loadAccountTarget(request: ForegroundRequest) {
+        auth.finance(FinanceOperation.GET_ACCOUNT, org.json.JSONObject().put("accountId", targetId), request) { outcome -> runOnUiThread {
             if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
             gate = null
-            val body = outcome.value?.get("body") as? Map<*, *>
-            val row = if (mode == ACCOUNT) body else (body?.get("items") as? List<*>)?.mapNotNull { it as? Map<*, *> }?.singleOrNull { it["id"] == targetId }
-            if (outcome.code != null || outcome.value?.get("status") != 200 || row == null ||
-                mode != ACCOUNT && "\"${row["version"]}\"" != ifMatch || mode == ACCOUNT && row["has_number"] != true) {
+            val row = outcome.value?.get("body") as? Map<*, *>
+            if (outcome.code != null || outcome.value?.get("status") != 200 || row == null || row["has_number"] != true) {
                 showFailure(outcome.code ?: AuthCode.ACCESS_DENIED)
             } else {
                 targetLoaded = true
-                status.text = if (mode == ACCOUNT) {
-                    val asset = row["asset"] as Map<*, *>
-                    "${asset["name"]} · ${row["institution_name"]}\n${row["masked_number"]}\n이 계좌의 전체 번호를 확인합니다."
-                } else "대상: ${row["label"]}\n아래 버튼으로 이 항목의 해제를 확인해 주세요."
+                val asset = row["asset"] as Map<*, *>
+                status.text = "${asset["name"]} · ${row["institution_name"]}\n${row["masked_number"]}\n이 계좌의 전체 번호를 확인합니다."
                 submit.isEnabled = true
             }
         } }
-        if (mode == ACCOUNT) auth.finance(FinanceOperation.GET_ACCOUNT,
-            org.json.JSONObject().put("accountId", targetId), request, completion)
-        else auth.request("GET", path, null, request, completion)
     }
 
     private fun submitNativePasskey() {

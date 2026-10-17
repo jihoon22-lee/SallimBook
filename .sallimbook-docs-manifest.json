@@ -66,8 +66,8 @@
       "git_sha1": "0140c9483d11818be204056d9906ed03faa74e59"
     },
     "docs/api-contract.md": {
-      "sha256": "1c88047172c0f5599c46a2b59beea46536158e1a112f310091d599f249606a78",
-      "git_sha1": "5310cacbe0052ac91b3d95aeab834f8348c616e0"
+      "sha256": "b732f864037674f1e12a5327d2100e2ec313d71a696a792150f140b20f715df4",
+      "git_sha1": "e86ec4a5473237738d21c79c9a9dd91f460ed50e"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -226,8 +226,8 @@
       "git_sha1": "05095fa6358915dcd93ec86267885a56087ed409"
     },
     "docs/testing/passkeys-web.md": {
-      "sha256": "cf830c8b8af6c26e3ab07d7fe4c9843ea602cf2afba217e50e9407dfdf26c9a3",
-      "git_sha1": "dffacd8b08f781d4085351108e8a4a3b5f9ef517"
+      "sha256": "0efece15a939fbda00d9cf96fa8c42a63aa4d40e9ec25874cb49a81cad436e60",
+      "git_sha1": "cfde913f5abf050ad7a28ba4ff90f59953aeb4b4"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "75e50c296b96865b339ad3604d9c2573b64df85fde44ea3312df6774d41c394f",
