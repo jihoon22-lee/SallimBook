@@ -18,6 +18,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [화면 명세](screen-specifications.md) | 26개 화면, Android/PC 배치·입력·상태·오류 |
 | [보안·인증](security-authentication.md) | 위협 모델, 계정/잠금/복호화, 민감정보 정책 |
 | [보관함 키 수명주기](vault-key-lifecycle.md) | 부부 공유, 새 기기, 복구, 회전, 로컬 CVC |
+| [첨부 서버 검증](testing/documents-server.md) | 인증 다운로드, 암호화 저장, typed 연결, 정리 정책과 시험 결과 |
 | [보험 사건 흐름](insurance-workflows.md) | 진료 트리, 복수 청구, 분할 지급, 정산 예시 |
 | [개발 환경](development-environment.md) | WSL, 버전 고정, Android 빌드, 환경 분리 |
 | [월 입력 UI 검증](testing/monthly-assets-client.md) | SB-012 확정·정정·멱등 재시도·실제 HTTPS 검증 |

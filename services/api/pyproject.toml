@@ -13,6 +13,8 @@ dependencies = [
   "argon2-cffi==25.1.0",
   "webauthn==3.0.1",
   "cryptography==50.0.2",
+  "pillow==13.0.0",
+  "pypdf==6.21.1",
 ]
 
 [build-system]

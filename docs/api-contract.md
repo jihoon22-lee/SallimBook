@@ -341,14 +341,46 @@ PC 웹에서는 별도 vault adapter가 암호문을 복호화하며 일반 Quer
 
 ## 6. 첨부
 
-v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을 명시적으로 변경한다.
-확장자·선언 MIME만 믿지 않고 실제 포맷·크기와 악성 내용을 검사한다.
-다운로드는 권한 확인 후 스트림 또는 매우 짧은 만료의 목적 제한 링크를 사용한다.
-치료명이나 실제 이름을 object storage key에 포함하지 않는다.
-카드 앞뒷면 이미지 첨부는 secret 경계를 우회하므로 지원하지 않는다.
+SB-023은 PDF/JPEG/PNG 원본을 파일당 **20MiB(20,971,520바이트)**까지 지원한다.
+`POST /documents`에 파일명·MIME·실제 크기·SHA-256·typed target·`contains_no_card_data: true`를
+제출하면 pending 문서와 최초 연결을 같은 트랜잭션으로 만든다. 생성은 Idempotency-Key를 요구하고
+201 Location 및 불변 `{id, version}` 참조를 반환한다. 파일명은 경로·제어문자·방향 제어문자를
+허용하지 않으며 확장자도 선언 MIME과 일치해야 한다. 카드 사진·번호·CVC 첨부는 지원하지 않는다.
+
+`PUT /documents/{id}/content`는 `application/octet-stream` 원본과 문서 If-Match/Idempotency-Key를
+받는다. 크기·해시·실제 형식·악성 내용·카드 정보 검사를 모두 통과한 원본만 암호화해 ready로 전환한다.
+본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
+503이다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
+검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
+
+| 동작 | 경로·버전 기준 |
+|---|---|
+| 목록/상세 | GET /documents, GET /documents/{id}; 목록은 target_kind와 target_id를 함께 지정 가능 |
+| 원본 다운로드 | GET /documents/{id}/download; 현재 가계 권한과 ready 상태 확인 후 인증 응답으로 전달 |
+| 문서 삭제 | POST /documents/{id}/delete; 사유·문서 If-Match·멱등키, 연결도 함께 종료 |
+| 연결 추가 | POST /document-links; document_id/target·문서 If-Match·멱등키 |
+| 연결 이력 | GET /documents/{id}/links; 활성·종료 이력을 모두 반환 |
+| 연결 종료 | POST /document-links/{id}/end; 사유·연결 If-Match·멱등키, 문서 버전도 증가 |
+
+target.kind는 policy/case/medical_node/expense/claim/appliance/asset 중 하나이며 같은 가계의
+실제 대상을 검증한다. 카드 대상은 없다. 목록은 UUID cursor와 limit 1~200을 사용한다.
+응답에는 저장소 경로·암호화 키·nonce가 없으며 다운로드는 no-store/nosniff/CSP sandbox와
+attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만들지 않는다.
+pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
+정리 명령과 검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
+
+### SB-018 결제수단 연결 조회와 종료 확인
+
+`GET /api/v1/cards/{resource_id}/payment-links`와 `GET /api/v1/accounts/{resource_id}/payment-links`는 현재·미래 규칙 버전, 미납/부분 납부 회차와 연결 카드를 각각 count/cursor 페이지로 반환한다. `as_of_date`는 기본 서울 오늘이며 종료 화면에서는 선택한 종료일을 전달한다. 카드 승인 계획과 계좌 직접 납부 계획을 구분하고, 응답은 `registered_recurring_only` 및 `account_withdrawal_total_available=false`로 전체 카드대금 출금액을 알 수 없음을 명시한다.
+
+카드 PATCH/archive 및 계좌에 연결된 자산 PATCH/archive에서 새 종료일을 저장할 때 서버는 가계 잠금 안에서 연결을 다시 읽는다. 영향이 있으면 `closure_ack=true`와 조회에서 받은 `usage_digest`가 필요하며, 누락은 409 `PAYMENT_LINK_CONFIRMATION_REQUIRED`, 조회 이후 내용·버전·종료일 변경은 409 `PAYMENT_LINKS_CHANGED`다. digest는 페이지 밖의 연결까지 포함하며 권한 증명이 아니다. 종료일을 바꾸면 다시 조회한다. 확인 필드만 보낸 PATCH는 거부한다. 확인 필드는 DB·감사 변경 필드 목록에 저장하지 않는다.
+
+기존에 종료된 항목의 일반 메타데이터 수정에는 다시 확인을 요구하지 않는다. 종료일을 다른 날짜로 바꾸면 다시 확인한다. 과거 규칙·회차·현금 기록은 자동 이동하거나 삭제하지 않으며, 결제수단 교체는 사용자가 규칙 변경 또는 카드 납부계좌 수정으로 명시한다.
+
+웹/Android 화면은 종료일 기준 모든 페이지를 읽고 같은 digest·자원 버전·총건수를 확인한 뒤 명시 확인을 요구한다. 연결 변경409에서는 작성한 종료일을 유지하고 내역을 다시 읽으며 이전 확인을 재사용하지 않는다. Android 네이티브 경로도 확인 여부와 digest를 함께 전달한다.
 
 ### SB-019/SB-020 보험계약·독립 사건·진료 트리
 
@@ -394,3 +426,27 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 금전 생성·정정·무효·환불·반환·배분 연결 변경은 Idempotency-Key를 요구한다. 기존 대상에 적용하는 명령은 If-Match도 요구하며 환불/반환 생성에는 부모 의료비/지급의 버전을 사용한다. 결과는 변경 당시 `{id, version}` 참조이고 재전송해도 변하지 않는다. 최신 상태와 가능한 후속 동작은 GET으로 다시 조회한다. 청구 메타데이터 수정은 If-Match와 사유를 요구한다. 소득 화면은 실제 보험금 원본을 읽기 전용으로 투영하며 계좌 잔액이나 자산 스냅샷을 자동 변경하지 않는다.
 
 보험 계약·사건·금전 화면의 생성 client/Android adapter 연결과 실제 HTTPS 검증은 [보험 UI 검증 기록](testing/insurance-client.md)을 따른다.
+
+### SB-024~SB-027 가전·공용 재고·교체
+
+`/api/v1/appliances`와 `/consumables`는 POST/목록 GET, `/{id}`는 GET/PATCH를 제공한다.
+목록의 `status`는 active/ended/all이며 기본 active다. 가전 구매일·보증기한·구매액 미입력과 0원은 구분한다.
+금액은 십진 문자열, 수량은 0~1,000,000 범위의 엄격한 정수다. 가전 구매액과 재고 입고액은 자산·현금 기록을 자동 생성하지 않는다.
+수정은 `If-Match`, 상태 종료는 `ended_on` PATCH를 사용하며 이력을 실제 삭제하지 않는다.
+
+`/appliance-consumables`의 POST/GET와 `/{link_id}` GET/PATCH가 기기별 호환·주기·교체 수량·다음 확인일 override를 관리한다.
+동일 가계의 가전/소모품 조합은 하나이며 중지한 연결은 같은 행을 다시 활성화한다. 소모품 규격이 있으면 가계 안에서 유일하다.
+구매일·입고일을 교체일로 추정하지 않으며, 교체 이력이 없으면 다음 확인일은 unknown이다.
+
+`/consumables/{id}/stock-movements` POST/GET 및 `/{movement_id}` GET, `/{movement_id}/cancel` POST가
+입고(receipt), 반품 입고/출고(return_in/return_out), 사유 있는 조정(adjustment)과 원본의 완전 취소를 제공한다.
+`/appliance-consumables/{link_id}/replacements` POST/GET 및 `/{replacement_id}` GET, `/{replacement_id}/cancel` POST가 교체·취소를 제공한다.
+재고 쓰기는 `If-Match: "현재 소모품 version"`과 `Idempotency-Key`를 함께 요구한다. 교체에는 현재 `link_version`과
+`clear_next_check_override` 선택이 추가로 필요하다. 교체와 재고 감소는 같은 트랜잭션이며, 부족하면 409 `INSUFFICIENT_STOCK`이다.
+응답은 원본 실행 당시 `stock_version`, movement ID와 선택적 replacement ID의 불변 참조다. 재전송 뒤에는 현재 자원을 다시 조회한다.
+취소도 새 반대 동작을 기록하며, 당시 저장한 옛 날짜를 덮어쓰지 않고 취소되지 않은 가장 최근 교체를 다시 선택한다.
+
+`GET /api/v1/homecare/status`는 Asia/Seoul의 오늘(`as_of`) 기준으로 사용 중인 가전/소모품 연결을 반환한다.
+`replacement_due`는 날짜 미확인일 때 null, `purchase_needed`는 공용 재고가 기기별 교체 수량보다 적을 때 true이며
+`low_stock`은 별도의 재고 부족 임계와 비교한다. 자산의 선택 월은 입력으로 받지 않는다. 모든 목록은 UUID cursor와 최대 200개 limit로 나눈다.
+첨부파일의 연결·다운로드는 SB-023의 별도 typed 문서 계약을 사용한다.

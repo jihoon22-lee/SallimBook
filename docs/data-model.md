@@ -181,11 +181,21 @@ stock_quantity는 movement 합계의 트랜잭션 내 캐시다. 정기 검증�
 | audit_events | actor_id, entity_type, entity_id, action, request_id, before_version?, after_version?, safe_diff, occurred_at | 비밀/토큰/문서 원문 제외; 일반 금액 정정은 권한 보호 |
 | idempotency_records | actor_id, operation, key, request_hash, response_reference, state, expires_at | unique(actor_id,operation,key); 다른 payload 재사용=409 |
 
-파일 업로드는 pending → 검증 → committed, 연결 도중 실패한 orphan은 보존 기간 뒤 정리한다.
+파일 업로드 상태는 pending → ready → deleted이며 검증 실패 시 pending을 유지한다.
+24시간이 지난 pending에는 업로드할 수 없다. 연결 없는 ready 문서는 명시적 삭제 전까지 보존하며,
+DB 참조 없는 암호문이나 삭제 뒤 24시간이 지난 암호문만 정리 명령의 대상이다.
 현재 감사 helper는 자원 ID·작업·행 버전·변경 필드명만 저장하며 사용자 입력값을 임의 dict로 받지 않는다.
 자산 생성·수정·종료·삭제와 감사 기록을 같은 트랜잭션에서 저장한다. FK 충돌 등으로 실패하면 감사 추가도 롤백한다.
 감사 행의 actor_id는 해당 가계의 사용자 복합 FK로 제한한다. 감사 조회 API는 후속 화면 연결에서 추가한다.
 가계가 다른 parent와 document를 연결할 수 없다.
+
+`0013_documents`는 documents/document_links와 같은 가계의 typed 복합 FK를 추가한다.
+문서 metadata·저장 완료 envelope는 변경할 수 없고 물리 삭제는 차단한다. 링크는 정확히 하나의
+대상만 가지며 같은 활성 연결은 유일하다. 링크 삽입은 문서 행을 잠가 동시 삭제와 직렬화한다.
+ready 전환에는 활성 링크가 필요하고 deleted 문서는 활성 링크를 가질 수 없다.
+링크 종료와 삭제 사유·시각은 보존하며 soft delete가 감사·원본 연결 이력을 없애지 않는다.
+저장소의 불투명 UUID 파일명, 키 버전, nonce, checksum과 저장 시각은 DB에서 관리한다.
+암호문 파일 생성과 DB commit 사이 장애는 전역 advisory lock을 쓰는 정리 작업으로 회수한다.
 
 ## 9. 핵심 관계도
 
@@ -272,3 +282,13 @@ erDiagram
 금전 메타데이터·상세·이력의 직접 덮어쓰기와 삭제를 DB trigger로 거부한다. 현재 청구는 사건/계약을 유지하고 배분은 지급/사건/금액/성격을 유지한다. 버전 갱신은 한 단계씩 증가한다. 연결된 cash 원본은 사실 변경 없이 활성에서 무효로만 전환하며 활성 반환이나 현재 청구 근거가 남아 있으면 거부한다. 처방과 비용 이력은 양방향 검사한다.
 
 영수증 상세의 선택적 정확한 합계와 지급의 필수 배분 합계는 지연 제약 trigger로 트랜잭션 끝에 확인한다. 여러 행을 생성하는 중간 상태를 허용하되 불일치한 묶음을 커밋하지 않는다. 환불/반환은 원본 cash 잠금과 활성 합계 제약을 사용한다. 모든 관계의 가계와 사건은 typed 복합 FK로 보호하며 사건 집계는 비용 원본·수령 배분·환불/반환을 각각 한 번만 사용한다.
+
+### SB-024~SB-027 실제 재고 저장소
+
+`0012_homecare`는 appliances, consumables, appliance_consumables, stock_movements,
+consumable_replacements 다섯 테이블을 추가한다. 가전/소모품/동작/교체 관계와 작성자는 모두 가계 복합 FK로 묶는다.
+소모품의 `stock_quantity`는 동작 합계 캐시이며 커밋 시 지연 제약으로 실제 원장 합계와 대조한다.
+각 동작은 처리 당시 `stock_version`을 캡처하고 소모품 안에서 유일하다. 교체 출고와 교체 기록은 정확히 한 쌍이다.
+동작/교체의 UPDATE·DELETE를 막고, 취소는 한 원본에 하나의 정확한 반대 수량 동작만 허용한다.
+취소 기록을 다시 취소할 수 없으며 재고는 음수가 될 수 없다. 원장이 있으면 수량 단위를 바꾸지 못한다.
+기기별 연결의 양 끝 ID도 불변이다. 마지막 교체일은 취소되지 않은 원본 중 날짜·ID 순서로 선택한다.

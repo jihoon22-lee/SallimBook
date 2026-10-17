@@ -219,3 +219,20 @@ SB-019/SB-020 보험 서버의 합성 계약·암호화20개, API/권한/동시�
 구체적인 범위와 결과는 [보험 UI 검증 기록](testing/insurance-client.md)을 따른다.
 
 SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 직접 DB 제약19, 기존 보험 API27·계약/암호화20·보존4). 실제 PostgreSQL에서 T-12~T-19/T-22, 금전 정정 중 실패의 전체 rollback, 동시 반환 한도, 멱등 재전송, 현재 청구 근거 정정과 과거 이력, 다른 가계/사건 차단, 읽기 전용 소득 투영과 스냅샷 불변을 확인했다. `uv run --project services/api python scripts/test_database.py services/api/tests/test_insurance_events.py services/api/tests/test_insurance_event_storage.py services/api/tests/test_insurance_core.py services/api/tests/test_insurance_contract.py services/api/tests/test_insurance_storage.py -q` 및 Alembic drift/왕복을 통과했고 전용 DB를 정지했다. 생성 API client·타입·전체 Ruff·문서 검사도 통과했다. 보험 화면은 별도 client 검증을 따르며 실기기 검증은 남아 있다.
+
+진료 트리 정렬 보완 뒤 보험 API27개와 Alembic drift/왕복 검사를 통과했다. 페이지 크기1·2·3에서 부모/자식·동순위 UUID·다른 사건 cursor·부모 이동을 확인하며 기존 계약/암호화20개·DB 보존4개와 함께 유지한다.
+
+SB-024~SB-027의 가전·재고 API 21개와 `0012_homecare`를 구현했다.
+관련 순수 계산/스키마 33개, 실제 PostgreSQL API 27개와 DB 불변식 15개, 총 75개 검사와
+migration drift 및 전체 downgrade/upgrade가 통과했다. 상세 범위는 [가전·재고 검증](testing/homecare-server.md)을 참고한다.
+웹·Android 화면과 가전 구매 문서 연결은 후속 통합 범위다.
+
+### 첨부 저장과 검사
+
+SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외부 필드 keyring을 사용한다.
+검사 설정은 `SALLIMBOOK_DOCUMENT_SCANNER_SOCKET`, `SALLIMBOOK_DOCUMENT_TESSERACT_PATH`,
+`SALLIMBOOK_DOCUMENT_PDFTOPPM_PATH`이며 기본 미설정 상태는 업로드 503으로 실패한다.
+호스트에 도구를 임의 설치하거나 운영 키를 생성하지 않았다. 격리된 [실제 검사 도구 이미지](../infra/documents/README.md)와
+[서버 135개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
+정리 명령 `uv run --project services/api python scripts/cleanup_documents.py`는 기본 dry-run이다.
+검토 후 `--apply`를 명시하면 24시간이 지난 DB 미참조/삭제 암호문만 제거하며 metadata 이력은 유지한다.
