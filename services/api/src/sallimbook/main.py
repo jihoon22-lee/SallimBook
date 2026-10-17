@@ -11,6 +11,7 @@ from sallimbook.config import Settings
 from sallimbook.core.database import REQUIRED_SCHEMA_REVISION, make_engine
 from sallimbook.core.errors import DomainError, ErrorResponse
 from sallimbook.core.http import install_http_contract
+from sallimbook.identity.router import router as identity_router
 
 
 class HealthResponse(BaseModel):
@@ -41,7 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json" if development else None,
         lifespan=lifespan,
         responses={
-            code: {"model": ErrorResponse} for code in (400, 401, 403, 404, 409, 422, 500, 503)
+            code: {"model": ErrorResponse} for code in (400, 401, 403, 404, 409, 422, 429, 500, 503)
         },
     )
     install_http_contract(app)
@@ -87,6 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from None
         return HealthResponse(status="ok")
 
+    app.include_router(identity_router)
     return app
 
 

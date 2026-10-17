@@ -1,5 +1,25 @@
 """Explicit model registry for migrations; no dynamic import of arbitrary modules."""
 
+from sallimbook.core.idempotency import IdempotencyRecord
+from sallimbook.identity.auth_models import (
+    AuthSession,
+    HouseholdMember,
+    Invitation,
+    LoginThrottle,
+    RefreshToken,
+    RegisteredDevice,
+    User,
+)
 from sallimbook.identity.models import Household
 
-__all__ = ["Household"]
+__all__ = [
+    "AuthSession",
+    "Household",
+    "HouseholdMember",
+    "IdempotencyRecord",
+    "Invitation",
+    "LoginThrottle",
+    "RefreshToken",
+    "RegisteredDevice",
+    "User",
+]
