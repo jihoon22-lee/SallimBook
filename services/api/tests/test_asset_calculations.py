@@ -183,6 +183,10 @@ def test_invalid_or_incomplete_sources_cannot_yield_confirmed_comparison():
     with pytest.raises(ValueError):
         AssetValue("a", None)
     with pytest.raises(ValueError):
+        AssetValue("a", None, verification_state="carried_unconfirmed")
+    carried_zero = asset_totals([AssetValue("a", 0, verification_state="carried_unconfirmed")])
+    assert carried_zero.net_assets_krw == 0 and carried_zero.provisional
+    with pytest.raises(ValueError):
         AssetValue("a", 1, verification_state="missing")
     previous = AssetMonth("2025-01", (row,), "confirmed")
     invalid_current = AssetMonth(

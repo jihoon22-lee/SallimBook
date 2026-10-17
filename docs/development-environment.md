@@ -87,6 +87,7 @@ Windows의 별도 checkout이 필요하면 Git으로 동기화하고 생성 파�
 현재 실행 명령은 [README](../README.md#개발-실행)에 있다.
 SB-001은 기본 화면·프로세스 health·웹/Android 빌드, SB-002는 PostgreSQL·migration·공통 계약을 포함한다.
 개발 포트는 API 18741, Vite 18742, 웹 E2E 18743, 개발 DB 18744, 일회용 시험 DB 18745다.
+시험 DB는 데이터·WAL을 tmpfs에 두므로 확장된 migration/이력 회귀의 메모리 사용을 포함해 한도를 1 GiB로 둔다. 개발 DB 한도는 384 MiB로 유지한다.
 기존 서버를 종료하거나 점유 포트를 빼앗지 않는다.
 `scripts/setup_dev.py`는 기존 `.env`를 덮어쓰지 않고 새 파일에만 난수 개발 비밀번호를 저장한다(mode 0600).
 `pnpm db:up`과 `db:stop`은 Compose 프로젝트 `sallimbook-dev`의 `db` 서비스만 제어한다.
@@ -173,3 +174,7 @@ loopback 18748 포트에서 UI 회귀를 실행한다. `uv run --project service
 
 구현 범위와 검증 결과는 [자산·계좌 UI 검증 기록](testing/assets-accounts-client.md)을 따른다.
 Android 번호 입력·표시 실기기 시험은 빌드/JVM/브라우저 bridge 모의시험과 구분한다.
+
+### 병렬 검증 자원
+
+같은 WSL에서 UI 브라우저 검사를 실행하는 동안 Docker 시험 컨테이너의 생성·시작·중지를 병행하지 않는다. 네트워크 인터페이스 변경이 Chromium의 모듈 요청에 `ERR_NETWORK_CHANGED`를 일으킬 수 있어 순서를 조정한다. 별도 UI 포트는 config 하나의 webServer로 지정한다. `/tmp`가 메모리 기반이고 공간이 부족하면 재생성 가능한 이전 빌드 캐시를 정리하거나 TMPDIR를 충분한 로컬 저장소로 지정한다. 소스·사용자 파일·기존 서비스는 정리 대상이 아니다.
