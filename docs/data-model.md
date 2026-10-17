@@ -107,7 +107,7 @@ draft/확정/재개방의 멱등 응답은 원래 revision ID·번호·version�
 
 | 테이블 | 핵심 필드 | 제약·용도 |
 |---|---|---|
-| cards | owner_member_id, issuer_name, product_name, alias, card_type, last_four, settlement_day?, settlement_account_id?, status | 일반 API에는 마스킹 정보만 |
+| cards | owner_member_id, issuer_name, product_name, alias, card_type, last_four, settlement_day?, settlement_account_id?, started_on?, ended_on? | 일반 API에는 마스킹 정보만 |
 | vault_versions | household_id, key_version, state, created_by | unique(household_id,key_version) |
 | vault_member_wrappings | member_id, key_version, kdf_name, kdf_params, salt, wrap_nonce, wrapped_key | unique(member_id,key_version); 각 구성원의 별도 암호 |
 | vault_recovery_wrappings | household_id, key_version, wrap_nonce, wrapped_key, recovery_generation | 서버에 복구코드 원문 없음 |
@@ -251,3 +251,7 @@ erDiagram
 ### SB-014 구현 상태
 
 `0007_cash_records`는 `cash_records`, `cash_record_revisions`, `income_conversions`를 추가한다. CashRecord 버전별 원본과 전환 묶음은 타입이 있는 행으로 남기고 DB trigger가 UPDATE/DELETE를 거부한다. 일반 audit에는 금액·메모 원문을 복제하지 않는다. 수입의 계좌 연결은 구현됐고 카드 FK는 실제 카드 테이블을 추가하는 migration에서 연결한다. 향후 고정 납부·의료비·보험금 subtype는 공통 cash 생성 helper를 같은 트랜잭션에서 호출하며 수입 API는 임의 subtype 생성을 노출하지 않는다.
+
+### SB-017 구현 상태
+
+`0008_cards`는 카드 metadata와 cash 원본/이력의 `card_id` 복합 FK를 추가한다. 상태는 ended_on에서 파생하며 소유자와 결제계좌도 같은 가계 FK로 묶는다. cash 계좌/카드 배타 선택과 수입·보험금의 카드 사용 금지를 DB CHECK로 검증한다. 기존 cash 행은 card_id가 null인 채로 유지된다. 카드 종료는 cash 이력이나 계좌 연결을 삭제하지 않고, 사용 중인 카드의 물리 삭제는 FK로 차단한다. 일반 카드 테이블에 PAN·유효기간·CVC가 없으며 보관함 암호문도 별도 테이블을 추가할 때 연결한다.

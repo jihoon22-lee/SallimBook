@@ -62,20 +62,20 @@
       "git_sha1": "8b1efc9af0109b44edebba0787076a0962c6dfd9"
     },
     "docs/data-model.md": {
-      "sha256": "800185f7c20f23ca4721f79751e0c258f10c54482492cebb0a9269271c8158f1",
-      "git_sha1": "88562e58eade97908344eb5444d7f43cdb06ddee"
+      "sha256": "45033e6480aab10971dd9066f8153c1a0d228e4c396e344c15272b1f3ac74fce",
+      "git_sha1": "de819030a4bc6eb7d5b149fea602422501161e45"
     },
     "docs/api-contract.md": {
-      "sha256": "0cf3144a1c1d2f74715791b03d3f8f45441bc5db28156901801dffa3ecd71194",
-      "git_sha1": "8db73b2b43ccab40729258820813f9e21f6a7bdc"
+      "sha256": "8a86453762d44c63dbc781c2b74e692d63215ff711624ef00248a40ec572d6a7",
+      "git_sha1": "0d31ed08dc54e0b4ce163df4b663e7fe3d027194"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "92043688711699443136a589434d846103d3bd3a46ab739b59029df5a79a2e7d",
-      "git_sha1": "e4cf137ac486e03ae670db42b1e0ed34a99bc21a"
+      "sha256": "c1a41abca9ae760087fc7f843ee89483a10d5b0d43d5055df8273867a4a290e1",
+      "git_sha1": "17c1f35e3b38e63fbc1f94f77d500b378cc0c510"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "4fda7d2fb36ddc154a3ad9a12f7c5f7a199e7895346f6061a0f318f2a0441c21",
