@@ -270,6 +270,27 @@ class BundleTests(unittest.TestCase):
         errors, _ = v.local_link_errors(self.root, [self.root / 'README.md'])
         self.assertTrue(errors)
 
+    def test_dependency_documents_do_not_enter_project_validation(self):
+        for directory in ('node_modules/package', 'services/api/.venv/package', 'apps/client/dist'):
+            path = self.root / directory / 'README.md'
+            path.parent.mkdir(parents=True)
+            path.write_text('[vendor link](missing.md)')
+        paths = [path for path in v.project_files(self.root) if path.suffix == '.md']
+        self.assertEqual(paths, [self.root / 'README.md'])
+        self.assertEqual(v.local_link_errors(self.root, paths)[0], [])
+
+    def test_new_project_document_is_still_validated(self):
+        new = self.root / 'docs/new.md'
+        new.parent.mkdir()
+        new.write_text('[broken](missing.md)')
+        paths = [path for path in v.project_files(self.root) if path.suffix == '.md']
+        self.assertIn(new, paths)
+        self.assertEqual(len(v.local_link_errors(self.root, paths)[0]), 1)
+
+    def test_document_discovery_does_not_follow_symlink_directory(self):
+        (self.root / 'loop').symlink_to(self.root, target_is_directory=True)
+        self.assertEqual(len(v.project_files(self.root)), 3)
+
 
 class IntegrationTests(unittest.TestCase):
     setUp = BundleTests.setUp

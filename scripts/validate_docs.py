@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -11,6 +13,40 @@ from urllib.parse import unquote, urlsplit
 from publish_github import MANIFEST, PublishError, load_bundle, validate_plan
 
 ROOT = Path(__file__).resolve().parents[1]
+
+IGNORED_DIRECTORIES = {
+    '.git', '.venv', 'node_modules', 'dist', 'build', '.gradle', '.kotlin',
+    '__pycache__', '.pytest_cache', '.ruff_cache', '.cache', '.pnpm-store',
+    'coverage', 'playwright-report', 'test-results', 'private', 'private-data',
+    'secrets', 'attachments', 'uploads', 'backups',
+}
+
+
+def project_files(root: Path) -> list[Path]:
+    """Include new project documents, but never walk dependency/output trees."""
+    try:
+        top = subprocess.run(
+            ['git', '-C', str(root), 'rev-parse', '--show-toplevel'],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        if Path(top).resolve() == root.resolve():
+            result = subprocess.run(
+                ['git', '-C', str(root), 'ls-files', '--cached', '--others',
+                 '--exclude-standard', '-z'], capture_output=True, check=True,
+            )
+            candidates = {root / os.fsdecode(name) for name in result.stdout.split(b'\0') if name}
+            return sorted(p for p in candidates if p.is_file() and not p.is_symlink()
+                          and not (set(p.relative_to(root).parts) & IGNORED_DIRECTORIES))
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass  # A downloaded documentation bundle need not be a Git checkout.
+    result = []
+    for parent, directories, names in os.walk(root, followlinks=False):
+        directories[:] = [name for name in directories
+                          if name not in IGNORED_DIRECTORIES
+                          and not (Path(parent) / name).is_symlink()]
+        result.extend(Path(parent) / name for name in names
+                      if not (Path(parent) / name).is_symlink())
+    return sorted(result)
 
 
 def strip_fences(text: str) -> str:
@@ -51,14 +87,14 @@ def local_link_errors(root: Path, paths: list[Path]) -> tuple[list[str], int]:
 
 
 def check(root: Path) -> dict:
-    paths = sorted(p for p in root.rglob('*.md') if '.git' not in p.parts)
+    maintained = project_files(root)
+    paths = [p for p in maintained if p.suffix == '.md']
     errors, links = local_link_errors(root, paths)
     if (root / MANIFEST).exists():
         files, _ = load_bundle(root)
         manifest_checked = True
     else:
-        files = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob('*')
-                 if p.is_file() and '__pycache__' not in p.parts and '.git' not in p.parts}
+        files = {str(p.relative_to(root)): b'' for p in maintained}
         manifest_checked = False
     plan = json.loads((root / 'planning/backlog.json').read_text(encoding='utf-8'))
     validate_plan(plan, files)
