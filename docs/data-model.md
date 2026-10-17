@@ -5,7 +5,8 @@
 SB-002의 `0001_households`는 가계 루트와 KRW/Asia·Seoul/version 제약을 생성한다.
 SB-005/007의 `0002_identity_auth`는 사용자·구성원·초대·기기·세션·refresh 이력·요청 제한·멱등 기록을 추가한다.
 SB-006의 `0003_passkeys`는 `auth_credentials`, `auth_challenges`, `auth_step_up_grants` 세 테이블을 추가한다.
-SB-010의 `0004_assets`는 자산 식별 정보와 `audit_events`를 추가한다. 월 평가액·계좌 테이블은 아직 포함하지 않는다.
+SB-010의 `0004_assets`는 자산 식별 정보와 `audit_events`를 추가한다.
+SB-011의 `0005_accounts`는 금융 자산과 1:1 연결되는 `financial_accounts`를 추가한다. 월 평가액은 후속 migration이다.
 아래 나머지 업무 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
 공통 ORM은 UUID·UTC timestamp·낙관적 version을 제공하며, `KrwNumeric` 바인딩은
 float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. 새 DB에 사용자 가계를 자동 생성하지 않는다.
@@ -69,7 +70,7 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 | 테이블 | 핵심 필드 | 제약·용도 |
 |---|---|---|
 | assets | id, kind(asset/liability), category, name, owner_member_id?, ownership_kind, household_share, amount_basis, started_on, ended_on, inclusion_status | 금융·부동산·보증금·대출 공통 집계 단위 |
-| financial_accounts | asset_id, institution_name, account_type, account_number_ciphertext, number_key_version, masked_number, purpose, opened_on, closed_on | asset_id unique; 계좌별 자산 중복 없음 |
+| financial_accounts | asset_id, institution_name, account_type, account_number_ciphertext?, number_nonce?, number_key_version?, last_four?, purpose?, opened_on?, created_by_member_id, updated_by_member_id | asset_id unique; 가계·자산 및 작성/수정 구성원 복합 FK; 번호 envelope 전체 null 또는 전체 유효 |
 | asset_months | household_id, period_month, current_revision_id | unique(household_id,period_month) |
 | asset_month_revisions | month_id, revision_no, state, confirmed_at, reopened_reason, previous_revision_id? | unique(month_id,revision_no), 완료본 보존 |
 | asset_values | revision_id, asset_id, input_amount_krw?, owned_amount_krw?, as_of_date?, verification_state, origin(carried/manual), change_reason | unique(revision_id,asset_id); null과 0 구분 |
@@ -83,6 +84,11 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 가계 지분은 0~1의 정확한 십진 문자열이며 소수점 아래 최대 18자리다. DB numeric scale CHECK도 이를 검증한다.
 `whole`과 `owned` 입력 기준을 구분하며 금액을 등록/수정하는 필드는 자산 metadata에 없다.
 종료일과 archived_at은 함께 설정/해제하고, 다른 기록이 참조하는 자산의 물리 삭제는 FK로 거부한다.
+계좌의 소유자·종료일·상태는 연결 자산에서 읽으며 계좌에 별도 잔액이나 생명주기 칼럼을 두지 않는다.
+연결된 자산은 `kind=asset`, `category=financial`을 유지하고 종료일은 계좌 개설일보다 빠를 수 없다.
+계좌번호는 선택 입력이다. 저장 시 AES-256-GCM 암호문·12바이트 nonce·키 버전과 마지막 4자리만 남긴다.
+가계·계좌 UUID·필드명·키 버전을 AAD에 넣어 다른 행으로 옮긴 암호문을 거부한다.
+자산을 새로 만들며 계좌를 등록할 때 두 행과 감사 행을 한 트랜잭션으로 저장한다.
 
 ## 4. 카드와 보관함
 
@@ -223,7 +229,7 @@ erDiagram
 ## 12. 마이그레이션
 
 초기 순서: identity → assets/accounts → cards metadata → insurance contracts → cashflow → insurance cases/claims/payouts → homecare → vault/documents.
-현재 적용 순서는 `0001_households` → `0002_identity_auth` → `0003_passkeys` → `0004_assets`이며 readiness도 이 revision을 요구한다.
+현재 적용 순서는 `0001_households` → `0002_identity_auth` → `0003_passkeys` → `0004_assets` → `0005_accounts`이며 readiness도 이 revision을 요구한다.
 단계 간 FK 대상은 먼저 만들고, 순환 참조가 필요하면 별도 migration에서 제약을 추가한다.
 각 단계의 테스트 DB 생성·migration round-trip을 검증한다.
 운영 데이터가 있는 migration은 백업/복구와 하위 호환 API 기간을 먼저 계획한다.

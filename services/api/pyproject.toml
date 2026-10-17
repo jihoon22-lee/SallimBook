@@ -12,6 +12,7 @@ dependencies = [
   "psycopg[binary]==3.3.6",
   "argon2-cffi==25.1.0",
   "webauthn==3.0.1",
+  "cryptography==50.0.2",
 ]
 
 [build-system]
