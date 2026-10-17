@@ -64,5 +64,10 @@ private bearer·무본문·오류 상관 ID·strict JSON/MIME/크기·취소/잠
 서버 `test_exports_encoding.py` **44개**도 통과했다. DB 권한/가계 교차 검증은 서버의 별도 통합시험이며,
 이 변경에서는 DB·마이그레이션·API 계약을 변경하거나 격리 DB를 새로 실행하지 않았다.
 
+최종 플랫폼 통합 `ba4d0ac`에서는 보관함 관리 재인증 8개를 포함한 전체 JVM **330개**가
+실패·오류·건너뜀 없이 통과했다. Android sync 뒤 debug APK와 release Kotlin도 함께 통과했다
+(Gradle 1분 5초). 생성 OpenAPI·TS client 재생성 차이는 없었고 타입 검사·웹 빌드도 통과했다.
+CI의 실제 HTTPS 업무 검증에 `scripts/test_web_auth.py --audit`를 추가했다.
+
 이 검사는 실제 Galaxy WebView/앱 잠금·백그라운드·세션 폐기나 네트워크 인증을 실행한 실기기
 인수가 아니다. 실제 설정 화면의 감사 조회와 취소·잠금 실패 인수는 전체 실기기 검증에 남아 있다.
