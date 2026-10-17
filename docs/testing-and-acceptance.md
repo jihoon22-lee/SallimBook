@@ -20,7 +20,7 @@ DB 테스트 미설정 skip, Android `NO-SOURCE`, 모바일 viewport는 각각 �
 |---|---|---|
 | 도메인 | pytest | 순자산·기간·원리금·보험금·재고 계산 |
 | DB/API | pytest + PostgreSQL | FK, 트랜잭션, 가계 격리, 충돌, 재시도 |
-| 웹 | Vitest + Playwright | 폼, 조회·수정, 상태, 핵심 사용자 여정 |
+| 웹 | Playwright·브라우저 모델/공통 fixture | 폼, 조회·수정, 상태, 핵심 사용자 여정 |
 | Android | Kotlin 단위·계측, 실기기 | bridge, 지문/키, 잠금·백업·서명 |
 | 운영 | 별도 복구 환경 | 백업 복원, API/앱 호환, 장애 복구 |
 | 문서 도구 | Python unittest | 게시기 dry-run/충돌/중복 방지, 링크·계획 유효성 |
@@ -81,12 +81,15 @@ DB 테스트 미설정 skip, Android `NO-SOURCE`, 모바일 viewport는 각각 �
 테스트 결과에는 실행한 commit, 환경, 기기/API 수준, 명령, 성공/실패, 제한을 남긴다.
 에뮬레이터 통과와 실기기 통과를 별도 필드로 기록한다.
 
-## 6. CI 목표
+## 6. CI와 실제 실행 결과 구분
 
-기초 구현 이후 PR 파이프라인: 문서·린트 → 타입 → 단위 → PostgreSQL API/migration → 웹 E2E → Android compile/unit.
+현재 [.github/workflows/ci.yml](../.github/workflows/ci.yml)은 문서·도구, API lint/unit, 격리 문서 검사 도구,
+타입·생성 계약, PostgreSQL API/migration, 웹 UI·실제 HTTPS, Android compile/unit job을 정의한다.
 실기기 보안 테스트와 운영 복구는 별도 릴리스 게이트다.
 의존성/비밀 검사, Action 버전 고정, 최소 token 권한, 외부 PR의 secret 접근 차단을 포함한다.
-초기 패키지에 workflow YAML은 포함하지 않는다. 실제 프로젝트 manifest가 마련된 뒤 동작 가능한 CI만 추가한다.
+로컬의 동일 명령 통과와 GitHub Actions 실행 결과는 별도로 기록한다. 실행기가 시작되지 않거나
+로그/step이 없는 실패를 코드 검증 통과로 바꾸어 적지 않는다. 비밀 작업 브라우저 시험은
+trace·screenshot·video를 끄며 실제 사용자 데이터는 사용하지 않는다.
 
 ## 7. v1 사용자 인수 시나리오
 

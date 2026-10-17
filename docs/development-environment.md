@@ -14,16 +14,18 @@ Android UI 디버깅과 실기기 연결은 Windows Android Studio/ADB 또는 �
 | UI | React + TypeScript + Vite | Android/PC UI와 업무 로직 공유 |
 | 모바일 | Capacitor 8.x | 공통 UI에 네이티브 보안 기능 연결 |
 | 네이티브 | Kotlin, AndroidX Biometric, Keystore, Credential Manager | 시스템 인증과 암호키 접근 분리/결합 |
-| UI 도구 | Tailwind CSS, shadcn/ui | 반응형 폼·표·다이얼로그 |
-| 서버 상태 | TanStack Query | 조회·갱신·메모리 캐시 |
-| 입력 | React Hook Form, Zod | 일관된 입력 처리, 서버 검증과 계약 대조 |
-| 차트 | Recharts | 자산 추이, 접근 가능한 표 병행 |
+| UI 도구 | 공통 CSS·semantic HTML | 반응형 폼·표·다이얼로그 |
+| 서버 상태 | React hooks·공통 resource/command adapter | 현재 화면 조회·취소·버전 충돌 처리 |
+| 입력 | React 입력·생성 API 타입·도메인 검증 함수 | 서버가 최종 검증, 공통 fixture 대조 |
+| 차트 | SVG·금액 표 | 자산 추이와 정확한 원 단위 값 병행 |
 | API | FastAPI, SQLAlchemy 2, Alembic | 관계형 도메인과 버전 있는 DB |
 | DB | PostgreSQL | 정확한 금액·관계·트랜잭션 |
-| 패키지 도구 | pnpm, uv 제안 | JS/Python lockfile와 반복 가능한 설치 |
+| 패키지 도구 | pnpm, uv | JS/Python lockfile와 반복 가능한 설치 |
 | 배포 | Docker Compose + Caddy | 개인용 상시 서버의 단일 운영 구성 |
 
 프레임워크 이름은 확정 방향, 패치 버전은 구현 검증 후 고정이다.
+초기 문서의 UI 라이브러리 후보는 현재 manifest에 설치되지 않았다. 실제 구현과 검증 근거는
+[클라이언트 구현 결정](adr/client-implementation-and-tests.md)을 따른다.
 Capacitor 8 공식 자료는 Node 22 이상과 Android Studio 2025.2.1 이상을 안내하며,
 8.0 이행 예시에는 compile/target SDK 36이 제시되어 있다([S01, S02](references.md)).
 이를 '작성일 현재 모든 구성요소의 최신 버전'이라고 확대 해석하지 않는다.
@@ -88,6 +90,9 @@ Windows의 별도 checkout이 필요하면 Git으로 동기화하고 생성 파�
 SB-001은 기본 화면·프로세스 health·웹/Android 빌드, SB-002는 PostgreSQL·migration·공통 계약을 포함한다.
 개발 포트는 API 18741, Vite 18742, 웹 E2E 18743, 개발 DB 18744, 일회용 시험 DB 18745다.
 시험 DB는 데이터·WAL을 tmpfs에 두므로 확장된 migration/이력 회귀의 메모리 사용을 포함해 한도를 1 GiB로 둔다. 개발 DB 한도는 384 MiB로 유지한다.
+시험 DB에만 shared_buffers=64MB, max_wal_size=128MB, min_wal_size=32MB, checkpoint_timeout=30s를 적용한다.
+전체 migration 시험에서 기본 WAL 목표 1GiB가 컨테이너 메모리를 채워 backend OOM과 연결 종료를 일으킨 결과를 반영했다.
+fsync 등 내구성 설정은 유지한다. [PostgreSQL 18 WAL 설정](https://www.postgresql.org/docs/18/runtime-config-wal.html#RUNTIME-CONFIG-WAL-CHECKPOINTS)의 max_wal_size는 강제 상한이 아니므로 전체 실행에서 메모리와 OOM 여부도 확인한다.
 기존 서버를 종료하거나 점유 포트를 빼앗지 않는다.
 `scripts/setup_dev.py`는 기존 `.env`를 덮어쓰지 않고 새 파일에만 난수 개발 비밀번호를 저장한다(mode 0600).
 `pnpm db:up`과 `db:stop`은 Compose 프로젝트 `sallimbook-dev`의 `db` 서비스만 제어한다.
