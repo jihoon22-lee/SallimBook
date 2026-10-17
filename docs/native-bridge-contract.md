@@ -393,3 +393,58 @@ TS 본문/응답/조회 조건은 생성 `components`와 `operations`를 참조�
 브라우저 포트는 18748이며 해당 실행 중 Docker 서비스 상태는 변경하지 않았다.
 문서 manifest·로컬 링크 및 `git diff --check`도 통과했다. 이 변경의 APK 조립·서명·배포,
 실제 기기의 앱 잠금/백그라운드/화면 꺼짐/늦은 응답 시험은 실행하지 않았다.
+
+## 18. 가전·소모품·재고 (SB-024~027, Refs #33~36)
+
+R-03/R-16/R-17/R-19/R-22의 생성 API 21개 operationId를 같은 이름의 `nativeFinance` 명령으로 연결했다.
+가전·소모품·기기별 연결은 목록/생성/상세/수정을 제공하고, 입고·재고 동작과 교체는 각각
+부모별 목록/생성/상세/취소를 제공한다. 오늘 기준 상태는 `getHomecareStatus`로 조회한다.
+경로 인자는 `applianceId`, `consumableId`, `linkId`, `movementId`, `replacementId`이며,
+TS 입력·응답·조회 조건은 생성 `components`와 `operations`를 참조한다.
+서버·마이그레이션·API 계약·lockfile은 변경하지 않았다.
+
+`NativeHomecarePolicy`는 고정 경로와 메서드, 정확한 인자·본문·응답 필드를 검증한다.
+수량은 0~1,000,000의 JSON 정수이며 교체 수량은 양수, 원장 증감은 0이 아닌 정수다.
+float·bool·숫자 문자열을 수량으로 변환하지 않는다. 금액은 null·0원·최대 20자리 십진 문자열을
+그대로 보존한다. 임의 자원 ID 변경과 빈 patch, 잘못된 날짜/주기, 입출고 방향, 조정 사유를 검사한다.
+구매 URL은 자격증명 없는 HTTPS 메타데이터로 검증하며 native 네트워크 요청 경로로 사용하지 않는다.
+
+메타데이터 수정은 해당 가전·소모품·연결의 `ifMatch`를 요구한다. 재고/교체 생성·취소의
+`ifMatch`는 공용 **소모품 버전**이며 `idempotencyKey`도 필수다. 교체 생성은 별도 `link_version`과
+`clear_next_check_override` bool을 반드시 전달해 수동 확인일 유지/해제를 명시한다.
+재고 응답의 `{id, consumable_id, stock_version, replacement_id}`는 원래 동작 당시의 불변 참조다.
+재전송 응답의 version을 현재 재고로 해석하거나 If-Match에 맞춰 올리지 않으며, 후속 변경 전
+현재 소모품과 연결을 다시 조회한다. 취소는 새 원장 ID를 반환하며 원본을 삭제하지 않는다.
+
+응답은 부모 ID·조회 필터·내림차순 cursor/limit·가계 일관성을 검사한다. 보증 상태는 미입력과
+만료일 포함 유효 상태를 구분한다. 다음 확인일의 unknown/override/replacement와 교체 필요 null,
+구매 필요 및 재고 임계 상태를 보존하며 날짜/수량의 내부 일관성을 대조한다. `getHomecareStatus`는
+서버 `as_of`를 사용하고 자산 month나 임의 기준일 쿼리를 받지 않는다.
+권한, 실제 오늘, 최종 재고 계산·트랜잭션·중복 처리는 서버가 결정한다.
+
+기존 `NativeAuthSession.finance`의 앱 잠금·foreground/cancel gate와 토큰 전용 HTTP를 재사용한다.
+일반 `request`의 경로 범위는 확장하지 않는다. 알려진 오류 코드와 로컬 문구만 전달하고 서버 원문
+메시지·제출값은 버린다. 웹 HTTP 우회·자동 재시도·브라우저 저장소를 추가하지 않았다.
+
+`pnpm typecheck`, `pnpm android:sync`가 통과했다. 아래 명령으로 신규 homecare 15개를 포함한
+JVM **203개**가 실패·오류·건너뜀 없이 통과했고 디버그 APK 조립과 release Kotlin 컴파일도 성공했다.
+
+```bash
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin
+```
+
+`homecare-native-bridge.spec.ts`의 명령 전달/재전송 참조/실패 경계 11개 시나리오를 desktop과
+Android 크기에서 실행해 신규 **22개**, 기존 보험·금융·계좌 **46개**, 총 **68개**가 통과했다.
+소스 `648d9b7`의 독립 검토에서도 21개 경로/헤더/본문/응답, 재고·연결 버전 구분,
+멱등 참조·cursor·부모 ID 검증과 기존 네이티브 gate 연결을 대조해 추가 차단 문제는 없었다.
+아래 실행에는 기본 Playwright 설정의 baseURL/webServer만 18754로 바꾼 임시 config를 사용했다.
+Docker 시험 정지 후 실행했고 완료 후 Vite 정지와 포트 반환을 확인했다. 임시 config는 제거했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test homecare-native-bridge.spec.ts insurance-events-native-bridge.spec.ts insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.homecare-native.local.config.ts --workers=2
+python3 scripts/validate_docs.py
+git diff --check
+```
+
+브라우저 모의시험은 실제 Android 기기 검증을 대신하지 않는다. 실기기 잠금·백그라운드·늦은 응답,
+화면 캡처·백업 시험과 정식 APK 서명·배포는 실행하지 않았다.

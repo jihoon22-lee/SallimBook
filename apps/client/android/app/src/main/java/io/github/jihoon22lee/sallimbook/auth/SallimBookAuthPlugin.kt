@@ -241,6 +241,28 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun createPolicyPremiumLink(call: PluginCall) = finance(call, FinanceOperation.CREATE_POLICY_PREMIUM_LINK)
     @PluginMethod fun updatePolicyPremiumLink(call: PluginCall) = finance(call, FinanceOperation.UPDATE_POLICY_PREMIUM_LINK)
 
+    @PluginMethod fun listApplianceConsumables(call: PluginCall) = finance(call, FinanceOperation.LIST_APPLIANCE_CONSUMABLES)
+    @PluginMethod fun createApplianceConsumable(call: PluginCall) = finance(call, FinanceOperation.CREATE_APPLIANCE_CONSUMABLE)
+    @PluginMethod fun getApplianceConsumable(call: PluginCall) = finance(call, FinanceOperation.GET_APPLIANCE_CONSUMABLE)
+    @PluginMethod fun updateApplianceConsumable(call: PluginCall) = finance(call, FinanceOperation.UPDATE_APPLIANCE_CONSUMABLE)
+    @PluginMethod fun listConsumableReplacements(call: PluginCall) = finance(call, FinanceOperation.LIST_CONSUMABLE_REPLACEMENTS)
+    @PluginMethod fun createConsumableReplacement(call: PluginCall) = finance(call, FinanceOperation.CREATE_CONSUMABLE_REPLACEMENT)
+    @PluginMethod fun getConsumableReplacement(call: PluginCall) = finance(call, FinanceOperation.GET_CONSUMABLE_REPLACEMENT)
+    @PluginMethod fun cancelConsumableReplacement(call: PluginCall) = finance(call, FinanceOperation.CANCEL_CONSUMABLE_REPLACEMENT)
+    @PluginMethod fun listAppliances(call: PluginCall) = finance(call, FinanceOperation.LIST_APPLIANCES)
+    @PluginMethod fun createAppliance(call: PluginCall) = finance(call, FinanceOperation.CREATE_APPLIANCE)
+    @PluginMethod fun getAppliance(call: PluginCall) = finance(call, FinanceOperation.GET_APPLIANCE)
+    @PluginMethod fun updateAppliance(call: PluginCall) = finance(call, FinanceOperation.UPDATE_APPLIANCE)
+    @PluginMethod fun listConsumables(call: PluginCall) = finance(call, FinanceOperation.LIST_CONSUMABLES)
+    @PluginMethod fun createConsumable(call: PluginCall) = finance(call, FinanceOperation.CREATE_CONSUMABLE)
+    @PluginMethod fun getConsumable(call: PluginCall) = finance(call, FinanceOperation.GET_CONSUMABLE)
+    @PluginMethod fun updateConsumable(call: PluginCall) = finance(call, FinanceOperation.UPDATE_CONSUMABLE)
+    @PluginMethod fun listStockMovements(call: PluginCall) = finance(call, FinanceOperation.LIST_STOCK_MOVEMENTS)
+    @PluginMethod fun createStockMovement(call: PluginCall) = finance(call, FinanceOperation.CREATE_STOCK_MOVEMENT)
+    @PluginMethod fun getStockMovement(call: PluginCall) = finance(call, FinanceOperation.GET_STOCK_MOVEMENT)
+    @PluginMethod fun cancelStockMovement(call: PluginCall) = finance(call, FinanceOperation.CANCEL_STOCK_MOVEMENT)
+    @PluginMethod fun getHomecareStatus(call: PluginCall) = finance(call, FinanceOperation.GET_HOMECARE_STATUS)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
