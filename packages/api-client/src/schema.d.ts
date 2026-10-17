@@ -74,6 +74,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare Assets */
+        get: operations["getAssetComparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset-months/{month}": {
         parameters: {
             query?: never;
@@ -208,6 +225,23 @@ export interface paths {
         head?: never;
         /** Update Value */
         patch: operations["updateAssetMonthValue"];
+        trace?: never;
+    };
+    "/api/v1/asset-trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Asset Trends */
+        get: operations["getAssetTrends"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/assets": {
@@ -2117,6 +2151,38 @@ export interface components {
         };
         /** @enum {string} */
         AssetCategory: "real_estate" | "deposit" | "financial" | "loan" | "other";
+        /** AssetComparisonResponse */
+        AssetComparisonResponse: {
+            /** Added Asset Ids */
+            added_asset_ids: string[];
+            /** Change Percent */
+            change_percent: string | null;
+            change_percent_unavailable_reason: components["schemas"]["PercentUnavailable"] | null;
+            /** Changed Share Asset Ids */
+            changed_share_asset_ids: string[];
+            /** Common Scope Delta Krw */
+            common_scope_delta_krw: string | null;
+            current: components["schemas"]["ComparisonPeriod"];
+            filters: components["schemas"]["ComparisonFilters"];
+            /** From Month */
+            from_month: string | null;
+            /** Item Count */
+            item_count: number;
+            /** Items */
+            items: components["schemas"]["ComparisonItem"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            previous: components["schemas"]["ComparisonPeriod"] | null;
+            /** Removed Asset Ids */
+            removed_asset_ids: string[];
+            /** Scope Changed */
+            scope_changed: boolean | null;
+            state: components["schemas"]["ComparisonState"];
+            /** To Month */
+            to_month: string;
+            /** Total Delta Krw */
+            total_delta_krw: string | null;
+        };
         /** AssetCreate */
         AssetCreate: {
             amount_basis: components["schemas"]["AmountBasis"];
@@ -2252,6 +2318,40 @@ export interface components {
         };
         /** @enum {string} */
         AssetStatus: "active" | "archived";
+        /** AssetTrendPoint */
+        AssetTrendPoint: {
+            /** As Of Date */
+            as_of_date: string | null;
+            /** Confirmed Amount Krw */
+            confirmed_amount_krw: string | null;
+            dates: components["schemas"]["ObservationDates"];
+            /** Included In Total */
+            included_in_total: boolean | null;
+            /** Month */
+            month: string;
+            /** Observed Amount Krw */
+            observed_amount_krw: string | null;
+            revision: components["schemas"]["MonthReference"] | null;
+            /** State */
+            state: components["schemas"]["MonthState"] | "missing";
+            totals: components["schemas"]["MonthTotals"] | null;
+            value_state: components["schemas"]["TrendValueState"];
+        };
+        /** AssetTrendResponse */
+        AssetTrendResponse: {
+            filters: components["schemas"]["ComparisonFilters"];
+            /** From Month */
+            from_month: string;
+            /** Points */
+            points: components["schemas"]["AssetTrendPoint"][];
+            /**
+             * Series Kind
+             * @enum {string}
+             */
+            series_kind: "household_net_assets" | "asset_owned_amount";
+            /** To Month */
+            to_month: string;
+        };
         /** AuthenticationCredential */
         AuthenticationCredential: {
             /** Authenticatorattachment */
@@ -2992,6 +3092,58 @@ export interface components {
         ClientExtensions: {
             credProps?: components["schemas"]["CredentialProperties"] | null;
         };
+        /** ComparisonFilters */
+        ComparisonFilters: {
+            /** Asset Id */
+            asset_id?: string | null;
+            category?: components["schemas"]["AssetCategory"] | null;
+            kind?: components["schemas"]["AssetKind"] | null;
+            /** Owner Member Id */
+            owner_member_id?: string | null;
+            ownership_kind?: components["schemas"]["OwnershipKind"] | null;
+        };
+        /** ComparisonItem */
+        ComparisonItem: {
+            after: components["schemas"]["MonthValueResponse"] | null;
+            /** After In Scope */
+            after_in_scope: boolean;
+            /** Amount Delta Krw */
+            amount_delta_krw: string | null;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            before: components["schemas"]["MonthValueResponse"] | null;
+            /** Before In Scope */
+            before_in_scope: boolean;
+            /**
+             * Membership
+             * @enum {string}
+             */
+            membership: "common" | "added" | "removed" | "excluded" | "unavailable";
+            /** Net Assets Effect Krw */
+            net_assets_effect_krw: string | null;
+            /** Same Scope */
+            same_scope: boolean;
+            scope_reason: components["schemas"]["ScopeReason"] | null;
+            /** Share Changed */
+            share_changed: boolean;
+        };
+        /** ComparisonPeriod */
+        ComparisonPeriod: {
+            /** Confirmed At */
+            confirmed_at: string | null;
+            dates: components["schemas"]["ObservationDates"];
+            /** Month */
+            month: string;
+            revision: components["schemas"]["MonthReference"] | null;
+            /** State */
+            state: components["schemas"]["MonthState"] | "missing";
+            totals: components["schemas"]["MonthTotals"] | null;
+        };
+        /** @enum {string} */
+        ComparisonState: "available" | "no_previous_month" | "current_missing" | "unconfirmed";
         /** ConversionResponse */
         ConversionResponse: {
             /**
@@ -4543,6 +4695,15 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ObservationDates */
+        ObservationDates: {
+            /** Missing Date Asset Ids */
+            missing_date_asset_ids: string[];
+            /** Mixed Dates */
+            mixed_dates: boolean;
+            /** Non Month End Asset Ids */
+            non_month_end_asset_ids: string[];
+        };
         /** OptionsResponse */
         OptionsResponse: {
             /**
@@ -4744,6 +4905,8 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** @enum {string} */
+        PercentUnavailable: "no_previous_month" | "current_missing" | "unconfirmed" | "zero_previous_total" | "negative_previous_total";
         /** PolicyCreate */
         PolicyCreate: {
             /** Beneficiary Note */
@@ -5395,6 +5558,8 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** @enum {string} */
+        ScopeReason: "previously_held_added" | "started_after_previous_period" | "ended_before_current_period" | "not_in_previous_scope" | "not_in_current_scope" | "inclusion_changed" | "filter_membership_changed" | "household_share_changed" | "excluded_from_total";
         /** SettlementCreate */
         SettlementCreate: {
             /** Account Id */
@@ -5478,6 +5643,8 @@ export interface components {
         };
         /** @enum {string} */
         TreatmentState: "ongoing" | "ended";
+        /** @enum {string} */
+        TrendValueState: "missing_month" | "missing_item" | "outside_filter" | "missing_value" | "unconfirmed" | "verified";
         /** @enum {string} */
         VerificationState: "missing" | "carried_unconfirmed" | "verified";
         /** WebLoginResponse */
@@ -6061,6 +6228,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentLinksResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getAssetComparison: {
+        parameters: {
+            query: {
+                to: string;
+                from?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                asset_id?: string | null;
+                kind?: components["schemas"]["AssetKind"] | null;
+                category?: components["schemas"]["AssetCategory"] | null;
+                ownership_kind?: components["schemas"]["OwnershipKind"] | null;
+                owner_member_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetComparisonResponse"];
                 };
             };
             /** @description Bad Request */
@@ -6950,6 +7228,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonthValueResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getAssetTrends: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                asset_id?: string | null;
+                kind?: components["schemas"]["AssetKind"] | null;
+                category?: components["schemas"]["AssetCategory"] | null;
+                ownership_kind?: components["schemas"]["OwnershipKind"] | null;
+                owner_member_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTrendResponse"];
                 };
             };
             /** @description Bad Request */

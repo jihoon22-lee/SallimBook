@@ -20,6 +20,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [보관함 키 수명주기](vault-key-lifecycle.md) | 부부 공유, 새 기기, 복구, 회전, 로컬 CVC |
 | [보험 사건 흐름](insurance-workflows.md) | 진료 트리, 복수 청구, 분할 지급, 정산 예시 |
 | [개발 환경](development-environment.md) | WSL, 버전 고정, Android 빌드, 환경 분리 |
+| [월 입력 UI 검증](testing/monthly-assets-client.md) | SB-012 확정·정정·멱등 재시도·실제 HTTPS 검증 |
 | [자산·계좌 UI 검증](testing/assets-accounts-client.md) | SB-010/011 실제 UI·HTTPS·Android 빌드 검증 범위 |
 | [테스트·인수](testing-and-acceptance.md) | 24개 시나리오 및 6개 보안 게이트 |
 | [운영·백업](deployment-backup-operations.md) | HTTPS, 서명 APK, 서버/보관함 복구, 장애 |
