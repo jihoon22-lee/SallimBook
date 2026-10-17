@@ -74,8 +74,8 @@
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "02110b7901a7a351f6bf08eb31a3ae458b62e6c7e408f82e11bbac00b2a1b356",
-      "git_sha1": "27d8a6f611752efb42fbeb95a830a7b0172ee30c"
+      "sha256": "d5931a7858f859795e308cf33a7884b1f5c8bb9e105e91c95ab49d93a96d6375",
+      "git_sha1": "352c587d829ba29e3403cc46523901cddc44f0ef"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "4fda7d2fb36ddc154a3ad9a12f7c5f7a199e7895346f6061a0f318f2a0441c21",
@@ -224,6 +224,10 @@
     "scripts/test_web_auth.py": {
       "sha256": "a89da28144101a0a19364d8b787737ff4e5c328b76b45d7b3aa751c651693226",
       "git_sha1": "044a75fda09a9bf7470c814ad334190cb9883ef8"
+    },
+    "docs/testing/native-security-proof.md": {
+      "sha256": "75e50c296b96865b339ad3604d9c2573b64df85fde44ea3312df6774d41c394f",
+      "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "cf830c8b8af6c26e3ab07d7fe4c9843ea602cf2afba217e50e9407dfdf26c9a3",
