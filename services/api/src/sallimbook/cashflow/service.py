@@ -40,9 +40,10 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
-from sallimbook.core.types import decimal_krw, krw_string, month_start
+from sallimbook.core.types import SEOUL, decimal_krw, krw_string, month_start
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.models import Household
+from sallimbook.identity.service import utcnow
 
 _VALUES = (
     "household_id",
@@ -90,7 +91,8 @@ def _response(row: CashRecordRevision) -> CashResponse:
         action=row.action,
         reason=row.reason,
         conversion_id=row.conversion_id,
-        editable=row.kind in (*INCOME_KINDS, "income_return") and row.state == "active",
+        editable=row.kind in INCOME_KINDS and row.state == "active",
+        voidable=row.kind in (*INCOME_KINDS, "income_return") and row.state == "active",
     )
 
 
@@ -142,6 +144,13 @@ def _remember(
     session.flush()
 
 
+def _validate_actual_date(payload: CashInput) -> None:
+    if payload.occurred_on is not None and payload.occurred_on > utcnow().astimezone(SEOUL).date():
+        raise DomainError(
+            "INVALID_OCCURRED_DATE", "실제 입금·지급이 확인된 날짜를 입력해 주세요.", 422
+        )
+
+
 def _validate_links(
     session: Session,
     principal: Principal,
@@ -149,6 +158,7 @@ def _validate_links(
     *,
     previous: CashRecord | None = None,
 ) -> None:
+    _validate_actual_date(payload)
     # Match existing asset/account writers: Asset -> Account -> Member. IDs cannot be retargeted.
     if payload.account_id is not None:
         account = scoped_entity(session, FinancialAccount, payload.account_id, principal)

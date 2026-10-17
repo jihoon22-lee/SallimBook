@@ -3,6 +3,7 @@ from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from sallimbook.assets.schemas import DateOnly
 from sallimbook.core.types import KrwString, SignedKrwString, YearMonth
@@ -64,12 +65,12 @@ class IncomeCreate(IncomeInput):
 
 class IncomePatch(InputModel):
     reason: Reason = Field(repr=False)
-    kind: IncomeKind | None = None
-    amount_krw: KrwString | None = Field(default=None, repr=False)
-    period_month: YearMonth | None = None
-    date_precision: Precision | None = None
+    kind: IncomeKind | SkipJsonSchema[None] = Field(default_factory=lambda: None)
+    amount_krw: KrwString | SkipJsonSchema[None] = Field(default_factory=lambda: None, repr=False)
+    period_month: YearMonth | SkipJsonSchema[None] = Field(default_factory=lambda: None)
+    date_precision: Precision | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     occurred_on: DateOnly | None = None
-    member_id: UUID | None = None
+    member_id: UUID | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     account_id: UUID | None = None
     note: Note | None = Field(default=None, repr=False)
     duplicate_acknowledged: bool = Field(default=False, strict=True)
@@ -135,6 +136,7 @@ class CashResponse(BaseModel):
     reason: str | None = Field(repr=False)
     conversion_id: UUID | None
     editable: bool
+    voidable: bool
 
 
 class IncomeListResponse(BaseModel):

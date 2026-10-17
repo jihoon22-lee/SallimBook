@@ -16,7 +16,11 @@ class IncomeValue:
     state: str = "active"
 
     def __post_init__(self):
-        if not self.source_id or self.kind not in PROJECTED_INCOME_KINDS:
+        if (
+            not isinstance(self.source_id, str)
+            or not self.source_id
+            or self.kind not in PROJECTED_INCOME_KINDS
+        ):
             raise ValueError("An income source and supported kind are required")
         if self.state not in {"active", "void"} or int(krw_string(self.amount_krw)) <= 0:
             raise ValueError("A cash fact requires positive exact KRW and a known state")
