@@ -88,6 +88,7 @@ class CardResponse(BaseModel):
     card_type: CardType
     last_four: str | None
     masked_number: str | None
+    has_secret: bool
     settlement_day: int | None
     settlement_account_id: UUID | None
     settlement_account_status: Literal["active", "closed"] | None

@@ -1,9 +1,12 @@
+import asyncio
+from threading import BoundedSemaphore
 from typing import Annotated
 from urllib.parse import quote
 from uuid import UUID
 
 from anyio import fail_after
 from fastapi import APIRouter, Header, Query, Request, Response
+from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from sallimbook.core.errors import DomainError, ErrorResponse
@@ -29,6 +32,27 @@ router = APIRouter(
 IfMatch = Annotated[str, Header(alias="If-Match")]
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)]
 Limit = Annotated[int, Query(ge=1, le=200)]
+# Bound the complete body + inspection lifetime, before allocating any body buffer.
+# Keep dispatched thread jobs alive when the HTTP task is cancelled; their buffers
+# still occupy the slot until the synchronous worker actually completes.
+_UPLOAD_SLOT = BoundedSemaphore(1)
+_UPLOAD_TASKS: set[asyncio.Task] = set()
+
+
+def _upload_finished(task: asyncio.Task) -> None:
+    _UPLOAD_TASKS.discard(task)
+    _UPLOAD_SLOT.release()
+    if not task.cancelled():
+        task.exception()  # Observe failures even if the disconnected caller is gone.
+
+
+def _store_upload(engine, principal, document_id, content, if_match, key, settings):
+    # A cancelled request closes its dependency session. The worker owns a separate
+    # session for its complete lifetime and revalidates the live principal itself.
+    with Session(engine) as worker_session:
+        return service.upload_content(
+            worker_session, principal, document_id, content, if_match, key, settings
+        )
 
 
 def _result(response, result):
@@ -119,31 +143,48 @@ async def upload_content(
     # transaction before waiting on an untrusted network body so logout/revocation
     # remains available. The service revalidates the live session after inspection.
     await run_in_threadpool(session.commit)
-    content = bytearray()
-    try:
-        with fail_after(120):
-            async for chunk in request.stream():
-                if len(content) + len(chunk) > MAX_DOCUMENT_BYTES:
-                    raise DomainError(
-                        "DOCUMENT_TOO_LARGE", "첨부파일은 20MiB 이하로 선택해 주세요.", 413
-                    )
-                content.extend(chunk)
-    except TimeoutError:
+    if not _UPLOAD_SLOT.acquire(blocking=False):
         raise DomainError(
-            "DOCUMENT_UPLOAD_TIMEOUT", "파일 전송 시간이 초과됐습니다. 다시 확인해 주세요.", 408
-        ) from None
-    if not content or (raw_length is not None and len(content) != int(raw_length)):
-        raise DomainError("DOCUMENT_CONTENT_LENGTH", "파일 크기를 확인해 주세요.", 422)
-    result = await run_in_threadpool(
-        service.upload_content,
-        session,
-        principal,
-        document_id,
-        bytes(content),
-        if_match,
-        idempotency_key,
-        request.app.state.settings,
-    )
+            "DOCUMENT_UPLOAD_BUSY",
+            "다른 첨부파일을 처리하고 있습니다. 잠시 뒤 다시 시도해 주세요.",
+            503,
+        )
+    handed_to_worker = False
+    try:
+        content = bytearray()
+        try:
+            with fail_after(120):
+                async for chunk in request.stream():
+                    if len(content) + len(chunk) > MAX_DOCUMENT_BYTES:
+                        raise DomainError(
+                            "DOCUMENT_TOO_LARGE", "첨부파일은 20MiB 이하로 선택해 주세요.", 413
+                        )
+                    content.extend(chunk)
+        except TimeoutError:
+            raise DomainError(
+                "DOCUMENT_UPLOAD_TIMEOUT", "파일 전송 시간이 초과됐습니다. 다시 확인해 주세요.", 408
+            ) from None
+        if not content or (raw_length is not None and len(content) != int(raw_length)):
+            raise DomainError("DOCUMENT_CONTENT_LENGTH", "파일 크기를 확인해 주세요.", 422)
+        task = asyncio.create_task(
+            run_in_threadpool(
+                _store_upload,
+                request.app.state.engine,
+                principal,
+                document_id,
+                bytes(content),
+                if_match,
+                idempotency_key,
+                request.app.state.settings,
+            )
+        )
+        _UPLOAD_TASKS.add(task)
+        task.add_done_callback(_upload_finished)
+        handed_to_worker = True
+        result = await asyncio.shield(task)
+    finally:
+        if not handed_to_worker:
+            _UPLOAD_SLOT.release()
     return _result(response, result)
 
 
