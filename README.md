@@ -82,6 +82,11 @@ pnpm dev:api  # 127.0.0.1:18741, 별도 터미널
 pnpm dev      # http://127.0.0.1:18742
 ```
 
+API 설정은 명령을 실행한 디렉터리의 `.env`를 읽습니다. 위 명령은 저장소 루트에서 실행합니다.
+필요하면 `.env.example`을 참고해 `.env`를 만들되 기존 파일은 덮어쓰지 않습니다.
+설정 우선순위는 명시적 `Settings` 인자 → 프로세스 환경변수 → `.env` → 기본값입니다.
+staging·production의 CORS 허용 origin 기본값은 빈 목록이며, 필요한 origin을 명시적으로 지정합니다.
+
 ```bash
 pnpm api:generate
 pnpm typecheck
@@ -99,6 +104,9 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 python3 scripts/setup_android_sdk.py  # 최초 SDK 설치; 라이선스 확인
 pnpm android:build
 ```
+
+SDK 설치기는 고정된 빌드 도구만 설치하며 `platform-tools`와 ADB를 설치·업데이트하지 않습니다.
+실기기 연결용 ADB는 기존 환경을 유지하고 별도로 버전을 선택합니다.
 
 산출물은 `apps/client/android/app/build/outputs/apk/debug/app-debug.apk`이며 개발용입니다.
 최소 API 30, 개발 앱 ID `io.github.jihoon22lee.sallimbook.debug`입니다.

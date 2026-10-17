@@ -47,6 +47,9 @@ FastAPI 0.143.3을 lockfile에 고정했다. OpenAPI 생성기의 TypeScript 5 p
 Android는 compile/target SDK 36, 앱 Build Tools 36.0.0,
 AGP 8.13.0, Gradle 8.14.3(checksum 고정), Kotlin 2.2.20이다.
 CLI SDK 설치기는 공식 명령 도구 build 15859902의 SHA-256을 검증하며 기존 SDK 설치를 덮어쓰지 않는다.
+설치 대상은 `platforms;android-36`, `build-tools;36.0.0`이다. 버전 없이 갱신되는
+`platform-tools`는 설치 대상에서 제외하므로 기존 ADB를 변경하지 않는다.
+실기기 연결에 필요한 ADB는 별도로 버전을 선택하며 빌드 설치기가 자동 설치·업데이트하지 않는다.
 앱 Gradle dependency lock은 `apps/client/android/app/gradle.lockfile`에 저장한다.
 DB와 운영 이미지 버전은 해당 Issue에서 호환 시험 후 별도로 고정한다.
 
@@ -60,6 +63,10 @@ DB와 운영 이미지 버전은 해당 Issue에서 호환 시험 후 별도로 
 WSL의 Linux 파일시스템에 clone을 두고 프로젝트별 의존성을 관리한다.
 운영 DB/첨부/서명키는 저장소 밖의 명시적 경로에 보관한다.
 개발 .env.example에는 변수 이름과 무해한 예시만 넣고 실제 비밀은 로컬 환경으로 주입한다.
+API `Settings`는 현재 작업 디렉터리의 `.env`를 UTF-8로 읽으며 상위 디렉터리를 검색하지 않는다.
+README의 명령은 저장소 루트에서 실행하므로 루트 `.env`가 적용된다.
+설정 우선순위는 명시적 `Settings` 인자 → 프로세스 환경변수 → `.env` → 기본값이다.
+격리 테스트는 `_env_file=None`으로 로컬 `.env` 로딩을 끌 수 있다.
 Windows와 WSL에서 같은 node_modules/Gradle 캐시를 공유하지 않는다.
 Windows의 별도 checkout이 필요하면 Git으로 동기화하고 생성 파일/빌드 폴더를 무작정 복사하지 않는다.
 
@@ -80,5 +87,9 @@ Gradle wrapper의 CLI 빌드는 공식 지원 경로다([S18](references.md)).
 - test: 별도 DB·일회용 암호키·격리 첨부, 네트워크 부작용 차단.
 - staging: 운영과 같은 HTTPS/인증/서명 흐름, 여전히 합성 데이터.
 - production: 두 실계정, 별도 비밀·서명키·백업, debug/원격 WebView 설정 금지.
+
+origin을 지정하지 않은 development·test는 전용 로컬 UI origin 두 개를 사용한다.
+staging·production은 기본 허용 origin이 없으며 환경변수 또는 `.env`에 허용 목록을 명시한다.
+`.env`에 적힌 로컬 origin도 명시적 설정이므로 운영 환경을 선택할 때 함께 검토한다.
 
 환경 간 실제 건강·금융데이터를 복사하지 않는다. 꼭 필요한 진단은 익명화·축약된 재현 데이터로 대체한다.
