@@ -129,6 +129,8 @@ def create_account(
         is not None
     ):
         raise DomainError("ASSET_ALREADY_LINKED", "이미 계좌와 연결된 자산입니다.", 409)
+    if payload.asset_id is not None and asset.ended_on is not None:
+        raise DomainError("ASSET_UNAVAILABLE", "사용 중인 금융 자산을 선택해 주세요.", 422)
     _validate_dates(payload.opened_on, asset)
     account = FinancialAccount(
         id=uuid4(),

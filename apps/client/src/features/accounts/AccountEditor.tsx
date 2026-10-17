@@ -23,8 +23,8 @@ export function AccountEditor({ initial }: { initial?: Account }) {
     if (initial || mode !== "existing") return;
     let active = true; setAssetLoading(true); setAssetError(null);
     void (async () => { const all: Asset[] = []; let cursor: string | null = null;
-      do { const response = await assetsApi.list({ kind: "asset", category: "financial", status: "all", limit: 100, ...(cursor ? { cursor } : {}) }); all.push(...response.items); cursor = response.next_cursor; } while (cursor && active);
-      if (active) setAvailable(all);
+      do { const response = await assetsApi.list({ kind: "asset", category: "financial", status: "active", limit: 100, ...(cursor ? { cursor } : {}) }); all.push(...response.items); cursor = response.next_cursor; } while (cursor && active);
+      if (active) setAvailable(all.filter((item) => item.status === "active" && item.ended_on === null));
     })().catch((failure) => { if (active) setAssetError(toApiError(failure)); }).finally(() => { if (active) setAssetLoading(false); });
     return () => { active = false; };
   }, [initial, mode, assetsApi, assetRetry]);
@@ -60,7 +60,7 @@ export function AccountEditor({ initial }: { initial?: Account }) {
       {base ? <p>연결된 자산: <Link to={`/assets/${base.asset_id}/edit`}>{base.asset.name} 기본정보 수정</Link></p> : <>
         <div className="form-field"><label htmlFor="account-asset-mode">금융 자산 연결</label><select id="account-asset-mode" disabled={busy} value={mode} onChange={(event) => setMode(event.target.value)}><option value="new">새 금융 자산과 함께 등록</option><option value="existing">기존 금융 자산에 연결</option></select></div>
         {mode === "new" ? <><MemberLoadError error={members.error} retry={members.retry} /><AssetFields value={asset} onChange={setAsset} members={members.members} financial disabled={busy || members.loading || Boolean(members.error)} /></> : <>
-          <div className="form-field"><label htmlFor="account-asset">연결할 금융 자산</label><select id="account-asset" required disabled={busy || assetLoading} value={assetId} onChange={(event) => setAssetId(event.target.value)}><option value="">금융 자산 선택</option>{available.map((item) => <option key={item.id} value={item.id}>{item.name}{item.status === "archived" ? " (사용 종료)" : ""}</option>)}</select></div><FinanceError error={assetError} /><button type="button" disabled={busy || assetLoading} onClick={() => setAssetRetry((value) => value + 1)}>금융 자산 다시 불러오기</button><p className="muted">이미 계좌에 연결된 자산은 다시 연결할 수 없어요.</p>
+          <div className="form-field"><label htmlFor="account-asset">연결할 금융 자산</label><select id="account-asset" required disabled={busy || assetLoading} value={assetId} onChange={(event) => setAssetId(event.target.value)}><option value="">금융 자산 선택</option>{available.map((item) => <option key={item.id} value={item.id}>{item.name}{item.status === "archived" ? " (사용 종료)" : ""}</option>)}</select></div><FinanceError error={assetError} /><button type="button" disabled={busy || assetLoading} onClick={() => setAssetRetry((value) => value + 1)}>금융 자산 다시 불러오기</button><p className="muted">사용 중인 금융 자산만 연결할 수 있어요. 이미 계좌에 연결된 자산은 다시 연결할 수 없어요.</p>
         </>}
       </>}
       {formError && <p role="alert">{formError}</p>}<FinanceError error={error} />

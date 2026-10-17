@@ -10,6 +10,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sallimbook.accounts.router import router as accounts_router
 from sallimbook.assets.month_router import router as asset_months_router
 from sallimbook.assets.router import router as assets_router
+from sallimbook.cards.router import router as cards_router
+from sallimbook.cashflow.router import router as income_router
 from sallimbook.config import Settings
 from sallimbook.core.database import REQUIRED_SCHEMA_REVISION, make_engine
 from sallimbook.core.errors import DomainError, ErrorResponse
@@ -98,6 +100,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(assets_router)
     app.include_router(accounts_router)
     app.include_router(asset_months_router)
+    app.include_router(income_router)
+    app.include_router(cards_router)
     return app
 
 

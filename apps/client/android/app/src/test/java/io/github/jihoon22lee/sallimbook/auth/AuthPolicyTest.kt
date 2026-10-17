@@ -132,6 +132,8 @@ class AuthPolicyTest {
         val body = mapOf("error" to mapOf("code" to "ASSET_KIND_IN_USE", "message" to "synthetic"))
         val error = AuthPolicy.safeError(409, body, uuid)!!["error"] as Map<*, *>
         assertEquals("ASSET_KIND_IN_USE", error["code"])
+        val unavailable = mapOf("error" to mapOf("code" to "ASSET_UNAVAILABLE"))
+        assertEquals("ASSET_UNAVAILABLE", (AuthPolicy.safeError(422, unavailable, uuid)!!["error"] as Map<*, *>)["code"])
         assertEquals("월별 금액 기록이 있어 자산·부채 구분을 바꿀 수 없습니다.", error["message"])
     }
 
