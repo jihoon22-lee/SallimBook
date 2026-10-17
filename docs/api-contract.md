@@ -98,6 +98,8 @@ step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
 수정·종료·삭제는 `If-Match`가 필요하며 다른 가계의 자산/소유자는 404, 버전 충돌은 409다.
 종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다.
 metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액과 계좌 연결은 후속 API다.
+PATCH에서 생략한 필드는 유지한다. null로 지울 수 있는 필드는 `owner_member_id`, `ended_on`, `note`뿐이며
+OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다.
 
 ## 1. 공통 규약
 

@@ -219,24 +219,12 @@
         "additionalProperties": false,
         "properties": {
           "amount_basis": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AmountBasis"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/AmountBasis",
+            "title": "Amount Basis"
           },
           "category": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AssetCategory"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/AssetCategory",
+            "title": "Category"
           },
           "ended_on": {
             "anyOf": [
@@ -251,50 +239,24 @@
             "title": "Ended On"
           },
           "household_share": {
-            "anyOf": [
-              {
-                "maxLength": 20,
-                "pattern": "^(0(?:\\.[0-9]{1,18})?|1(?:\\.0{1,18})?)$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Household Share"
+            "maxLength": 20,
+            "pattern": "^(0(?:\\.[0-9]{1,18})?|1(?:\\.0{1,18})?)$",
+            "title": "Household Share",
+            "type": "string"
           },
           "inclusion_status": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/InclusionStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/InclusionStatus",
+            "title": "Inclusion Status"
           },
           "kind": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AssetKind"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/AssetKind",
+            "title": "Kind"
           },
           "name": {
-            "anyOf": [
-              {
-                "maxLength": 120,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
           },
           "note": {
             "anyOf": [
@@ -321,26 +283,13 @@
             "title": "Owner Member Id"
           },
           "ownership_kind": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OwnershipKind"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/OwnershipKind",
+            "title": "Ownership Kind"
           },
           "started_on": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started On"
+            "format": "date",
+            "title": "Started On",
+            "type": "string"
           }
         },
         "title": "AssetPatch",

@@ -126,6 +126,7 @@ def test_asset_schema_rejects_invalid_relations_and_server_controlled_fields(ove
 def test_patch_distinguishes_omitted_fields_from_explicit_clear():
     patch = AssetPatch(note=None)
     assert patch.model_dump(exclude_unset=True) == {"note": None}
+
     assert AssetPatch(ended_on=None).model_dump(exclude_unset=True) == {"ended_on": None}
     assert AssetPatch(owner_member_id=None).model_dump(exclude_unset=True) == {
         "owner_member_id": None
@@ -140,6 +141,25 @@ def test_patch_distinguishes_omitted_fields_from_explicit_clear():
         with pytest.raises(ValidationError):
             AssetPatch.model_validate(invalid)
     assert AssetArchive(ended_on="2025-01-01").ended_on == date(2025, 1, 1)
+
+
+def test_openapi_patch_nullability_matches_server_validation():
+    app = FastAPI()
+    app.include_router(router)
+    contract = app.openapi()["components"]["schemas"]["AssetPatch"]
+    clearable = {"owner_member_id", "ended_on", "note"}
+    for name, schema in contract["properties"].items():
+        assert name not in contract.get("required", [])
+        nullable = any(item.get("type") == "null" for item in schema.get("anyOf", []))
+        assert nullable == (name in clearable)
+        if name in clearable:
+            assert AssetPatch.model_validate({name: None}).model_dump(exclude_unset=True) == {
+                name: None
+            }
+        else:
+            assert "default" not in schema
+            with pytest.raises(ValidationError):
+                AssetPatch.model_validate({name: None})
 
 
 @dataclass(frozen=True)

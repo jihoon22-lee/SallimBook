@@ -580,23 +580,31 @@ export interface components {
         };
         /** AssetPatch */
         AssetPatch: {
-            amount_basis?: components["schemas"]["AmountBasis"] | null;
-            category?: components["schemas"]["AssetCategory"] | null;
+            /** Amount Basis */
+            amount_basis?: components["schemas"]["AmountBasis"];
+            /** Category */
+            category?: components["schemas"]["AssetCategory"];
             /** Ended On */
             ended_on?: string | null;
             /** Household Share */
-            household_share?: string | null;
-            inclusion_status?: components["schemas"]["InclusionStatus"] | null;
-            kind?: components["schemas"]["AssetKind"] | null;
+            household_share?: string;
+            /** Inclusion Status */
+            inclusion_status?: components["schemas"]["InclusionStatus"];
+            /** Kind */
+            kind?: components["schemas"]["AssetKind"];
             /** Name */
-            name?: string | null;
+            name?: string;
             /** Note */
             note?: string | null;
             /** Owner Member Id */
             owner_member_id?: string | null;
-            ownership_kind?: components["schemas"]["OwnershipKind"] | null;
-            /** Started On */
-            started_on?: string | null;
+            /** Ownership Kind */
+            ownership_kind?: components["schemas"]["OwnershipKind"];
+            /**
+             * Started On
+             * Format: date
+             */
+            started_on?: string;
         };
         /** AssetResponse */
         AssetResponse: {
