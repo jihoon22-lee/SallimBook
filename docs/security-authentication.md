@@ -102,11 +102,43 @@ step-up은 `authenticated_at`을 갱신하지 않으므로 다른 목적에 재�
 
 ### 앱 잠금
 
-Android 앱 시작·백그라운드 복귀 시 잠금 상태를 판정한다. 기본은 백그라운드 1분 이후 앱 잠금.
-서버 세션이 없으면 지문 성공만으로 새 로그인을 만들지 않는다.
-시스템 BiometricPrompt를 사용하며 생체정보 원문은 받지 않는다([S03](references.md)).
-기기 PIN·패턴·비밀번호 허용 여부는 지원 API/키 설정과 일치시켜 실제 기기에서 검증한다.
-앱 잠금은 화면 보호이며 서버 인증이나 vault 해제의 대체가 아니다.
+Refs #18, #38: 이 구현은 SB-029의 앱 잠금 부분이며 카드 보관함·실기기 보안 게이트 완료를 의미하지 않는다.
+프로세스 시작은 잠금 상태다. 같은 프로세스에서 외부 백그라운드가 60,000ms 미만이면 복귀할 수 있고,
+1분 이상이면 다시 인증한다. `elapsedRealtime`으로 시간을 판단하며 잠금 해제 상태를 디스크·Bundle에 저장하지 않는다.
+화면 꺼짐·기기 잠금 확인·수동 잠금은 즉시 잠근다. 앱 내부의 로그인·계좌번호 화면 전환은 외부 백그라운드와 구분한다.
+Activity 일시정지 시 네이티브 가림 화면을 먼저 표시하고 비밀번호 입력을 지운다.
+
+API 30 이상에서 플랫폼 `BiometricPrompt`의 `BIOMETRIC_STRONG | DEVICE_CREDENTIAL`을 **앱 화면 잠금 전용**으로 사용한다.
+이 선택은 기기 PIN·패턴·비밀번호를 허용하며 자체 앱 PIN이나 별도 암호키를 만들지 않는다.
+성공 콜백은 현재 요청 세대·포그라운드·창 초점·기기 잠금을 다시 확인한 뒤에만 소비한다.
+이 로컬 인증은 서버의 최근 로그인 시각·step-up 증명·보관함 키를 변경하지 않는다.
+미등록·잠금 제한·기기 인증 실패 시 네이티브 입력으로 현재 계정의 서버 비밀번호 재인증을 수행할 수 있다.
+검증된 서버 응답 후에만 같은 세대에서 해제하며 기존 세션·기기를 유지한다. 이 경로의 실제 비밀번호 재인증은 서버 최근 로그인을 갱신한다.
+로컬 세션이 없으면 네이티브 로그인·초대 수락만 제공하며 생체 인증 성공으로 새 로그인을 만들지 않는다.
+
+가림 화면은 WebView를 숨기고 뒤쪽 접근성 접근을 막는다. MainActivity도 `FLAG_SECURE`를 사용한다.
+잠긴 동안 `getSession`은 refresh나 `/me`를 호출하지 않고 `APP_LOCKED`를 반환한다.
+일반 metadata·계좌번호·패스키 보호 동작은 요청 생성 세대와 잠금 상태를 토큰 접근·HTTP 전송·본문 쓰기·응답 전달에서 확인한다.
+잠금은 대기·진행 요청을 취소하며 해제 후에도 이전 세대의 응답은 재사용하지 않는다.
+로그인·초대·재인증·명시 로그아웃 예외는 각 인증 경로로만 제한하고 금융 API에는 사용할 수 없다.
+JS 잠금 이벤트는 화면·입력·캐시 폐기에만 사용한다. JS bool이나 Intent 결과로 해제하는 API는 없다.
+
+플랫폼 API 선택은 [공식 Builder 계약](https://developer.android.com/reference/android/hardware/biometrics/BiometricPrompt.Builder#setAllowedAuthenticators(int))과
+[인증 가이드](https://developer.android.com/identity/sign-in/biometric-auth)를 확인했다. 새 라이브러리는 추가하지 않았다.
+실제 Galaxy에서 PIN·지문·취소·최근 앱·화면 잠금·프로세스 재시작 검증은 전체 기능 개발 뒤에 수행하며 현재 미실행이다.
+카드 보관함의 strong 생체 인증과 실제 `CryptoObject` 키 사용 정책은 별도로 유지한다.
+
+앱 잠금 자동 검증(2026-10-18, WSL 분리 작업 트리):
+
+- `pnpm install --frozen-lockfile`, `pnpm android:sync`, client `typecheck`: 성공, 의존성/lockfile 변경 없음.
+- JDK 21/SDK 36의 `:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin :app:processReleaseMainManifest`: 성공. JVM 73개 중 앱 잠금 정책 14개, 실패·오류·건너뜀 0개.
+- `pnpm exec playwright test --config playwright.finance.config.ts --workers=2`: 데스크톱/Android 크기 전체 168개 성공. 새 잠금 시뮬레이션은 초기 차단·입력 폐기·조작된 해제 이벤트 거절·명시 잠금을 확인한다.
+- `pnpm test:docs`: 문서 검증 및 도구 테스트 40개 성공. 별도 작성자의 소스 검토에서 발견한 취소 직후 서버 응답 경합은 요청 모니터 안에서 최종 해제를 결정하도록 수정하고 실제 helper 회귀를 추가했다.
+
+JVM/브라우저 시뮬레이션은 실제 OS 인증·FLAG_SECURE·백업 보호를 증명하지 않는다.
+두 Galaxy의 미실행 항목은 콜드 시작/강제종료/회전, 59초·60초 복귀, 내부 네이티브 화면 전환,
+화면 꺼짐/잠금, 기기 인증 취소·등록 변경·잠금 제한·PIN 전환, 서버 비밀번호 실패/만료/취소,
+최근 앱·스크린샷·접근성 뒤쪽 화면, 잠금 중 늦은 HTTP 응답이다. 실기기 증거가 확보되기 전 #18/#38의 출시 보안 게이트를 완료로 표시하지 않는다.
 
 ### 비밀 열람
 
@@ -188,3 +220,7 @@ G5: 웹 XSS/의존 스크립트 경계와 첨부 접근, 네이티브 bridge 입
 G6: 운영 백업 복원·APK 서명·업데이트·분실 대응 실증.
 
 보안 게이트가 실패한 기능을 숨긴 채 v1 완료로 처리하지 않는다.
+
+### SB-017 카드 일반정보 경계
+
+카드 일반 API는 마지막 네 자리만 입력·반환한다. 전체 PAN/유효기간/CVC/암호문을 전달하는 일반 요청은 strict extra-field 검증으로 거부한다. 카드 소유자와 가계 권한을 분리해 같은 가계의 두 계정이 모두 관리하며 다른 가계 ID는 API와 DB FK에서 차단한다. 이 단계는 카드 비밀 보관함을 제공하거나 전체 앱 E2EE를 주장하지 않는다.

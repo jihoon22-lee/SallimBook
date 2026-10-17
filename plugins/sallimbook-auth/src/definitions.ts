@@ -8,7 +8,7 @@ export type NativeAuthErrorCode =
   | "AUTH_UNAVAILABLE" | "AUTH_CANCELLED" | "ACCESS_DENIED" | "SESSION_EXPIRED"
   | "KEY_INVALIDATED" | "NETWORK_UNAVAILABLE" | "INVALID_REQUEST"
   | "AUTH_FAILED" | "REGISTRATION_FAILED" | "PASSKEYS_DISABLED" | "PASSKEY_REQUIRED"
-  | "PASSKEY_CANCELLED" | "PASSKEY_FAILED" | "REAUTHENTICATION_REQUIRED" | "VERSION_CONFLICT";
+  | "PASSKEY_CANCELLED" | "PASSKEY_FAILED" | "REAUTHENTICATION_REQUIRED" | "VERSION_CONFLICT" | "APP_LOCKED";
 
 export type NativeAuthResult<T> = { ok: true; value: T } | { ok: false; code: NativeAuthErrorCode };
 export type NativeJson = null | boolean | number | string | NativeJson[] | { [key: string]: NativeJson };
@@ -33,6 +33,10 @@ export type NativeAccountPatch = Omit<components["schemas"]["AccountPatch"], "ac
 export type NativeFinanceResponse<T> = { status: number; body: T | components["schemas"]["ErrorResponse"] | null };
 
 export interface SallimBookAuth {
+  /** Safe status only. Unlock is controlled exclusively by the native screen. */
+  getAppLock(): Promise<NativeAuthResult<{ locked: boolean }>>;
+  lockApp(): Promise<NativeAuthResult<{ locked: true }>>;
+  addListener(event: "appLockChanged", listener: (state: { locked: boolean }) => void): Promise<{ remove(): Promise<void> }>;
   getSession(): Promise<NativeAuthResult<NativeSessionState>>;
   loginUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
   /** Confirms the current account password without creating another device or session. */
@@ -58,6 +62,32 @@ export interface SallimBookAuth {
   getAccount(options: { accountId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
   createAccount(options: { input: NativeAccountCreate }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
   updateAccount(options: { accountId: string; input: NativeAccountPatch; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
+  getAssetMonth(options: { month: string; query?: NonNullable<operations["getAssetMonth"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthResponse"]>>>;
+  getAssetMonthRevision(options: { month: string; revisionNo: number; query?: NonNullable<operations["getAssetMonthRevision"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthResponse"]>>>;
+  listAssetMonthRevisions(options: { month: string; query?: NonNullable<operations["listAssetMonthRevisions"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthHistoryResponse"]>>>;
+  createAssetMonthDraft(options: { month: string; input: components["schemas"]["MonthDraft"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  updateAssetMonthValue(options: { month: string; assetId: string; input: components["schemas"]["MonthValueUpdate"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthValueResult"]>>>;
+  synchronizeAssetMonthScope(options: { month: string; input: components["schemas"]["MonthScopeSync"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  confirmAssetMonth(options: { month: string; input: components["schemas"]["MonthConfirm"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  reopenAssetMonth(options: { month: string; input: components["schemas"]["MonthReopen"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  listIncome(options: { query: NonNullable<operations["listIncome"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeListResponse"]>>>;
+  incomeSummary(options: { query: NonNullable<operations["incomeSummary"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeSummaryResponse"]>>>;
+  incomeDuplicateCandidates(options: { query: NonNullable<operations["incomeDuplicateCandidates"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DuplicateResponse"]>>>;
+  getIncome(options: { recordId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  incomeHistory(options: { recordId: string; query?: NonNullable<operations["incomeHistory"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeHistoryResponse"]>>>;
+  createIncome(options: { input: components["schemas"]["IncomeCreate"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  correctIncome(options: { recordId: string; input: components["schemas"]["IncomePatch"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  voidIncome(options: { recordId: string; input: components["schemas"]["IncomeVoid"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  returnIncome(options: { recordId: string; input: components["schemas"]["IncomeReturn"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;
+  convertIncomePrecision(options: { input: components["schemas"]["IncomeConvert"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConversionResponse"]>>>;
+  listCards(options: { query?: NonNullable<operations["listCards"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CardListResponse"]>>>;
+  getCard(options: { cardId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CardResponse"]>>>;
+  createCard(options: { input: components["schemas"]["CardCreate"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CardResponse"]>>>;
+  updateCard(options: { cardId: string; input: components["schemas"]["CardPatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CardResponse"]>>>;
+  archiveCard(options: { cardId: string; input: components["schemas"]["CardArchive"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CardResponse"]>>>;
+  deleteCard(options: { cardId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  getAssetComparison(options: { query: operations["getAssetComparison"]["parameters"]["query"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetComparisonResponse"]>>>;
+  getAssetTrends(options: { query: operations["getAssetTrends"]["parameters"]["query"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetTrendResponse"]>>>;
   /** Number plaintext and ciphertext never appear in arguments or return values. */
   editAccountNumberUI(options: { accountId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "saved" | "deleted" | "cancelled" }>>;
   showAccountNumberUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;

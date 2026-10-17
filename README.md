@@ -125,6 +125,9 @@ Android 인증 서버 주소는 빌드 시 Gradle 속성 `sallimbookApiOrigin`�
 앱의 로그인·초대 입력과 인증 토큰은 네이티브 모듈에서 처리하고 일반 웹 상태에 반환하지 않습니다.
 안전한 메시지 채널을 지원하지 않는 WebView에서는 업데이트 안내를 표시합니다.
 두 Galaxy의 실기기·백업/전송·잠금 실패 시나리오는 전체 기능 개발 뒤에 수행합니다.
+Android 앱 잠금은 프로세스 시작·화면 잠금·수동 잠금 및 외부 백그라운드 1분 후 적용합니다.
+네이티브 기기 인증 또는 현재 계정의 서버 비밀번호 재인증으로 다시 열며, 카드 보관함 인증과 구분합니다.
+구현 경계와 실기기 미검증 항목은 [앱 잠금 정책](docs/security-authentication.md#앱-잠금)을 참고합니다.
 
 자세한 환경·검증 범위는 [개발 환경](docs/development-environment.md)을 참고합니다.
 [실제 브라우저 인증 검사](docs/testing/browser-authentication.md)는 임시 HTTPS 인증서와 합성 계정을 사용합니다.

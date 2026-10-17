@@ -49,7 +49,11 @@ Chromium 가상 인증기가 실제 서명을 만들고 API가 실제 PostgreSQL
 | `uv run --project services/api python scripts/test_web_auth.py` | 실제 HTTPS 쿠키·CSRF·동일 세션 비밀번호 재인증 **2개 통과** |
 | `uv run --project services/api python scripts/test_database.py services/api/tests/test_identity.py services/api/tests/test_passkeys.py` | API·권한·검증 **100개 통과**, Alembic drift 없음, downgrade/upgrade 성공 |
 | `pnpm api:generate`, `pnpm typecheck` | 통합 서버에서 API 계약 재생성·타입 검사 통과 |
-| `pnpm android:sync` 후 `:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin` | 인증 JVM **27개 통과**, 개발 APK·release Kotlin 컴파일 성공 |
+| `pnpm android:build` 및 `:app:compileReleaseKotlin` | PR60 후속 수정 브랜치에서 JVM **51개 통과**(인증 32·기존 debug POC 19), 개발 APK·release Kotlin 컴파일 성공 |
+
+최종 병합 후 HTTPS 두 명령도 각각 2개씩 다시 통과했다. 초기 병행 UI 실행은 라우팅 reload 1건에서
+5초 timeout이 있었고, 같은 코드의 해당 테스트 단독 실행과 최종 2-worker 전체 실행은 통과했다.
+CI에서는 일반 HTTPS 인증에 더해 `--passkeys`의 실제 서명 검증도 실행한다.
 
 WebAuthn 검사는 등록·로그인·공개 목록·폐기와 폐기 키 재로그인 거부를 확인했다. 초대·기기 해제용 scoped
 grant를 실제로 소비한 뒤에도 패스키 등록·폐기에 필요한 계정 인증 시각이 갱신되지 않음을 확인했다.
@@ -65,3 +69,22 @@ grant를 실제로 소비한 뒤에도 패스키 등록·폐기에 필요한 계
 - [W3C WebAuthn](https://w3c.github.io/webauthn/)
 - [브라우저 등록 옵션 JSON 변환](https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseCreationOptionsFromJSON_static)
 - [브라우저 인증 옵션 JSON 변환](https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseRequestOptionsFromJSON_static)
+
+Android는 `401 PASSKEY_VERIFICATION_FAILED` 시 기존 로그인 세션을 유지하고 패스키 실패를 알린다. 실제 세션 만료 401은 로컬 세션을 제거한다. 두 경로를 같은 native 실패 처리 helper로 회귀 검증했다.
+
+Android 기기·패스키 삭제 대상 확인은 `next_cursor`를 따라 마지막 페이지까지 조회한다. 200개 뒤 대상, 목록 종료·버전 충돌·반복/잘못된 cursor를 native 단위 검사로 확인했다. 화면 이탈/잠금으로 취소된 조회는 다음 페이지 요청이나 해제 버튼 활성화로 이어지지 않는다.
+
+
+## 앱 잠금 통합 후 제공자 화면 생명주기 보완 (Refs #18, #38)
+
+Credential Manager의 불투명 화면으로 발생하는 pause/stop/save는 현재 제공자 소유 요청에 한해
+고정된 60초·challenge 만료 안에서 유지한다. 응답 뒤 1초 이내 실제 foreground 복귀 조건과
+화면 꺼짐·앱 잠금·명시 취소·파괴 시 폐기를 확인하는 정책 시험 12개를 추가했다.
+고정 SDK의 same-task non-exported HiddenActivity 예외는 화면 이동만 허용하고 잠금을 해제하지 않는다.
+독립 코드 검토에서 추가 차단 사항은 발견되지 않았다.
+
+`pnpm install --frozen-lockfile`, `pnpm android:sync`와 Gradle
+`:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin`이 통과했다.
+해당 앱 잠금 통합 브랜치의 JVM은 **90개 통과**(실패·오류·건너뜀 0)이며 개발 APK가 생성됐다.
+이 수치는 위 PR60 단독 검증과 별개다. 실제 기기에서 opaque 제공자·Home·화면 꺼짐·
+60초 대기·늦은 callback 시나리오는 아직 실행하지 않았으므로 성공으로 기록하지 않는다.

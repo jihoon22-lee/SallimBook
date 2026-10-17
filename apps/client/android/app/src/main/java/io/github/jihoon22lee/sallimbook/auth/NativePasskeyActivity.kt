@@ -57,6 +57,7 @@ class NativePasskeyActivity : AppCompatActivity() {
     }
 
     private val auth by lazy { NativeAuthSession.get(applicationContext) }
+    private val appLock by lazy { AppLockController.get(applicationContext) }
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
     private val credentials by lazy { CredentialManager.create(applicationContext) }
     private val handler = Handler(Looper.getMainLooper())
@@ -204,27 +205,53 @@ class NativePasskeyActivity : AppCompatActivity() {
     private fun loadTarget() {
         if (!ready() || gate != null || targetLoaded || mode !in setOf(REVOKE, DEVICE, ACCOUNT)) return
         val request = ForegroundRequest().also { gate = it }
-        val path = if (mode == REVOKE) "/api/v1/auth/passkeys?limit=200" else "/api/v1/devices?limit=200"
-        val completion: (AuthOutcome) -> Unit = { outcome -> runOnUiThread {
+        if (mode == ACCOUNT) { loadAccountTarget(request); return }
+        loadTargetPage(request, PasskeyTargetPages(mode == REVOKE, targetId!!, ifMatch!!))
+    }
+
+    private fun loadTargetPage(request: ForegroundRequest, pages: PasskeyTargetPages) {
+        if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return }
+        val path = pages.nextPath ?: return
+        auth.request("GET", path, null, request) { outcome -> runOnUiThread {
+            if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
+            if (outcome.code != null || outcome.value?.get("status") != 200) {
+                gate = null
+                showFailure(outcome.code ?: AuthCode.ACCESS_DENIED)
+                return@runOnUiThread
+            }
+            val row = try { pages.accept(outcome.value["body"]) } catch (failure: AuthFailure) {
+                gate = null
+                showFailure(failure.code)
+                return@runOnUiThread
+            }
+            if (row != null) {
+                gate = null
+                targetLoaded = true
+                status.text = "대상: ${row["label"]}\n아래 버튼으로 이 항목의 해제를 확인해 주세요."
+                submit.isEnabled = true
+            } else if (pages.nextPath != null) {
+                loadTargetPage(request, pages)
+            } else {
+                gate = null
+                showFailure(AuthCode.ACCESS_DENIED)
+            }
+        } }
+    }
+
+    private fun loadAccountTarget(request: ForegroundRequest) {
+        auth.finance(FinanceOperation.GET_ACCOUNT, org.json.JSONObject().put("accountId", targetId), request) { outcome -> runOnUiThread {
             if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
             gate = null
-            val body = outcome.value?.get("body") as? Map<*, *>
-            val row = if (mode == ACCOUNT) body else (body?.get("items") as? List<*>)?.mapNotNull { it as? Map<*, *> }?.singleOrNull { it["id"] == targetId }
-            if (outcome.code != null || outcome.value?.get("status") != 200 || row == null ||
-                mode != ACCOUNT && "\"${row["version"]}\"" != ifMatch || mode == ACCOUNT && row["has_number"] != true) {
+            val row = outcome.value?.get("body") as? Map<*, *>
+            if (outcome.code != null || outcome.value?.get("status") != 200 || row == null || row["has_number"] != true) {
                 showFailure(outcome.code ?: AuthCode.ACCESS_DENIED)
             } else {
                 targetLoaded = true
-                status.text = if (mode == ACCOUNT) {
-                    val asset = row["asset"] as Map<*, *>
-                    "${asset["name"]} · ${row["institution_name"]}\n${row["masked_number"]}\n이 계좌의 전체 번호를 확인합니다."
-                } else "대상: ${row["label"]}\n아래 버튼으로 이 항목의 해제를 확인해 주세요."
+                val asset = row["asset"] as Map<*, *>
+                status.text = "${asset["name"]} · ${row["institution_name"]}\n${row["masked_number"]}\n이 계좌의 전체 번호를 확인합니다."
                 submit.isEnabled = true
             }
         } }
-        if (mode == ACCOUNT) auth.finance(FinanceOperation.GET_ACCOUNT,
-            org.json.JSONObject().put("accountId", targetId), request, completion)
-        else auth.request("GET", path, null, request, completion)
     }
 
     private fun submitNativePasskey() {
@@ -263,6 +290,12 @@ class NativePasskeyActivity : AppCompatActivity() {
         if (!ready() || lifetime?.startProvider() != true) { cancelPending(); return }
         val signal = CancellationSignal().also { cancellation = it }
         providerOwner = pending
+        val request = gate ?: run { cancelPending(); return }
+        // App-lock cancellation must also revoke an outstanding provider operation, even if
+        // the SDK never delivers its cancellation callback while our Activity is stopped.
+        request.bindNetworkCancellation { handler.post {
+            if (gate === request && ceremony === pending) close() else signal.cancel()
+        } }
         val executor = ContextCompat.getMainExecutor(this)
         try {
             val json = String(pending.options)
@@ -299,6 +332,7 @@ class NativePasskeyActivity : AppCompatActivity() {
 
     private fun providerResult(owner: NativePasskeyCeremony, json: String) {
         if (providerOwner !== owner) return
+        gate?.releaseNetworkCancellation()
         providerOwner = null
         cancellation = null
         if (ceremony !== owner) { if (ready()) showFailure(AuthCode.PASSKEY_CANCELLED); return }
@@ -358,6 +392,7 @@ class NativePasskeyActivity : AppCompatActivity() {
 
     private fun providerFailure(owner: NativePasskeyCeremony, code: AuthCode) {
         if (providerOwner !== owner) return
+        gate?.releaseNetworkCancellation()
         providerOwner = null
         cancellation = null
         if (ceremony !== owner) { if (ready()) showFailure(AuthCode.PASSKEY_CANCELLED); return }
@@ -370,6 +405,9 @@ class NativePasskeyActivity : AppCompatActivity() {
         handler.removeCallbacks(finishWhenReady)
         handler.removeCallbacks(expire)
         lifetime?.cancel(); lifetime = null
+        // Invalidate ownership before CancellationSignal can synchronously invoke a callback.
+        providerOwner = null
+        if (cancellation != null) gate?.releaseNetworkCancellation()
         gate?.cancel(); gate = null
         ceremony?.discard(); ceremony = null
         response?.fill('\u0000'); response = null
@@ -422,7 +460,7 @@ class NativePasskeyActivity : AppCompatActivity() {
         if (hasFocus) { finishProviderResponse(); loadTarget() }
         else {
             clearInvitation()
-            if (gate != null && lifetime?.mayWaitForPresentation() != true) {
+            if (gate != null && !keepProviderTransition()) {
                 cancelPending(); showFailure(AuthCode.PASSKEY_CANCELLED)
             }
         }
@@ -431,14 +469,19 @@ class NativePasskeyActivity : AppCompatActivity() {
     override fun onPause() {
         resumed = false
         clearInvitation()
-        // Credential Manager can temporarily pause this Activity. No response is used until
-        // resumed, unlocked and focused; a stopped Activity always cancels the ceremony.
-        if (lifetime?.mayWaitForPresentation() != true) close()
+        // Only the current provider (or its bounded return) may cover this Activity.
+        if (!keepProviderTransition()) close()
         super.onPause()
     }
 
-    override fun onStop() { close(); super.onStop() }
-    override fun onSaveInstanceState(outState: Bundle) { cancelPending(); clearInvitation(); super.onSaveInstanceState(outState); outState.clear() }
+    override fun onStop() { if (!keepProviderTransition()) close(); super.onStop() }
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (!keepProviderTransition()) cancelPending()
+        clearInvitation()
+        super.onSaveInstanceState(outState)
+        // Provider state remains in this Activity instance only; recreation is still rejected.
+        outState.clear()
+    }
     override fun onDestroy() {
         cancelPending(); clearInvitation()
         providerOwner = null
@@ -448,4 +491,24 @@ class NativePasskeyActivity : AppCompatActivity() {
         super.onDestroy()
     }
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
+
+    /** Used only by the process controller for the pinned SDK trampoline during cold login. */
+    internal fun ownsCredentialProvider(): Boolean {
+        val request = gate ?: return false
+        val ticket = request.appLockTicket() ?: return false
+        return providerOwner != null && providerOwner === ceremony && cancellation?.isCanceled == false &&
+            request.isActive() && appLock.isCurrent(ticket) && !keyguard.isDeviceLocked &&
+            !isFinishing && !isDestroyed && lifetime?.providerWaitValid() == true
+    }
+
+    private fun keepProviderTransition(): Boolean {
+        val policy = lifetime ?: return false
+        val request = gate
+        val ticket = request?.appLockTicket()
+        val active = request?.isActive() == true && ticket != null && appLock.isCurrent(ticket) && !isFinishing && !isDestroyed
+        if (!policy.keepPendingInBackground(ownsCredentialProvider(), active, !keyguard.isDeviceLocked)) return false
+        handler.removeCallbacks(expire)
+        handler.postDelayed(expire, policy.remainingPresentationMillis())
+        return true
+    }
 }

@@ -18,13 +18,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class NativeHttpResponse(val status: Int, val body: Any?, val requestId: String?)
 
 /** 503 Retry-After follow-ups must not resend a rotating credential, even with retries off. */
-internal class OneShotAuthBody(private val bytes: ByteArray) : RequestBody() {
+internal class OneShotAuthBody(private val bytes: ByteArray, private val beforeWrite: () -> Unit = {}) : RequestBody() {
     private val written = AtomicBoolean(false)
     override fun contentType() = "application/json; charset=utf-8".toMediaType()
     override fun contentLength() = bytes.size.toLong()
     override fun isOneShot() = true
     override fun writeTo(sink: BufferedSink) {
         if (!written.compareAndSet(false, true)) throw IOException("A native auth body cannot be replayed")
+        beforeWrite()
         sink.write(bytes)
     }
 }
@@ -56,8 +57,9 @@ internal class NativeAuthHttp(private val origin: String) {
         ifMatch: String? = null,
         stepUpToken: String? = null,
         nativeAccountNumber: Boolean = false,
+        idempotencyKey: String? = null,
     ): NativeHttpResponse {
-        gate.check()
+        gate.checkHttp(method, path)
         if (AuthPolicy.apiOrigin(origin) == null) {
             throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
         }
@@ -72,7 +74,7 @@ internal class NativeAuthHttp(private val origin: String) {
         ) && method == "POST" && ifMatch == null
         val internalRevoke = method == "DELETE" && PasskeyPolicy.revokePath(path) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && body == null
-        val metadata = FinancePolicy.metadataHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch)
+        val metadata = FinancePolicy.metadataHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch, idempotencyKey)
         val numberFields = body?.keys()?.asSequence()?.toSet()
         val numberMutation = nativeAccountNumber && method == "PATCH" && FinancePolicy.numberPath(path, false) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && numberFields == setOf("account_number") &&
@@ -86,6 +88,7 @@ internal class NativeAuthHttp(private val origin: String) {
             (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
+        if (idempotencyKey != null && !metadata) throw AuthFailure(AuthCode.INVALID_REQUEST)
         if (nativeAccountNumber && !numberMutation && !numberReveal) throw AuthFailure(AuthCode.INVALID_REQUEST)
         if (stepUpToken != null && !PasskeyPolicy.stepUpHeaderAllowed(method, path, ifMatch, stepUpToken)) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
@@ -95,15 +98,16 @@ internal class NativeAuthHttp(private val origin: String) {
             requestBytes = body?.toString()?.toByteArray(Charsets.UTF_8)
             val request = Request.Builder()
                 .url(origin + path)
-                .method(method, requestBytes?.let(::OneShotAuthBody))
+                .method(method, requestBytes?.let { OneShotAuthBody(it) { gate.checkHttp(method, path) } })
                 .header("Accept", "application/json")
                 .header("X-SallimBook-Native", "1")
                 .apply {
                     if (accessToken != null) header("Authorization", "Bearer $accessToken")
                     if (ifMatch != null) header("If-Match", ifMatch)
+                    if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey)
                     if (stepUpToken != null) header("X-Step-Up-Token", stepUpToken)
                 }.build()
-            gate.check()
+            gate.checkHttp(method, path)
             val call = client.newCall(request)
             gate.bindNetworkCancellation { call.cancel() }
             return call.execute().use { response ->
@@ -135,7 +139,7 @@ internal class NativeAuthHttp(private val origin: String) {
                         jsonValue(value)
                     } finally { bytes.fill(0) }
                 }
-                gate.check()
+                gate.checkHttp(method, path)
                 val requestId = response.header("X-Request-ID")?.takeIf {
                     Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").matches(it)
                 }

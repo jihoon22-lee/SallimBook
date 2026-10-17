@@ -13,6 +13,24 @@ internal object PasskeyPolicy {
     private val domainLabel = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
     private val base64Url = Regex("[A-Za-z0-9_-]+")
 
+    fun reject(status: Int, body: Any?, unauthenticatedLogin: Boolean, clearSession: () -> Unit): Nothing {
+        val code = ((body as? Map<*, *>)?.get("error") as? Map<*, *>)?.get("code")
+        if (status == 401) {
+            // A consumed/rejected ceremony does not revoke the existing account session.
+            if (unauthenticatedLogin || code == "PASSKEY_VERIFICATION_FAILED") {
+                throw AuthFailure(AuthCode.PASSKEY_FAILED)
+            }
+            clearSession()
+            throw AuthFailure(AuthCode.SESSION_EXPIRED)
+        }
+        throw AuthFailure(when (code) {
+            "PASSKEYS_DISABLED", "PASSKEY_CONFIGURATION_INVALID" -> AuthCode.PASSKEYS_DISABLED
+            "PASSKEY_REQUIRED" -> AuthCode.PASSKEY_REQUIRED
+            "REAUTHENTICATION_REQUIRED" -> AuthCode.REAUTHENTICATION_REQUIRED
+            else -> AuthCode.PASSKEY_FAILED
+        })
+    }
+
     fun configuration(apiOrigin: String, rpId: String, configuredCertificate: String, actualCertificate: String): Boolean {
         if (AuthPolicy.apiOrigin(apiOrigin) == null || rpId.length !in 3..253 ||
             rpId.split('.').size < 2 || rpId.split('.').any { !domainLabel.matches(it) }) return false
@@ -137,11 +155,41 @@ internal object PasskeyPolicy {
     }
 }
 
+/** Fetches all metadata pages for the selected target without trusting a JavaScript label. */
+internal class PasskeyTargetPages(passkey: Boolean, private val targetId: String, private val ifMatch: String) {
+    private val base = if (passkey) "/api/v1/auth/passkeys?limit=200" else "/api/v1/devices?limit=200"
+    private val cursors = mutableSetOf<String>()
+    var nextPath: String? = base
+        private set
+
+    fun accept(body: Any?): Map<*, *>? {
+        if (nextPath == null) throw AuthFailure(AuthCode.ACCESS_DENIED)
+        val page = body as? Map<*, *> ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+        val items = page["items"] as? List<*> ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+        val matches = items.filterIsInstance<Map<*, *>>().filter { it["id"] == targetId }
+        if (matches.size > 1) throw AuthFailure(AuthCode.ACCESS_DENIED)
+        matches.singleOrNull()?.let { row ->
+            if ("\"${row["version"]}\"" != ifMatch) throw AuthFailure(AuthCode.ACCESS_DENIED)
+            nextPath = null
+            return row
+        }
+        val cursor = page["next_cursor"]
+        nextPath = if (cursor == null) null else {
+            if (cursor !is String || !PasskeyPolicy.uuid.matches(cursor) || !cursors.add(cursor) || items.isEmpty()) {
+                throw AuthFailure(AuthCode.ACCESS_DENIED)
+            }
+            "$base&cursor=$cursor"
+        }
+        return null
+    }
+}
+
 /** One ceremony, one verification, never a reusable authentication grant. */
 internal class PasskeyPresentationPolicy(private val clock: () -> Long, private val expiresAt: Long) {
     private enum class Phase { FETCHED, PROVIDER, WAITING, VERIFYING, CANCELLED }
     private var phase = Phase.FETCHED
     private var returnedAt = 0L
+    private var providerBackgroundAt: Long? = null
     fun awaitingProvider(): Boolean = phase == Phase.PROVIDER
     fun waitingForPresentation(): Boolean = phase == Phase.WAITING
     fun mayWaitForPresentation(): Boolean = phase in setOf(Phase.PROVIDER, Phase.WAITING)
@@ -151,13 +199,41 @@ internal class PasskeyPresentationPolicy(private val clock: () -> Long, private 
         return true
     }
     fun providerReturned(): Boolean {
-        if (phase != Phase.PROVIDER || clock() >= expiresAt) { cancel(); return false }
+        if (!providerWaitValid()) { cancel(); return false }
         phase = Phase.WAITING
         returnedAt = clock()
         return true
     }
     fun canWait(): Boolean = phase == Phase.WAITING && clock() >= returnedAt &&
         clock() - returnedAt < 1_000L && clock() < expiresAt
+    /** A provider may cover the Activity. Its first loss of presentation starts a fixed limit. */
+    fun keepPendingInBackground(providerOwned: Boolean, requestActive: Boolean, unlocked: Boolean): Boolean {
+        if (!requestActive || !unlocked) { cancel(); return false }
+        return when (phase) {
+            Phase.PROVIDER -> {
+                if (!providerOwned) { cancel(); return false }
+                if (providerBackgroundAt == null) providerBackgroundAt = clock()
+                providerWaitValid().also { if (!it) cancel() }
+            }
+            Phase.WAITING -> canWait().also { if (!it) cancel() }
+            else -> { cancel(); false }
+        }
+    }
+    fun providerWaitValid(): Boolean {
+        if (phase != Phase.PROVIDER || clock() >= expiresAt) return false
+        val start = providerBackgroundAt ?: return true
+        return clock() >= start && clock() - start < 60_000L
+    }
+    /** No lifecycle callback can extend either the original challenge or the return deadline. */
+    fun remainingPresentationMillis(): Long {
+        val now = clock()
+        val remaining = when (phase) {
+            Phase.PROVIDER -> providerBackgroundAt?.let { 60_000L - (now - it) } ?: (expiresAt - now)
+            Phase.WAITING -> 1_000L - (now - returnedAt)
+            else -> 0L
+        }
+        return minOf(expiresAt - now, remaining).coerceAtLeast(0)
+    }
     fun claimVerification(resumed: Boolean, focused: Boolean, unlocked: Boolean): Boolean {
         if (!canWait()) { cancel(); return false }
         if (!resumed || !focused || !unlocked) return false
@@ -165,4 +241,11 @@ internal class PasskeyPresentationPolicy(private val clock: () -> Long, private 
         return true
     }
     fun cancel() { phase = Phase.CANCELLED }
+}
+
+/** The pinned Credential Manager passkey controllers use this non-exported same-task trampoline. */
+internal object PasskeyProviderActivityPolicy {
+    private const val HIDDEN = "androidx.credentials.playservices.controllers.identityauth.HiddenActivity"
+    fun permits(className: String, exported: Boolean, sameTask: Boolean, currentProviderOwned: Boolean): Boolean =
+        className == HIDDEN && !exported && sameTask && currentProviderOwned
 }

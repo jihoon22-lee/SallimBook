@@ -22,6 +22,7 @@ type StepUpPurpose = ScopeProof["purpose"];
 export type OperationProof = { signal: AbortSignal; stepUp: boolean };
 
 export type AuthState =
+  | { status: "locked" }
   | { status: "loading" }
   | { status: "signed-out"; remoteRevocationUnconfirmed?: boolean }
   | { status: "authenticated"; member: Member }
@@ -65,6 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     csrf.current = null;
     member.current = null;
     if (mounted.current) setState({ status: "signed-out" });
+  }, []);
+
+  const clearForAppLock = useCallback(() => {
+    generation.current += 1;
+    restoreFlight.current = null;
+    csrf.current = null;
+    member.current = null;
+    if (mounted.current) setState({ status: "locked" });
   }, []);
 
   const renewCsrf = useCallback((requestGeneration: number): Promise<string> => {
@@ -119,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         csrf.current = null;
         member.current = null;
         const failure = toApiError(error);
-        setState(failure.status === 401 ? { status: "signed-out" } : { status: "error", error: failure });
+        setState(failure.code === "APP_LOCKED" ? { status: "locked" } : failure.status === 401 ? { status: "signed-out" } : { status: "error", error: failure });
       }
     })();
     restoreFlight.current = promise;
@@ -137,6 +146,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [reloadSession]);
 
+  useEffect(() => {
+    if (!isNativeAuth() || isNativeAuthUnavailable()) return;
+    let disposed = false;
+    let handle: { remove(): Promise<void> } | undefined;
+    void nativeAuth.onAppLock(({ locked }) => {
+      if (disposed || !mounted.current) return;
+      // Events discard UI state; native policy still decides whether any API may run.
+      if (locked) clearForAppLock(); else void reloadSession();
+    }).then((value) => { if (disposed) void value.remove(); else handle = value; })
+      .catch(() => { if (!disposed) clearForAppLock(); });
+    return () => { disposed = true; if (handle) void handle.remove(); };
+  }, [clearForAppLock, reloadSession]);
+
   const authenticatedRequest = useCallback(async <T,>(request: (requestGeneration: number) => Promise<T>): Promise<T> => {
     if (!member.current) throw new ApiError(401, "UNAUTHENTICATED");
     const requestGeneration = generation.current;
@@ -146,10 +168,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return data;
     } catch (error) {
       const failure = toApiError(error);
+      if (failure.code === "APP_LOCKED") clearForAppLock();
       if (failure.status === 401 && failure.code !== "PASSKEY_VERIFICATION_FAILED" && generation.current === requestGeneration) clearSession();
       throw failure;
     }
-  }, [clearSession, ensureCurrent]);
+  }, [clearSession, clearForAppLock, ensureCurrent]);
 
   const mutation = useCallback(<T,>(request: (token: string) => Promise<T>): Promise<T> => authenticatedRequest(async (requestGeneration) => {
     requireWebAuth();
@@ -374,7 +397,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
     [state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{state.status === "locked"
+    ? <p role="status">앱이 잠겨 있어요. Android 보호 화면에서 다시 열어 주세요.</p>
+    : children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {
