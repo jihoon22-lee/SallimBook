@@ -4,16 +4,21 @@ The content inspector is stubbed only in lifecycle tests; its real parsers and r
 bounds have independent tests and the deployed scanner/OCR have a separate tool harness.
 """
 
+import asyncio
 import hashlib
 import os
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import UTC, datetime, timedelta
+from threading import Event
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 from test_accounts import asset_payload, make_actor, write_keyring
@@ -487,3 +492,122 @@ def test_list_filters_pages_and_duplicate_link(document_app, actors):
         )
         assert duplicate.status_code == 409
         assert detail(client, actor, rows[0])["version"] == 1
+
+
+def test_database_serializes_document_delete_and_new_link(document_app, actors):
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        row = pending(client, actor)
+        assert upload(client, actor, row).status_code == 200
+        link = client.get(f"/api/v1/documents/{row['id']}/links", headers=actor.headers).json()[
+            "items"
+        ][0]
+        assert (
+            client.post(
+                f"/api/v1/document-links/{link['id']}/end",
+                headers=headers(actor, version=1),
+                json={"reason": "합성 해제"},
+            ).status_code
+            == 200
+        )
+    started = Event()
+
+    def insert_link():
+        with Session(document_app.state.engine) as session:
+            session.add(
+                DocumentLink(
+                    id=uuid4(),
+                    household_id=actor.household_id,
+                    document_id=UUID(row["id"]),
+                    asset_id=UUID(link["target"]["id"]),
+                    active=True,
+                    created_by_member_id=actor.member_id,
+                    updated_by_member_id=actor.member_id,
+                )
+            )
+            started.set()
+            session.commit()
+
+    with (
+        document_app.state.engine.connect() as connection,
+        ThreadPoolExecutor(max_workers=1) as pool,
+    ):
+        transaction = connection.begin()
+        connection.execute(
+            text(
+                "UPDATE documents SET state='deleted', deleted_at=now(), "
+                "deletion_reason='synthetic', version=version+1 WHERE id=:id"
+            ),
+            {"id": row["id"]},
+        )
+        future = pool.submit(insert_link)
+        try:
+            assert started.wait(3)
+            with pytest.raises(FutureTimeout):
+                future.result(timeout=0.2)
+            transaction.commit()
+            with pytest.raises(DBAPIError):
+                future.result(timeout=5)
+        finally:
+            if transaction.is_active:
+                transaction.rollback()
+    with Session(document_app.state.engine) as session:
+        active = list(
+            session.scalars(
+                select(DocumentLink).where(
+                    DocumentLink.document_id == UUID(row["id"]), DocumentLink.active.is_(True)
+                )
+            )
+        )
+        assert active == [] and session.get(Document, UUID(row["id"])).state == "deleted"
+
+
+def test_slow_upload_body_does_not_block_session_revocation(document_app, actors):
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        row = pending(client, actor)
+
+    def revoke():
+        with Session(document_app.state.engine) as session:
+            auth = session.get(AuthSession, actor.principal.session_id)
+            auth.revoked_at = datetime.now(UTC)
+            session.commit()
+
+    async def scenario():
+        started, continue_body = asyncio.Event(), asyncio.Event()
+
+        async def content():
+            yield CONTENT[:8]
+            started.set()
+            await continue_body.wait()
+            yield CONTENT[8:]
+
+        transport = httpx.ASGITransport(app=document_app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="https://synthetic.test"
+        ) as client:
+            upload_task = asyncio.create_task(
+                client.put(
+                    f"/api/v1/documents/{row['id']}/content",
+                    content=content(),
+                    headers=headers(actor, version=1)
+                    | {"Content-Type": "application/octet-stream"},
+                )
+            )
+            await asyncio.wait_for(started.wait(), timeout=5)
+            revoked = asyncio.create_task(asyncio.to_thread(revoke))
+            completed_while_upload_waited = False
+            try:
+                await asyncio.wait_for(asyncio.shield(revoked), timeout=1)
+                completed_while_upload_waited = True
+            except TimeoutError:
+                pass
+            finally:
+                continue_body.set()
+            response = await asyncio.wait_for(upload_task, timeout=5)
+            await asyncio.wait_for(revoked, timeout=5)
+            assert completed_while_upload_waited
+            assert response.status_code == 401
+
+    asyncio.run(scenario())
+    assert not document_app.state.settings.document_storage_directory.exists()

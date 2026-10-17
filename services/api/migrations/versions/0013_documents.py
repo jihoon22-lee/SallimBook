@@ -326,14 +326,16 @@ END $$;
 CREATE TRIGGER protect_document BEFORE INSERT OR UPDATE OR DELETE ON documents
  FOR EACH ROW EXECUTE FUNCTION protect_document();
 CREATE FUNCTION protect_document_link() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE document_state text;
 BEGIN
  IF TG_OP = 'DELETE' THEN
   RAISE EXCEPTION 'document link history cannot be deleted' USING ERRCODE='55000';
  END IF;
  IF TG_OP = 'INSERT' THEN
-  IF NOT NEW.active OR NEW.version <> 1 OR NOT EXISTS (
-   SELECT 1 FROM documents WHERE id=NEW.document_id AND household_id=NEW.household_id
-    AND state <> 'deleted') THEN
+  SELECT state INTO document_state FROM documents
+   WHERE id=NEW.document_id AND household_id=NEW.household_id FOR UPDATE;
+  IF NOT NEW.active OR NEW.version <> 1 OR document_state IS NULL
+     OR document_state = 'deleted' THEN
    RAISE EXCEPTION 'new document link requires available document' USING ERRCODE='23514';
   END IF;
   RETURN NEW;

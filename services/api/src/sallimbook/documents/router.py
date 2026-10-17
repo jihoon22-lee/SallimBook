@@ -2,10 +2,11 @@ from typing import Annotated
 from urllib.parse import quote
 from uuid import UUID
 
+from anyio import fail_after
 from fastapi import APIRouter, Header, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
 
-from sallimbook.core.errors import DomainError
+from sallimbook.core.errors import DomainError, ErrorResponse
 from sallimbook.documents import service
 from sallimbook.documents.models import MAX_DOCUMENT_BYTES
 from sallimbook.documents.schemas import (
@@ -20,7 +21,11 @@ from sallimbook.documents.schemas import (
 )
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
-router = APIRouter(prefix="/api/v1", tags=["documents"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["documents"],
+    responses={code: {"model": ErrorResponse} for code in (408, 413)},
+)
 IfMatch = Annotated[str, Header(alias="If-Match")]
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)]
 Limit = Annotated[int, Query(ge=1, le=200)]
@@ -110,11 +115,23 @@ async def upload_content(
             raise DomainError("DOCUMENT_CONTENT_LENGTH", "파일 크기를 확인해 주세요.", 422)
         if len(raw_length) > 10 or int(raw_length) > MAX_DOCUMENT_BYTES:
             raise DomainError("DOCUMENT_TOO_LARGE", "첨부파일은 20MiB 이하로 선택해 주세요.", 413)
+    # authenticate() updates last_seen under a session-row lock. Release that short
+    # transaction before waiting on an untrusted network body so logout/revocation
+    # remains available. The service revalidates the live session after inspection.
+    await run_in_threadpool(session.commit)
     content = bytearray()
-    async for chunk in request.stream():
-        if len(content) + len(chunk) > MAX_DOCUMENT_BYTES:
-            raise DomainError("DOCUMENT_TOO_LARGE", "첨부파일은 20MiB 이하로 선택해 주세요.", 413)
-        content.extend(chunk)
+    try:
+        with fail_after(120):
+            async for chunk in request.stream():
+                if len(content) + len(chunk) > MAX_DOCUMENT_BYTES:
+                    raise DomainError(
+                        "DOCUMENT_TOO_LARGE", "첨부파일은 20MiB 이하로 선택해 주세요.", 413
+                    )
+                content.extend(chunk)
+    except TimeoutError:
+        raise DomainError(
+            "DOCUMENT_UPLOAD_TIMEOUT", "파일 전송 시간이 초과됐습니다. 다시 확인해 주세요.", 408
+        ) from None
     if not content or (raw_length is not None and len(content) != int(raw_length)):
         raise DomainError("DOCUMENT_CONTENT_LENGTH", "파일 크기를 확인해 주세요.", 422)
     result = await run_in_threadpool(
