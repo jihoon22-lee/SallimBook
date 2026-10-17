@@ -17,8 +17,8 @@ SB-034~040 · R-01~R-22 · 2026-10-18 WSL Ubuntu.
 | 전체 웹 | `TMPDIR=/home/jihoon/.cache/sallimbook pnpm test:web --workers=2` | `1f81039` **982 통과**, 실패·건너뜀 0, 6.7분. PC/Android 크기와 native plugin 모의시험이며 실기기 인수와 구분 |
 | 웹 배포 빌드 | `pnpm build` | 165 modules 성공. JS 894.22kB/gzip 231.17kB, 기존 chunk 크기 경고 남음 |
 | 정적 검사 | API src/tests/migrations와 실제 HTTPS harness Ruff | 통과 |
-| 저장소·운영 도구 | `python3 -m unittest discover -s tests -q` | 운영 16개 포함 **56 통과** |
-| 운영 컨테이너 | `python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE` | `5d5f48a`: migration/readiness, runtime DB 역할, 11가지 권한 변조 거부, 감사 UPDATE/DELETE의 42501 및 정상 INSERT/조회, UID10001, 한국어 OCR·ClamAV 업로드, AEAD 저장·다운로드, 익명 차단 통과 |
+| 저장소·운영 도구 | `python3 -m unittest discover -s tests -q` | 운영 19개 포함 **59 통과** |
+| 운영 컨테이너 | `python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE` | `2fbe39e`: migration/readiness, runtime DB 역할, 11가지 권한 변조 거부, 감사 UPDATE/DELETE의 42501 및 정상 INSERT/조회, UID10001, 한국어 OCR·ClamAV 업로드, AEAD 저장·다운로드, 익명 차단 통과. scanner 미준비·stale 거부, 중단→unhealthy→복구 통과 |
 | 암호화 백업·복원 | 검증한 age/PostgreSQL client 경로에서 `uv run --project services/api python -m ops.test_recovery` | 실제 새 합성 DB 복원, manifest·전체 테이블 행 수·첨부 AEAD, 기존 인증 폐기와 pending/new rotation gate 통과 |
 | 배포 설정 | `python3 -m ops.test_deployment` | 고정 Caddy/Tailscale Compose, 공개 JSON/다른 경로 404 통과. 실제 tailnet 노드 등록은 미실행 |
 | APK 서명 도구 | JDK 21·고정 SDK에서 `python3 -m ops.test_release --sdk /DEDICATED_ANDROID_SDK` | `fc297d2`: 합성 키로 release v2/v3 실제 빌드·서명, manifest/native 설정·zipalign·인증서·증가 versionCode·이전 APK·변조 거부 통과. 시험 키/APK 제거 |
@@ -80,7 +80,22 @@ debug CVC 인수 도구는 실제 store를 별도 합성 namespace에서 사용�
 - unsigned release: `a6534bd9c69ea4af7dffae5773ddd7403925f8545af46037a0deda39b5710403`
 
 공개 origin/RP/cert가 공란인 개발 검증 산출물이므로 실제 서버 로그인용 배포 APK가 아니다.
-운영 리뷰의 마지막 이미지 revision 대조·scanner readiness 보완은 별도 통합 검증 결과를 추가한다.
+운영 최종 통합 `2fbe39e183582cfa4b0d0b085224bd547d20a40a`의 깨끗한 archive에서 API/웹
+이미지를 함께 빌드했다. 실제 이미지의 OCI revision·역할 label과 내부 `source-revision.json`이
+이 commit과 일치하고, 다른 revision 또는 API/웹 역할을 요구하면 preflight가 거부함을 확인했다.
+
+- 빌드 입력 receipt SHA-256: `a9329fcbb8c7e264a027c2d992955efd73ae84f1cac08ad2ed545ede338d2fda`
+- API image ID/index: `sha256:175eee925f55ab32388c9ff05a2686ac191e7fc022419101563700c81cd3fddb`
+- API linux/amd64 manifest: `sha256:60867c8e4a05968f4a7b0bc4a914dcf7666d5da36258f426a8ac4eec90b6858a`
+- 웹 image ID/index: `sha256:c34671fd354482b3ce7173d70f934df9faa0e09b3b32b24e5f21121db3e57d20`
+- 웹 linux/amd64 manifest: `sha256:2dcf18dd8b737b102113a2de282f23dc051b03ffb50190827b1afe92a4e6c453`
+
+scanner가 없는 실제 container에서 두 health mode가 실패했고, 실제 Unix PING·엔진/DB 검사가
+정상일 때 통과했다. 시험 프로세스의 시계를 8일 뒤로 바꾸면 stale DB로 두 mode 모두 거부했다.
+실제 scanner를 중지하면 API의 DB HTTP readiness가 200인 동안에도 Docker health는 unhealthy로
+바뀌었고, scanner 재시작 뒤 healthy로 복구했다. 이 검사는 운영 도구만 변경했으며 API·웹·Android
+런타임 소스는 앞의 전체 검증과 같다. 시험 container/network/volume을 모두 제거했다.
+실제 운영 노드·서명키·휴대전화 인수는 이 합성 검증과 별도로 진행한다.
 
 GitHub Actions는 기존 PR부터 runner·step이 시작되기 전에 종료되는 상태를 관찰했다.
 조회 권한 때문에 일부 상태/로그 API도 거절됐다. 로컬 동등 명령 결과와 원격 CI 성공을
