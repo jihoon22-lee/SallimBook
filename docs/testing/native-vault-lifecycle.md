@@ -36,6 +36,19 @@ JS에 전달한다. 키 wrapping과 카드 envelope API는 private native 전송
 동일한 원본 manifest와 키를 다시 확인한 경우에만 유지하며, 화면을 닫으면 폐기한다.
 서버 실패의 원문 메시지·제출값은 표시하거나 반환하지 않고 알려진 코드와 로컬 문구만 쓴다.
 
+처음 설정·암호 변경·복구·공유 생성/수락/취소·접근 철회·카드 변경/purge·회전 시작/준비/중단도
+`REAUTHENTICATION_REQUIRED`와 `STEP_UP_REQUIRED`를 같은 native 화면에서 처리한다. 이미 만들어진
+변경 요청은 엄격한 wire 검증을 거친 불변 복사본의 body·If-Match·Idempotency-Key만 유지하고,
+준비된 raw HVK·새 HVK·복구코드·입력은 재인증 전에 지운다. 재인증 뒤 fresh household/member/user/device가
+같은지 확인하고 사용자가 동일 요청을 명시적으로 다시 제출한다. 네트워크 실패 뒤에도 동일 요청을
+수동 재시도하며 계정 인증이 다시 만료되면 같은 요청으로 재인증한다. 복구코드 보관 확인이 끝나지
+않은 initialize/recover/prepare 요청은 이 경로에 보관할 수 없다.
+회전 준비 재전송이 성공하면 staged 본인 wrapping을 기존·새 보관함 암호로 다시 여는 화면으로
+이어지고, 지운 키로 다음 카드를 처리하지 않는다. recovery-wrap/share-wrap 등 요청 준비 중 인증이
+만료되면 계정 재인증 뒤 원래 폼을 빈 입력으로 다시 열어 필요한 보관함 입력을 명시적으로 받는다.
+잘못된 로그인 암호는 보관한 암호화 요청을 버리지 않지만 취소·화면 이탈·계정/기기 변경은 폐기한다.
+
+
 `NativeVaultHttp`는 고정 HTTPS와 플랫폼 TLS 검증을 사용한다. 쿠키·리디렉션·캐시·HTTP 로그·
 자동 인증 응답·자동 재전송이 없다. one-shot 본문과 OkHttp 후속 요청 취소를 함께 적용한다.
 bearer는 긴 작업 시작 시 고정하지 않고 각 HTTP 직전에 같은 계정 executor의 private supplier로
@@ -195,6 +208,15 @@ worker 결과의 마지막 소비에서도 완료 시한·foreground를 확인�
 계정 재인증·같은 키 복원을 가정해 cursor를 이어가며, 다른 키/폐기된 cursor는 거절한다.
 이 검사는 실제 서버 재인증 응답이나 Android 입력 화면을 구동한 통합시험이 아니며 실기기 인수에
 대량 회전 중 최근 로그인 만료·암호 재확인·취소·다른 계정/키 변경 실패 시나리오를 추가한다.
+
+PR #79의 공통 관리 재인증 후속 수정은 typecheck·Android sync·JVM **299개**(실패·오류·건너뜀 0),
+debug APK·release Kotlin을 통과했다. 신규 8개는 14종 변경 요청의 동일 bytes/version/Idempotency-Key,
+반복 재인증·취소·계정/기기 변경, raw 키 2개와 복구코드 소거, 미확인 복구코드 요청 거절,
+원본 mutable body와 보관 요청 분리, 보호 조회의 빈 폼 재진입 정책을 검사한다.
+TS/bridge 계약은 바꾸지 않아 기존 브라우저 52개 결과를 유지하며 이번 수정에서 다시 실행하지 않았다.
+이 JVM 검사는 Android Activity 입력·실제 서버 재인증 통합시험을 대신하지 않는다. 실기기에서는
+initialize/recover/change-password/share/revoke/rotation-start/prepare의 5분 만료, 잘못된 로그인 암호,
+동일 요청 재전송·네트워크 실패·취소와 prepare 성공 후 기존/새 키 재입력도 추가 확인해야 한다.
 
 실기기 미실행 항목: 최초 등록/암호화/별도 열람, 지문 추가·삭제·잠금 방식 제거·키 무효화,
 기존 등록/CVC가 있는 재저장 prompt 취소·오류 뒤 원래 값의 열람, 저장 실패 뒤 기존 암호문의 복원,
