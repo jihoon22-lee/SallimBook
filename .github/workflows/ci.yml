@@ -60,6 +60,22 @@ jobs:
       # PostgreSQL tests are exercised separately with an explicit disposable test DB.
       - run: uv run --project services/api pytest services/api/tests -m 'not database'
 
+  document-tools:
+    name: Isolated document scanner and parser integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      # Synthetic bytes only; no credentials, mounts or runtime network access.
+      - run: uv run --no-project python scripts/test_document_tools.py
+
   types-contract:
     name: Type checks and generated API contract
     runs-on: ubuntu-24.04
@@ -173,6 +189,9 @@ jobs:
       - run: uv run --project services/api python scripts/test_web_auth.py
       - run: uv run --project services/api python scripts/test_web_auth.py --passkeys
       - run: uv run --project services/api python scripts/test_web_auth.py --finance
+      - run: uv run --project services/api python scripts/test_web_auth.py --months
+      - run: uv run --project services/api python scripts/test_web_auth.py --comparison
+      - run: uv run --project services/api python scripts/test_web_auth.py --cashflow
 
   android:
     name: Android debug compile and available unit tests

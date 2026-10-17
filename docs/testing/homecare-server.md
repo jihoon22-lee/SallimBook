@@ -2,7 +2,7 @@
 
 대상: SB-024~SB-027, Issue #33~#36, R-03/R-16/R-17/R-19/R-22.
 가전 metadata와 구매·보증, 같은 SKU의 공용 재고, 기기별 주기, 입고·교체·취소·조정,
-오늘 기준 확인/구매 상태를 수동 입력 API 21개로 제공한다.
+오늘 기준 확인/구매 상태를 수동 입력 API 24개로 제공한다.
 
 ## 실행 결과
 
@@ -14,7 +14,7 @@ uv run --project services/api ruff check services/api/src/sallimbook/homecare se
 python3 scripts/validate_docs.py
 ```
 
-순수 계산·입력 계약 33개, 실제 DB/API 27개, 직접 DB 제약 15개로 총 **75개 통과**했다.
+순수 계산·입력 계약 33개, 실제 DB/API 34개, 직접 DB 제약 15개로 총 **82개 통과**했다.
 격리 시험 DB에서 Alembic `upgrade head`, drift 검사와 전체 downgrade/upgrade를 통과했으며 시험 컨테이너를 정지했다.
 초기 시험에서 버전/멱등 헤더가 빠진 잘못된 payload의 기대 상태를 422로 쓴 fixture 하나를 공통 계약 400으로 고친 뒤 다시 통과했다.
 SQLAlchemy 2.1의 PostgreSQL DISTINCT ON API도 현재 지원 방식으로 고정했다.
@@ -28,3 +28,8 @@ SQLAlchemy 2.1의 PostgreSQL DISTINCT ON API도 현재 지원 방식으로 고�
 
 이 기록은 서버 범위다. 웹·Android 관리 화면, 실제 HTTPS 흐름, 구매 문서 연결은 후속 PR에서 통합한다.
 Galaxy 두 기기 시험과 홈 상단 월간 자산 변화/오늘 소모품 배치도 전체 기능 구현 뒤 검증한다.
+
+리뷰 보완: 참조 없는 가전·소모품·기기별 연결은 If-Match 확인 후 204 삭제한다.
+연결 또는 취소된 재고/교체 이력이 남아 있으면 DB RESTRICT FK가 삭제를 막고 409를 반환한다.
+같은 트랜잭션의 감사 기록도 실패 시 롤백한다. 다른 가계·버전 충돌·부부 삭제·삭제와 새 연결 동시성
+7개를 추가했다. 취소 fixture의 필수 실제 날짜와 200 응답을 바로잡고 82개 전체를 다시 통과했다.

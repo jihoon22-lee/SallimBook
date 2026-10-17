@@ -159,15 +159,10 @@ API 변경 후 `pnpm api:generate`와 `pnpm typecheck`로 OpenAPI·TS 계약을 
 
 환경 간 실제 건강·금융데이터를 복사하지 않는다. 꼭 필요한 진단은 익명화·축약된 재현 데이터로 대체한다.
 
-### 반복 규칙 DB 확장
-
-`0009_recurring`의 기간 배타 제약은 고정 PostgreSQL 이미지의 btree_gist 1.8을 사용한다. 마이그레이션 역할에 대상 DB의 CREATE 권한이 필요하고 런타임 API 역할에는 확장 설치 권한을 주지 않는다. public의 기존 확장 버전/위치가 다르면 자동 이동·업그레이드하지 않고 마이그레이션을 중단한다. [PostgreSQL btree_gist 문서](https://www.postgresql.org/docs/18/btree-gist.html), [CREATE EXTENSION 문서](https://www.postgresql.org/docs/18/sql-createextension.html)를 확인했다.
-
-
 ### 자산·계좌 화면 검증
 
 자산 목록·등록·상세·수정·사용 종료와 계좌 목록·등록·상세·수정·사용 종료를 실제 생성 API client에 연결했다.
-월 스냅샷/월간 비교 API 연결은 별도 작업이며 현재 화면은 아직 조회하지 않은 금액을 0원으로 채우지 않는다.
+기본정보 목록은 아직 조회하지 않은 금액을 0원으로 채우지 않는다. 웹 월 입력·확정·정정은 별도 월 기록 화면에서 제공한다. 월간 비교·추이와 홈 요약은 확정 월 기록을 조회한다.
 계좌는 하나의 금융 자산과 연결하고 평가액을 중복 합산하지 않는다.
 
 `pnpm --filter @sallimbook/client exec playwright test --config playwright.finance.config.ts`는 별도
@@ -180,20 +175,56 @@ loopback 18748 포트에서 UI 회귀를 실행한다. `uv run --project service
 구현 범위와 검증 결과는 [자산·계좌 UI 검증 기록](testing/assets-accounts-client.md)을 따른다.
 Android 번호 입력·표시 실기기 시험은 빌드/JVM/브라우저 bridge 모의시험과 구분한다.
 
+### 웹 월 기록 입력 검증
+
+`/assets/months/:month`는 실제 월 작성본·전월 복사·행 확인·명시 범위 반영·확정·정정에 연결된다.
+`?revision=N`으로 당시 범위와 금액을 읽기 전용 조회한다. 전월 미확인은 0원이 아니고, 확정 전 날짜와 비교 범위를 확인한다.
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.months.config.ts`는 18749 포트를 사용한다.
+`uv run --project services/api python scripts/test_web_auth.py --months`는 실제 HTTPS·일회용 DB의 월 전체 흐름을 검증한다.
+[월 입력 검증 기록](testing/monthly-assets-client.md)에 재현 명령과 구현/검증 경계를 기록한다.
+Android 월 adapter는 같은 생성 계약과 네이티브 인증에 연결되며 잠금 중 요청·응답을 차단한다.
+### 반복 규칙 DB 확장
+
+`0009_recurring`의 기간 배타 제약은 고정 PostgreSQL 이미지의 btree_gist 1.8을 사용한다. 마이그레이션 역할에 대상 DB의 CREATE 권한이 필요하고 런타임 API 역할에는 확장 설치 권한을 주지 않는다. public의 기존 확장 버전/위치가 다르면 자동 이동·업그레이드하지 않고 마이그레이션을 중단한다. [PostgreSQL btree_gist 문서](https://www.postgresql.org/docs/18/btree-gist.html), [CREATE EXTENSION 문서](https://www.postgresql.org/docs/18/sql-createextension.html)를 확인했다.
+
+SB-018 결제수단 연결 조회·종료 확인은 새 migration 없이 `0009_recurring` 위에 연결했다.
+`test_payment_links.py`42개, 카드30개, 자산61개, 고정비69개, 계좌68개가 현재 코드에서 통과했다
+(총270개, 종료 확인이 필요한 기존 fixture 수정 후 분리 재검증 포함). Alembic drift 없음과
+downgrade/upgrade 왕복도 확인했다. 기존 서버·데이터는 변경하지 않고 일회용 시험 DB만 사용했다.
+
+### 수입·고정 납부·카드 화면 검증
+
+웹과 Android adapter를 수입·반복 규칙·예정 회차·실제 납부·카드 일반정보에 연결했다.
+카드·계좌·연결 자산 종료에는 선택 종료일 기준 연결 전체 조회와 명시 확인을 사용한다.
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.cashflow.config.ts`는
+18751 포트에서 UI/bridge 모의시험을 실행한다. 실제 HTTPS 흐름은
+`uv run --project services/api python scripts/test_web_auth.py --cashflow`로 실행한다.
+구체적인 금액·이력·종료 검증과 실행 한계는 [생활비 UI 검증 기록](testing/cashflow-client.md)을 따른다.
+
 ### 병렬 검증 자원
 
 같은 WSL에서 UI 브라우저 검사를 실행하는 동안 Docker 시험 컨테이너의 생성·시작·중지를 병행하지 않는다. 네트워크 인터페이스 변경이 Chromium의 모듈 요청에 `ERR_NETWORK_CHANGED`를 일으킬 수 있어 순서를 조정한다. 별도 UI 포트는 config 하나의 webServer로 지정한다. `/tmp`가 메모리 기반이고 공간이 부족하면 재생성 가능한 이전 빌드 캐시를 정리하거나 TMPDIR를 충분한 로컬 저장소로 지정한다. 소스·사용자 파일·기존 서비스는 정리 대상이 아니다.
-
-SB-018의 최종 고정비 종료일 단축·앱 잠금 통합 후 기존 자산/계좌 화면은 closure_ack=false 기본값을 명시한다. Android 기존 메타데이터 경로도 이 기본값을 허용하며 사용자 확인을 대신 승인하지 않는다. 자산/계좌 UI36개와 JVM92개, 디버그 APK 조립·생성 타입·문서 검사가 통과했다. 연결된 수단의 종료 검토 화면과 전체 네이티브 연결 조회는 수입·카드·고정비 클라이언트 변경에서 이어진다.
 
 SB-019/SB-020 보험 서버의 합성 계약·암호화20개, API/권한/동시성23개, DB 보존4개 총47개가 통과했다.
 최초 실행의 fixture3건(종료 상태·적용일·기존400계약)을 수정한 뒤 47개 전체와 Alembic drift/왕복을 다시 통과했다.
 실제 잠금 대기 중 인증 만료, 기기 철회, 복호화/감사 후 만료, 다른 가계 참조와 깊은 진료 트리를 포함한다.
 웹/Android 보험 화면과 운영 키·실기기 검증은 후속 단계이며 이 결과로 완료 처리하지 않는다.
 
+진료 트리 정렬 보완 뒤 보험 API27개와 Alembic drift/왕복 검사를 통과했다. 페이지 크기1·2·3에서 부모/자식·동순위 UUID·다른 사건 cursor·부모 이동을 확인하며 기존 계약/암호화20개·DB 보존4개와 함께 유지한다.
+
 SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 직접 DB 제약19, 기존 보험 API27·계약/암호화20·보존4). 실제 PostgreSQL에서 T-12~T-19/T-22, 금전 정정 중 실패의 전체 rollback, 동시 반환 한도, 멱등 재전송, 현재 청구 근거 정정과 과거 이력, 다른 가계/사건 차단, 읽기 전용 소득 투영과 스냅샷 불변을 확인했다. `uv run --project services/api python scripts/test_database.py services/api/tests/test_insurance_events.py services/api/tests/test_insurance_event_storage.py services/api/tests/test_insurance_core.py services/api/tests/test_insurance_contract.py services/api/tests/test_insurance_storage.py -q` 및 Alembic drift/왕복을 통과했고 전용 DB를 정지했다. 생성 API client·타입·전체 Ruff·문서 검사도 통과했다. 새 보험 화면과 실기기 검증은 후속 연결 단계다.
 
-SB-024~SB-027의 가전·재고 API 21개와 `0012_homecare`를 구현했다.
-관련 순수 계산/스키마 33개, 실제 PostgreSQL API 27개와 DB 불변식 15개, 총 75개 검사와
+SB-024~SB-027의 가전·재고 API 24개와 `0012_homecare`를 구현했다.
+관련 순수 계산/스키마 33개, 실제 PostgreSQL API 34개와 DB 불변식 15개, 총 82개 검사와
 migration drift 및 전체 downgrade/upgrade가 통과했다. 상세 범위는 [가전·재고 검증](testing/homecare-server.md)을 참고한다.
 웹·Android 화면과 가전 구매 문서 연결은 후속 통합 범위다.
+
+### 첨부 저장과 검사
+
+SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외부 필드 keyring을 사용한다.
+검사 설정은 `SALLIMBOOK_DOCUMENT_SCANNER_SOCKET`, `SALLIMBOOK_DOCUMENT_TESSERACT_PATH`,
+`SALLIMBOOK_DOCUMENT_PDFTOPPM_PATH`이며 기본 미설정 상태는 업로드 503으로 실패한다.
+호스트에 도구를 임의 설치하거나 운영 키를 생성하지 않았다. 격리된 [실제 검사 도구 이미지](../infra/documents/README.md)와
+[서버 141개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
+정리 명령 `uv run --project services/api python scripts/cleanup_documents.py`는 기본 dry-run이다.
+검토 후 `--apply`를 명시하면 24시간이 지난 DB 미참조/삭제 암호문만 제거하며 metadata 이력은 유지한다.
