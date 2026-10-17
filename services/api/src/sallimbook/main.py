@@ -109,11 +109,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(income_router)
     app.include_router(recurring_router)
     app.include_router(cards_router)
+    app.include_router(asset_comparison_router)
     app.include_router(insurance_router)
     app.include_router(insurance_events_router)
     app.include_router(homecare_router)
 
-    app.include_router(asset_comparison_router)
     app.include_router(payment_links_router)
     return app
 

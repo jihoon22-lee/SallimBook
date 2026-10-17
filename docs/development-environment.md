@@ -208,11 +208,19 @@ downgrade/upgrade 왕복도 확인했다. 기존 서버·데이터는 변경하�
 SB-019/SB-020 보험 서버의 합성 계약·암호화20개, API/권한/동시성23개, DB 보존4개 총47개가 통과했다.
 최초 실행의 fixture3건(종료 상태·적용일·기존400계약)을 수정한 뒤 47개 전체와 Alembic drift/왕복을 다시 통과했다.
 실제 잠금 대기 중 인증 만료, 기기 철회, 복호화/감사 후 만료, 다른 가계 참조와 깊은 진료 트리를 포함한다.
-웹/Android 보험 화면과 운영 키·실기기 검증은 후속 단계이며 이 결과로 완료 처리하지 않는다.
+이 서버 검사와 별도로 웹/Android 보험 화면을 연결했다. 운영 키·실기기 검증은 미완료다.
+
+### 보험 화면 검증
+
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.insurance.config.ts`는
+18753 포트에서 보험과 기존 UI 회귀를 실행한다. `uv run --project services/api python scripts/test_web_auth.py --insurance`는
+전용 일회용 DB·개인 임시 키링·임시 HTTPS 인증서로 실제 계약/사건/비용/청구/수령/반환을 검사한다.
+키링은 증권번호 서버 필드 보호 시험에만 사용하며 기존 키나 신뢰 저장소를 바꾸지 않는다.
+구체적인 범위와 결과는 [보험 UI 검증 기록](testing/insurance-client.md)을 따른다.
 
 진료 트리 정렬 보완 뒤 보험 API27개와 Alembic drift/왕복 검사를 통과했다. 페이지 크기1·2·3에서 부모/자식·동순위 UUID·다른 사건 cursor·부모 이동을 확인하며 기존 계약/암호화20개·DB 보존4개와 함께 유지한다.
 
-SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 직접 DB 제약19, 기존 보험 API27·계약/암호화20·보존4). 실제 PostgreSQL에서 T-12~T-19/T-22, 금전 정정 중 실패의 전체 rollback, 동시 반환 한도, 멱등 재전송, 현재 청구 근거 정정과 과거 이력, 다른 가계/사건 차단, 읽기 전용 소득 투영과 스냅샷 불변을 확인했다. `uv run --project services/api python scripts/test_database.py services/api/tests/test_insurance_events.py services/api/tests/test_insurance_event_storage.py services/api/tests/test_insurance_core.py services/api/tests/test_insurance_contract.py services/api/tests/test_insurance_storage.py -q` 및 Alembic drift/왕복을 통과했고 전용 DB를 정지했다. 생성 API client·타입·전체 Ruff·문서 검사도 통과했다. 새 보험 화면과 실기기 검증은 후속 연결 단계다.
+SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 직접 DB 제약19, 기존 보험 API27·계약/암호화20·보존4). 실제 PostgreSQL에서 T-12~T-19/T-22, 금전 정정 중 실패의 전체 rollback, 동시 반환 한도, 멱등 재전송, 현재 청구 근거 정정과 과거 이력, 다른 가계/사건 차단, 읽기 전용 소득 투영과 스냅샷 불변을 확인했다. `uv run --project services/api python scripts/test_database.py services/api/tests/test_insurance_events.py services/api/tests/test_insurance_event_storage.py services/api/tests/test_insurance_core.py services/api/tests/test_insurance_contract.py services/api/tests/test_insurance_storage.py -q` 및 Alembic drift/왕복을 통과했고 전용 DB를 정지했다. 생성 API client·타입·전체 Ruff·문서 검사도 통과했다. 실기기 검증은 전체 기능 구현 뒤 수행한다.
 
 SB-024~SB-027의 가전·재고 API 24개와 `0012_homecare`를 구현했다.
 관련 순수 계산/스키마 33개, 실제 PostgreSQL API 34개와 DB 불변식 15개, 총 82개 검사와
