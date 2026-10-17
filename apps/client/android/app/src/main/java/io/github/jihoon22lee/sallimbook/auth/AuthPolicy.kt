@@ -194,6 +194,19 @@ internal object AuthPolicy {
     fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
         if (requestId == null || !uuid.matches(requestId)) return null
         val messages = mapOf(
+            "INVALID_HOMECARE_DATE" to (422 to "실제 기록 날짜와 취소 날짜를 확인해 주세요."),
+            "INVALID_HOMECARE_INPUT" to (422 to "가전·소모품의 입력 항목과 날짜·주기를 확인해 주세요."),
+            "APPLIANCE_UNAVAILABLE" to (422 to "사용 중인 가전을 선택해 주세요."),
+            "CONSUMABLE_UNAVAILABLE" to (422 to "사용 중인 소모품을 선택해 주세요."),
+            "APPLIANCE_CONSUMABLE_UNAVAILABLE" to (422 to "사용 중인 기기별 소모품 연결을 선택해 주세요."),
+            "CONSUMABLE_SKU_EXISTS" to (409 to "이미 등록된 규격입니다. 공용 재고를 확인해 주세요."),
+            "CONSUMABLE_UNIT_IN_USE" to (409 to "재고 이력이 있어 단위를 바꿀 수 없습니다."),
+            "APPLIANCE_CONSUMABLE_EXISTS" to (409 to "이미 연결된 소모품입니다. 기존 연결을 확인해 주세요."),
+            "INSUFFICIENT_STOCK" to (409 to "공용 재고가 부족합니다. 현재 재고를 확인해 주세요."),
+            "STOCK_LIMIT_EXCEEDED" to (422 to "허용 재고 수량을 초과합니다."),
+            "INVALID_STOCK_REVERSAL" to (422 to "취소 기록을 다시 취소할 수 없습니다."),
+            "STOCK_MOVEMENT_ALREADY_REVERSED" to (409 to "이미 취소된 재고 기록입니다."),
+            "REPLACEMENT_CANCEL_REQUIRED" to (409 to "기기별 교체 기록에서 취소해 주세요."),
             "RETURN_EXCEEDS_ALLOCATION" to (409 to "반환 합계가 원래 배분 금액을 초과합니다."),
             "INSURANCE_PAYOUT_HAS_RETURNS" to (409 to "활성 반환을 먼저 확인해 주세요."),
             "CLAIM_ALLOCATION_MISMATCH" to (422 to "청구와 같은 사건·보험계약을 선택해 주세요."),

@@ -33,6 +33,28 @@ export type NativeAccountPatch = Omit<components["schemas"]["AccountPatch"], "ac
 export type NativeFinanceResponse<T> = { status: number; body: T | components["schemas"]["ErrorResponse"] | null };
 
 export interface SallimBookAuth {
+  /** Homecare metadata; stock If-Match and immutable receipt versions belong to the consumable. */
+  listApplianceConsumables(options: { query?: NonNullable<operations["listApplianceConsumables"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableListResponse"]>>>;
+  createApplianceConsumable(options: { input: components["schemas"]["ApplianceConsumableCreate"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableResponse"]>>>;
+  getApplianceConsumable(options: { linkId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableResponse"]>>>;
+  updateApplianceConsumable(options: { linkId: string; input: components["schemas"]["ApplianceConsumablePatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableResponse"]>>>;
+  listConsumableReplacements(options: { linkId: string; query?: NonNullable<operations["listConsumableReplacements"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ReplacementListResponse"]>>>;
+  createConsumableReplacement(options: { linkId: string; input: components["schemas"]["ReplacementCreate"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  getConsumableReplacement(options: { linkId: string; replacementId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ReplacementResponse"]>>>;
+  cancelConsumableReplacement(options: { linkId: string; replacementId: string; input: components["schemas"]["StockCancellation"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  listAppliances(options: { query?: NonNullable<operations["listAppliances"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceListResponse"]>>>;
+  createAppliance(options: { input: components["schemas"]["ApplianceInput"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceResponse"]>>>;
+  getAppliance(options: { applianceId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceResponse"]>>>;
+  updateAppliance(options: { applianceId: string; input: components["schemas"]["AppliancePatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceResponse"]>>>;
+  listConsumables(options: { query?: NonNullable<operations["listConsumables"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableListResponse"]>>>;
+  createConsumable(options: { input: components["schemas"]["ConsumableInput"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableResponse"]>>>;
+  getConsumable(options: { consumableId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableResponse"]>>>;
+  updateConsumable(options: { consumableId: string; input: components["schemas"]["ConsumablePatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableResponse"]>>>;
+  listStockMovements(options: { consumableId: string; query?: NonNullable<operations["listStockMovements"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMovementListResponse"]>>>;
+  createStockMovement(options: { consumableId: string; input: components["schemas"]["StockMovementCreate"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  getStockMovement(options: { consumableId: string; movementId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMovementResponse"]>>>;
+  cancelStockMovement(options: { consumableId: string; movementId: string; input: components["schemas"]["StockCancellation"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  getHomecareStatus(options: { query?: NonNullable<operations["getHomecareStatus"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["HomecareStatusResponse"]>>>;
   /** Safe status only. Unlock is controlled exclusively by the native screen. */
   getAppLock(): Promise<NativeAuthResult<{ locked: boolean }>>;
   lockApp(): Promise<NativeAuthResult<{ locked: true }>>;
