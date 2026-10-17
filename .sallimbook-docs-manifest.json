@@ -336,6 +336,10 @@
     "docs/testing/native-audit.md": {
       "sha256": "7195cf4f6fb6fc97af8d1f96331c3778184463c46d1f1e0dd56112d00bc13606",
       "git_sha1": "0d44ef17c5426e1f95b513607c3f2802dc3be25a"
+    },
+    "docs/testing/final-integration.md": {
+      "sha256": "3c6725f9e0791d2d2c86da7e393e0eefd6e00ef07b65c3534e7f84b9128be097",
+      "git_sha1": "62382782141d7dc22aba52160422d9bd6655140b"
     }
   }
 }
