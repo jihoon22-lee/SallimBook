@@ -278,8 +278,8 @@
       "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
     },
     "docs/testing/vault-server.md": {
-      "sha256": "4e56982a1c7bf35ce680c7f3e877e224dc8015d392d1f74a76c97aab24e977cf",
-      "git_sha1": "488928c78ac866d4a0a7d1aef9e84ae9ca72e02c"
+      "sha256": "d4aa62d2d99584696f7665e878732e945dedb64a4ccd6d2e6104ae734fd2c53e",
+      "git_sha1": "cecafb25f73855fb0ddb4f9d62ce30732fa6282b"
     },
     "scripts/generate_vault_vectors.py": {
       "sha256": "1c562545fc2d1dc8ec3e863ccfa632395b8d8fdfd8527a1092a1f948241a0913",
