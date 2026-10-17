@@ -19,6 +19,7 @@ from sallimbook.core.errors import DomainError, ErrorResponse
 from sallimbook.core.http import install_http_contract
 from sallimbook.identity.passkeys.router import router as passkey_router
 from sallimbook.identity.router import router as identity_router
+from sallimbook.insurance.router import router as insurance_router
 
 
 class HealthResponse(BaseModel):
@@ -104,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(income_router)
     app.include_router(recurring_router)
     app.include_router(cards_router)
+    app.include_router(insurance_router)
     return app
 
 
