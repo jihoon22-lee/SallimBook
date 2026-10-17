@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 
 internal enum class FinanceOperation {
+    MEDICAL_NODE_SUMMARY, INSURANCE_CASE_SUMMARY, LIST_INSURANCE_CLAIMS, CREATE_INSURANCE_CLAIM, GET_INSURANCE_CLAIM, UPDATE_INSURANCE_CLAIM, INSURANCE_CLAIM_HISTORY, LIST_MEDICAL_EXPENSES, CREATE_MEDICAL_EXPENSE, GET_MEDICAL_EXPENSE, CORRECT_MEDICAL_EXPENSE, MEDICAL_EXPENSE_HISTORY, LIST_MEDICAL_REFUNDS, CREATE_MEDICAL_REFUND, VOID_MEDICAL_EXPENSE, GET_MEDICAL_REFUND, CORRECT_MEDICAL_REFUND, MEDICAL_REFUND_HISTORY, VOID_MEDICAL_REFUND, GET_PAYOUT_ALLOCATION, LINK_PAYOUT_ALLOCATION, PAYOUT_ALLOCATION_HISTORY, LIST_INSURANCE_PAYOUTS, CREATE_INSURANCE_PAYOUT, GET_INSURANCE_PAYOUT, CORRECT_INSURANCE_PAYOUT, INSURANCE_PAYOUT_HISTORY, LIST_INSURANCE_RETURNS, CREATE_INSURANCE_RETURN, VOID_INSURANCE_PAYOUT, GET_INSURANCE_RETURN, CORRECT_INSURANCE_RETURN, INSURANCE_RETURN_HISTORY, VOID_INSURANCE_RETURN,
     LIST_ASSETS, GET_ASSET, CREATE_ASSET, UPDATE_ASSET, ARCHIVE_ASSET, DELETE_ASSET,
     LIST_ACCOUNTS, GET_ACCOUNT, CREATE_ACCOUNT, UPDATE_ACCOUNT,
     GET_ASSET_MONTH, GET_ASSET_MONTH_REVISION, LIST_ASSET_MONTH_REVISIONS, CREATE_ASSET_MONTH_DRAFT,
@@ -18,6 +19,7 @@ internal enum class FinanceOperation {
     RESCHEDULE_OBLIGATION, SKIP_OBLIGATION, UNSKIP_OBLIGATION, COMPLETE_OBLIGATION, REOPEN_OBLIGATION,
     SETTLE_OBLIGATION, LIST_OBLIGATION_SETTLEMENTS, VOID_FIXED_SETTLEMENT,
     GET_CARD_PAYMENT_LINKS, GET_ACCOUNT_PAYMENT_LINKS,
+    LIST_INSURANCE_CASES, CREATE_INSURANCE_CASE, GET_INSURANCE_CASE, UPDATE_INSURANCE_CASE, INSURANCE_CASE_HISTORY, LIST_MEDICAL_NODES, CREATE_MEDICAL_NODE, DELETE_MEDICAL_NODE, GET_MEDICAL_NODE, UPDATE_MEDICAL_NODE, LIST_INSURANCE_POLICIES, CREATE_INSURANCE_POLICY, GET_INSURANCE_POLICY, UPDATE_INSURANCE_POLICY, LIST_INSURANCE_COVERAGES, CREATE_INSURANCE_COVERAGE, UPDATE_INSURANCE_COVERAGE, LIST_POLICY_PREMIUM_LINKS, CREATE_POLICY_PREMIUM_LINK, UPDATE_POLICY_PREMIUM_LINK,
 }
 
 /** Constructed from named metadata commands, never from a JS URL, headers or encoded body. */
@@ -155,6 +157,8 @@ internal object FinancePolicy {
         if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
         if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.prepare(operation, value)
         if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.prepare(operation, value)
+        if (InsuranceEventPolicy.supports(operation)) return InsuranceEventPolicy.prepare(operation, value)
+        if (InsurancePolicy.supports(operation)) return InsurancePolicy.prepare(operation, value)
         val args = objectValue(value)
         val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
         val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
@@ -195,10 +199,12 @@ internal object FinancePolicy {
     fun metadataHttpAllowed(method: String, path: String, body: Any?, ifMatch: String?, idempotencyKey: String? = null): Boolean { return try {
         if (CashflowPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (FixedCostPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
+        if (InsuranceEventPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (idempotencyKey != null) return false
         if (CardMetadataPolicy.httpAllowed(method, path, body, ifMatch)) return true
         if (ComparisonPolicy.httpAllowed(method, path, body, ifMatch)) return true
         if (PaymentLinksPolicy.httpAllowed(method, path, body, ifMatch)) return true
+        if (InsurancePolicy.httpAllowed(method, path, body, ifMatch)) return true
         val uri = URI(path)
         if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path ||
             path.any { it.isWhitespace() || it.code < 32 }) false
@@ -304,6 +310,8 @@ internal object FinancePolicy {
             if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
             if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.response(operation, request, status, value)
             if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.response(operation, request, status, value)
+            if (InsuranceEventPolicy.supports(operation)) return InsuranceEventPolicy.response(operation, request, status, value)
+            if (InsurancePolicy.supports(operation)) return InsurancePolicy.response(operation, request, status, value)
             if (operation == FinanceOperation.DELETE_ASSET) {
                 if (status != 204 || value != null) invalid()
                 return null

@@ -10,7 +10,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import UTC, datetime, timedelta
-from threading import Event
+from threading import Barrier, Event
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import httpx
@@ -31,7 +32,7 @@ from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.documents import service
 from sallimbook.documents.cleanup import cleanup_files
-from sallimbook.documents.models import Document, DocumentLink
+from sallimbook.documents.models import Document, DocumentLink, DocumentStorageReservation
 from sallimbook.documents.router import router
 from sallimbook.documents.schemas import DocumentReason
 from sallimbook.documents.storage import PrivateStore
@@ -810,3 +811,170 @@ def test_appliance_document_reference_preserves_parent_even_after_unlink(documen
         assert ended.status_code == 200
         assert client.delete(path, headers=headers(actor, version=1)).status_code == 409
         assert client.get(path, headers=actor.headers).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "scope,unit",
+    [("household", "bytes"), ("household", "count"), ("global", "bytes"), ("global", "count")],
+)
+def test_persistent_quota_rejects_before_disk_write_and_allows_idempotent_replay(
+    document_app, actors, scope, unit, monkeypatch
+):
+    settings = document_app.state.settings
+    setattr(settings, f"document_{scope}_quota_{unit}", len(CONTENT) + 16 if unit == "bytes" else 1)
+    actor = actors[0]
+    original = PrivateStore.put
+    writes = []
+
+    def put(*args, **kwargs):
+        writes.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(PrivateStore, "put", put)
+    with TestClient(document_app) as client:
+        first = pending(client, actor)
+        assert upload(client, actor, first, key="quota-first").status_code == 200
+        # A replay has no new reservation, including when capacity is exhausted.
+        assert upload(client, actor, first, key="quota-first").status_code == 200
+        rejected = pending(client, actors[2] if scope == "global" else actors[1])
+        result = upload(client, actors[2] if scope == "global" else actors[1], rejected)
+        assert result.status_code == 413, result.text
+        assert result.json()["error"]["code"] == "DOCUMENT_STORAGE_QUOTA_EXCEEDED"
+        assert detail(client, actor, first)["state"] == "ready"
+    assert len(writes) == 1
+    with Session(document_app.state.engine) as session:
+        rows = list(session.scalars(select(DocumentStorageReservation)))
+        assert len(rows) == 1 and rows[0].size_bytes == len(CONTENT) + 16
+
+
+def test_concurrent_households_cannot_overbook_global_capacity(document_app, actors):
+    document_app.state.settings.document_global_quota_count = 1
+    with TestClient(document_app) as client:
+        rows = [pending(client, actor) for actor in (actors[0], actors[2])]
+    start = Barrier(2)
+
+    def store(actor, row):
+        start.wait(timeout=5)
+        with Session(document_app.state.engine) as session:
+            try:
+                service.upload_content(
+                    session,
+                    actor.principal,
+                    UUID(row["id"]),
+                    CONTENT,
+                    '"1"',
+                    "parallel-capacity",
+                    document_app.state.settings,
+                )
+                return "stored"
+            except DomainError as error:
+                return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        jobs = [
+            pool.submit(store, actor, row)
+            for actor, row in zip((actors[0], actors[2]), rows, strict=True)
+        ]
+        results = [job.result(timeout=10) for job in jobs]
+    assert sorted(results) == ["DOCUMENT_STORAGE_QUOTA_EXCEEDED", "stored"]
+    assert len(list(document_app.state.settings.document_storage_directory.iterdir())) == 1
+
+
+def test_failed_document_commit_keeps_orphan_charge_until_physical_cleanup(
+    document_app, actors, monkeypatch
+):
+    settings = document_app.state.settings
+    settings.document_household_quota_count = 1
+    actor = actors[0]
+    original = PrivateStore.put
+
+    def write_then_fail(*args, **kwargs):
+        original(*args, **kwargs)
+        raise DomainError("SYNTHETIC_COMMIT_FAILURE", "합성 저장 실패", 503)
+
+    with TestClient(document_app) as client:
+        first, second = pending(client, actor), pending(client, actor)
+        monkeypatch.setattr(PrivateStore, "put", write_then_fail)
+        assert upload(client, actor, first).status_code == 503
+        monkeypatch.setattr(PrivateStore, "put", original)
+        assert detail(client, actor, first)["state"] == "pending"
+        assert upload(client, actor, second).status_code == 413
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True)["removed"] == 0
+        assert upload(client, actor, second).status_code == 413
+        with Session(document_app.state.engine) as session:
+            result = cleanup_files(
+                session, settings, apply=True, now=datetime.now(UTC) + timedelta(hours=25)
+            )
+            assert result["removed"] == 1
+        assert upload(client, actor, second).status_code == 200
+
+
+def test_deleted_and_unlinked_documents_keep_charge_until_durable_cleanup(document_app, actors):
+    settings = document_app.state.settings
+    settings.document_household_quota_count = 1
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        row = pending(client, actor)
+        assert upload(client, actor, row).status_code == 200
+        link = client.get(f"/api/v1/documents/{row['id']}/links", headers=actor.headers).json()[
+            "items"
+        ][0]
+        assert (
+            client.post(
+                f"/api/v1/document-links/{link['id']}/end",
+                json={"reason": "합성"},
+                headers=headers(actor, version=1),
+            ).status_code
+            == 200
+        )
+        other = pending(client, actor)
+        future = datetime.now(UTC) + timedelta(hours=25)
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 0
+        assert upload(client, actor, other).status_code == 413
+        version = detail(client, actor, row)["version"]
+        assert (
+            client.post(
+                f"/api/v1/documents/{row['id']}/delete",
+                json={"reason": "합성 삭제"},
+                headers=headers(actor, version=version),
+            ).status_code
+            == 200
+        )
+        assert upload(client, actor, other).status_code == 413
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True)["removed"] == 0
+            assert cleanup_files(session, settings, now=future)["eligible"] == 1
+        assert upload(client, actor, other).status_code == 413  # dry run never releases quota
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 1
+        assert upload(client, actor, other).status_code == 200
+
+
+def test_low_disk_space_rejects_before_reservation_or_write(document_app, actors, monkeypatch):
+    from sallimbook.documents import quota
+
+    monkeypatch.setattr(quota.os, "fstatvfs", lambda _: SimpleNamespace(f_bavail=0, f_frsize=4096))
+    with TestClient(document_app) as client:
+        row = pending(client, actors[0])
+        result = upload(client, actors[0], row)
+        assert result.status_code == 503
+        assert result.json()["error"]["code"] == "DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE"
+    assert list(document_app.state.settings.document_storage_directory.iterdir()) == []
+    with Session(document_app.state.engine) as session:
+        assert list(session.scalars(select(DocumentStorageReservation))) == []
+
+
+def test_reservation_identity_and_live_charge_cannot_be_changed_directly(document_app, actors):
+    with TestClient(document_app) as client:
+        row = pending(client, actors[0])
+        assert upload(client, actors[0], row).status_code == 200
+    for statement in (
+        "DELETE FROM document_storage_reservations",
+        "UPDATE document_storage_reservations SET size_bytes=17",
+        "UPDATE document_storage_reservations SET released_at=now()",
+    ):
+        with Session(document_app.state.engine) as session, pytest.raises(DBAPIError):
+            session.execute(text(statement))
+            session.commit()

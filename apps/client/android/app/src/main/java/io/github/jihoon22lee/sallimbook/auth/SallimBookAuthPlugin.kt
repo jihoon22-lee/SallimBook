@@ -186,6 +186,61 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun getCardPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_CARD_PAYMENT_LINKS)
     @PluginMethod fun getAccountPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_ACCOUNT_PAYMENT_LINKS)
 
+    @PluginMethod fun listInsuranceCases(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_CASES)
+    @PluginMethod fun createInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_CASE)
+    @PluginMethod fun getInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_CASE)
+    @PluginMethod fun updateInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.UPDATE_INSURANCE_CASE)
+    @PluginMethod fun medicalNodeSummary(call: PluginCall) = finance(call, FinanceOperation.MEDICAL_NODE_SUMMARY)
+    @PluginMethod fun insuranceCaseSummary(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_CASE_SUMMARY)
+    @PluginMethod fun listInsuranceClaims(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_CLAIMS)
+    @PluginMethod fun createInsuranceClaim(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_CLAIM)
+    @PluginMethod fun getInsuranceClaim(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_CLAIM)
+    @PluginMethod fun updateInsuranceClaim(call: PluginCall) = finance(call, FinanceOperation.UPDATE_INSURANCE_CLAIM)
+    @PluginMethod fun insuranceClaimHistory(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_CLAIM_HISTORY)
+    @PluginMethod fun listMedicalExpenses(call: PluginCall) = finance(call, FinanceOperation.LIST_MEDICAL_EXPENSES)
+    @PluginMethod fun createMedicalExpense(call: PluginCall) = finance(call, FinanceOperation.CREATE_MEDICAL_EXPENSE)
+    @PluginMethod fun getMedicalExpense(call: PluginCall) = finance(call, FinanceOperation.GET_MEDICAL_EXPENSE)
+    @PluginMethod fun correctMedicalExpense(call: PluginCall) = finance(call, FinanceOperation.CORRECT_MEDICAL_EXPENSE)
+    @PluginMethod fun medicalExpenseHistory(call: PluginCall) = finance(call, FinanceOperation.MEDICAL_EXPENSE_HISTORY)
+    @PluginMethod fun listMedicalRefunds(call: PluginCall) = finance(call, FinanceOperation.LIST_MEDICAL_REFUNDS)
+    @PluginMethod fun createMedicalRefund(call: PluginCall) = finance(call, FinanceOperation.CREATE_MEDICAL_REFUND)
+    @PluginMethod fun voidMedicalExpense(call: PluginCall) = finance(call, FinanceOperation.VOID_MEDICAL_EXPENSE)
+    @PluginMethod fun getMedicalRefund(call: PluginCall) = finance(call, FinanceOperation.GET_MEDICAL_REFUND)
+    @PluginMethod fun correctMedicalRefund(call: PluginCall) = finance(call, FinanceOperation.CORRECT_MEDICAL_REFUND)
+    @PluginMethod fun medicalRefundHistory(call: PluginCall) = finance(call, FinanceOperation.MEDICAL_REFUND_HISTORY)
+    @PluginMethod fun voidMedicalRefund(call: PluginCall) = finance(call, FinanceOperation.VOID_MEDICAL_REFUND)
+    @PluginMethod fun getPayoutAllocation(call: PluginCall) = finance(call, FinanceOperation.GET_PAYOUT_ALLOCATION)
+    @PluginMethod fun linkPayoutAllocation(call: PluginCall) = finance(call, FinanceOperation.LINK_PAYOUT_ALLOCATION)
+    @PluginMethod fun payoutAllocationHistory(call: PluginCall) = finance(call, FinanceOperation.PAYOUT_ALLOCATION_HISTORY)
+    @PluginMethod fun listInsurancePayouts(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_PAYOUTS)
+    @PluginMethod fun createInsurancePayout(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_PAYOUT)
+    @PluginMethod fun getInsurancePayout(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_PAYOUT)
+    @PluginMethod fun correctInsurancePayout(call: PluginCall) = finance(call, FinanceOperation.CORRECT_INSURANCE_PAYOUT)
+    @PluginMethod fun insurancePayoutHistory(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_PAYOUT_HISTORY)
+    @PluginMethod fun listInsuranceReturns(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_RETURNS)
+    @PluginMethod fun createInsuranceReturn(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_RETURN)
+    @PluginMethod fun voidInsurancePayout(call: PluginCall) = finance(call, FinanceOperation.VOID_INSURANCE_PAYOUT)
+    @PluginMethod fun getInsuranceReturn(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_RETURN)
+    @PluginMethod fun correctInsuranceReturn(call: PluginCall) = finance(call, FinanceOperation.CORRECT_INSURANCE_RETURN)
+    @PluginMethod fun insuranceReturnHistory(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_RETURN_HISTORY)
+    @PluginMethod fun voidInsuranceReturn(call: PluginCall) = finance(call, FinanceOperation.VOID_INSURANCE_RETURN)
+    @PluginMethod fun insuranceCaseHistory(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_CASE_HISTORY)
+    @PluginMethod fun listMedicalNodes(call: PluginCall) = finance(call, FinanceOperation.LIST_MEDICAL_NODES)
+    @PluginMethod fun createMedicalNode(call: PluginCall) = finance(call, FinanceOperation.CREATE_MEDICAL_NODE)
+    @PluginMethod fun deleteMedicalNode(call: PluginCall) = finance(call, FinanceOperation.DELETE_MEDICAL_NODE)
+    @PluginMethod fun getMedicalNode(call: PluginCall) = finance(call, FinanceOperation.GET_MEDICAL_NODE)
+    @PluginMethod fun updateMedicalNode(call: PluginCall) = finance(call, FinanceOperation.UPDATE_MEDICAL_NODE)
+    @PluginMethod fun listInsurancePolicies(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_POLICIES)
+    @PluginMethod fun createInsurancePolicy(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_POLICY)
+    @PluginMethod fun getInsurancePolicy(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_POLICY)
+    @PluginMethod fun updateInsurancePolicy(call: PluginCall) = finance(call, FinanceOperation.UPDATE_INSURANCE_POLICY)
+    @PluginMethod fun listInsuranceCoverages(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_COVERAGES)
+    @PluginMethod fun createInsuranceCoverage(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_COVERAGE)
+    @PluginMethod fun updateInsuranceCoverage(call: PluginCall) = finance(call, FinanceOperation.UPDATE_INSURANCE_COVERAGE)
+    @PluginMethod fun listPolicyPremiumLinks(call: PluginCall) = finance(call, FinanceOperation.LIST_POLICY_PREMIUM_LINKS)
+    @PluginMethod fun createPolicyPremiumLink(call: PluginCall) = finance(call, FinanceOperation.CREATE_POLICY_PREMIUM_LINK)
+    @PluginMethod fun updatePolicyPremiumLink(call: PluginCall) = finance(call, FinanceOperation.UPDATE_POLICY_PREMIUM_LINK)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
@@ -206,6 +261,21 @@ class SallimBookAuthPlugin : Plugin() {
         val expected = if (mode == NativeAccountNumberActivity.EDIT) setOf("accountId", "ifMatch") else setOf("accountId")
         if (fields != expected || id == null || !PasskeyPolicy.uuid.matches(id) ||
             mode == NativeAccountNumberActivity.EDIT && !PasskeyPolicy.target(id, tag)) {
+            failure(call, AuthCode.INVALID_REQUEST); return
+        }
+        launchForm(call, mode, id, tag)
+    }
+
+    @PluginMethod fun editInsurancePolicyNumberUI(call: PluginCall) { main.post { launchInsurancePolicyForm(call, NativeInsurancePolicyNumberActivity.EDIT) } }
+    @PluginMethod fun showInsurancePolicyNumberUI(call: PluginCall) { main.post { launchInsurancePolicyForm(call, NativeInsurancePolicyNumberActivity.SHOW) } }
+
+    private fun launchInsurancePolicyForm(call: PluginCall, mode: String) {
+        val fields = call.data.keys().asSequence().toSet()
+        val id = call.data.opt("policyId") as? String
+        val tag = call.data.opt("ifMatch") as? String
+        val expected = if (mode == NativeInsurancePolicyNumberActivity.EDIT) setOf("policyId", "ifMatch") else setOf("policyId")
+        if (fields != expected || id == null || !PasskeyPolicy.uuid.matches(id) ||
+            mode == NativeInsurancePolicyNumberActivity.EDIT && !PasskeyPolicy.target(id, tag)) {
             failure(call, AuthCode.INVALID_REQUEST); return
         }
         launchForm(call, mode, id, tag)
@@ -240,6 +310,7 @@ class SallimBookAuthPlugin : Plugin() {
             val component = when {
                 passkey -> NativePasskeyActivity::class.java
                 mode in setOf(NativeAccountNumberActivity.EDIT, NativeAccountNumberActivity.SHOW) -> NativeAccountNumberActivity::class.java
+                mode in setOf(NativeInsurancePolicyNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.SHOW) -> NativeInsurancePolicyNumberActivity::class.java
                 else -> NativeAuthActivity::class.java
             }
             val intent = Intent(activity, component)
@@ -262,13 +333,13 @@ class SallimBookAuthPlugin : Plugin() {
             NativeAuthActivity.CREATE_INVITATION, NativePasskeyActivity.INVITE -> "created"
             NativePasskeyActivity.REGISTER -> "registered"
             NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE -> "revoked"
-            NativeAccountNumberActivity.EDIT -> "saved"
-            NativeAccountNumberActivity.SHOW, NativePasskeyActivity.ACCOUNT -> "completed"
+            NativeAccountNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.EDIT -> "saved"
+            NativeAccountNumberActivity.SHOW, NativePasskeyActivity.ACCOUNT, NativeInsurancePolicyNumberActivity.SHOW -> "completed"
             else -> "accepted"
         }
         val status = result.data?.getStringExtra(NativeAuthActivity.EXTRA_STATUS)
         uiOutcome = if (result.resultCode == Activity.RESULT_OK &&
-            (status == expected || uiMode == NativeAccountNumberActivity.EDIT && status == "deleted")) {
+            (status == expected || uiMode in setOf(NativeAccountNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.EDIT) && status == "deleted")) {
             AuthOutcome.success(mapOf("status" to status))
         } else if (result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) != null) {
             val code = AuthCode.entries.firstOrNull { it.name == result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) }

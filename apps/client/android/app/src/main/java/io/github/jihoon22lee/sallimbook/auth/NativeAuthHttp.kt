@@ -57,6 +57,7 @@ internal class NativeAuthHttp(private val origin: String) {
         ifMatch: String? = null,
         stepUpToken: String? = null,
         nativeAccountNumber: Boolean = false,
+        nativeInsurancePolicyNumber: Boolean = false,
         idempotencyKey: String? = null,
     ): NativeHttpResponse {
         gate.checkHttp(method, path)
@@ -84,7 +85,10 @@ internal class NativeAuthHttp(private val origin: String) {
             } == true)
         val numberReveal = nativeAccountNumber && method == "POST" && FinancePolicy.numberPath(path, true) &&
             ifMatch == null && numberFields == emptySet<String>()
-        if (!internalAuthPath && !internalRevoke && !metadata && !numberMutation && !numberReveal &&
+        val policyNumber = nativeInsurancePolicyNumber && !nativeAccountNumber && stepUpToken == null &&
+            InsurancePolicy.numberHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch)
+        if (nativeInsurancePolicyNumber && !policyNumber || nativeAccountNumber && nativeInsurancePolicyNumber) throw AuthFailure(AuthCode.INVALID_REQUEST)
+        if (!internalAuthPath && !internalRevoke && !metadata && !numberMutation && !numberReveal && !policyNumber &&
             (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
