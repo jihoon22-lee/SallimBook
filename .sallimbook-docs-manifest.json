@@ -248,6 +248,10 @@
     "docs/testing/cashflow-client.md": {
       "sha256": "67c306ea81bb37ae5d82a6f6790750b27ae2b3bfc5babbf335409471224aa5a8",
       "git_sha1": "73af32efc4d7ea04e803febd8e7f8bcd2b027095"
+    },
+    "docs/testing/insurance-client.md": {
+      "sha256": "44cce844fc818029926db2478f105572403cee930b154112f1a6ccfd47d27096",
+      "git_sha1": "ed666a6c2af9fbb7564307f6ab3035e7003080f7"
     }
   }
 }

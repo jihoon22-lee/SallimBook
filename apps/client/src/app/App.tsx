@@ -19,6 +19,9 @@ import { FixedListPage, FixedDetailPage, RuleListPage, RuleNewPage, RuleDetailPa
 import { LivingPage } from "../features/living/LivingPage";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { householdScreens } from "../features/household/screens";
+import { InsuranceHome } from "../features/insurance/InsuranceHome";
+import { PolicyListPage, PolicyNewPage, PolicyDetailPage } from "../features/insurance/policies/PolicyPages";
+import { CaseListPage, CaseNewPage, CaseDetailPage } from "../features/insurance/cases/CasePages";
 import { insuranceScreens } from "../features/insurance/screens";
 import { VaultPage } from "../features/vault/VaultPage";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
@@ -26,7 +29,7 @@ import { MonthProvider } from "../shared/MonthContext";
 import { PlannedPage } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens, ...insuranceScreens];
+const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens, ...insuranceScreens.filter((screen) => screen.path === "/insurance/payouts/new")];
 const screens = [
   { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <Dashboard /> },
   { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: false, element: <VaultPage /> },
@@ -56,6 +59,16 @@ const screens = [
   { path: "/fixed-payments/rules/:id", title: "납부 규칙 상세", group: "living" as NavigationGroup, parent: { to: "/fixed-payments/rules", label: "납부 규칙" }, live: true, element: <RuleDetailPage /> },
   { path: "/fixed-payments/rules/:id/edit", title: "납부 규칙 변경", group: "living" as NavigationGroup, parent: { to: "/fixed-payments/rules", label: "납부 규칙" }, live: true, element: <RuleDetailPage edit /> },
   { path: "/fixed-payments/:id", title: "고정 납부 상세", group: "living" as NavigationGroup, parent: { to: "/fixed-payments", label: "고정 납부 목록" }, live: true, element: <FixedDetailPage /> },
+  { path: "/insurance", title: "보험", group: "insurance" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <InsuranceHome /> },
+  { path: "/insurance/policies", title: "보험 계약", group: "insurance" as NavigationGroup, parent: { to: "/insurance", label: "보험" }, live: true, element: <PolicyListPage /> },
+  { path: "/insurance/policies/new", title: "보험 계약 등록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/policies", label: "보험 계약" }, live: true, element: <PolicyNewPage /> },
+  { path: "/insurance/policies/:id", title: "보험 계약 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/policies", label: "보험 계약" }, live: true, element: <PolicyDetailPage /> },
+  { path: "/insurance/policies/:id/edit", title: "보험 계약 수정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/policies", label: "보험 계약" }, live: true, element: <PolicyDetailPage edit /> },
+  { path: "/insurance/cases", title: "보험 사건", group: "insurance" as NavigationGroup, parent: { to: "/insurance", label: "보험" }, live: true, element: <CaseListPage /> },
+  { path: "/insurance/cases/new", title: "보험 사건 등록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseNewPage /> },
+  { path: "/insurance/cases/:id", title: "보험 사건 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseDetailPage /> },
+  { path: "/insurance/cases/:id/edit", title: "보험 사건 변경", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseDetailPage edit /> },
+  { path: "/insurance/cases/:id/nodes/:nodeId", title: "진료·약국 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseDetailPage /> },
   ...plannedScreens.map((screen) => ({ ...screen, live: false, element: <PlannedPage screen={screen} /> })),
 ];
 
