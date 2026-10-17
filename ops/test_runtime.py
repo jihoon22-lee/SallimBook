@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from ops.backup import OperationError
 from ops.build_context import REVISION_LABEL
 from ops.deploy import render
 from ops.preflight import verify_image_details
@@ -35,7 +36,24 @@ def main(image):
     if not revision:
         raise RuntimeError("Source-labelled application image required")
     verify_image_details([inspected], revision=revision, role="api")
+    for wanted_revision, wanted_role in (
+        ("b" * 40 if revision != "b" * 40 else "c" * 40, "api"),
+        (revision, "web"),
+    ):
+        try:
+            verify_image_details([inspected], revision=wanted_revision, role=wanted_role)
+        except OperationError:
+            pass
+        else:
+            raise AssertionError("Actual image accepted a mismatched revision or role")
     image_id = inspected["Id"]
+    for mode in ("scanner", "api"):
+        cold = subprocess.run(
+            ["docker", "run", "--rm", "--network", "none", "--read-only",
+             "--entrypoint", "python", image_id, "-m", "ops.health", mode],
+            capture_output=True, timeout=15, check=False,
+        )
+        assert cold.returncode == 1, "Cold scanner unexpectedly passed readiness"
     project = "sallimbook-ops-smoke-" + uuid4().hex[:12]
     with tempfile.TemporaryDirectory(prefix=project + "-") as temporary:
         directory = Path(temporary)
