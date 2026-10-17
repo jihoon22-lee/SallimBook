@@ -18,8 +18,8 @@ test("referenced card deletion is rejected while an unreferenced mistaken card c
 });
 test("card closure shows every linked page and changing date clears acknowledgement before saving", async ({ page }) => {
   const state = await mockCashflow(page); state.linksRequired = true; state.linksMore = true; await page.goto(`/cards/${uid(50)}`); await page.getByRole("button", { name: "카드 사용 종료", exact: true }).click(); const review = page.getByRole("region", { name: "사용 종료 영향 확인", exact: true }); await expect(review).toContainText("현재·미래 규칙 2개"); await expect(page.getByRole("button", { name: "카드 사용 종료 저장", exact: true })).toBeDisabled(); await review.getByText("연결 규칙 모두 보기", { exact: true }).click(); await expect(review.getByRole("link", { name: "합성 미래 연간 구독", exact: true })).toBeVisible(); await expect(review).toContainText("카드 승인 계획"); await expect(review).toContainText("전체 카드 명세나 계좌 출금 합계는 제공하지 않아요");
-  await review.getByRole("checkbox").check(); await page.getByLabel("카드 종료일", { exact: true }).fill("2025-02-21"); await expect(review).toContainText("2025.02.21 기준"); await expect(review.getByRole("checkbox")).not.toBeChecked(); await review.getByRole("checkbox").check(); await page.getByRole("button", { name: "카드 사용 종료 저장", exact: true }).click(); await expect(page.getByRole("button", { name: "카드 사용 종료", exact: true })).toHaveCount(0);
-  expect(state.writes.at(-1)!.body).toEqual({ ended_on: "2025-02-21", closure_ack: true, usage_digest: "1".padStart(64, "0") }); expect(state.linksQueries.some((query) => query.has("rule_cursor"))).toBe(true);
+  await review.getByRole("checkbox").check(); await page.getByLabel("카드 종료일", { exact: true }).fill("2025-02-19"); await expect(review).toContainText("2025.02.19 기준"); await expect(review.getByRole("checkbox")).not.toBeChecked(); await review.getByRole("checkbox").check(); await page.getByRole("button", { name: "카드 사용 종료 저장", exact: true }).click(); await expect(page.getByRole("button", { name: "카드 사용 종료", exact: true })).toHaveCount(0);
+  expect(state.writes.at(-1)!.body).toEqual({ ended_on: "2025-02-19", closure_ack: true, usage_digest: "1".padStart(64, "0") }); expect(state.linksQueries.some((query) => query.has("rule_cursor"))).toBe(true);
 });
 test("changed payment linkage rejects old closure proof and preserves date for re-review", async ({ page }) => {
   const state = await mockCashflow(page); state.linksRequired = true; await page.goto(`/cards/${uid(50)}`); await page.getByRole("button", { name: "카드 사용 종료", exact: true }).click(); const review = page.getByRole("region", { name: "사용 종료 영향 확인", exact: true }); await review.getByRole("checkbox").check(); state.linksVersion++;
@@ -27,4 +27,61 @@ test("changed payment linkage rejects old closure proof and preserves date for r
 });
 test("mixed payment-link revisions are never combined into an approvable list", async ({ page }) => {
   const state = await mockCashflow(page); state.linksRequired = true; state.linksMore = true; state.linksRace = true; await page.goto(`/cards/${uid(50)}`); await page.getByRole("button", { name: "카드 사용 종료", exact: true }).click(); await expect(page.getByRole("alert")).toContainText("연결된 계획이 변경됐어요"); await expect(page.getByRole("button", { name: "카드 사용 종료 저장", exact: true })).toBeDisabled(); expect(state.writes).toHaveLength(0); await page.getByRole("button", { name: "종료 영향 다시 확인", exact: true }).click(); await expect(page.getByRole("region", { name: "사용 종료 영향 확인", exact: true }).getByRole("checkbox")).toBeVisible();
+});
+for (const flow of ["edit", "archive"] as const) {
+  test(`card ${flow} blocks future and before-start dates while allowing today`, async ({ page }) => {
+    const state = await mockCashflow(page);
+    state.cards[0]!.started_on = "2025-02-20";
+    await page.goto(`/cards/${uid(50)}${flow === "edit" ? "/edit" : ""}`);
+    if (flow === "archive") await page.getByRole("button", { name: "카드 사용 종료", exact: true }).click();
+    const input = page.getByLabel(flow === "edit" ? "카드 사용 종료일" : "카드 종료일", { exact: true });
+    const save = page.getByRole("button", { name: flow === "edit" ? "카드 변경 저장" : "카드 사용 종료 저장", exact: true });
+    await expect(input).toHaveAttribute("max", "2025-02-20");
+    await input.fill("2025-02-21");
+    await expect(page.getByRole("alert")).toHaveText("카드 사용 종료일은 서울 기준 오늘을 넘을 수 없어요.");
+    await expect(save).toBeDisabled();
+    await input.evaluate((element) => element.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(state.writes).toHaveLength(0);
+    expect(state.linksQueries.some((query) => query.get("as_of_date") === "2025-02-21")).toBe(false);
+    await input.fill("2025-02-19");
+    await expect(page.getByRole("alert")).toHaveText("카드 사용 종료일은 사용 시작일과 같거나 늦어야 해요.");
+    await expect(save).toBeDisabled();
+    await input.fill("2025-02-20");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(page.getByRole("heading", { name: "합성 구독 카드", exact: true })).toBeVisible();
+    expect(state.writes).toHaveLength(1);
+    expect(state.writes[0]!.body).toMatchObject({ ended_on: "2025-02-20", closure_ack: false });
+  });
+}
+
+test("card date normalization switches at Seoul midnight and keeps optional end dates", async ({ page }) => {
+  await mockCashflow(page); await page.goto("/cards");
+  for (const [moment, allowed] of [["2025-02-20T14:59:59Z", false], ["2025-02-20T15:00:00Z", true]] as const) {
+    await page.clock.setFixedTime(new Date(moment));
+    const result = await page.evaluate(async (owner) => {
+      const source = "/src/features/cards/model.ts";
+      const { cardDraft, cardInput } = await import(source);
+      const draft = { ...cardDraft(), owner, issuer: "합성 카드사", product: "합성 카드" };
+      return { next: cardInput({ ...draft, ended: "2025-02-21" }) !== null, blank: cardInput(draft)?.ended_on,
+        invalid: cardInput({ ...draft, ended: "2025-02-30" }) };
+    }, uid(2));
+    expect(result).toEqual({ next: allowed, blank: null, invalid: null });
+  }
+  await page.goto(`/cards/${uid(50)}/edit`);
+  await expect(page.getByLabel("카드 사용 종료일", { exact: true })).toHaveAttribute("max", "2025-02-21");
+});
+
+test("server card date error explains both inclusive start and Seoul today bounds", async ({ page }) => {
+  await mockCashflow(page);
+  await page.route(`**/api/v1/cards/${uid(50)}`, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    await route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ error: { code: "INVALID_CARD_DATES", message: "UNTRUSTED_SYNTHETIC_MESSAGE", request_id: "synthetic" } }) });
+  });
+  await page.goto(`/cards/${uid(50)}/edit`);
+  await page.getByLabel("카드 별칭", { exact: true }).fill("합성 변경");
+  await page.getByRole("button", { name: "카드 변경 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("카드 사용 종료일은 사용 시작일과 같거나 늦어야 하며, 서울 기준 오늘을 넘을 수 없어요.");
+  await expect(page.getByLabel("카드 별칭", { exact: true })).toHaveValue("합성 변경");
 });
