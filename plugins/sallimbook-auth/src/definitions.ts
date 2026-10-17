@@ -32,7 +32,19 @@ export type NativeAccountCreate = Omit<components["schemas"]["AccountCreate"], "
 export type NativeAccountPatch = Omit<components["schemas"]["AccountPatch"], "account_number">;
 export type NativeFinanceResponse<T> = { status: number; body: T | components["schemas"]["ErrorResponse"] | null };
 
+/** IDs and an action only; every protected input and result is native-owned. */
+export type NativeVaultEntry =
+  | { action: "manage" | "setup" | "register-device" | "change-password" | "recover" | "rotate" }
+  | { action: "view" | "edit" | "purge" | "cvc-view" | "cvc-edit" | "cvc-delete"; cardId: string }
+  | { action: "share" | "revoke-member"; memberId: string }
+  | { action: "accept-share" | "cancel-share"; offerId: string }
+  | { action: "resume-rotation" | "abort-rotation"; rotationId: string };
+
 export interface SallimBookAuth {
+  openVaultUI(options: NativeVaultEntry): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
+  getVaultStatus(): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultStatusResponse"]>>>;
+  listVaultShares(options: { query?: NonNullable<operations["listVaultShares"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultShareListResponse"]>>>;
+  getVaultRotation(options: { rotationId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultRotationResponse"]>>>;
   deleteAppliance(options: { applianceId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   deleteConsumable(options: { consumableId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   deleteApplianceConsumable(options: { linkId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
