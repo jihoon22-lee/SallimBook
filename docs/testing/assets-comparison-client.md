@@ -51,12 +51,19 @@ React bridge 시뮬레이션은 월·revision 조회, 값 변경의 ID/If-Match,
 잠금·세션 만료·네트워크 실패에서 보호 화면 전환과 WebView HTTP 요청 0건을 확인한다.
 이 검사는 Android Keystore·생체인증·실기기 동작을 대신하지 않는다.
 
-통합 후 `pnpm typecheck`, `pnpm build`, 문서 검증과 `git diff --check`가 통과했다.
-전용 18750에서 전체 회귀 248개를 실행해 244개가 통과했다. 기존 계좌 네이티브 테스트의 가짜 bridge에
-새 비교 조회가 빠져 부수적인 오류가 생긴 4개는 비교·추이 응답을 추가한 뒤 해당 파일 10개 전체를
-다시 실행해 통과했다. 신규 네이티브 화면 16개와 비교 UI 28개는 전체 실행에서 모두 통과했다.
+최종 앱 잠금·계좌 연결 보완을 통합한 뒤 전체 UI 회귀 **252개 통과**를 확인했다.
+월 입력과 비교의 실제 HTTPS 검사도 각각 다시 통과했다. JVM 정책 검사 **131개 통과**,
+디버그 APK 조립과 release Kotlin 컴파일, 생성 client 재생성·타입·문서 검사도 성공했다.
+Android에 복사된 웹 산출물 4개가 최종 dist와 동일함을 확인했다.
+CI는 기존 인증·패스키·계좌 HTTPS 검사에 월 입력·비교 검사를 이어 실행한다.
 
 ```bash
 TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp pnpm --filter @sallimbook/client exec playwright test --config playwright.comparison.config.ts --workers 1
-TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp pnpm --filter @sallimbook/client exec playwright test --config playwright.comparison.config.ts tests/accounts-native.spec.ts --workers 1
+TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp uv run --project services/api python scripts/test_web_auth.py --months
+TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp uv run --project services/api python scripts/test_web_auth.py --comparison
+pnpm android:build
+# Android 디렉터리에서 같은 검증 JDK/SDK를 사용:
+./gradlew --no-daemon compileReleaseKotlin
 ```
+
+실제 Galaxy 두 대의 실패 시나리오·운영 키·서명 배포는 아직 실행하지 않았다.

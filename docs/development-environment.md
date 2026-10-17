@@ -162,7 +162,7 @@ API 변경 후 `pnpm api:generate`와 `pnpm typecheck`로 OpenAPI·TS 계약을 
 ### 자산·계좌 화면 검증
 
 자산 목록·등록·상세·수정·사용 종료와 계좌 목록·등록·상세·수정·사용 종료를 실제 생성 API client에 연결했다.
-기본정보 목록은 아직 조회하지 않은 금액을 0원으로 채우지 않는다. 웹 월 입력·확정·정정은 별도 월 기록 화면에서 제공한다. 월간 비교 연결은 후속 작업이다.
+기본정보 목록은 아직 조회하지 않은 금액을 0원으로 채우지 않는다. 웹 월 입력·확정·정정은 별도 월 기록 화면에서 제공한다. 월간 비교·추이와 홈 요약은 확정 월 기록을 조회한다.
 계좌는 하나의 금융 자산과 연결하고 평가액을 중복 합산하지 않는다.
 
 `pnpm --filter @sallimbook/client exec playwright test --config playwright.finance.config.ts`는 별도
