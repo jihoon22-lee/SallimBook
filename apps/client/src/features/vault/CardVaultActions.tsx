@@ -9,7 +9,7 @@ import { useAuth } from "../auth/AuthProvider";
 import type { WebVaultRequest } from "./actions";
 import { WebVaultAction } from "./WebVaultAction";
 
-type Entry = WebVaultRequest | { action: "register-device" };
+type Entry = WebVaultRequest | { action: "register-device" } | { action: "cvc-delete"; cardId: string };
 export function VaultActionLauncher({ children, onCompleted }: {
   children: (open: (request: Entry) => void, busy: boolean) => ReactNode;
   onCompleted?: () => void;
@@ -21,7 +21,7 @@ export function VaultActionLauncher({ children, onCompleted }: {
     if (flight.current || request) return;
     setError(null); setMessage("");
     if (!isNativeAuth()) {
-      if (entry.action === "register-device") { setError(new ApiError(0, "NATIVE_AUTH_UNAVAILABLE")); return; }
+      if (entry.action === "register-device" || entry.action === "cvc-delete") { setError(new ApiError(0, "NATIVE_AUTH_UNAVAILABLE")); return; }
       flight.current = true; setRequest(entry); return;
     }
     flight.current = true; setBusy(true);
@@ -53,8 +53,9 @@ export function CardVaultActions({ cardId, onCompleted }: { cardId: string; onCo
       <button disabled={busy} onClick={() => open({ action: "view", cardId })}>전체 번호·유효기간 열람</button>
       <button disabled={busy} onClick={() => open({ action: "edit", cardId })}>카드 비밀 등록·수정</button>
       <button className="secondary-button" disabled={busy} onClick={() => open({ action: "purge", cardId })}>카드 비밀 제거</button>
+      {native && <button className="secondary-button" disabled={busy} onClick={() => open({ action: "cvc-delete", cardId })}>이 기기의 CVC/CVV 삭제 검토</button>}
     </div>}</VaultActionLauncher>
-    <p className="muted">{native ? "CVC/CVV는 Android 기기 안에서만 보관하며 새 기기에서 다시 입력해야 해요. 현재 보안 검증 전이라 입력·열람·삭제 기능은 비활성 상태예요." : "CVC/CVV는 PC 웹에서 입력·열람·저장하지 않아요. 웹에서는 화면 캡처를 막을 수 없으니 주변을 확인해 주세요."}</p>
+    <p className="muted">{native ? "CVC/CVV는 Android 기기 안에서만 보관하며 새 기기에서 다시 입력해야 해요. 현재 보안 검증 전이라 입력·열람은 비활성 상태예요. 이 기기에 남은 CVC/CVV는 보호된 화면에서 삭제할 수 있어요." : "CVC/CVV는 PC 웹에서 입력·열람·저장하지 않아요. 웹에서는 화면 캡처를 막을 수 없으니 주변을 확인해 주세요."}</p>
     <Link to="/vault">보관함 설정·공유·복구</Link>
   </section>;
 }

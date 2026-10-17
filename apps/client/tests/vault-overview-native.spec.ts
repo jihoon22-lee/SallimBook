@@ -10,7 +10,7 @@ test("native overview routes public IDs for all ordinary vault workflows without
     ["복구코드로 보관함 복구", { action: "recover" }], ["보관함 키 회전 시작", { action: "rotate" }],
     ["이 구성원에게 공유", { action: "share", memberId: uid(5) }], ["공유 수락", { action: "accept-share", offerId: uid(901) }],
     ["공유 요청 거절", { action: "cancel-share", offerId: uid(901) }], ["공유 요청 취소", { action: "cancel-share", offerId: uid(900) }], ["전체 번호·유효기간 열람", { action: "view", cardId: uid(50) }],
-    ["카드 비밀 등록·수정", { action: "edit", cardId: uid(50) }], ["카드 비밀 제거", { action: "purge", cardId: uid(50) }],
+    ["카드 비밀 등록·수정", { action: "edit", cardId: uid(50) }], ["카드 비밀 제거", { action: "purge", cardId: uid(50) }], ["이 기기의 CVC/CVV 삭제 검토", { action: "cvc-delete", cardId: uid(50) }],
   ] as const;
   for (const [label, expected] of actions) {
     await page.getByRole("button", { name: label, exact: true }).click();
@@ -19,9 +19,9 @@ test("native overview routes public IDs for all ordinary vault workflows without
   }
   state.status.members[1]!.status = "active"; state.status.members[1]!.version = 1; await page.getByRole("button", { name: "보관함 상태 다시 확인", exact: true }).click(); await page.getByRole("button", { name: "이 구성원 접근 철회 검토", exact: true }).click();
   await expect.poll(() => state.calls.filter((call) => call.method === "openVaultUI").at(-1)?.args).toEqual({ action: "revoke-member", memberId: uid(5) });
-  expect(state.calls.filter((call) => call.method === "openVaultUI")).toHaveLength(12); expect(state.http).toEqual([]);
+  expect(state.calls.filter((call) => call.method === "openVaultUI")).toHaveLength(13); expect(state.http).toEqual([]);
   await expect(page.locator('input[type="password"], input[type="text"], textarea')).toHaveCount(0);
-  await expect(page.getByText(/CVC\/CVV 기능은 보안 검증 전이라 현재 비활성 상태예요/)).toBeVisible();
+  await expect(page.getByText(/CVC\/CVV 입력·열람은 보안 검증 전이라 현재 비활성 상태예요/)).toBeVisible();
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
 });
 
@@ -65,5 +65,5 @@ test("native card details use native protected actions while ordinary metadata r
   const state = await mockVaultOverview(page, true); await page.goto(`/cards/${uid(50)}`);
   await page.getByRole("button", { name: "전체 번호·유효기간 열람", exact: true }).click(); await expect(page.getByRole("button", { name: "카드 사용 종료", exact: true })).toBeVisible();
   await expect.poll(() => state.calls.filter((call) => call.method === "openVaultUI").map((call) => call.args)).toEqual([{ action: "view", cardId: uid(50) }]);
-  expect(state.http).toEqual([]); await expect(page.getByText(/현재 보안 검증 전이라 입력·열람·삭제 기능은 비활성 상태예요/)).toBeVisible();
+  expect(state.http).toEqual([]); await expect(page.getByText(/현재 보안 검증 전이라 입력·열람은 비활성 상태예요/)).toBeVisible();
 });

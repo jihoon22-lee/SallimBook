@@ -286,8 +286,8 @@
       "git_sha1": "8d7f77e4d155e2921f883cc7ba87a3e4a3066ac0"
     },
     "docs/testing/vault-overview.md": {
-      "sha256": "f2ec970f2dbb53db166a03705dd2c3767e81136eb848310f001c0da7f2a58c60",
-      "git_sha1": "f9508dcade79453398ec09a6ec943e6ad65a11d4"
+      "sha256": "b163bab36fa4d1acb32bf160f33f638f2370adaf8dc3b6daa2db5f045d24adcf",
+      "git_sha1": "e4610c8ac066cc3a175b964f5c43dd7df7e15206"
     }
   }
 }

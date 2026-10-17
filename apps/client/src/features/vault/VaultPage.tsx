@@ -73,13 +73,13 @@ function VaultOverview({ memberId }: { memberId: string }) {
       <section className="card"><h2>카드 비밀</h2><p>목록에는 마지막 네 자리만 표시해요. 유효기간 **/** · CVC/CVV ***</p><AuthError error={cards.error} />
         {cards.loading && <p role="status">카드 목록 확인 중…</p>}
         {!cards.error && <ul className="finance-list">{cards.items.map((card) => <li key={card.id}><h3><Link to={`/cards/${card.id}`}>{card.alias || card.product_name}</Link></h3><p>{card.masked_number || "마지막 네 자리 미입력"} · {card.status === "closed" ? "사용 종료" : "사용 중"}</p><div className="form-actions">
-          <button disabled={busy || !active} onClick={() => open({ action: "view", cardId: card.id })}>전체 번호·유효기간 열람</button><button disabled={busy || !ready} onClick={() => open({ action: "edit", cardId: card.id })}>카드 비밀 등록·수정</button><button className="secondary-button" disabled={busy || !active || !!row.pending_rotation_id} onClick={() => open({ action: "purge", cardId: card.id })}>카드 비밀 제거</button>
+          <button disabled={busy || !active} onClick={() => open({ action: "view", cardId: card.id })}>전체 번호·유효기간 열람</button><button disabled={busy || !ready} onClick={() => open({ action: "edit", cardId: card.id })}>카드 비밀 등록·수정</button><button className="secondary-button" disabled={busy || !active || !!row.pending_rotation_id} onClick={() => open({ action: "purge", cardId: card.id })}>카드 비밀 제거</button>{native && <button className="secondary-button" disabled={busy || !active} onClick={() => open({ action: "cvc-delete", cardId: card.id })}>이 기기의 CVC/CVV 삭제 검토</button>}
         </div></li>)}</ul>}
         {!cards.loading && !cards.error && !cards.items.length && <p>등록된 카드가 없어요. 카드 일반정보를 먼저 등록해 주세요.</p>}
         <div className="form-actions"><Link to="/cards/new">카드 일반정보 등록</Link><button disabled={busy || cards.loading} onClick={() => void cards.reload()}>카드 목록 다시 확인</button>{cards.cursor && <button disabled={busy || cards.loading} onClick={() => void cards.more()}>카드 더 보기</button>}</div>
       </section>
     </>}
-    <section className="card"><h2>기기와 복구 안내</h2><p>{native ? "이 Android 기기에서 비밀 입력·열람은 네이티브 보호 화면으로 열려요. 새 기기에서는 보관함을 등록하고 CVC/CVV를 다시 입력해야 해요. CVC/CVV 기능은 보안 검증 전이라 현재 비활성 상태예요." : "PC 웹은 카드번호와 유효기간을 별도 보관함 화면에서 다뤄요. CVC/CVV 입력·열람·저장은 지원하지 않아요. 웹에서는 화면 캡처를 막을 수 없어요."}</p>
+    <section className="card"><h2>기기와 복구 안내</h2><p>{native ? "이 Android 기기에서 비밀 입력·열람은 네이티브 보호 화면으로 열려요. 새 기기에서는 보관함을 등록하고 CVC/CVV를 다시 입력해야 해요. CVC/CVV 입력·열람은 보안 검증 전이라 현재 비활성 상태예요. 이 기기에 남은 CVC/CVV 삭제는 보호된 화면에서 할 수 있어요." : "PC 웹은 카드번호와 유효기간을 별도 보관함 화면에서 다뤄요. CVC/CVV 입력·열람·저장은 지원하지 않아요. 웹에서는 화면 캡처를 막을 수 없어요."}</p>
       <p>보관함 암호·복구코드·잠금 해제 가능한 신뢰 기기를 모두 잃으면 기존 카드 비밀을 복원할 수 없어요. 복구코드는 오프라인의 안전한 곳에 보관해 주세요.</p><Link to="/settings/auth">계정과 등록 기기 관리</Link>
     </section>
   </>}</VaultActionLauncher>;
