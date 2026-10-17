@@ -56,8 +56,33 @@ from sallimbook.insurance.models import (
     MedicalNode,
     PolicyPremiumLink,
 )
+from sallimbook.vault.models import (
+    CardSecretEnvelope,
+    VaultKeyCheck,
+    VaultMembership,
+    VaultMemberWrapping,
+    VaultNonceReservation,
+    VaultRecoveryWrapping,
+    VaultRotationCard,
+    VaultRotationMember,
+    VaultShareOffer,
+    VaultState,
+    VaultVersion,
+)
 
 __all__ = [
+    "CardSecretEnvelope",
+    "VaultKeyCheck",
+    "VaultMemberWrapping",
+    "VaultMembership",
+    "VaultNonceReservation",
+    "VaultRecoveryWrapping",
+    "VaultRotationCard",
+    "VaultRotationMember",
+    "VaultShareOffer",
+    "VaultState",
+    "VaultVersion",
+
     "Appliance",
     "Consumable",
     "ApplianceConsumable",
