@@ -150,7 +150,7 @@ function AssetEdit({ id }: { id: string }) {
 export function AssetListPage() {
   const { state } = useAuth();
   const { month } = useMonth();
-  return <><div className="intro"><p className="eyebrow">우리 집의 기본정보</p><h1>자산과 부채</h1><p>소유자와 지분, 보유 기간을 함께 관리해요.</p></div><MonthPicker /><p className="month-action"><Link to={`/assets/months/${month}`}>{formatMonth(month)} 확인 안내</Link></p>{state.status === "authenticated" ? <AssetList /> : <SessionStatus />}</>;
+  return <><div className="intro"><p className="eyebrow">우리 집의 기본정보</p><h1>자산과 부채</h1><p>소유자와 지분, 보유 기간을 함께 관리해요.</p></div><MonthPicker /><p className="month-action"><Link to={`/assets/months/${month}`}>{formatMonth(month)} 월 기록 확인</Link></p>{state.status === "authenticated" ? <AssetList /> : <SessionStatus />}</>;
 }
 export function AssetNewPage() {
   const { state } = useAuth();

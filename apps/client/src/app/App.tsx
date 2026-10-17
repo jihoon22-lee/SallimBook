@@ -4,6 +4,7 @@ import { Link, matchRoutes, NavLink, Route, Routes, useLocation, useNavigate } f
 import { AccountListPage, AccountNewPage, AccountDetailPage } from "../features/accounts/AccountPages";
 import { accountScreens } from "../features/accounts/screens";
 import { assetScreens } from "../features/assets/screens";
+import { AssetMonthPage } from "../features/assets/months/MonthPage";
 import { AssetListPage, AssetNewPage, AssetDetailPage } from "../features/assets/AssetPages";
 import { authScreens } from "../features/auth/screens";
 import { AuthProvider } from "../features/auth/AuthProvider";
@@ -21,7 +22,7 @@ import { MonthProvider } from "../shared/MonthContext";
 import { PlannedPage } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id"), ...cardScreens, ...householdScreens, ...insuranceScreens, ...livingScreens];
+const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month"), ...cardScreens, ...householdScreens, ...insuranceScreens, ...livingScreens];
 const screens = [
   { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: false, element: <Dashboard /> },
   { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: false, element: <VaultPage /> },
@@ -33,6 +34,7 @@ const screens = [
   ...accountScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/accounts" ? <AccountListPage /> : <AccountDetailPage /> })),
   { path: "/accounts/new", title: "계좌 등록", group: "assets" as NavigationGroup, parent: { to: "/accounts", label: "계좌 목록" }, live: true, element: <AccountNewPage /> },
   { path: "/accounts/:id/edit", title: "계좌 정보 수정", group: "assets" as NavigationGroup, parent: { to: "/accounts", label: "계좌 목록" }, live: true, element: <AccountDetailPage edit /> },
+  { path: "/assets/months/:month", title: "월별 자산 확인", group: "assets" as NavigationGroup, parent: { to: "/assets", label: "자산 목록" }, live: true, element: <AssetMonthPage /> },
   ...plannedScreens.map((screen) => ({ ...screen, live: false, element: <PlannedPage screen={screen} /> })),
 ];
 
