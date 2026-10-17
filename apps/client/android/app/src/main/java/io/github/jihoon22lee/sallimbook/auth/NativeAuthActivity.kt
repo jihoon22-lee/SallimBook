@@ -1,0 +1,369 @@
+package io.github.jihoon22lee.sallimbook.auth
+
+import android.app.Activity
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.text.InputFilter
+import android.text.InputType
+import android.view.View
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import java.time.Instant
+
+/** Must be registered exported=false. No credential is an Intent extra or Activity result.
+ * Background/recreation cancels the form; JVM/build checks do not prove physical UI privacy.
+ */
+class NativeAuthActivity : AppCompatActivity() {
+    companion object {
+        internal const val EXTRA_MODE = "sallimbook.auth.mode"
+        internal const val EXTRA_STATUS = "sallimbook.auth.status"
+        internal const val EXTRA_ERROR = "sallimbook.auth.error"
+        internal const val LOGIN = "login"
+        internal const val INVITATION = "invitation"
+        internal const val CREATE_INVITATION = "create-invitation"
+    }
+
+    private val auth by lazy { NativeAuthSession.get(applicationContext) }
+    private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
+    private var foreground = false
+    private var pending: ForegroundRequest? = null
+    private var mode = LOGIN
+    private val inputs = mutableListOf<EditText>()
+    private val pendingSecrets = mutableListOf<CharArray>()
+    private lateinit var identity: EditText
+    private lateinit var password: EditText
+    private lateinit var passwordConfirmation: EditText
+    private lateinit var displayName: EditText
+    private lateinit var status: TextView
+    private lateinit var submit: Button
+    private lateinit var close: Button
+    private var invitationText: TextView? = null
+    private var createdInvitation = false
+    private var invitationDisplay: InvitationDisplay? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val expireInvitation = Runnable { clearInvitationDisplay(true) }
+    private var screenReceiverRegistered = false
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) cancelAndFinish()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(null)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        setResult(Activity.RESULT_CANCELED)
+        val notExported = try {
+            !packageManager.getActivityInfo(ComponentName(this, NativeAuthActivity::class.java), 0).exported
+        } catch (_: Exception) { false }
+        mode = intent.getStringExtra(EXTRA_MODE) ?: ""
+        if (savedInstanceState != null || !notExported || !auth.available ||
+            mode !in setOf(LOGIN, INVITATION, CREATE_INVITATION) || intent.extras?.keySet() != setOf(EXTRA_MODE)) {
+            setResult(Activity.RESULT_CANCELED, Intent().putExtra(EXTRA_ERROR, AuthCode.AUTH_UNAVAILABLE.name))
+            finish()
+            return
+        }
+        buildUi()
+        ContextCompat.registerReceiver(this, screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED)
+        screenReceiverRegistered = true
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { cancelAndFinish() }
+        })
+    }
+
+    private fun buildUi() {
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isSaveEnabled = false
+            filterTouchesWhenObscured = true
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            importantForContentCapture = View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS
+        }
+        fun label(text: String, size: Float = 16f) = TextView(this).apply {
+            this.text = text
+            textSize = size
+            isSaveEnabled = false
+            setPadding(0, 12.dp(), 0, 8.dp())
+            column.addView(this)
+        }
+        fun field(caption: String, secret: Boolean, maxLength: Int): EditText {
+            val title = label(caption)
+            return EditText(this).apply {
+                id = View.generateViewId()
+                title.labelFor = id
+                setSingleLine(true)
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
+                    if (secret) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_VARIATION_NORMAL
+                imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING or EditorInfo.IME_ACTION_NEXT
+                filters = arrayOf(InputFilter.LengthFilter(maxLength))
+                isSaveEnabled = false
+                isSaveFromParentEnabled = false
+                freezesText = false
+                isLongClickable = false
+                filterTouchesWhenObscured = true
+                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+                importantForContentCapture = View.IMPORTANT_FOR_CONTENT_CAPTURE_NO
+                minimumHeight = 48.dp()
+                inputs.add(this)
+                column.addView(this)
+            }
+        }
+        label(when (mode) {
+            LOGIN -> "SallimBook · 로그인"
+            CREATE_INVITATION -> "SallimBook · 구성원 초대"
+            else -> "SallimBook · 초대 수락"
+        }, 24f)
+        label("이 화면을 벗어나면 입력한 비밀번호와 초대 코드를 지웁니다.")
+        identity = field(when (mode) {
+            LOGIN -> "로그인 이름"
+            CREATE_INVITATION -> "초대할 구성원의 로그인 이름"
+            else -> "초대 코드"
+        }, mode == INVITATION, if (mode == INVITATION) 128 else 64)
+        if (mode != CREATE_INVITATION) {
+            password = field(if (mode == LOGIN) "비밀번호" else "새 비밀번호 · 15자 이상", true, 128)
+        }
+        if (mode == INVITATION) {
+            passwordConfirmation = field("새 비밀번호 확인", true, 128)
+            displayName = field("표시 이름", false, 80)
+        }
+        if (mode == CREATE_INVITATION) {
+            invitationText = label("").apply { setTextIsSelectable(false); isLongClickable = false; freezesText = false }
+        }
+        status = label("")
+        submit = Button(this).apply {
+            text = when (mode) { LOGIN -> "로그인"; CREATE_INVITATION -> "초대 만들기"; else -> "초대 수락" }
+            minimumHeight = 48.dp()
+            filterTouchesWhenObscured = true
+            setOnClickListener { submitNative() }
+            column.addView(this)
+        }
+        close = Button(this).apply {
+            text = "취소"
+            minimumHeight = 48.dp()
+            filterTouchesWhenObscured = true
+            setOnClickListener { cancelAndFinish() }
+            column.addView(this)
+        }
+        val scroll = ScrollView(this).apply { isSaveEnabled = false; addView(column) }
+        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left + 20.dp(), bars.top + 12.dp(), bars.right + 20.dp(), bars.bottom + 20.dp())
+            insets
+        }
+        setContentView(scroll)
+    }
+
+    private fun submitNative() {
+        if (!foreground || !hasWindowFocus() || keyguard.isDeviceLocked || pending != null) return
+        if (mode == CREATE_INVITATION && invitationDisplay != null) {
+            val code = invitationDisplay?.reveal(SystemClock.elapsedRealtime(), foreground,
+                hasWindowFocus(), !keyguard.isDeviceLocked)
+            if (code == null) clearInvitationDisplay(true)
+            else {
+                invitationText?.text = code
+                submit.isEnabled = false
+                status.text = "받는 사람이 자신의 네이티브 초대 수락 화면에 직접 입력해 주세요.\n최대 30초 후 또는 화면에서 벗어나면 코드를 지웁니다."
+            }
+            return
+        }
+        val identifier = identity.text.toString().trim()
+        if (mode == CREATE_INVITATION) { createNativeInvitation(identifier); return }
+        val secret = CharArray(password.length()).also { password.text.getChars(0, password.length(), it, 0) }
+        val confirmation = if (mode == INVITATION) CharArray(passwordConfirmation.length()).also {
+            passwordConfirmation.text.getChars(0, passwordConfirmation.length(), it, 0)
+            passwordConfirmation.text.clear()
+        } else null
+        val passwordsMatch = confirmation == null || secret.contentEquals(confirmation)
+        confirmation?.fill('\u0000')
+        val name = if (mode == INVITATION) displayName.text.toString().trim() else ""
+        val valid = if (mode == LOGIN) {
+            Regex("[A-Za-z][A-Za-z0-9_.-]{2,63}").matches(identifier) && secret.isNotEmpty()
+        } else {
+            Regex("[A-Za-z0-9_-]{32,128}").matches(identifier) && secret.size >= 15 && name.isNotEmpty() && passwordsMatch
+        }
+        if (!valid) {
+            secret.fill('\u0000')
+            password.text.clear()
+            status.text = "입력 항목을 확인해 주세요."
+            return
+        }
+        val gate = ForegroundRequest()
+        pending = gate
+        pendingSecrets.add(secret)
+        password.text.clear()
+        if (mode == INVITATION) identity.text.clear()
+        submit.isEnabled = false
+        status.text = "확인하고 있어요."
+        val completion: (AuthOutcome) -> Unit = { outcome ->
+            runOnUiThread {
+                if (pending === gate && gate.isActive() && foreground && hasWindowFocus() && !keyguard.isDeviceLocked &&
+                    !isFinishing && !isDestroyed) {
+                    pending = null
+                    clearSecretBuffers()
+                    submit.isEnabled = true
+                    if (outcome.code == null) {
+                        setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_STATUS,
+                            if (mode == LOGIN) "authenticated" else "accepted"))
+                        clearInputs()
+                        finish()
+                    } else status.text = message(outcome.code)
+                } else gate.cancel()
+            }
+        }
+        if (mode == LOGIN) auth.login(identifier, secret, "Android", gate, completion)
+        else {
+            val invitation = identifier.toCharArray()
+            pendingSecrets.add(invitation)
+            auth.acceptInvitation(invitation, secret, name, gate, completion)
+        }
+    }
+
+    private fun createNativeInvitation(identifier: String) {
+        if (!Regex("[A-Za-z][A-Za-z0-9_.-]{2,63}").matches(identifier)) {
+            status.text = "초대할 구성원의 로그인 이름을 확인해 주세요."
+            return
+        }
+        val gate = ForegroundRequest()
+        pending = gate
+        submit.isEnabled = false
+        status.text = "초대를 만들고 있어요."
+        auth.createInvitation(identifier, gate) { outcome, invitation ->
+            runOnUiThread {
+                try {
+                    if (pending === gate && gate.isActive() && foreground && hasWindowFocus() && !keyguard.isDeviceLocked &&
+                        !isFinishing && !isDestroyed) {
+                        pending = null
+                        if (outcome.code == null && invitation != null) {
+                            createdInvitation = true
+                            identity.isEnabled = false
+                            val now = Instant.now()
+                            val expiry = java.time.OffsetDateTime.parse(invitation.expiresAt).toInstant()
+                            val remaining = when {
+                                expiry <= now -> 0L
+                                expiry >= now.plusSeconds(30) -> 30_000L
+                                else -> java.time.Duration.between(now, expiry).toMillis()
+                            }
+                            invitationDisplay = InvitationDisplay(invitation.token.copyOf(),
+                                SystemClock.elapsedRealtime(), remaining)
+                            submit.text = "초대 코드 보기"
+                            submit.isEnabled = remaining > 0
+                            status.text = "초대 코드는 최대 30초 동안 이 화면에서 확인할 수 있어요."
+                            handler.postDelayed(expireInvitation, remaining)
+                            close.text = "닫기"
+                        } else {
+                            submit.isEnabled = true
+                            status.text = message(outcome.code ?: AuthCode.AUTH_UNAVAILABLE)
+                        }
+                    } else {
+                        gate.cancel()
+                        if (!isFinishing && !isDestroyed) {
+                            status.text = "화면을 벗어나 초대 코드를 지웠어요. 다시 초대를 만들어 주세요."
+                        }
+                    }
+                } finally { invitation?.discard() }
+            }
+        }
+    }
+
+    private fun clearSecretBuffers() { pendingSecrets.forEach { it.fill('\u0000') }; pendingSecrets.clear() }
+    private fun clearInvitationDisplay(expired: Boolean = false) {
+        handler.removeCallbacks(expireInvitation)
+        invitationDisplay?.discard()
+        invitationDisplay = null
+        invitationText?.text = ""
+        if (expired && ::status.isInitialized) {
+            status.text = "초대 코드를 지웠어요. 필요하면 다시 초대를 만들어 주세요."
+            submit.text = "초대 다시 만들기"
+            submit.isEnabled = true
+            identity.isEnabled = true
+        }
+    }
+
+    private fun clearInputs() { inputs.forEach { it.text.clear() }; clearInvitationDisplay(); clearSecretBuffers() }
+
+    private fun cancelAndFinish() {
+        pending?.cancel()
+        pending = null
+        clearInputs()
+        if (createdInvitation) setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_STATUS, "created"))
+        else setResult(Activity.RESULT_CANCELED)
+        if (!isFinishing) finish()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        foreground = true
+        if (keyguard.isDeviceLocked) cancelAndFinish()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) {
+            val interrupted = pending != null
+            pending?.cancel()
+            pending = null
+            clearSecretBuffers()
+            if (::password.isInitialized) password.text.clear()
+            if (::passwordConfirmation.isInitialized) passwordConfirmation.text.clear()
+            if (mode == INVITATION && ::identity.isInitialized) identity.text.clear()
+            clearInvitationDisplay(createdInvitation)
+            if (::submit.isInitialized) submit.isEnabled = true
+            if (interrupted && ::status.isInitialized) status.text = "화면을 벗어나 요청을 중단했어요. 결과를 확인한 후 다시 진행해 주세요."
+        }
+    }
+
+    override fun onPause() {
+        foreground = false
+        pending?.cancel()
+        pending = null
+        clearInputs()
+        if (!isFinishing) cancelAndFinish()
+        super.onPause()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        clearInputs()
+        super.onSaveInstanceState(outState)
+        outState.clear()
+    }
+
+    override fun onDestroy() {
+        pending?.cancel()
+        clearInputs()
+        if (screenReceiverRegistered) unregisterReceiver(screenReceiver)
+        screenReceiverRegistered = false
+        super.onDestroy()
+    }
+
+    private fun message(code: AuthCode): String = when (code) {
+        AuthCode.AUTH_FAILED -> "로그인 정보를 확인해 주세요."
+        AuthCode.REGISTRATION_FAILED -> "초대 코드와 입력 정보를 확인해 주세요. 이미 수락했다면 로그인해 주세요."
+        AuthCode.NETWORK_UNAVAILABLE -> "연결을 확인할 수 없어요. 자동으로 다시 전송하지 않았어요."
+        AuthCode.KEY_INVALIDATED -> "기기 인증 저장소를 사용할 수 없어요. 다시 로그인해 주세요."
+        AuthCode.SESSION_EXPIRED -> "이 화면을 닫고 다시 로그인한 후 진행해 주세요."
+        AuthCode.ACCESS_DENIED -> "권한과 현재 가계 상태를 확인해 주세요."
+        AuthCode.AUTH_CANCELLED -> "인증을 취소했어요."
+        else -> "인증을 완료할 수 없어요. 앱 설정을 확인해 주세요."
+    }
+
+    private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
+}

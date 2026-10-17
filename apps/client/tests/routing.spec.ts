@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/me", (route) => route.fulfill({
+    status: 401, contentType: "application/json",
+    body: JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", request_id: "synthetic" } }),
+  }));
+});
+
 const routes = [
   ["/login", "로그인"], ["/onboarding", "공동 가계 시작"],
   ["/", "함께 살피는 오늘의 살림"], ["/assets", "자산과 부채"],
@@ -26,7 +33,9 @@ test("all 26 specified routes support direct entry and reload without inventing 
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-      await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toBeVisible();
+      if (path !== "/login" && path !== "/onboarding") {
+        await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toBeVisible();
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     });
   }

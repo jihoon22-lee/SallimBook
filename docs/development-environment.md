@@ -54,6 +54,9 @@ CLI SDK 설치기는 공식 명령 도구 build 15859902의 SHA-256을 검증하
 `platform-tools`는 설치 대상에서 제외하므로 기존 ADB를 변경하지 않는다.
 실기기 연결에 필요한 ADB는 별도로 버전을 선택하며 빌드 설치기가 자동 설치·업데이트하지 않는다.
 앱 Gradle dependency lock은 `apps/client/android/app/gradle.lockfile`에 저장한다.
+SB-005의 native 계정 인증 HTTP는 OkHttp 5.4.0으로 고정한다. [공식 변경 기록](https://raw.githubusercontent.com/lysine-dev/okhttp/master/CHANGELOG.md)과
+배포 AAR 메타데이터를 확인했다. 5.5.0은 compileSdk 37을 요구하여 현재 SDK 36 빌드에 사용할 수 없었고,
+5.4.0의 minCompileSdk 36을 선택했다. JVM/Android 호환 검증은 실제 Gradle 빌드와 단위 테스트로 수행한다.
 SB-002에서 SQLAlchemy 2.1.5, Alembic 1.20.0, psycopg 3.3.6을 추가했다.
 개발 PostgreSQL 18.6-bookworm 이미지는 Compose에서 digest까지 고정한다.
 운영 이미지 버전은 해당 Issue에서 호환 시험 후 별도로 고정한다.
@@ -92,7 +95,8 @@ SB-001은 기본 화면·프로세스 health·웹/Android 빌드, SB-002는 Post
 Capacitor sync 전에 web production build가 완료되어야 앱에 최신 웹 자산이 포함된다.
 Gradle wrapper의 CLI 빌드는 공식 지원 경로다([S18](references.md)).
 에뮬레이터 테스트만으로 실제 지문과 하드웨어 보안키 동작을 검증했다고 쓰지 않는다.
-기본 Android 모듈에는 업무 단위 테스트가 아직 없어 Gradle test task의 `NO-SOURCE`는 테스트 통과 수로 세지 않는다.
+Android 계정 인증 정책에는 JVM 단위 테스트가 있다. bridge 계측·Keystore·생체인증은 별도 환경이 필요하며,
+Gradle task의 `NO-SOURCE`나 계측 APK 컴파일을 해당 동작 테스트 통과로 세지 않는다.
 
 ## 6. 환경 구분
 
