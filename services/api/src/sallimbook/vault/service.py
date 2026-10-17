@@ -776,6 +776,7 @@ def cancel_share(session, principal, offer_id, if_match, idempotency_key, *, ste
     def execute():
         _unfrozen(context, state)
         require_version(offer, if_match)
+        _current_key(state, offer.key_version)
         if offer.state != "pending":
             raise DomainError(
                 "VAULT_SHARE_UNAVAILABLE", "진행 중인 공유 요청을 확인해 주세요.", 409
@@ -910,6 +911,19 @@ def start_rotation(session, principal, payload, if_match, idempotency_key, *, st
         for member in members:
             _available_member(context, member.member_id)
         envelopes = _current_envelopes(context, state.current_key_version)
+        # A pending offer wraps the old key. Close it before the staging freeze so
+        # it cannot outlive that key or occupy the recipient's pending-offer slot.
+        for offer in session.scalars(
+            select(VaultShareOffer).where(
+                VaultShareOffer.household_id == principal.household_id,
+                VaultShareOffer.state == "pending",
+            )
+        ):
+            before = offer.version
+            offer.state, offer.closed_at = "cancelled", context.recheck()
+            touch(offer, principal)
+            _audit(context, offer, "vault_share", "archive", ("state",), before)
+        session.flush()
         rotation = VaultVersion(
             **actor_fields(principal),
             key_version=state.next_key_version,

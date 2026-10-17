@@ -977,3 +977,25 @@ def test_card_secret_revision_cas_and_changed_idempotent_payload(vault_app, acto
         ).json()
         assert detail["revision"] == 2 and detail["last_four"] == "1111"
         assert card_detail(client, first, row["id"])["last_four"] == "1111"
+
+
+def test_rotation_closes_pending_share_before_freeze_and_allows_fresh_share(vault_app, actors):
+    first, partner, _ = actors
+    with TestClient(vault_app) as client:
+        initialize(client, first)
+        old = share(client, first, partner)
+        rotation = start_rotation(client, first)
+        offers = client.get("/api/v1/vault/shares", headers=first.headers).json()["items"]
+        assert next(item for item in offers if item["id"] == old["id"])["state"] == "cancelled"
+        assert (
+            client.get(
+                f"/api/v1/vault/shares/{old['id']}/wrapping", headers=partner.headers
+            ).status_code
+            == 409
+        )
+        rotation = prepare(client, first, rotation, [first])
+        assert finalize(client, first, rotation).status_code == 200
+        new = share(client, first, partner, seed=200)
+        assert new["id"] != old["id"]
+        accept(client, partner, new)
+        assert own_wrap(client, partner)["key_version"] == 2
