@@ -506,6 +506,13 @@ JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/S
 JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=2 :app:testDebugUnitTest
 ```
 
-브라우저 모의시험 `documents-native-bridge.spec.ts`의 12개 시나리오는 작성했으며 실행 순서를
-조율 중이다. 실제 Galaxy의 파일 제공자·URI 권한·선택기/회전/잠금·부분 저장·취소 시험,
+브라우저 모의시험은 신규 문서 12개 시나리오를 두 화면 크기에서 실행한 **24개**와 기존
+보험·금융·소모품 브리지 **68개**, 총 **92개**가 통과했다. 기본 Playwright 설정의 baseURL과
+webServer만 18754로 바꾼 임시 config를 사용했고 완료 후 제거했다. Vite 정지와 포트 반환도 확인했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test documents-native-bridge.spec.ts homecare-native-bridge.spec.ts insurance-events-native-bridge.spec.ts insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.documents-native.local.config.ts --workers=2
+```
+
+실제 Galaxy의 파일 제공자·URI 권한·선택기/회전/잠금·부분 저장·취소 시험,
 정식 서명·배포는 실행하지 않았다. 빌드와 합성 JVM 검사를 실기기 성공으로 해석하지 않는다.
