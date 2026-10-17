@@ -230,8 +230,8 @@
       "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
     },
     "docs/testing/passkeys-web.md": {
-      "sha256": "73e32c6407e08bb3e105e875c2f7886ec54eda03e1278b1a422d46a17ad0fcce",
-      "git_sha1": "3a392bb66050a24eafe539e010366792910904cd"
+      "sha256": "0efece15a939fbda00d9cf96fa8c42a63aa4d40e9ec25874cb49a81cad436e60",
+      "git_sha1": "cfde913f5abf050ad7a28ba4ff90f59953aeb4b4"
     }
   }
 }

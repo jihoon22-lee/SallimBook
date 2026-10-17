@@ -193,18 +193,34 @@ class NativePasskeyActivity : AppCompatActivity() {
     private fun loadTarget() {
         if (!ready() || gate != null || targetLoaded || mode !in setOf(REVOKE, DEVICE)) return
         val request = ForegroundRequest().also { gate = it }
-        val path = if (mode == REVOKE) "/api/v1/auth/passkeys?limit=200" else "/api/v1/devices?limit=200"
+        loadTargetPage(request, PasskeyTargetPages(mode == REVOKE, targetId!!, ifMatch!!))
+    }
+
+    private fun loadTargetPage(request: ForegroundRequest, pages: PasskeyTargetPages) {
+        if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return }
+        val path = pages.nextPath ?: return
         auth.request("GET", path, null, request) { outcome -> runOnUiThread {
             if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
-            gate = null
-            val body = outcome.value?.get("body") as? Map<*, *>
-            val row = (body?.get("items") as? List<*>)?.mapNotNull { it as? Map<*, *> }?.singleOrNull { it["id"] == targetId }
-            if (outcome.code != null || outcome.value?.get("status") != 200 || row == null || "\"${row["version"]}\"" != ifMatch) {
+            if (outcome.code != null || outcome.value?.get("status") != 200) {
+                gate = null
                 showFailure(outcome.code ?: AuthCode.ACCESS_DENIED)
-            } else {
+                return@runOnUiThread
+            }
+            val row = try { pages.accept(outcome.value["body"]) } catch (failure: AuthFailure) {
+                gate = null
+                showFailure(failure.code)
+                return@runOnUiThread
+            }
+            if (row != null) {
+                gate = null
                 targetLoaded = true
                 status.text = "대상: ${row["label"]}\n아래 버튼으로 이 항목의 해제를 확인해 주세요."
                 submit.isEnabled = true
+            } else if (pages.nextPath != null) {
+                loadTargetPage(request, pages)
+            } else {
+                gate = null
+                showFailure(AuthCode.ACCESS_DENIED)
             }
         } }
     }
