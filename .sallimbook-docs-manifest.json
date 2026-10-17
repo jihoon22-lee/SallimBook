@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "cded4a621eb35b59adc0a36d0e93cbe4ea69861053d0acdc5d20f3a840e0808a",
-      "git_sha1": "ca9e5e468a7683ecba81ad10eb883dead0ec0ff0"
+      "sha256": "b613a857aae8a740d6cfc382c7bd6f9ad5456d7b5680484a3506c475307485ac",
+      "git_sha1": "fa50b454c4ca2cbb3a671bc00726b02439686799"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -234,8 +234,8 @@
       "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
     },
     "docs/testing/assets-accounts-client.md": {
-      "sha256": "719325e09cd72867a9a2610e4d5682eca24fbf3f4b48f93e607a9bf78b792fc7",
-      "git_sha1": "cc99d9219cc23eb80159791a85e3edf58b91d2ef"
+      "sha256": "2fb2b5fd39a1f21f55e7817e1310dbf5e0385b939e53a8d4f336a2d584f587f7",
+      "git_sha1": "456bc93b5e0bfccfbe1212be2d5103ecc3dd5be6"
     }
   }
 }

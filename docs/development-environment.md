@@ -174,3 +174,7 @@ loopback 18748 포트에서 UI 회귀를 실행한다. `uv run --project service
 
 구현 범위와 검증 결과는 [자산·계좌 UI 검증 기록](testing/assets-accounts-client.md)을 따른다.
 Android 번호 입력·표시 실기기 시험은 빌드/JVM/브라우저 bridge 모의시험과 구분한다.
+
+### 병렬 검증 자원
+
+같은 WSL에서 UI 브라우저 검사를 실행하는 동안 Docker 시험 컨테이너의 생성·시작·중지를 병행하지 않는다. 네트워크 인터페이스 변경이 Chromium의 모듈 요청에 `ERR_NETWORK_CHANGED`를 일으킬 수 있어 순서를 조정한다. 별도 UI 포트는 config 하나의 webServer로 지정한다. `/tmp`가 메모리 기반이고 공간이 부족하면 재생성 가능한 이전 빌드 캐시를 정리하거나 TMPDIR를 충분한 로컬 저장소로 지정한다. 소스·사용자 파일·기존 서비스는 정리 대상이 아니다.
