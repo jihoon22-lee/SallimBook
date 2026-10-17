@@ -189,6 +189,7 @@ internal object FixedCostPolicy {
         terms(row)
         if (row["effective_until"] != null && (row["effective_until"] as String) <= (row["effective_from"] as String)) invalid()
     }
+    fun ruleMetadata(value: Any?): Map<String, Any?> = rule(value)
     private fun rule(value: Any?): Map<String, Any?> {
         // Versions are historical scope, not a 200-row page; 10,000 exceeds the 3 MiB transport capacity.
         val row = shape(value, mapOf("id" to id, "household_id" to id, "version" to positive, "ended_on" to nullable(date),

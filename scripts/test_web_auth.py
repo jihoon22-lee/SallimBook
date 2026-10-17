@@ -45,6 +45,7 @@ def execute(
     months: bool = False,
     comparison: bool = False,
     cashflow: bool = False,
+    insurance: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -72,6 +73,7 @@ def execute(
             months=months,
             comparison=comparison,
             cashflow=cashflow,
+            insurance=insurance,
         )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
@@ -85,6 +87,7 @@ def run_browser(
     months: bool = False,
     comparison: bool = False,
     cashflow: bool = False,
+    insurance: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -116,7 +119,7 @@ def run_browser(
         with tempfile.TemporaryDirectory(prefix="sallimbook-https-") as directory:
             private = Path(directory)
             field_keys = private / "field-keys.json"
-            if finance:
+            if finance or insurance:
                 field_keys.touch(mode=0o600)
                 field_keys.write_text(
                     json.dumps(
@@ -175,7 +178,7 @@ def run_browser(
                     webauthn_rp_id=host if passkeys else None,
                     webauthn_web_origins=[origin] if passkeys else [],
                     webauthn_native_origins=[],
-                    field_encryption_key_file=field_keys if finance else None,
+                    field_encryption_key_file=field_keys if finance or insurance else None,
                 )
                 app = create_app(settings)
 
@@ -279,6 +282,7 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_MONTHS": "1" if months else "0",
                         "SALLIMBOOK_HTTPS_COMPARISON": "1" if comparison else "0",
                         "SALLIMBOOK_HTTPS_CASHFLOW": "1" if cashflow else "0",
+                        "SALLIMBOOK_HTTPS_INSURANCE": "1" if insurance else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -289,7 +293,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months|cashflow)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance|months|cashflow|insurance)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -351,6 +355,10 @@ if __name__ == "__main__":
         "--cashflow", action="store_true",
         help="Verify manual income, cards, recurring payments and closure review with real HTTPS.",
     )
+    parser.add_argument(
+        "--insurance", action="store_true",
+        help="Verify insurance policies, medical cases and actual financial events with real HTTPS.",
+    )
     args = parser.parse_args()
     with test_service_lock():
         execute(
@@ -359,4 +367,5 @@ if __name__ == "__main__":
             months=args.months or args.comparison,
             comparison=args.comparison,
             cashflow=args.cashflow,
+            insurance=args.insurance,
         )
