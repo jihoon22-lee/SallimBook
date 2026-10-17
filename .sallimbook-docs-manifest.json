@@ -122,8 +122,8 @@
       "git_sha1": "34cb6de1be33e6f786516c326ef84fd6f722d021"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "87b263db56c1ae43f307eaec77cf1b13dea1bbb2fc4efec946f41c1783fe9c86",
-      "git_sha1": "3072b9c40263e99198d5d2975e59a56ee7dd122b"
+      "sha256": "6a2845f5c75a2bbec9c4e697675626fc11d3f440572f0e0adf608e3122ccc455",
+      "git_sha1": "fce873f8db1f1456caa769a2eafa19cdccd13815"
     },
     "docs/README.md": {
       "sha256": "6cb1d0332275d9bc158d2e855ddc40e645800c7f6932bcd8443b28e13089c414",
@@ -226,8 +226,8 @@
       "git_sha1": "616137f1bb35641f263dc625744b8f2a857be681"
     },
     "docs/testing/passkeys-web.md": {
-      "sha256": "0ffc2a8c5e4917630d6b7166f3079195c038e9bfef097ed80cd33736966ab87a",
-      "git_sha1": "eff57f649151381e78b9e97012c2af7b02780ac9"
+      "sha256": "0cd7cbd733b3706915dfecec81130634d2ba674852122201229c25ef2e1ab695",
+      "git_sha1": "27adc2b410f7b6bffd125eac24e385165479a16e"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
