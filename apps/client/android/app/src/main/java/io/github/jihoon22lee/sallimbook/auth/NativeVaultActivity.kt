@@ -602,7 +602,7 @@ class NativeVaultActivity : AppCompatActivity() {
         if(controls.none { it.text=="동일 시작 요청 다시 확인" }) button("동일 시작 요청 다시 확인") { if(retryCommand===command) commitStart(command) }
     }
     private class RotationProgress(val material:NativeVaultMaterial?,val rotationId:String,val retry:NativeVaultCommand?,val code:String?,
-        val cursor:NativeVaultRotationCursor?=null,val advance:Boolean=false) {
+        val cursor:NativeVaultRotationCursor?=null,val advance:Boolean=false,val resumeSnapshot:NativeVaultSnapshot?=null) {
         fun discard() { material?.discard(); cursor?.discard() }
     }
     private var rotationProgress:RotationProgress?=null
@@ -633,7 +633,8 @@ class NativeVaultActivity : AppCompatActivity() {
                 if(manifest["state"]!="staging") throw NativeVaultFailure("VAULT_ROTATION_UNAVAILABLE")
                 val newKey=material.nextKey ?: throw NativeVaultFailure("VAULT_NOT_PREPARED")
                 NativeVaultActions.verify(newKey,c.ownWrapping(fresh,manifest),fresh.householdId,NativeVaultWire.version(manifest["key_version"]))
-                val progress=cursor ?: NativeVaultRotationCursor(manifest).also { cursor=it }
+                val progress=cursor ?: NativeVaultRotationCursor(manifest,material.key,newKey).also { cursor=it }
+                progress.checkKeys(material.key,newKey)
                 val card=progress.next(manifest)
                 // Exactly one card per foreground work lease; the next card receives its own 60s gate.
                 if(card!=null) {
@@ -664,13 +665,18 @@ class NativeVaultActivity : AppCompatActivity() {
                 val code=when(failure) { is NativeVaultFailure -> failure.code; is AuthFailure -> failure.code.name; is VaultCryptoFailure -> failure.code.name; else -> "ACCESS_DENIED" }
                 if(code=="NETWORK_UNAVAILABLE" && failedCommand!=null) {
                     retained=true; RotationProgress(material,rotationId,failedCommand,code,cursor)
+                } else if(code in setOf("REAUTHENTICATION_REQUIRED","STEP_UP_REQUIRED")) {
+                    // Only continuity metadata survives account reauth; both raw keys are discarded now.
+                    material.discard(); retained=true
+                    RotationProgress(null,rotationId,failedCommand,code,cursor,resumeSnapshot=material.snapshot)
                 } else throw failure
             } finally { if(!retained) { material.discard(); cursor?.discard() } }
         },done={ progress ->
             if(progress.advance) {
                 status.text="카드 ${progress.cursor!!.verifiedCount}/${progress.cursor.total}개 확인·준비 완료"
                 continueRotation(progress.material!!,progress.rotationId,previous=progress.cursor)
-            } else if(progress.code==null) { completed=true; progress.discard(); success("새 키로 전환했어요. 이 기기의 보관함을 다시 등록하고 보안코드는 기기에서 다시 입력해 주세요.") }
+            } else if(progress.resumeSnapshot!=null) rotationReauthentication(progress)
+            else if(progress.code==null) { completed=true; progress.discard(); success("새 키로 전환했어요. 이 기기의 보관함을 다시 등록하고 보안코드는 기기에서 다시 입력해 주세요.") }
             else {
                 rotationProgress=progress; heading(); failure(progress.code)
                 button("같은 회전 요청 확인 후 계속") { val retained=rotationProgress ?: return@button; rotationProgress=null; continueRotation(retained.material!!,retained.rotationId,retained.retry,retained.cursor) }
@@ -683,6 +689,61 @@ class NativeVaultActivity : AppCompatActivity() {
         if(finished["state"]!="current" || current.keyVersion==material.snapshot.keyVersion ||
             NativeVaultWire.version(finished["key_version"])!=current.keyVersion) throw NativeVaultFailure("VAULT_KEY_VERSION_CONFLICT")
         NativeVaultActions.verify(material.nextKey ?: throw NativeVaultFailure("VAULT_NOT_PREPARED"),c.ownWrapping(current),current.householdId,current.keyVersion)
+    }
+    private fun rotationReauthentication(progress:RotationProgress) {
+        rotationProgress=progress; heading()
+        status.text="계정 재인증이 필요해 보관함 키를 지웠어요. 확인한 카드 진행 정보는 이 화면에서만 유지합니다."
+        label("현재 계정의 로그인 암호로 재인증한 뒤, 기존·새 보관함 암호로 같은 키를 다시 확인합니다. 화면을 닫거나 벗어나면 진행 정보도 지워집니다.")
+        val password=input("현재 계정 로그인 암호")
+        button("로그인 암호로 재인증") {
+            val secret=take(password)
+            reauthenticateAccount(secret) {
+                if(rotationProgress!==progress) { close(); return@reauthenticateAccount }
+                rotationUnlockAfterReauthentication(progress)
+            }
+        }
+        button("닫고 나중에 이어가기",true,::close)
+    }
+    private fun reauthenticateAccount(password:CharArray,done:()->Unit) {
+        val id=if(ready() && work==null && prompt==null) life.beginWork() else null
+        if(id==null) { password.fill('\u0000'); return }
+        val gate=ForegroundRequest().also { work=it; activeWorkId=id }; busy(true)
+        auth.reauthenticate(password,gate) { result ->
+            password.fill('\u0000')
+            runOnUiThread {
+                if(work!==gate || !gate.isActive() || !ready()) { gate.cancel(); if(work===gate) { work=null; activeWorkId=null }; return@runOnUiThread }
+                work=null; activeWorkId=null; gate.cancel(); busy(false)
+                if(!life.consumeWork(id,false,::ready) {
+                    if(result.code==null && result.value?.get("status")=="authenticated") done()
+                    else failure(result.code?.name ?: "AUTH_FAILED")
+                }) close()
+            }
+        }
+    }
+    private fun rotationUnlockAfterReauthentication(progress:RotationProgress) {
+        heading(); status.text="계정 재인증을 완료했어요. 같은 보관함 키를 확인한 뒤 다음 카드부터 계속합니다."
+        val old=input("현재 키의 내 보관함 암호"); val fresh=input("이 회전에 준비한 새 보관함 암호")
+        button("보관함 키 재확인 후 계속") {
+            val a=take(old); val b=take(fresh)
+            runNative(discard=NativeVaultMaterial::discard,supplied=listOf(a,b),task={ c ->
+                val (material,_)=unlock(c,a); var next:ByteArray?=null
+                try {
+                    val expected=progress.resumeSnapshot ?: throw NativeVaultFailure("ACCESS_DENIED")
+                    sameIdentity(expected,material.snapshot)
+                    if(expected.keyVersion!=material.snapshot.keyVersion) throw NativeVaultFailure("VAULT_KEY_VERSION_CONFLICT")
+                    val manifest=c.rotation(material.snapshot,progress.rotationId)
+                    progress.cursor?.check(manifest)
+                    next=NativeVaultActions.unlock(b,c.ownWrapping(material.snapshot,manifest),material.snapshot.householdId,
+                        material.snapshot.memberId,NativeVaultWire.version(manifest["key_version"]))
+                    progress.cursor?.checkKeys(material.key,next)
+                    NativeVaultMaterial(material.snapshot,material.key,next)
+                } catch(failure:Exception) { material.discard(); next?.fill(0); throw failure }
+            },done={ material ->
+                if(rotationProgress!==progress) { material.discard(); close() }
+                else { rotationProgress=null; continueRotation(material,progress.rotationId,progress.retry,progress.cursor) }
+            })
+        }
+        button("닫고 나중에 이어가기",true,::close)
     }
     private fun close() {
         entry?.cancel(); work?.cancel(); work=null; activeWorkId=null; life.lock(); prompt?.signal?.cancel(); prompt?.discard(); prompt=null

@@ -178,7 +178,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 authorize(gate, AppRequestKind.REAUTHENTICATE)
                 requireAvailable()
                 gate.check()
-                val token = access(gate)
+                val token = access(gate, NativeVaultAccess.REQUIRED_MILLIS)
                 payload = JSONObject().put("password", String(password))
                 password.fill('\u0000')
                 val response = http.send("POST", "/api/v1/auth/native/reauthenticate", gate,
