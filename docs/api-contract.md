@@ -368,7 +368,11 @@ target.kind는 policy/case/medical_node/expense/claim/appliance/asset 중 하나
 응답에는 저장소 경로·암호화 키·nonce가 없으며 다운로드는 no-store/nosniff/CSP sandbox와
 attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만들지 않는다.
 pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
-정리 명령과 검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
+업로드 저장 전에 가계·전체 byte/count 한도를 영속 예약하며 한도 초과는
+413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유 부족은 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
+예약에는 암호문 tag·실패 업로드·삭제 후 유예 파일도 포함하며 물리 정리 확인 뒤 용량을 반환한다.
+정리 명령·기본 한도·설정·검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
+7개 부모 상세의 공유 패널·원본 전송·응답 유실 재시도·Android 보호 화면 연결은 [첨부 UI 검증](testing/documents-client.md)을 따른다.
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
@@ -389,7 +393,7 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 
 `/{policy_id}/premium-links` 목록/생성과 `/{link_id}` PATCH(active)로 기존 고정비 규칙에 연결한다. 한 계약은 여러 규칙을 가질 수 있고 한 규칙은 한 계약에 귀속한다. 연결 해제는 이력을 남기며 규칙·납부를 삭제하거나 금액을 복제하지 않는다. 연결 응답의 보험료·주기·결제수단은 현재와 과거의 동일한 recurring rule version에서 읽으며 금액 수정도 기존 고정비 규칙 변경 API를 사용한다. 납부 누계로 자산을 자동 생성하지 않는다. 확인된 평가액용 금융 자산을 선택해 연결할 수 있다.
 
-증권번호는 create/PATCH의 `policy_number`로 저장하되 일반 응답은 `masked_number`/`has_number`만 반환한다. `/policies/{policy_id}/reveal` POST는 현재 세션의 최근 로그인 검증·가계 권한·감사와 no-store를 거쳐 30초 표시용 값을 반환한다. 서버 필드 키 파일이 없어도 번호 없는 메타데이터와 번호 삭제는 사용할 수 있다. Android 원문 입력/표시는 후속 네이티브 보호 화면에서 연결하며 JS 메타데이터 bridge에 번호를 포함하지 않는다.
+증권번호는 create/PATCH의 `policy_number`로 저장하되 일반 응답은 `masked_number`/`has_number`만 반환한다. `/policies/{policy_id}/reveal` POST는 현재 세션의 최근 로그인 검증·가계 권한·감사와 no-store를 거쳐 30초 표시용 값을 반환한다. 서버 필드 키 파일이 없어도 번호 없는 메타데이터와 번호 삭제는 사용할 수 있다. Android 원문 입력/표시는 네이티브 보호 화면으로 연결했으며 JS 메타데이터 bridge에 번호를 포함하지 않는다. 웹은 별도의 일시 입력·30초 표시 화면을 사용한다.
 
 사건 `/insurance/cases`와 `/{case_id}`는 계약에 종속되지 않는다. 환자·실제 날짜·치료 상태(ongoing/ended)와 정산 상태(open/settled)를 독립 관리한다. PATCH에는 If-Match와 사유가 필요하며 변경 전후 내용은 삭제 불가능한 typed 이력으로 보존한다. `/{case_id}/history`는 version cursor를 제공한다. 목록에는 진단명/코드를 포함하지 않는다. 치료 종료에는 종료일이 필요하며 재개방 시 종료일을 비운다.
 
@@ -426,6 +430,8 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 
 금전 생성·정정·무효·환불·반환·배분 연결 변경은 Idempotency-Key를 요구한다. 기존 대상에 적용하는 명령은 If-Match도 요구하며 환불/반환 생성에는 부모 의료비/지급의 버전을 사용한다. 결과는 변경 당시 `{id, version}` 참조이고 재전송해도 변하지 않는다. 최신 상태와 가능한 후속 동작은 GET으로 다시 조회한다. 청구 메타데이터 수정은 If-Match와 사유를 요구한다. 소득 화면은 실제 보험금 원본을 읽기 전용으로 투영하며 계좌 잔액이나 자산 스냅샷을 자동 변경하지 않는다.
 
+보험 계약·사건·금전 화면의 생성 client/Android adapter 연결과 실제 HTTPS 검증은 [보험 UI 검증 기록](testing/insurance-client.md)을 따른다.
+
 ### SB-024~SB-027 가전·공용 재고·교체
 
 `/api/v1/appliances`와 `/consumables`는 POST/목록 GET, `/{id}`는 GET/PATCH를 제공한다.
@@ -453,3 +459,45 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 `replacement_due`는 날짜 미확인일 때 null, `purchase_needed`는 공용 재고가 기기별 교체 수량보다 적을 때 true이며
 `low_stock`은 별도의 재고 부족 임계와 비교한다. 자산의 선택 월은 입력으로 받지 않는다. 모든 목록은 UUID cursor와 최대 200개 limit로 나눈다.
 첨부파일의 연결·다운로드는 SB-023의 별도 typed 문서 계약을 사용한다.
+
+가전·재고·교체 24개 계약의 웹/Android 화면 연결과 홈의 월/오늘 분리는 [가전·재고 UI 검증](testing/homecare-client.md)을 따른다.
+
+
+### SB-028~SB-032 보관함 서버
+
+보관함은 클라이언트가 암호화한 opaque envelope만 받는다. 일반 카드 응답에 `has_secret`을 추가하며,
+현재 키의 미폐기 비밀 존재 여부를 나타낸다. PAN·유효기간·CVC 평문은 입력/응답 계약에 없다.
+정확한 포맷·AAD·KDF와 길이는 [보관함 v1 결정](adr/vault-format-v1.md)을 따른다.
+
+| `/api/v1` 아래 경로 | 동작·버전 기준 |
+|---|---|
+| `/vault/status` | GET 가계 상태·본인 권한·구성원·회전 필요 여부 |
+| `/vault/initialize` | POST 초기 key check/member/recovery bundle; If-Match 없음 |
+| `/vault/wrappings/me` | GET 현재 본인 wrapping+key check, PUT 본인 암호 변경; wrapping version |
+| `/vault/recovery-wrap` | GET 현재 복구 wrapping+key check; 최근 인증 필요 |
+| `/vault/recover` | POST 본인 wrapping+복구 wrapping 동시 교체; vault status version |
+| `/vault/members/{member_id}/revoke` | POST 구성원 권한 철회; membership version |
+| `/vault/shares` | GET 본인 관련 공유 이력/cursor, POST 공유 생성; vault status version |
+| `/vault/shares/{offer_id}/wrapping` | GET 대상 본인만 미만료 wrapping 조회; 최근 인증 필요 |
+| `/vault/shares/{offer_id}/accept`, `/cancel` | POST 수락/취소; offer version |
+| `/cards/{card_id}/secret-envelope` | GET 현재 암호문, PUT 새 비밀, DELETE 모든 온라인 버전 비밀 폐기; card version |
+| `/vault/rotations` | POST 새 버전/원본 manifest 예약; vault status version |
+| `/vault/rotations/{rotation_id}` | GET 준비 상태·카드/구성원 manifest |
+| `/vault/rotations/{rotation_id}/prepare` | POST 새 key check/전체 member/recovery bundle; rotation version |
+| `/vault/rotations/{rotation_id}/cards/{card_id}` | PUT 원본 ID/revision에 해당하는 새 암호문, GET 준비된 암호문; rotation version |
+| `/vault/rotations/{rotation_id}/wrappings/me` | GET 준비된 본인 wrapping+key check |
+| `/vault/rotations/{rotation_id}/finalize`, `/abort` | POST 전체 원자 전환/회전 중단; rotation version |
+
+모든 mutation은 Idempotency-Key를 요구하며 재전송 응답은 당시 `{id,version}` 참조다.
+If-Match는 표의 해당 metadata version을 사용하며 key_version이나 카드 secret revision과 다르다.
+공유·복구·rewrap·철회·회전은 최근 5분의 계정 인증 또는 목적/대상에 묶인 일회성 step-up을 요구한다.
+구성원 관리는 `vault.membership`과 대상 member ID, 회전은 `vault.key_rotation`과 household ID다.
+토큰과 평문 비밀을 멱등 해시·감사 원문에 넣지 않는다. 모든 응답은 no-store이며 일반 가계 가입이
+보관함 권한을 주지 않는다. `key_check_confirmed`는 client 동의 기록이며 서버 인증 증거가 아니다.
+
+회전은 종료 카드까지 현재 모든 미폐기 비밀과 활성 구성원을 고정한다. 진행 중인 공유는 종료하고
+준비 중 비밀/권한/rewrap 변경을 동결한다. 현재 키 읽기는 가능하며 모든 새 암호문과 wrapping이
+완성된 뒤 DB에서 current를 한 번에 전환한다. abort 버전과 nonce는 다시 쓰지 않는다.
+철회된 구성원은 즉시 opaque 조회가 막히고, 남은 구성원도 새 비밀 쓰기/재공유 전에 HVK 회전이 필요하다.
+비밀 DELETE는 현재·retired·aborted 암호문을 NULL로 폐기하지만 nonce·원본 참조·감사·카드 metadata는 남긴다.
+온라인 폐기가 이전 백업/기기 사본까지 회수하지는 않는다. 실제 검증 범위는 [서버 기록](testing/vault-server.md)에 있다.

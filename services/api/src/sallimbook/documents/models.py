@@ -124,3 +124,23 @@ class DocumentLink(ActorFields, EntityMixin, Base):
     active: Mapped[bool]
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     end_reason: Mapped[str | None] = mapped_column(String(500))
+
+
+class DocumentStorageReservation(Base):
+    """Committed before disk writes; released only after reconciliation proves absence."""
+
+    __tablename__ = "document_storage_reservations"
+    __table_args__ = (
+        household_fk("document_storage_reservations", "document_id", "documents"),
+        CheckConstraint("storage_key ~ '^[0-9a-f]{32}[.]sbdoc$'", name="key"),
+        CheckConstraint(f"size_bytes BETWEEN 17 AND {MAX_DOCUMENT_BYTES + 16}", name="size"),
+        Index("ix_document_reservations_active", "released_at", "household_id"),
+    )
+    storage_key: Mapped[str] = mapped_column(String(38), primary_key=True)
+    household_id: Mapped[UUID]
+    document_id: Mapped[UUID]
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

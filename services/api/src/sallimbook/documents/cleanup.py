@@ -11,16 +11,18 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, text
 
-from sallimbook.documents.models import Document
+from sallimbook.documents.models import Document, DocumentStorageReservation
+from sallimbook.documents.quota import QUOTA_LOCK, STORAGE_BARRIER
 from sallimbook.documents.storage import STORAGE_NAME, PrivateStore
 
 
 def cleanup_files(session, settings, *, apply=False, now=None):
     now = now or datetime.now(UTC)
     cutoff = now - timedelta(hours=24)
-    # Uploads take the shared form before writing, retained through the metadata commit.
+    # Uploads use the same exclusive barrier, retained through their metadata commit.
     # This barrier avoids deleting content while its transaction is not visible yet.
-    session.execute(text("SELECT pg_advisory_xact_lock(91544042505043)"))
+    session.execute(text(f"SELECT pg_advisory_xact_lock({STORAGE_BARRIER})"))
+    session.execute(text(f"SELECT pg_advisory_xact_lock({QUOTA_LOCK})"))
     keep = set(
         session.scalars(
             select(Document.storage_key).where(
@@ -53,5 +55,20 @@ def cleanup_files(session, settings, *, apply=False, now=None):
                     counts["removed"] += 1
         if apply:
             os.fsync(directory)
+            # Release only after durable removal or confirmed absence. A failed upload's
+            # committed reservation survives rollback and remains charged for the grace period.
+            reservations = session.scalars(
+                select(DocumentStorageReservation).where(
+                    DocumentStorageReservation.released_at.is_(None),
+                    DocumentStorageReservation.created_at <= cutoff,
+                )
+            )
+            for reservation in reservations:
+                if reservation.storage_key in keep:
+                    continue
+                try:
+                    os.stat(reservation.storage_key, dir_fd=directory, follow_symlinks=False)
+                except FileNotFoundError:
+                    reservation.released_at = now
     session.commit()
     return counts

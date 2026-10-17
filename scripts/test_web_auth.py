@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -36,6 +36,7 @@ from sallimbook.main import create_app
 from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 from test_database import COMPOSE, ROOT, test_service_lock, validate_test_url
+from test_document_runtime import document_runtime
 
 
 def execute(
@@ -45,6 +46,9 @@ def execute(
     months: bool = False,
     comparison: bool = False,
     cashflow: bool = False,
+    insurance: bool = False,
+    homecare: bool = False,
+    documents: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -72,6 +76,9 @@ def execute(
             months=months,
             comparison=comparison,
             cashflow=cashflow,
+            insurance=insurance,
+            homecare=homecare,
+            documents=documents,
         )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
@@ -85,6 +92,9 @@ def run_browser(
     months: bool = False,
     comparison: bool = False,
     cashflow: bool = False,
+    insurance: bool = False,
+    homecare: bool = False,
+    documents: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -113,10 +123,12 @@ def run_browser(
                 ),
                 "synthetic-browser-harness",
             )
-        with tempfile.TemporaryDirectory(prefix="sallimbook-https-") as directory:
+        with tempfile.TemporaryDirectory(prefix="sallimbook-https-") as directory, (
+            document_runtime() if documents else nullcontext({})
+        ) as document_settings:
             private = Path(directory)
             field_keys = private / "field-keys.json"
-            if finance:
+            if finance or insurance or documents:
                 field_keys.touch(mode=0o600)
                 field_keys.write_text(
                     json.dumps(
@@ -175,7 +187,9 @@ def run_browser(
                     webauthn_rp_id=host if passkeys else None,
                     webauthn_web_origins=[origin] if passkeys else [],
                     webauthn_native_origins=[],
-                    field_encryption_key_file=field_keys if finance else None,
+                    field_encryption_key_file=field_keys if finance or insurance or documents else None,
+                    document_storage_directory=private / "document-storage" if documents else None,
+                    **document_settings,
                 )
                 app = create_app(settings)
 
@@ -279,6 +293,9 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_MONTHS": "1" if months else "0",
                         "SALLIMBOOK_HTTPS_COMPARISON": "1" if comparison else "0",
                         "SALLIMBOOK_HTTPS_CASHFLOW": "1" if cashflow else "0",
+                        "SALLIMBOOK_HTTPS_INSURANCE": "1" if insurance else "0",
+                        "SALLIMBOOK_HTTPS_HOMECARE": "1" if homecare else "0",
+                        "SALLIMBOOK_HTTPS_DOCUMENTS": "1" if documents else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -289,7 +306,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months|cashflow)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -351,6 +368,15 @@ if __name__ == "__main__":
         "--cashflow", action="store_true",
         help="Verify manual income, cards, recurring payments and closure review with real HTTPS.",
     )
+    parser.add_argument(
+        "--insurance", action="store_true",
+        help="Verify insurance policies, medical cases and actual financial events with real HTTPS.",
+    )
+    parser.add_argument(
+        "--homecare", action="store_true",
+        help="Verify appliances, shared stock, replacement and dashboard with real HTTPS.",
+    )
+    parser.add_argument("--documents", action="store_true", help="Verify attachments with the real pinned scanner/OCR tool container and HTTPS API.")
     args = parser.parse_args()
     with test_service_lock():
         execute(
@@ -359,4 +385,7 @@ if __name__ == "__main__":
             months=args.months or args.comparison,
             comparison=args.comparison,
             cashflow=args.cashflow,
+            insurance=args.insurance,
+            homecare=args.homecare,
+            documents=args.documents,
         )

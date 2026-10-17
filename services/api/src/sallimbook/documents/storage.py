@@ -111,7 +111,7 @@ class PrivateStore:
             if directory is not None:
                 os.close(directory)
 
-    def put(self, row, content, keyring):
+    def put(self, row, content, keyring, *, storage_key=None):
         if (
             not 1 <= len(content) <= MAX_DOCUMENT_BYTES
             or len(content) != row.size_bytes
@@ -123,7 +123,9 @@ class PrivateStore:
         version = keyring.active_key_version
         nonce = secrets.token_bytes(12)
         encrypted = AESGCM(_key(keyring, version)).encrypt(nonce, content, _aad(row, version))
-        name = uuid4().hex + ".sbdoc"
+        name = storage_key if storage_key is not None else uuid4().hex + ".sbdoc"
+        if not isinstance(name, str) or not STORAGE_NAME.fullmatch(name):
+            raise unavailable()
         with self.directory() as directory:
             descriptor = os.open(
                 name,

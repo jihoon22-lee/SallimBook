@@ -73,8 +73,22 @@ jobs:
           version: "0.12.5"
           python-version: "3.14.7"
           enable-cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: "9.15.9"
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sallimbook/client exec playwright install --with-deps chromium
+      - run: uv sync --project services/api --frozen
       # Synthetic bytes only; no credentials, mounts or runtime network access.
       - run: uv run --no-project python scripts/test_document_tools.py
+      - run: uv run --project services/api ruff check scripts/test_document_runtime.py scripts/test_web_auth.py
+      - run: uv run --project services/api python scripts/setup_dev.py
+      - run: uv run --project services/api python scripts/test_web_auth.py --documents
 
   types-contract:
     name: Type checks and generated API contract
@@ -189,6 +203,8 @@ jobs:
       - run: uv run --project services/api python scripts/test_web_auth.py
       - run: uv run --project services/api python scripts/test_web_auth.py --passkeys
       - run: uv run --project services/api python scripts/test_web_auth.py --finance
+      - run: uv run --project services/api python scripts/test_web_auth.py --insurance
+      - run: uv run --project services/api python scripts/test_web_auth.py --homecare
       - run: uv run --project services/api python scripts/test_web_auth.py --months
       - run: uv run --project services/api python scripts/test_web_auth.py --comparison
       - run: uv run --project services/api python scripts/test_web_auth.py --cashflow
