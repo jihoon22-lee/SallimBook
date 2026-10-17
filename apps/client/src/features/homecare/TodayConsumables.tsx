@@ -1,0 +1,26 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
+import { ApiError } from "../../platform/api";
+import { SessionStatus } from "../auth/AuthFeedback";
+import { useAuth } from "../auth/AuthProvider";
+import { dateLabel, todaySeoul } from "../finance/dates";
+import { useResource } from "../finance/queries";
+import { useHomecareApi } from "./api";
+import type { Schema } from "./model";
+import { ResourceFeedback } from "./HomecareSupport";
+export async function completeToday(read: (cursor?: string) => Promise<Schema["HomecareStatusResponse"]>): Promise<Schema["HomecareStatusResponse"]> {
+  const first = await read(); const items = [...first.items]; let cursor = first.next_cursor; const seen = new Set<string>();
+  while (cursor) { if (seen.has(cursor) || seen.size >= 100) throw new ApiError(0, "REQUEST_FAILED"); seen.add(cursor); const page = await read(cursor); if (page.as_of !== first.as_of || page.items.some((row) => row.as_of !== first.as_of || items.some((old) => old.id === row.id))) throw new ApiError(409, "VERSION_CONFLICT"); items.push(...page.items); cursor = page.next_cursor; }
+  if (items.some((row) => row.as_of !== first.as_of)) throw new ApiError(409, "VERSION_CONFLICT");
+  return { ...first, items, next_cursor: null };
+}
+function TodayList({ compact }: { compact: boolean }) {
+  const api = useHomecareApi(); const [filter, setFilter] = useState("attention");
+  const resource = useResource(useCallback(() => completeToday((cursor) => api.getHomecareStatus({ query: { cursor, limit: 200 } })), [api]));
+  useEffect(() => { let observedDay = todaySeoul(); const check = () => { const day = todaySeoul(); if (day !== observedDay) { observedDay = day; void resource.reload(); } }; const timer = window.setInterval(check, 30000); window.addEventListener("focus", check); document.addEventListener("visibilitychange", check); return () => { window.clearInterval(timer); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); }; }, [resource.reload]);
+  const shown = resource.data?.items.filter((row) => filter === "all" || filter === "due" && row.replacement_due === true || filter === "purchase" && row.purchase_needed || filter === "unknown" && row.replacement_due === null || filter === "attention" && (row.replacement_due !== false || row.purchase_needed || row.low_stock)) ?? [];
+  return <><ResourceFeedback resource={resource} />{resource.data && !resource.error && !resource.loading && <><p className="eyebrow">오늘 기준 · {dateLabel(resource.data.as_of)}</p><div className="form-field"><label>오늘 소모품 보기<select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="attention">확인할 항목</option><option value="due">교체 확인 필요</option><option value="purchase">구매 필요</option><option value="unknown">교체일 미확인</option><option value="all">모든 연결</option></select></label></div>{!resource.data.items.length ? <p>사용 중인 가전과 소모품 연결이 없어요. 소모품을 기기에 연결하면 여기서 오늘 상태를 확인할 수 있어요.</p> : !shown.length ? <p>선택한 조건에 해당하는 소모품이 없어요. 모든 연결에서 다음 확인일을 볼 수 있어요.</p> : <ul className="finance-list">{shown.slice(0, compact ? 4 : undefined).map((row) => <li key={row.id}><h3><Link to={`/appliance-consumables/${row.id}`}>{row.appliance_name} · {row.consumable_name}</Link></h3><p>{row.appliance_location || "장소 미입력"} · {row.sku_or_model || "규격 미입력"}</p><p>{row.replacement_due === null ? "교체 기준일 미확인" : row.replacement_due ? "교체 확인 필요" : "다음 확인일 전"} · {row.purchase_needed ? "교체 수량 부족 · 구매 필요" : "교체할 재고 있음"}{row.low_stock && " · 재고 부족 임계 이하"}</p><p>다음 확인 {row.next_check_on ? dateLabel(row.next_check_on) : "미확인"} · 공용 재고 {row.stock_quantity.toLocaleString("ko-KR")} {row.unit}</p><div className="form-actions"><Link to={`/appliance-consumables/${row.id}/replace`}>교체 기록</Link><Link to={`/consumables/${row.consumable_id}/stock/new`}>입고 기록</Link></div></li>)}</ul>}{compact && shown.length > 4 && <p><Link to="/consumables">나머지 {shown.length - 4}개 확인할 소모품 보기</Link></p>}<button type="button" onClick={() => void resource.reload()}>오늘 소모품 상태 새로 확인</button></>}</>;
+}
+export function TodayConsumables({ compact = false }: { compact?: boolean }) {
+  const { state } = useAuth(); return <section className="card" aria-labelledby={compact ? "consumables-title" : "today-consumables-title"}><p className="eyebrow">오늘 기준</p><h2 id={compact ? "consumables-title" : "today-consumables-title"}>살펴볼 소모품</h2><p className="muted">과거 자산 월을 골라도 소모품은 서울의 오늘 상태예요. 직접 정한 교체 기준과 현재 공용 재고를 확인해요.</p>{state.status === "authenticated" ? <TodayList compact={compact} /> : compact ? <><p>로그인하면 우리 가계의 공용 재고와 기기별 교체 상태를 확인할 수 있어요.</p><Link to="/login">로그인하기</Link></> : <SessionStatus />}<Link className="button-link" to={compact ? "/consumables" : "/appliances"}>{compact ? "소모품 전체 관리" : "가전에 소모품 연결하기"}</Link></section>;
+}
