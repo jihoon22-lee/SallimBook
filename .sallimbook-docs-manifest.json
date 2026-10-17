@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "a6a6be5f36f53430417dcd8f9af7c68472b92910e793a0105e3b560a4821d6a4",
-      "git_sha1": "98e141685d9970e0370fc4f10d2ed4cdba5910d0"
+      "sha256": "7b95a9c9bc23cf9c79a2881f154c3124113598bd572263afc86cd7d76e471fd3",
+      "git_sha1": "33aaa1da9adf74c7224b803b73bce6509777f31b"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
