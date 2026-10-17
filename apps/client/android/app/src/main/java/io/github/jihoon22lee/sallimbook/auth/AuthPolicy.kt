@@ -259,6 +259,7 @@ internal object AuthPolicy {
             "INVALID_PAYMENT_SPLIT" to (422 to "원금·이자 합계와 실제 납부액을 확인해 주세요."),
             "INVALID_ASSET" to (422 to "자산 입력 항목을 확인해 주세요."),
             "OWNER_UNAVAILABLE" to (422 to "소유자를 확인해 주세요."),
+            "ASSET_KIND_IN_USE" to (409 to "월별 금액 기록이 있어 자산·부채 구분을 바꿀 수 없습니다."),
             "ASSET_IN_USE" to (409 to "연결된 기록이 있는 자산입니다."),
             "ASSET_ALREADY_LINKED" to (409 to "이미 계좌와 연결된 자산입니다."),
             "FINANCIAL_ASSET_REQUIRED" to (422 to "금융 자산을 선택해 주세요."),

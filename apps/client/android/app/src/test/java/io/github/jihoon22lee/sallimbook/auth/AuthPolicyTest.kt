@@ -128,6 +128,13 @@ class AuthPolicyTest {
         assertFalse((AuthPolicy.safeError(409, invalidVersion, uuid)!!["error"] as Map<*, *>).containsKey("current_version"))
     }
 
+    @Test fun assetKindRestrictionIsNotAStaleVersionConflict() {
+        val body = mapOf("error" to mapOf("code" to "ASSET_KIND_IN_USE", "message" to "synthetic"))
+        val error = AuthPolicy.safeError(409, body, uuid)!!["error"] as Map<*, *>
+        assertEquals("ASSET_KIND_IN_USE", error["code"])
+        assertEquals("월별 금액 기록이 있어 자산·부채 구분을 바꿀 수 없습니다.", error["message"])
+    }
+
     @Test fun metadataProjectionMatchesTheGeneratedMemberAndDeviceContractsOnly() {
         val member = mapOf("user_id" to uuid, "member_id" to uuid, "household_id" to uuid,
             "display_name" to "합성 구성원", "role" to "owner")
