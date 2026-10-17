@@ -51,9 +51,9 @@ docker compose -f /PRIVATE_CONFIG/NEW_RENDERED_DIRECTORY/compose.json config --q
 uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/NEW_RENDERED_DIRECTORY
 ```
 
-`build-inputs.json`은 commit, 원본 API lock SHA와 모든 빌드 입력 해시를 기록한다. API는 `uv export --frozen --no-dev --no-emit-project`의 hash-pinned requirements를 사용한다. 이미지/APK 빌드는 임시 `git archive` checkout에서 수행하므로 원래 작업 트리의 ignored `.env`, 키, 첨부, public 디렉터리의 미추적 파일을 가져가지 않는다. 운영자 환경의 `VITE_*`도 상속하지 않는다. 최종 Docker context에는 필요한 API/웹 빌드 입력만 넣는다. API 이미지의 PostgreSQL client는 같은 공식 이미지의 loader/공유 라이브러리와 함께 격리하여 API Python의 시스템 라이브러리를 덮어쓰지 않는다.
+`build-inputs.json`은 commit, 원본 API lock SHA와 모든 빌드 입력 해시를 기록한다. 두 이미지 context에는 같은 clean archive SHA와 api/web 역할을 담은 `source-revision.json`을 추가하고 생성 Dockerfile에 literal OCI revision/역할 label을 넣는다. 운영자가 revision build-arg를 따로 입력하지 않는다. `preflight`는 digest로 선택한 실제 로컬 API/웹 이미지의 label이 manifest의 source_commit 및 해당 역할과 모두 같은지 검사하며, 누락·다른 revision·API/웹 바꿔치기는 거부한다. API와 웹은 같은 검토 commit에서 함께 빌드한다. 이 metadata 확인은 이미지 게시자의 암호학적 서명 검증을 의미하지 않는다. API는 `uv export --frozen --no-dev --no-emit-project`의 hash-pinned requirements를 사용한다. 이미지/APK 빌드는 임시 `git archive` checkout에서 수행하므로 원래 작업 트리의 ignored `.env`, 키, 첨부, public 디렉터리의 미추적 파일을 가져가지 않는다. 운영자 환경의 `VITE_*`도 상속하지 않는다. 최종 Docker context에는 필요한 API/웹 빌드 입력만 넣는다. API 이미지의 PostgreSQL client는 같은 공식 이미지의 loader/공유 라이브러리와 함께 격리하여 API Python의 시스템 라이브러리를 덮어쓰지 않는다.
 
-ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검사에 실패한다. `SALLIMBOOK_CVD_REFRESH`를 실제 갱신일로 바꿔 새 이미지로 배포한다. 오래된 이미지의 태그만 다시 붙여 검사 실패를 우회하지 않는다.
+ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검사에 실패한다. scanner와 API의 Compose healthcheck는 실제 Unix PING과 VERSIONCOMMANDS, 고정 엔진·INSTREAM 지원·DB freshness를 기존 업로드 검사와 같은 함수로 확인한다. API healthcheck는 DB HTTP readiness도 확인하며, scanner가 healthy가 된 뒤 API를 시작하고 API가 healthy가 된 뒤 웹을 시작한다. 실행 중 scanner 중단·stale 상태는 API container를 unhealthy로 바꾼다. 기존 `/api/v1/ready`의 DB 검사 계약은 유지하며 운영 준비 상태는 Compose health를 기준으로 확인한다. unhealthy 표시는 서비스를 자동 중지시키는 기능이 아니며 첨부 업로드는 기존 검사에서도 실패 시 거부한다. `SALLIMBOOK_CVD_REFRESH`를 실제 갱신일로 바꿔 새 이미지로 배포한다. 오래된 이미지의 태그만 다시 붙여 검사 실패를 우회하지 않는다.
 
 ## 3. 전용 네트워크와 비밀 주입
 

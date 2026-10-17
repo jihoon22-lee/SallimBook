@@ -7,8 +7,22 @@ import subprocess
 from pathlib import Path
 
 from ops.backup import OperationError, private_file
+from ops.build_context import REVISION_LABEL, ROLE_LABEL
 from ops.database import APPLICATION_ROLE
 from ops.deploy import POSTGRES, render, validate
+
+
+def verify_image_details(details, *, revision=None, role=None):
+    if (
+        len(details) != 1
+        or details[0].get("Architecture") != "amd64"
+        or details[0].get("Os") != "linux"
+    ):
+        raise OperationError("Deployment image platform mismatch")
+    if revision is not None:
+        labels = details[0].get("Config", {}).get("Labels") or {}
+        if labels.get(REVISION_LABEL) != revision or labels.get(ROLE_LABEL) != role:
+            raise OperationError("Application image source revision or role mismatch")
 
 
 def validate_database_settings(values, password):
@@ -92,6 +106,7 @@ def check(config_directory, verify_database=False):
     images = {
         service["image"] for service in generated["compose.json"]["services"].values()
     }
+    inspected_images = {}
     for image in images:
         result = subprocess.run(
             ["docker", "image", "inspect", image], capture_output=True, timeout=15
@@ -99,12 +114,13 @@ def check(config_directory, verify_database=False):
         if result.returncode:
             raise OperationError("A verified deployment image is missing locally")
         details = json.loads(result.stdout)
-        if (
-            len(details) != 1
-            or details[0]["Architecture"] != "amd64"
-            or details[0]["Os"] != "linux"
-        ):
-            raise OperationError("Deployment image platform mismatch")
+        verify_image_details(details)
+        inspected_images[image] = details
+    for role in ("api", "web"):
+        verify_image_details(
+            inspected_images[config[role + "_image"]],
+            revision=config["source_commit"], role=role,
+        )
     if verify_database:
         network = config["project"] + "_database"
         result = subprocess.run(

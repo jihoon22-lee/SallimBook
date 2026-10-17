@@ -9,9 +9,9 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from ops import backup, build_context, deploy, recovery, release
+from ops import backup, build_context, deploy, health, preflight, recovery, release
 
 
 def config():
@@ -30,9 +30,75 @@ def config():
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_image_source_revision_and_role_must_match_manifest(self):
+        for role in ("api", "web"):
+            labels = {build_context.REVISION_LABEL: "a" * 40, build_context.ROLE_LABEL: role}
+            details = [{"Architecture": "amd64", "Os": "linux", "Config": {"Labels": labels}}]
+            preflight.verify_image_details(details, revision="a" * 40, role=role)
+            for invalid in (
+                {},
+                {**labels, build_context.REVISION_LABEL: "b" * 40},
+                {**labels, build_context.ROLE_LABEL: "web" if role == "api" else "api"},
+            ):
+                with self.subTest(role=role, labels=invalid), self.assertRaises(
+                    backup.OperationError
+                ):
+                    preflight.verify_image_details(
+                        [{**details[0], "Config": {"Labels": invalid}}],
+                        revision="a" * 40, role=role,
+                    )
+
+    def test_source_revision_is_literal_in_both_generated_image_contexts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            template = root / "template"
+            template.write_text("FROM synthetic.invalid/base:fixed\n")
+            for role in ("api", "web"):
+                directory = root / role
+                directory.mkdir()
+                build_context.write_image_source(directory, template, "a" * 40, role)
+                self.assertEqual(
+                    json.loads((directory / "source-revision.json").read_text()),
+                    {"source_commit": "a" * 40, "image_role": role},
+                )
+                dockerfile = (directory / "Dockerfile").read_text()
+                self.assertIn(f'{build_context.REVISION_LABEL}="' + "a" * 40 + '"', dockerfile)
+                self.assertIn(f'{build_context.ROLE_LABEL}="{role}"', dockerfile)
+                self.assertNotIn("ARG", dockerfile)
+
+    def test_container_health_requires_scanner_and_database_readiness(self):
+        with patch.object(health, "scanner_ready") as scanner, patch.object(
+            health.urllib.request, "urlopen"
+        ) as http:
+            response = MagicMock(status=200)
+            http.return_value.__enter__.return_value = response
+            health.check("scanner")
+            http.assert_not_called()
+            health.check("api")
+            http.assert_called_once()
+            for reason in ("scanner-down", "scanner-stale"):
+                scanner.side_effect = RuntimeError(reason)
+                http.reset_mock()
+                for mode in ("scanner", "api"):
+                    with self.subTest(reason=reason, mode=mode), self.assertRaises(RuntimeError):
+                        health.check(mode)
+                http.assert_not_called()
+            scanner.side_effect = None
+            response.status = 503
+            with self.assertRaises(RuntimeError):
+                health.check("api")
+
     def test_no_host_resources_or_public_api_upstream(self):
         rendered = deploy.render(config())
         compose = rendered["compose.json"]
+        self.assertEqual(
+            compose["services"]["api"]["depends_on"]["scanner"]["condition"], "service_healthy"
+        )
+        for role in ("api", "scanner"):
+            self.assertEqual(
+                compose["services"][role]["healthcheck"]["test"],
+                ["CMD", "python", "-m", "ops.health", role],
+            )
         for service in compose["services"].values():
             self.assertNotIn("ports", service)
             self.assertNotIn("container_name", service)

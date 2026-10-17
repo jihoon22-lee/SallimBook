@@ -5,10 +5,13 @@ import json
 import secrets
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from uuid import uuid4
 
+from ops.build_context import REVISION_LABEL
 from ops.deploy import render
+from ops.preflight import verify_image_details
 
 
 def run(command, *, report=False):
@@ -28,6 +31,10 @@ def run(command, *, report=False):
 def main(image):
     # A local build is identified by its immutable image ID, without publishing it.
     inspected = json.loads(run(["docker", "image", "inspect", image]))[0]
+    revision = (inspected.get("Config", {}).get("Labels") or {}).get(REVISION_LABEL)
+    if not revision:
+        raise RuntimeError("Source-labelled application image required")
+    verify_image_details([inspected], revision=revision, role="api")
     image_id = inspected["Id"]
     project = "sallimbook-ops-smoke-" + uuid4().hex[:12]
     with tempfile.TemporaryDirectory(prefix=project + "-") as temporary:
@@ -74,7 +81,7 @@ def main(image):
             "runtime_directory": str(directory / "sallimbook-staging"),
             "version_code": 2,
             "version_name": "0.1.1",
-            "source_commit": "a" * 40,
+            "source_commit": revision,
         }
         production = render(config)["compose.json"]
         services = {
@@ -83,7 +90,10 @@ def main(image):
         for name in ("api", "scanner"):
             services[name]["image"] = image_id
             services[name]["restart"] = "no"
+            services[name]["healthcheck"]["interval"] = "1s"
+            services[name]["healthcheck"]["retries"] = 1
         services["api"]["env_file"] = [str(env)]
+        services["api"]["healthcheck"]["start_period"] = "10s"
         services["api"]["environment"].update(
             SALLIMBOOK_ENVIRONMENT="test", SALLIMBOOK_OPS_SYNTHETIC="1"
         )
@@ -212,9 +222,34 @@ p.chmod(0o600); os.chown(p,10001,10001)
                     state["HostConfig"]["Memory"] == state["HostConfig"]["MemorySwap"]
                 )
                 assert not state["HostConfig"]["PortBindings"]
+                assert state["State"]["Health"]["Status"] == "healthy"
+            run(command + ["stop", "scanner"])
+            api_id = run(command + ["ps", "-q", "api"]).strip()
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                state = json.loads(run(["docker", "inspect", api_id]))[0]
+                if state["State"]["Health"]["Status"] == "unhealthy":
+                    break
+                time.sleep(0.25)
+            else:
+                raise AssertionError("API stayed healthy after scanner stopped")
+            # A database-only HTTP probe still passes, so the observed unhealthy
+            # state comes from the real scanner dependency, not an API shutdown.
+            run(command + ["exec", "-T", "api", "python", "-c",
+                "import urllib.request; "
+                "urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready').close()"])
+            run(command + ["up", "-d", "--wait", "--wait-timeout", "120", "scanner"])
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                state = json.loads(run(["docker", "inspect", api_id]))[0]
+                if state["State"]["Health"]["Status"] == "healthy":
+                    break
+                time.sleep(0.25)
+            else:
+                raise AssertionError("API readiness did not recover with the scanner")
             print(
-        "PASS: image startup/migration/readiness and production UID/mount/memory settings; "
-        "no published ports, node, real account, or real key"
+                "PASS: image startup/migration/readiness, scanner-down unhealthy/recovery, "
+                "production UID/mount/memory; no published ports, node, real account, or real key"
             )
         finally:
             # Only this unique project and its newly created synthetic volumes.
