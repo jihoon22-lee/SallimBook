@@ -1,7 +1,7 @@
 # API 계약
 
-상태: 구현 명세. health/readiness·공통 계약과 SB-005/007 계정·가계 권한 기반 API를 구현했다.
-패스키와 금융·보험·재고·보관함 업무 API는 아래 명세에 따라 순차 구현한다.
+상태: 구현 명세. health/readiness·공통 계약, SB-005/007 계정·가계 권한과 SB-006 패스키 서버 API를 구현했다.
+패스키의 PC/Android 인증 UI와 금융·보험·재고·보관함 업무 API는 후속 구현 대상이다.
 기본 경로 `/api/v1`, JSON UTF-8, 원화는 정수 문자열, ID는 UUID.
 FastAPI OpenAPI를 구현 시 단일 계약으로 관리하고 TS client를 생성한다([S11](references.md)).
 
@@ -30,9 +30,59 @@ native access/refresh 응답은 Kotlin 인증 adapter에서만 처리한다. ref
 `POST /auth/invitations/accept`는 일회성 초대 코드로 계정을 만들고 로그인은 별도로 수행한다.
 인증된 `GET /me`, `GET /household/members`, `POST /household/invitations`,
 `GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다.
-초대와 기기 폐기는 최근 5분 내 실제 로그인을 요구한다. 패스키 목적별 step-up은 SB-006에서 연결한다.
+초대와 기기 폐기는 최근 5분 내 실제 로그인 또는 아래 목적·대상별 step-up 증명을 요구한다.
 기기 폐기 후에는 연결된 access/refresh 모두 기기 상태 검사에서 거부한다.
 일반 개인정보나 토큰 원문을 오류·서버 로그로 출력하지 않는다.
+
+### 패스키 서버 구현 · SB-006
+
+다음 10개 경로의 상세 입력·응답은 생성된 OpenAPI를 기준으로 한다. 경로의 `/api/v1`은 생략했다.
+
+| 메서드·경로 | 입력·동작 |
+|---|---|
+| POST /auth/passkeys/register/options | 인증된 사용자의 `label`; 최근 5분 로그인 필요 |
+| POST /auth/passkeys/register/verify | `challenge_id`, 표준 등록 `credential`; 최근 로그인과 동일 세션·기기 확인, 201 메타데이터 |
+| POST /auth/web/passkeys/options | `login_name`, `device_label`; 브라우저 로그인 challenge와 HttpOnly 기기 바인딩 쿠키 |
+| POST /auth/web/passkeys/verify | `challenge_id`, 서명된 `credential`; 바인딩 쿠키 확인 후 웹 세션 쿠키·CSRF 발급 |
+| POST /auth/native/passkeys/options | `login_name`, `device_label`; challenge와 네이티브 전용 `device_binding` |
+| POST /auth/native/passkeys/verify | `challenge_id`, 서명된 `credential`, `device_binding`; native access/refresh 발급 |
+| POST /auth/step-up/options | 인증된 세션의 `purpose`, UUID `target_id`; 해당 사용자의 등록된 패스키로 인증 요청 |
+| POST /auth/step-up/verify | `challenge_id`, 서명된 `credential`; 2분 유효 `grant_token`, 목적·대상·만료 반환 |
+| GET /auth/passkeys | 본인 미폐기 패스키 메타데이터 `items`, `next_cursor`; 기본 50/최대 200 |
+| DELETE /auth/passkeys/{credential_id} | 본인 패스키 폐기; 최근 로그인과 `If-Match` 필요, 204 |
+
+options 응답은 `challenge_id`, 라이브러리가 생성한 `public_key`, `expires_at`이다.
+challenge는 5분 유효·일회성이며 서버에는 해시만 저장한다. 등록/step-up은 사용자·가계·세션·기기에,
+로그인은 새 기기 ID와 바인딩 비밀에 연결한다. 웹 바인딩 쿠키는
+`__Host-sallimbook_passkey`(Secure/HttpOnly/SameSite=Strict, 5분)이며 로그인 성공 후 지운다.
+native의 바인딩 비밀·토큰은 Kotlin 인증 adapter에서만 처리하며 JS·URL·일반 저장소에 두지 않는다.
+알 수 없거나 비활성화된 계정에도 동일한 discoverable 옵션 형태를 반환하고, 실제 검증은 실패한다.
+
+등록/서명 검증은 challenge·RP ID·정확한 origin·UP/UV·credential 소유권·서명 카운터를 검사한다.
+설정이 없으면 ceremony는 `503 PASSKEYS_DISABLED`, 부정확한 설정은
+`503 PASSKEY_CONFIGURATION_INVALID`로 거부한다. 허용 origin 위반은 403,
+만료·재사용·다른 요청 범위의 challenge 또는 검증 실패는 인증 오류로 처리한다.
+PC의 WebAuthn UI와 Android Credential Manager·Digital Asset Links·실제 서명 인증서 연결은 아직 완료하지 않았다.
+
+### 목적별 step-up 소비
+
+현재 실제 소비 경로는 다음 두 가지다. 증명 발급 자체는 대상 자원의 접근 권한을 부여하지 않는다.
+
+| 보호 동작 | options의 purpose | target_id | 최종 요청 |
+|---|---|---|---|
+| 파트너 초대 | `household.invite` | 현재 가계 UUID | POST /household/invitations |
+| 본인 기기 폐기 | `device.revoke` | 폐기할 기기 UUID | DELETE /devices/{device_id}, `If-Match` 유지 |
+
+1. 현재 세션으로 `/auth/step-up/options`를 호출하고 반환된 challenge를 패스키로 서명한다.
+2. 같은 세션·기기에서 `/auth/step-up/verify`를 호출한다.
+3. 반환된 `grant_token`을 해당 변경 요청의 `X-Step-Up-Token` 헤더로 한 번 전달한다.
+
+서버는 가계·사용자·세션·기기·purpose·target·만료와 패스키/세션/기기의 활성 상태를 검사한다.
+초대의 소유자·인원·로그인 이름 검사, 기기 소유권·버전 검사를 통과한 뒤 같은 트랜잭션에서 증명을 소비한다.
+실패한 트랜잭션은 소비도 되돌린다. 성공한 증명은 재사용할 수 없고 다른 목적·대상·세션으로 옮길 수 없다.
+헤더를 생략하면 기존 최근 로그인 검사를 사용한다. 헤더를 전달했다면 로그인 시각이 최근이어도 유효성을 검사한다.
+step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
+다른 enum 목적(계좌 열람·내보내기·패스키 관리·보관함)은 소비 동작을 연결하기 전까지 권한을 부여하지 않는다.
 
 ## 1. 공통 규약
 
@@ -68,10 +118,12 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 인증 | POST /auth/web/login, /auth/web/logout; GET /auth/web/csrf | 웹 보안 쿠키·CSRF |
 | 인증 | POST /auth/native/login, /auth/native/refresh, /auth/native/logout | native 전용 토큰 응답·회전 |
 | 등록 | POST /auth/invitations/accept | 최초/파트너 초대 일회성 등록, 자동 로그인 없음 |
-| 패스키 | POST /auth/passkeys/options, /auth/passkeys/verify | challenge/RP ID/origin/UV 검증 |
+| 패스키 등록 | POST /auth/passkeys/register/options, /auth/passkeys/register/verify | 현재 계정·최근 로그인·challenge/RP ID/origin/UV |
+| 패스키 로그인 | POST /auth/web/passkeys/options, /auth/web/passkeys/verify; POST /auth/native/passkeys/options, /auth/native/passkeys/verify | transport별 기기 바인딩·기존 세션 발급기 공유 |
+| 패스키 관리 | GET /auth/passkeys, DELETE /auth/passkeys/{credential_id} | 본인 메타데이터 목록·최근 로그인/If-Match 폐기 |
 | 재인증 | POST /auth/step-up/options, /auth/step-up/verify | 짧은 목적 제한 인증 상태 |
 | 사용자 | GET /me, GET /household/members | 허용된 공동 가계만 |
-| 초대·기기 | POST /household/invitations, GET /devices, DELETE /devices/{id} | 재인증, 기기 세션 폐기 |
+| 초대·기기 | POST /household/invitations, GET /devices, DELETE /devices/{id} | 최근 로그인 또는 X-Step-Up-Token, 기기 세션 폐기 |
 | 홈 | GET /dashboard?month=YYYY-MM | 자산은 선택 월, 소모품은 서버 오늘 |
 | 자산 | GET/POST /assets, GET/PATCH/DELETE /assets/{id} | 종료/삭제 의미 구분 |
 | 계좌 | GET/POST /accounts, GET/PATCH /accounts/{id} | 자산 원본과 1:1 |

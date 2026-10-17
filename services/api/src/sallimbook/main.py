@@ -11,6 +11,7 @@ from sallimbook.config import Settings
 from sallimbook.core.database import REQUIRED_SCHEMA_REVISION, make_engine
 from sallimbook.core.errors import DomainError, ErrorResponse
 from sallimbook.core.http import install_http_contract
+from sallimbook.identity.passkeys.router import router as passkey_router
 from sallimbook.identity.router import router as identity_router
 
 
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "If-Match",
             "Idempotency-Key",
             "X-CSRF-Token",
+            "X-Step-Up-Token",
         ],
         expose_headers=["X-Request-ID", "ETag"],
     )
@@ -89,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HealthResponse(status="ok")
 
     app.include_router(identity_router)
+    app.include_router(passkey_router)
     return app
 
 
