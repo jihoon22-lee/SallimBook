@@ -1,0 +1,21 @@
+{
+  "platform": "linux/amd64",
+  "python_image": "python:3.14.7-slim-trixie@sha256:7bf6c3111fe094f8ee1a1cbcdc63c4cfb345b0e3df42d5aa9a90b3b4b022ab6d",
+  "debian_snapshot": "20261017T000000Z",
+  "apt": {
+    "poppler-utils": "25.03.0-5+deb13u4",
+    "tesseract-ocr": "5.5.0-1+b1",
+    "tesseract-ocr-eng": "1:4.1.0-2",
+    "tesseract-ocr-kor": "1:4.1.0-2",
+    "fonts-noto-cjk": "1:20240730+repack1-1"
+  },
+  "clamav": {
+    "version": "1.4.6",
+    "package_version": "1.4.6-1",
+    "url": "https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.4.6/clamav-1.4.6.linux.x86_64.deb",
+    "sha256": "d3ee9e401974855a1edc1761b1425417d126de618d5f0c91cd51209f69f6fcc2"
+  },
+  "api_uv_lock_sha256": "12e9621f16ce22b74e02ff474b51adae254e78300aa65b28cea2c3106aa1d5a7",
+  "requirements_sha256": "b4403c20be456dd1ba72b3181297d784ede50d34d373353ab81e829cfbfc822a",
+  "signature_database_policy": "Official signed CVD files fetched by FreshClam; reject databases older than 7 days; refresh explicitly when rebuilding."
+}
