@@ -22,12 +22,41 @@ class SallimBookAuthPlugin : Plugin() {
     private val main = Handler(Looper.getMainLooper())
     private var resumed = false
     private val pending = mutableMapOf<PluginCall, ForegroundRequest>()
+    private val lockedAllowed = mutableSetOf<PluginCall>()
     private val cancelled = mutableSetOf<PluginCall>()
     private var uiCall: PluginCall? = null
     private var uiMode: String? = null
     private var uiOutcome: AuthOutcome? = null
     private var lastUiLaunch = Long.MIN_VALUE
     private val auth get() = NativeAuthSession.get(context)
+    private val appLock get() = AppLockController.get(context)
+    private var lockEventPending = true
+    private val lockChanged: () -> Unit = {
+        lockEventPending = true
+        if (appLock.locked) pending.forEach { (call, gate) ->
+            if (call !in lockedAllowed) { gate.cancel(); cancelled.add(call) }
+        }
+        flushCancelled(); flushLockEvent()
+    }
+    override fun load() { appLock.addListener(lockChanged) }
+
+    private fun flushLockEvent() {
+        if (lockEventPending && trustedForeground()) {
+            lockEventPending = false
+            notifyListeners("appLockChanged", JSObject().put("locked", appLock.locked), true)
+        }
+    }
+
+    @PluginMethod fun getAppLock(call: PluginCall) { main.post {
+        if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
+        else if (!trustedForeground()) failure(call, AuthCode.ACCESS_DENIED)
+        else resolve(call, AuthOutcome.success(mapOf("locked" to appLock.locked)))
+    } }
+    @PluginMethod fun lockApp(call: PluginCall) { main.post {
+        if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
+        else if (!trustedForeground()) failure(call, AuthCode.ACCESS_DENIED)
+        else { appLock.lock(); resolve(call, AuthOutcome.success(mapOf("locked" to true))) }
+    } }
 
     private fun trustedForeground(): Boolean = resumed && !activity.isFinishing && !activity.isDestroyed &&
         (activity as? MainActivity)?.secureBridgeReady == true &&
@@ -45,16 +74,20 @@ class SallimBookAuthPlugin : Plugin() {
 
     private fun failure(call: PluginCall, code: AuthCode) = resolve(call, AuthOutcome.failure(code))
 
-    private fun begin(call: PluginCall, action: (ForegroundRequest, (AuthOutcome) -> Unit) -> Unit) {
+    private fun begin(call: PluginCall, allowLocked: Boolean = false, action: (ForegroundRequest, (AuthOutcome) -> Unit) -> Unit) {
         if (!trustedForeground()) { failure(call, AuthCode.ACCESS_DENIED); return }
+        if (appLock.locked && !allowLocked) { failure(call, AuthCode.APP_LOCKED); return }
         if (pending.size >= 8 || uiCall != null) { failure(call, AuthCode.AUTH_UNAVAILABLE); return }
         val gate = ForegroundRequest()
         pending[call] = gate
+        if (allowLocked) lockedAllowed.add(call)
         action(gate) { outcome ->
             main.post {
                 if (pending[call] !== gate) return@post
-                if (gate.isActive() && trustedForeground()) {
+                val loggedOut = allowLocked && outcome.value?.get("status") == "signedOut"
+                if ((gate.isActive() || loggedOut) && trustedForeground() && (!appLock.locked || allowLocked)) {
                     pending.remove(call)
+                    lockedAllowed.remove(call)
                     resolve(call, outcome)
                 } else {
                     gate.cancel()
@@ -72,7 +105,7 @@ class SallimBookAuthPlugin : Plugin() {
 
     @PluginMethod fun logout(call: PluginCall) { main.post {
         if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
-        else begin(call) { gate, callback -> auth.logout(gate, callback) }
+        else begin(call, allowLocked = true) { gate, callback -> auth.logout(gate, callback) }
     } }
 
     @PluginMethod fun request(call: PluginCall) { main.post {
@@ -139,6 +172,7 @@ class SallimBookAuthPlugin : Plugin() {
     private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null) {
         if (targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
         if (!trustedForeground() || !activity.hasWindowFocus()) { failure(call, AuthCode.ACCESS_DENIED); return }
+        if (appLock.locked) { failure(call, AuthCode.APP_LOCKED); return }
         val now = SystemClock.elapsedRealtime()
         if (!auth.available || uiCall != null || pending.isNotEmpty() ||
             lastUiLaunch != Long.MIN_VALUE && now - lastUiLaunch < 1000) {
@@ -198,7 +232,7 @@ class SallimBookAuthPlugin : Plugin() {
         uiCall = null
         uiMode = null
         uiOutcome = null
-        resolve(call, outcome)
+        resolve(call, if (appLock.locked) AuthOutcome.failure(AuthCode.APP_LOCKED) else outcome)
     }
 
     private fun flushCancelled() {
@@ -206,13 +240,14 @@ class SallimBookAuthPlugin : Plugin() {
         cancelled.toList().forEach { call ->
             cancelled.remove(call)
             pending.remove(call)
-            failure(call, AuthCode.AUTH_CANCELLED)
+            lockedAllowed.remove(call)
+            failure(call, if (appLock.locked) AuthCode.APP_LOCKED else AuthCode.AUTH_CANCELLED)
         }
     }
 
     override fun handleOnResume() {
         resumed = true
-        main.post { flushCancelled(); flushUiResult() }
+        main.post { flushLockEvent(); flushCancelled(); flushUiResult() }
     }
 
     override fun handleOnPause() {
@@ -221,9 +256,11 @@ class SallimBookAuthPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        appLock.removeListener(lockChanged)
         resumed = false
         pending.forEach { (call, gate) -> gate.cancel(); call.release(bridge) }
         pending.clear()
+        lockedAllowed.clear()
         cancelled.clear()
         uiCall?.release(bridge)
         uiCall = null

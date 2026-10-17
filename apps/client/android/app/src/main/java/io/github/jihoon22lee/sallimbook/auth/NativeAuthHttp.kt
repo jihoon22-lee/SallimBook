@@ -18,13 +18,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class NativeHttpResponse(val status: Int, val body: Any?, val requestId: String?)
 
 /** 503 Retry-After follow-ups must not resend a rotating credential, even with retries off. */
-internal class OneShotAuthBody(private val bytes: ByteArray) : RequestBody() {
+internal class OneShotAuthBody(private val bytes: ByteArray, private val beforeWrite: () -> Unit = {}) : RequestBody() {
     private val written = AtomicBoolean(false)
     override fun contentType() = "application/json; charset=utf-8".toMediaType()
     override fun contentLength() = bytes.size.toLong()
     override fun isOneShot() = true
     override fun writeTo(sink: BufferedSink) {
         if (!written.compareAndSet(false, true)) throw IOException("A native auth body cannot be replayed")
+        beforeWrite()
         sink.write(bytes)
     }
 }
@@ -57,7 +58,7 @@ internal class NativeAuthHttp(private val origin: String) {
         stepUpToken: String? = null,
         nativeAccountNumber: Boolean = false,
     ): NativeHttpResponse {
-        gate.check()
+        gate.checkHttp(method, path)
         if (AuthPolicy.apiOrigin(origin) == null) {
             throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
         }
@@ -95,7 +96,7 @@ internal class NativeAuthHttp(private val origin: String) {
             requestBytes = body?.toString()?.toByteArray(Charsets.UTF_8)
             val request = Request.Builder()
                 .url(origin + path)
-                .method(method, requestBytes?.let(::OneShotAuthBody))
+                .method(method, requestBytes?.let { OneShotAuthBody(it) { gate.checkHttp(method, path) } })
                 .header("Accept", "application/json")
                 .header("X-SallimBook-Native", "1")
                 .apply {
@@ -103,7 +104,7 @@ internal class NativeAuthHttp(private val origin: String) {
                     if (ifMatch != null) header("If-Match", ifMatch)
                     if (stepUpToken != null) header("X-Step-Up-Token", stepUpToken)
                 }.build()
-            gate.check()
+            gate.checkHttp(method, path)
             val call = client.newCall(request)
             gate.bindNetworkCancellation { call.cancel() }
             return call.execute().use { response ->
@@ -135,7 +136,7 @@ internal class NativeAuthHttp(private val origin: String) {
                         jsonValue(value)
                     } finally { bytes.fill(0) }
                 }
-                gate.check()
+                gate.checkHttp(method, path)
                 val requestId = response.header("X-Request-ID")?.takeIf {
                     Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").matches(it)
                 }

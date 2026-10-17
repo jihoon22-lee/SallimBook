@@ -7,9 +7,11 @@ async function nativeFinanceMock(page: Page, scenario: "normal" | "conflict" | "
   await page.addInitScript(({ account, household, scenario }) => {
     const state = { account, calls: [] as { method: string; args: Record<string, unknown> }[], http: 0, accountGets: 0, editOnce: true };
     Object.assign(window, { __financeNative: state, CapacitorCustomPlatform: { name: "android" }, Capacitor: {
-      PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "request", "listAssets", "getAsset", "createAsset", "updateAsset", "archiveAsset", "listAccounts", "getAccount", "createAccount", "updateAccount", "editAccountNumberUI", "showAccountNumberUI", "showAccountNumberWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })) }],
-      nativePromise: async (_plugin: string, method: string, args: Record<string, unknown> = {}) => {
-        state.calls.push({ method, args }); const ok = (value: unknown) => ({ ok: true, value }); const metadata = (body: unknown) => ok({ status: 200, body });
+      PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "request", "listAssets", "getAsset", "createAsset", "updateAsset", "archiveAsset", "listAccounts", "getAccount", "createAccount", "updateAccount", "editAccountNumberUI", "showAccountNumberUI", "showAccountNumberWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })).concat([{ name: "addListener", rtype: "callback" }, { name: "removeListener", rtype: "promise" }]) }],
+      nativeCallback: () => "synthetic-lock-listener",
+        nativePromise: async (_plugin: string, method: string, args: Record<string, unknown> = {}) => {
+        if (method === "removeListener") return;
+          state.calls.push({ method, args }); const ok = (value: unknown) => ({ ok: true, value }); const metadata = (body: unknown) => ok({ status: 200, body });
         if (method === "getSession") return ok({ available: true, authenticated: true });
         if (method === "request" && args.path === "/api/v1/me") return metadata(household[0]);
         if (method === "request" && args.path === "/api/v1/household/members") return metadata(household);
