@@ -250,8 +250,8 @@
       "git_sha1": "fbc10ac28ce7ed8e0e808a45e9b8a35991ec7c03"
     },
     "docs/testing/insurance-client.md": {
-      "sha256": "652957297f615eb525fc5e876383205283706eccff8f493654347143f07efb98",
-      "git_sha1": "52c495ab7f14accdb6f3d02ced57b98ac1b96804"
+      "sha256": "c7407b3a22ba2a5bea474bc4afad319250cc1b58dd624aa4b573d352cd31079a",
+      "git_sha1": "290040acf65784e9803b652b7f43f19a5cf89d4b"
     }
   }
 }
