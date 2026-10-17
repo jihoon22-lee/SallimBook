@@ -138,6 +138,12 @@
       "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
       "kind": "appliance_consumable",
       "label": "합성 H1 공용 필터 appliance_consumable"
+    },
+    {
+      "id": "af3d9124-368f-5c1e-8775-d37e30436d5e",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "insurance_case",
+      "label": "합성 H1 두 번째 보험 사건"
     }
   ]
 }
