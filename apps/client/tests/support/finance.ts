@@ -11,12 +11,20 @@ export const jointAsset: components["schemas"]["AssetResponse"] = {
   status: "active", archived_at: null, created_by_member_id: uid(2), updated_by_member_id: uid(2), created_at: "2026-10-17T00:00:00Z", updated_at: "2026-10-17T00:00:00Z", version: 1,
 };
 
+export const sampleAccount: components["schemas"]["AccountResponse"] = {
+  id: uid(30), household_id: uid(3), asset_id: uid(11), asset: { ...jointAsset, id: uid(11), name: "합성 개인 금융 자산", category: "financial", ownership_kind: "individual", owner_member_id: uid(5), household_share: "1", amount_basis: "owned" },
+  institution_name: "합성 금융기관", account_type: "irp", masked_number: "••••ONLY", has_number: true, purpose: "합성 은퇴 준비", opened_on: "2025-01-01", closed_on: null, status: "active", created_at: jointAsset.created_at, updated_at: jointAsset.updated_at, created_by_member_id: uid(2), updated_by_member_id: uid(2), version: 1,
+};
+
 export async function mockFinance(page: Page) {
   const state = {
     assets: [structuredClone(jointAsset), { ...jointAsset, id: uid(11), name: "합성 개인 금융 자산", category: "financial", ownership_kind: "individual", owner_member_id: uid(5), household_share: "1", amount_basis: "owned" }, { ...jointAsset, id: uid(12), name: "합성 종료 대출", kind: "liability", category: "loan", status: "archived", ended_on: "2026-01-01", archived_at: "2026-01-02T00:00:00Z" }] as components["schemas"]["AssetResponse"][],
     queries: [] as URLSearchParams[], creates: [] as components["schemas"]["AssetCreate"][], patches: [] as { version: string; body: components["schemas"]["AssetPatch"] }[], archives: [] as string[],
     conflictOnce: false, archiveConflictOnce: false, listFailure: false, membersFailure: false, mutationCsrfOnce: false, csrfCalls: 0, signedIn: true,
     pageSize: 50, rejectMutation: false,
+    accounts: [structuredClone(sampleAccount)], accountQueries: [] as URLSearchParams[], accountCreates: [] as components["schemas"]["AccountCreate"][], accountPatches: [] as { version: string; keys: string[]; body: Record<string, unknown> }[],
+    accountConflictOnce: false, revealDenied: false, revealDelay: 0, revealCalls: 0, accountGets: 0,
+
   };
   const error = (route: Route, status: number, code: string) => route.fulfill({ status, json: { error: { code, message: "UNTRUSTED_FINANCE_ERROR", request_id: "synthetic" } } });
   await page.route("**/api/v1/**", async (route) => {
@@ -28,6 +36,40 @@ export async function mockFinance(page: Page) {
       if (state.mutationCsrfOnce) { state.mutationCsrfOnce = false; return error(route, 403, "CSRF_FAILED"); }
       if (route.request().headers()["x-csrf-token"] !== `synthetic-finance-csrf-${state.csrfCalls}`) return error(route, 403, "CSRF_FAILED");
       if (state.rejectMutation) return error(route, 503, "UNAVAILABLE");
+    }
+    const project = (account: components["schemas"]["AccountResponse"]) => {
+      const asset = state.assets.find((item) => item.id === account.asset_id) ?? account.asset;
+      return { ...account, asset, status: asset.status === "archived" ? "closed" : "active", closed_on: asset.ended_on ?? null };
+    };
+    if (path === "/api/v1/accounts" && method === "GET") {
+      state.accountQueries.push(url.searchParams);
+      const selected = state.accounts.map(project).filter((account) => (!url.searchParams.has("account_type") || account.account_type === url.searchParams.get("account_type")) && (!url.searchParams.has("owner_member_id") || account.asset.owner_member_id === url.searchParams.get("owner_member_id")) && ((url.searchParams.get("status") ?? "active") === "all" || account.status === (url.searchParams.get("status") ?? "active")));
+      return route.fulfill({ json: { items: selected, next_cursor: null } });
+    }
+    if (path === "/api/v1/accounts" && method === "POST") {
+      const input = route.request().postDataJSON() as components["schemas"]["AccountCreate"]; state.accountCreates.push(input);
+      if (input.asset_id && state.accounts.some((item) => item.asset_id === input.asset_id)) return error(route, 409, "ASSET_ALREADY_LINKED");
+      const asset = input.asset_id ? state.assets.find((item) => item.id === input.asset_id)! : { ...jointAsset, ...input.asset!, id: uid(50 + state.accountCreates.length) };
+      if (!input.asset_id) state.assets.push(asset);
+      const account = { ...sampleAccount, ...input, id: uid(60 + state.accountCreates.length), asset_id: asset.id, asset, has_number: false, masked_number: null };
+      state.accounts.push(account); return route.fulfill({ status: 201, json: project(account) });
+    }
+    if (path.startsWith("/api/v1/accounts/")) {
+      const account = state.accounts.find((item) => item.id === path.split("/")[4]); if (!account) return error(route, 404, "NOT_FOUND");
+      if (method === "GET") { state.accountGets++; return route.fulfill({ json: project(account) }); }
+      if (method === "POST" && path.endsWith("/reveal")) {
+        state.revealCalls++; if (state.revealDenied) return error(route, 403, "REAUTHENTICATION_REQUIRED");
+        if (state.revealDelay) await new Promise((resolve) => setTimeout(resolve, state.revealDelay));
+        return route.fulfill({ json: { id: account.id, account_number: "SYNTHETIC-ACCOUNT-ONLY", display_for_seconds: 30 } });
+      }
+      if (method === "PATCH") {
+        const body = route.request().postDataJSON(); const version = route.request().headers()["if-match"] ?? "";
+        state.accountPatches.push({ version, keys: Object.keys(body), body: Object.fromEntries(Object.entries(body).filter(([key]) => key !== "account_number")) });
+        if (state.accountConflictOnce) { state.accountConflictOnce = false; account.version++; account.institution_name = "합성 서버 금융기관"; account.purpose = "합성 다른 편집자의 용도"; }
+        if (version !== `"${account.version}"`) return error(route, 409, "VERSION_CONFLICT");
+        if (Object.hasOwn(body, "account_number")) { account.has_number = body.account_number !== null; account.masked_number = account.has_number ? "••••ONLY" : null; delete body.account_number; }
+        Object.assign(account, body, { version: account.version + 1 }); return route.fulfill({ json: project(account) });
+      }
     }
     if (path === "/api/v1/assets" && method === "GET") {
       state.queries.push(url.searchParams);
