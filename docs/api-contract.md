@@ -138,6 +138,43 @@ draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `
 확정할 때 `acknowledge_non_month_end_dates`, `acknowledge_scope_change`로 표시된 차이를 명시 확인한다.
 웹 월 입력·확정·정정·과거 조회 화면을 연결했다. Android 월 adapter와 비교·추이·홈 연결은 후속 변경에서 진행한다.
 
+### 9) 자산 비교·추이 (SB-013)
+
+두 endpoint는 현재 가계의 **현재 월 revision**을 읽는다. 정정 중인 달을 과거 확정본으로 자동 대체하지 않는다.
+현재 자산의 이름·소유·지분을 과거 값에 결합하지 않으며 월 기록의 당시 snapshot을 사용한다.
+
+| 메서드·경로 | 조회 |
+|---|---|
+| GET /asset-comparison?to=YYYY-MM&from=YYYY-MM | 전체/동일 범위 순자산 변화, 각 월 합계·revision·상태, 항목별 전후 값·기준일·범위 영향 |
+| GET /asset-trends?from=YYYY-MM&to=YYYY-MM | 양 끝을 포함한 최대 120개월 연속 축, 기록/금액 상태, 관찰값과 확정 차트값 |
+
+비교의 `from`은 생략하면 직전 월이다. 두 API는 `asset_id`, `kind`, `category`, `ownership_kind`,
+`owner_member_id` 필터를 지원한다. 필터는 각 월 당시 값에 적용한다. 다른 가계의 자산/소유자 ID는 404다.
+공동 소유와 개인 owner ID를 함께 지정하면 422다. 비교는 UUID cursor, limit 1~200을 지원하며
+페이지마다 전체 필터 합계와 양쪽 revision 참조를 반환한다. 조회 도중 revision이 바뀐 페이지를 UI에서 섞지 않는다.
+
+비교 `state`는 available/no_previous_month/current_missing/unconfirmed다. 한쪽 기록이 없거나
+미확정이면 증감은 null이며, 미입력을 0원으로 바꾸지 않는다. 순자산 합계에는 included 항목만 넣는다.
+같은 asset ID·같은 가계 지분인 공통 범위를 별도로 계산한다. 추가/제외/지분 변경 ID와 당시 전후
+`MonthValueResponse`를 함께 제공한다. 항목 `amount_delta_krw`는 보유금액의 변화이고,
+`net_assets_effect_krw`는 부채 부호와 범위 추가/제외를 반영한 순자산 영향이다.
+없는 항목의 전후 값은 null이며 신규 취득/저축으로 추정하지 않는다.
+
+`change_percent`는 두 월이 확정되고 이전 순자산이 양수일 때 Decimal로 계산해 소수 둘째 자리 HALF_UP
+문자열로 반환한다. 0원/음수 기준은 null과 zero_previous_total/negative_previous_total 사유를 반환한다.
+원 단위 증감은 유지한다. 증감률은 투자 수익률이나 저축률이 아니다.
+각 월의 월말 아닌 기준일·미입력 기준일 ID와 혼합 날짜 여부도 반환한다.
+
+추이는 missing/draft/reopened/confirmed 기록 상태와 missing_month/missing_item/outside_filter/
+missing_value/unconfirmed/verified 금액 상태를 구분한다. `observed_amount_krw`는 현재 관찰값,
+`confirmed_amount_krw`는 확정·검증된 값만 담는다. 차트는 null 구간을 연결하지 않는다.
+전체 추이는 순자산, asset_id 추이는 해당 항목의 가계 보유금액이다. 명시적으로 선택한 합계 제외 항목은
+참고 금액을 조회할 수 있지만 가계 합계에는 더하지 않는다. 포함 여부도 함께 반환한다.
+실제 월 기록에서 필터에 맞는 included 항목이 0개인 합계 0과, 월 기록 자체가 없는 null을 구분한다.
+
+읽기는 기존 household scope 잠금을 사용해 현재 revision 선택과 행/합계를 일관되게 조회한다.
+새 migration이나 금액 저장 필드는 추가하지 않는다. 성공·오류 모두 기존 no-store 정책을 적용한다.
+
 ## 1. 공통 규약
 
 모든 가계 자원은 인증 사용자 membership에서 가계를 결정한다.
