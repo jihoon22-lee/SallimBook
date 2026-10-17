@@ -13,6 +13,8 @@ from pydantic import (
 )
 from pydantic.json_schema import SkipJsonSchema
 
+from sallimbook.cashflow.payment_link_schemas import CLOSURE_FIELDS, ClosureFields
+
 type AssetKind = Literal["asset", "liability"]
 type AssetCategory = Literal["real_estate", "deposit", "financial", "loan", "other"]
 type OwnershipKind = Literal["individual", "joint"]
@@ -79,7 +81,7 @@ def _omitted_patch_field():
     return Field(default_factory=lambda: None)
 
 
-class AssetPatch(AssetInput):
+class AssetPatch(AssetInput, ClosureFields):
     name: AssetName | SkipJsonSchema[None] = _omitted_patch_field()
     kind: AssetKind | SkipJsonSchema[None] = _omitted_patch_field()
     category: AssetCategory | SkipJsonSchema[None] = _omitted_patch_field()
@@ -94,15 +96,18 @@ class AssetPatch(AssetInput):
 
     @model_validator(mode="after")
     def validate_patch(self) -> Self:
-        if not self.model_fields_set:
+        if not self.model_fields_set - CLOSURE_FIELDS:
             raise ValueError("Supply at least one field to edit")
         nullable = {"owner_member_id", "ended_on", "note"}
-        if any(getattr(self, field) is None for field in self.model_fields_set - nullable):
+        if any(
+            getattr(self, field) is None
+            for field in self.model_fields_set - nullable - CLOSURE_FIELDS
+        ):
             raise ValueError("A required asset field cannot be cleared")
         return self
 
 
-class AssetArchive(AssetInput):
+class AssetArchive(AssetInput, ClosureFields):
     ended_on: DateOnly
 
 

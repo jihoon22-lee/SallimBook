@@ -120,7 +120,7 @@ def archive(
             session,
             principal,
             card_id,
-            CardPatch(ended_on=payload.ended_on),
+            CardPatch(**payload.model_dump(exclude_unset=True)),
             if_match,
             archive=True,
         ),
