@@ -3,13 +3,17 @@
 ## 1. 운영 형태
 
 상시 실행 호스트 1대에 Docker Compose를 사용한다.
-Caddy만 외부 HTTPS 포트를 노출하고 PostgreSQL/파일 저장소는 내부 네트워크에서 접근한다.
+전용 Tailscale 노드가 HTTPS를 종료하고 Caddy는 같은 격리 namespace의 loopback HTTP upstream으로 동작한다.
+PostgreSQL/파일 저장소는 내부 네트워크에서 접근한다. 호스트 포트와 기존 Tailscale 설정을 재사용하지 않는다.
 사용자 결정에 따라 현재 PC의 WSL에서 기존 서비스와 분리한 Compose 프로젝트로 운영한다.
 기존 컨테이너·DB·포트·호스트 Tailscale 설정은 변경하지 않는다.
 전용 Tailscale 노드의 Serve 8443은 앱/API, Funnel 443은 검증 정적 파일만 제공한다.
 PC 절전/종료·WSL 중단 시 이용이 중단되므로 자동 복귀와 상태 점검을 운영 인수에 포함한다.
 실제 노드 FQDN·비밀은 운영 단계에 주입하며 가상 값을 운영 주소로 표시하지 않는다.
 [승인된 격리 운영 결정](adr/private-network-and-app-identity.md)을 따른다.
+
+검토 가능한 Compose/이미지 입력, DB 역할 분리, 암호화 백업/격리 복원, 운영 승격 검사와 APK 서명 도구의 실제 명령은
+[운영 도구 runbook](operations-runbook.md)에 있다. 도구 작성이나 합성 검사 통과는 실제 노드·두 기기 운영 인수 완료를 뜻하지 않는다.
 
 ## 2. 설정 변수의 범주
 

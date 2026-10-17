@@ -94,8 +94,8 @@
       "git_sha1": "96f8a310581f35ff74556e730bc45a03192f14a4"
     },
     "docs/deployment-backup-operations.md": {
-      "sha256": "680c2fc917712cf66652a0747662522ec0c7821be245d8cf5e25625ec3981973",
-      "git_sha1": "6e84f7687d9c79bac36f7a0d75813fac08455482"
+      "sha256": "fc4d6b68aa5addf8cc4a844f153fb3568d7f0f444af42c410c895eeadbb0276b",
+      "git_sha1": "22ebd6e1cbe619b94593618ed3f1f3ecf64e754c"
     },
     "docs/roadmap-and-milestones.md": {
       "sha256": "95dd42215c69f32da823697ea9779b74fc22bb7ac86001c227082c5870b7b4db",
@@ -225,29 +225,25 @@
       "sha256": "a89f51179366f6e36b3c7deb70755c507590907767451be94f043f5e08294d3d",
       "git_sha1": "31821e6c78de26bd0e643896ebb238d5c0caa957"
     },
-    "docs/testing/passkeys-web.md": {
-      "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
-      "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
-    },
     "docs/testing/native-security-proof.md": {
       "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
       "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
+    },
+    "docs/testing/passkeys-web.md": {
+      "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
+      "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
     },
     "docs/testing/assets-accounts-client.md": {
       "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",
       "git_sha1": "88a225ab372b6af9991373b5111a018b7b696aca"
     },
-    "docs/testing/monthly-assets-client.md": {
-      "sha256": "d1f8af7845fa22f3ecb85d8db595254c7cc6bcaf18864ffb99cf55dbb9e0e916",
-      "git_sha1": "f4ca9f527aef0a213cf38ff21c48098d2c077287"
-    },
     "docs/testing/homecare-server.md": {
       "sha256": "5294bb1903116b5fe8bc5ce3cb02a315736e15a586ff27d63c90c9d7ccefea39",
       "git_sha1": "a8b02f82de5f99d45a3b2e6dc556659e6c54c45d"
     },
-    "infra/documents/README.md": {
-      "sha256": "ee1b7ea9d0c5c239737cefb6868111c9f152900de16cfa4d7eebc27c92e96ceb",
-      "git_sha1": "112a8f48c2ebc6761e02ce4642f6df465bb3ebb1"
+    "docs/testing/monthly-assets-client.md": {
+      "sha256": "d1f8af7845fa22f3ecb85d8db595254c7cc6bcaf18864ffb99cf55dbb9e0e916",
+      "git_sha1": "f4ca9f527aef0a213cf38ff21c48098d2c077287"
     },
     "docs/testing/assets-comparison-client.md": {
       "sha256": "226bf23365e5d0760ec2c18726379e63b411875816f9d212ab6dba8c34fba3c7",
@@ -257,17 +253,13 @@
       "sha256": "0c996a88ec7970a964b1ac9b684329e25d8027e40dd73e137126955a8bfbc4c5",
       "git_sha1": "fbc10ac28ce7ed8e0e808a45e9b8a35991ec7c03"
     },
-    "docs/adr/vault-format-v1.md": {
-      "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
-      "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
-    },
-    "docs/testing/native-vault-crypto.md": {
-      "sha256": "0fcd76d8aa1c97b3e9c4748efd0a74e7a9cba6a08f87945d0f22da3050fb99f1",
-      "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
-    },
     "docs/testing/documents-server.md": {
       "sha256": "89958991fe93e7784d277adb7daf74c4ec4949290e5f527272a1228cb6fcb767",
       "git_sha1": "404e821227adc9548092735670d9cbfc6567e4d7"
+    },
+    "infra/documents/README.md": {
+      "sha256": "ee1b7ea9d0c5c239737cefb6868111c9f152900de16cfa4d7eebc27c92e96ceb",
+      "git_sha1": "112a8f48c2ebc6761e02ce4642f6df465bb3ebb1"
     },
     "scripts/cleanup_documents.py": {
       "sha256": "514c471e081b56d2dc7fcdbc5f00d4b352a729b2c7b1f1997594606218eb527f",
@@ -277,13 +269,25 @@
       "sha256": "166136e8691243996d2bf2ea0e561d2a3d505748427613eb7df2965d0dec2f64",
       "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
     },
-    "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "405e7fc14623811fa8333054ed6481f1ef480a7a32309d93b8f59f9e283dcfb6",
-      "git_sha1": "0a3a0daffa7713b1f410c8f01c9994de94545c42"
-    },
     "docs/testing/insurance-client.md": {
       "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
       "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
+    },
+    "docs/operations-runbook.md": {
+      "sha256": "06969551578eb0635b3862a165109384c93a105ae102b2f4f7f630e81f0b412d",
+      "git_sha1": "c62509c2b063833394924d06395305b9bb5de696"
+    },
+    "docs/adr/vault-format-v1.md": {
+      "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
+      "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
+    },
+    "docs/testing/native-vault-crypto.md": {
+      "sha256": "0fcd76d8aa1c97b3e9c4748efd0a74e7a9cba6a08f87945d0f22da3050fb99f1",
+      "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
+    },
+    "docs/testing/native-vault-lifecycle.md": {
+      "sha256": "405e7fc14623811fa8333054ed6481f1ef480a7a32309d93b8f59f9e283dcfb6",
+      "git_sha1": "0a3a0daffa7713b1f410c8f01c9994de94545c42"
     },
     "docs/testing/homecare-client.md": {
       "sha256": "0581401abb980f338b8287d83087f6a9c56aa2314eaaec02c0c86d591152bb12",
