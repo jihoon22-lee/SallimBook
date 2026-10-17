@@ -10,13 +10,24 @@ class CardMetadataPolicyTest {
     private fun input() = mapOf<String, Any?>("owner_member_id" to id, "issuer_name" to "합성 카드사", "product_name" to "합성 카드", "alias" to null,
         "card_type" to "credit", "last_four" to "1234", "settlement_day" to 31, "settlement_account_id" to accountId,
         "started_on" to "2026-01-01", "ended_on" to null, "note" to null)
-    private fun card() = input() + mapOf("id" to id, "household_id" to id, "masked_number" to "**** 1234", "settlement_account_status" to "active",
+    private fun card() = input() + mapOf("id" to id, "household_id" to id, "masked_number" to "**** 1234", "has_secret" to false, "settlement_account_status" to "active",
         "status" to "active", "created_by_member_id" to id, "updated_by_member_id" to id, "created_at" to "2026-01-01T00:00:00Z",
         "updated_at" to "2026-01-01T00:00:00Z", "version" to 3)
     private fun request(op: FinanceOperation, args: Map<String, Any?>) = FinancePolicy.prepare(op, args)
     private fun bad(code: AuthCode = AuthCode.INVALID_REQUEST, action: () -> Unit) {
         try { action(); fail("Unsafe card input or response accepted") }
         catch (failure: AuthFailure) { assertEquals(code, failure.code); assertNull(failure.message) }
+    }
+
+    @Test fun secretPresenceIsTypedMetadataWithoutAnEnvelope() {
+        val get = request(FinanceOperation.GET_CARD, mapOf("cardId" to id))
+        assertNotNull(FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, card() + mapOf("has_secret" to true)))
+        for (value in listOf(null, "true", 1)) bad(AuthCode.ACCESS_DENIED) {
+            FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, card() + mapOf("has_secret" to value))
+        }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, card() - "has_secret") }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_CARD, get, 200,
+            card() + mapOf("has_secret" to true, "last_four" to null, "masked_number" to null)) }
     }
 
     @Test fun sixCommandsOnlyReachFixedMetadataPathsWithStrongVersions() {
