@@ -6,6 +6,7 @@ import type { components } from "@sallimbook/api-client";
 export const apiClient = createApiClient();
 
 const knownCodes = [
+  "APP_LOCKED",
   "UNAUTHENTICATED", "REAUTHENTICATION_REQUIRED", "CSRF_FAILED", "FORBIDDEN",
   "ORIGIN_REJECTED", "WRONG_AUTH_TRANSPORT", "AMBIGUOUS_AUTH", "RATE_LIMITED",
   "HOUSEHOLD_FULL", "LOGIN_UNAVAILABLE", "INVALID_INVITATION", "REGISTRATION_CONFLICT",
@@ -15,7 +16,9 @@ const knownCodes = [
   "PASSKEY_UNSUPPORTED", "PASSKEY_CANCELLED", "PASSKEY_EXPIRED", "PASSKEY_FAILED",
   "PASSKEY_CONFIGURATION_INVALID", "PASSKEY_VERIFICATION_FAILED", "PASSKEY_REQUIRED",
   "CREDENTIAL_UNAVAILABLE", "STEP_UP_REQUIRED", "PASSKEYS_DISABLED",
-  "REAUTHENTICATION_FAILED",
+  "REAUTHENTICATION_FAILED", "OWNER_UNAVAILABLE", "INVALID_ASSET", "ASSET_IN_USE", "ASSET_KIND_IN_USE", "ASSET_UNAVAILABLE",
+  "FINANCIAL_ASSET_REQUIRED", "ASSET_ALREADY_LINKED", "INVALID_ACCOUNT", "ACCOUNT_NUMBER_NOT_SET",
+  "FIELD_ENCRYPTION_UNAVAILABLE", "ACCOUNT_NUMBER_UNAVAILABLE", "INVALID_ACCOUNT_DATES",
 ] as const;
 
 export type ApiErrorCode = typeof knownCodes[number];
@@ -51,7 +54,7 @@ export function toApiError(error: unknown): ApiError {
   return new ApiError(0, error instanceof TypeError ? "NETWORK_UNAVAILABLE" : "REQUEST_FAILED");
 }
 
-type ApiResult<T> = {
+export type ApiResult<T> = {
   data?: T;
   error?: components["schemas"]["ErrorResponse"];
   response: Response;

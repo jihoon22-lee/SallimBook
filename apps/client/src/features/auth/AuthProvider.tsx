@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createApiClient } from "@sallimbook/api-client";
 import type { components } from "@sallimbook/api-client";
+import type { AuthenticatedApi, WriteClient, ScopeProof } from "./AuthenticatedApi";
+import type { ApiResult } from "../../platform/api";
 import { ApiError, apiClient, isNativeAuthUnavailable, requestApi, requireWebAuth, toApiError } from "../../platform/api";
 import { isNativeAuth, nativeAuth, nativeRequest } from "../../platform/nativeAuth";
 import { createPasskey, getPasskey } from "../../platform/webauthn";
@@ -15,10 +18,11 @@ type DeviceList = components["schemas"]["DeviceListResponse"];
 export type Passkey = components["schemas"]["CredentialResponse"];
 type PasskeyList = components["schemas"]["CredentialListResponse"];
 type PasskeyLoginInput = components["schemas"]["LoginOptionsRequest"];
-type StepUpPurpose = "household.invite" | "device.revoke";
+type StepUpPurpose = ScopeProof["purpose"];
 export type OperationProof = { signal: AbortSignal; stepUp: boolean };
 
 export type AuthState =
+  | { status: "locked" }
   | { status: "loading" }
   | { status: "signed-out"; remoteRevocationUnconfirmed?: boolean }
   | { status: "authenticated"; member: Member }
@@ -27,6 +31,7 @@ export type AuthState =
 
 interface AuthContextValue {
   state: AuthState;
+  domainApi: AuthenticatedApi;
   reloadSession(): Promise<void>;
   login(input: LoginInput): Promise<void>;
   loginNative(passkey?: boolean): Promise<boolean>;
@@ -61,6 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     csrf.current = null;
     member.current = null;
     if (mounted.current) setState({ status: "signed-out" });
+  }, []);
+
+  const clearForAppLock = useCallback(() => {
+    generation.current += 1;
+    restoreFlight.current = null;
+    csrf.current = null;
+    member.current = null;
+    if (mounted.current) setState({ status: "locked" });
   }, []);
 
   const renewCsrf = useCallback((requestGeneration: number): Promise<string> => {
@@ -115,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         csrf.current = null;
         member.current = null;
         const failure = toApiError(error);
-        setState(failure.status === 401 ? { status: "signed-out" } : { status: "error", error: failure });
+        setState(failure.code === "APP_LOCKED" ? { status: "locked" } : failure.status === 401 ? { status: "signed-out" } : { status: "error", error: failure });
       }
     })();
     restoreFlight.current = promise;
@@ -133,6 +146,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [reloadSession]);
 
+  useEffect(() => {
+    if (!isNativeAuth() || isNativeAuthUnavailable()) return;
+    let disposed = false;
+    let handle: { remove(): Promise<void> } | undefined;
+    void nativeAuth.onAppLock(({ locked }) => {
+      if (disposed || !mounted.current) return;
+      // Events discard UI state; native policy still decides whether any API may run.
+      if (locked) clearForAppLock(); else void reloadSession();
+    }).then((value) => { if (disposed) void value.remove(); else handle = value; })
+      .catch(() => { if (!disposed) clearForAppLock(); });
+    return () => { disposed = true; if (handle) void handle.remove(); };
+  }, [clearForAppLock, reloadSession]);
+
   const authenticatedRequest = useCallback(async <T,>(request: (requestGeneration: number) => Promise<T>): Promise<T> => {
     if (!member.current) throw new ApiError(401, "UNAUTHENTICATED");
     const requestGeneration = generation.current;
@@ -142,10 +168,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return data;
     } catch (error) {
       const failure = toApiError(error);
+      if (failure.code === "APP_LOCKED") clearForAppLock();
       if (failure.status === 401 && failure.code !== "PASSKEY_VERIFICATION_FAILED" && generation.current === requestGeneration) clearSession();
       throw failure;
     }
-  }, [clearSession, ensureCurrent]);
+  }, [clearSession, clearForAppLock, ensureCurrent]);
 
   const mutation = useCallback(<T,>(request: (token: string) => Promise<T>): Promise<T> => authenticatedRequest(async (requestGeneration) => {
     requireWebAuth();
@@ -337,9 +364,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, [authenticatedRequest, clearSession, mutation, scopedOperation]);
 
-  const value = useMemo(() => ({ state, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
-    [state, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const domainApi = useMemo<AuthenticatedApi>(() => ({
+    read: <T,>(web: ((client: Pick<typeof apiClient, "GET">) => Promise<ApiResult<T>>) | undefined, native?: () => Promise<T>) => authenticatedRequest(() => {
+      if (isNativeAuth()) {
+        if (!native) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
+        return native();
+      }
+      if (!web) throw new ApiError(0, "REQUEST_FAILED");
+      return requestApi(() => web({ GET: apiClient.GET }));
+    }),
+    write: <T,>(web: ((client: WriteClient) => Promise<ApiResult<T>>) | undefined, native?: () => Promise<T>, proof?: ScopeProof) => {
+      if (isNativeAuth()) return authenticatedRequest(() => {
+        if (!native) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
+        return native();
+      });
+      if (!web) return Promise.reject(new ApiError(0, "REQUEST_FAILED"));
+      const action = (token: string, grant?: string) => {
+        const client = createApiClient();
+        client.use({ onRequest({ request }) {
+          const url = new URL(request.url, window.location.origin);
+          if (url.origin !== window.location.origin || !url.pathname.startsWith("/api/v1/")) throw new ApiError(0, "ORIGIN_REJECTED");
+          request.headers.set("X-CSRF-Token", token);
+          if (grant) request.headers.set("X-Step-Up-Token", grant);
+          return request;
+        } });
+        // Middleware and its private proof values stay inside this one request attempt.
+        return requestApi(() => web({ POST: client.POST, PATCH: client.PATCH, PUT: client.PUT, DELETE: client.DELETE }));
+      };
+      return proof ? scopedOperation(proof.purpose, proof.targetId, proof.signal, action) : mutation((token) => action(token));
+    },
+  }), [authenticatedRequest, mutation, scopedOperation]);
+
+  const value = useMemo(() => ({ state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
+    [state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
+  return <AuthContext.Provider value={value}>{state.status === "locked"
+    ? <p role="status">앱이 잠겨 있어요. Android 보호 화면에서 다시 열어 주세요.</p>
+    : children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {
