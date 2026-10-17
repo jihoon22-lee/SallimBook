@@ -1217,3 +1217,184 @@ class TestRecurringDatabase:
 def test_initial_ended_rule_requires_ordered_period_and_reason_pair(overrides):
     with pytest.raises(ValidationError):
         RuleCreate(**(rule_payload() | overrides))
+
+
+@pytest.fixture
+def reading_dataset(recurring_app, actors):
+    actor = actors[0]
+    with TestClient(recurring_app) as client:
+        rules = [post_rule(client, actor, title=f"합성 일괄 조회 {index}") for index in range(4)]
+        for rule in rules:
+            generate(client, actor, rule["id"], start="2026-01-01", end="2026-01-31")
+        rows = client.get("/api/v1/obligations?month=2026-01", headers=actor.headers).json()[
+            "items"
+        ]
+        row = rows[0]
+        payments = [
+            settle(client, actor, row | {"version": version}, amount="10").json()
+            for version in range(1, 5)
+        ]
+        void = client.post(
+            f"/api/v1/settlements/{payments[0]['id']}/void",
+            headers=headers(actor, version=1),
+            json={"reason": "합성 조회 이력"},
+        )
+        assert void.status_code == 200
+        changed = client.patch(
+            f"/api/v1/recurring-rules/{rules[0]['id']}",
+            headers=headers(actor, version=1),
+            json=rule_payload() | {"effective_from": "2026-03-01", "reason": "합성 조회 이력"},
+        )
+        assert changed.status_code == 200
+    return rules, row, payments
+
+
+@pytest.mark.database
+class TestRecurringReadQueries:
+    @pytest.mark.parametrize("view", ["rules", "obligations", "settlements"])
+    def test_page_queries_are_constant_and_preserve_current_cash_revision(
+        self, db_engine, actors, reading_dataset, view
+    ):
+        from sqlalchemy import event
+
+        actor = actors[0]
+        rules, obligation, payments = reading_dataset
+        counts = []
+        for limit in (1, 10):
+            statements = []
+
+            def count_selects(
+                connection,
+                cursor,
+                statement,
+                parameters,
+                context,
+                executemany,
+                statements=statements,
+            ):
+                if statement.lstrip().upper().startswith("SELECT"):
+                    statements.append(statement)
+
+            with Session(db_engine) as session:
+                event.listen(db_engine, "before_cursor_execute", count_selects)
+                try:
+                    if view == "rules":
+                        response = service.list_rules(session, actor.principal, limit=limit)
+                    elif view == "obligations":
+                        response = service.list_obligations(
+                            session, actor.principal, "2026-01", limit=limit
+                        )
+                    else:
+                        response = service.list_settlements(
+                            session, actor.principal, UUID(obligation["id"]), limit=limit
+                        )
+                finally:
+                    event.remove(db_engine, "before_cursor_execute", count_selects)
+            counts.append(len(statements))
+            assert len(response.items) == (1 if limit == 1 else 4)
+            assert (response.next_cursor is not None) == (limit == 1)
+            if limit == 10:
+                if view == "rules":
+                    first = next(item for item in response.items if str(item.id) == rules[0]["id"])
+                    assert first.version == 2 and len(first.versions) == 2
+                elif view == "obligations":
+                    paid = next(item for item in response.items if str(item.id) == obligation["id"])
+                    assert paid.actual_amount_krw == "30" and paid.version == 6
+                    assert sum(int(item.actual_amount_krw) for item in response.items) == 30
+                else:
+                    voided = next(
+                        item for item in response.items if str(item.id) == payments[0]["id"]
+                    )
+                    assert voided.cash.state == "void" and voided.cash.version == 2
+                    assert sum(item.cash.state == "active" for item in response.items) == 3
+        # Household barrier, page rows/scope check, and one batch relation query.
+        assert counts == [3, 3]
+
+    @pytest.mark.parametrize("view", ["get_obligation", "list_obligations", "summary"])
+    def test_reader_holds_one_snapshot_while_an_actual_payment_waits(
+        self, db_engine, recurring_app, actors, view
+    ):
+        from threading import Event
+        from time import monotonic, sleep
+
+        from sqlalchemy import event, text
+
+        from sallimbook.cashflow.recurring_schemas import SettlementCreate
+
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"], start="2026-01-01", end="2026-01-31")
+            obligation = obligation_for(client, actor, "2026-01")
+        ready, release, writer_ready = Event(), Event(), Event()
+        pids = {}
+
+        def read():
+            with Session(db_engine) as session:
+                connection = session.connection()
+                pids["reader"] = connection.connection.driver_connection.info.backend_pid
+
+                def pause_before_actual(conn, cursor, statement, parameters, context, executemany):
+                    if (
+                        statement.lstrip().upper().startswith("SELECT")
+                        and "FROM fixed_settlements" in statement
+                    ):
+                        ready.set()
+                        assert release.wait(10), "Synthetic reader was not released"
+
+                event.listen(connection, "before_cursor_execute", pause_before_actual)
+                try:
+                    if view == "get_obligation":
+                        return service.get_obligation(
+                            session, actor.principal, UUID(obligation["id"])
+                        )
+                    if view == "list_obligations":
+                        return service.list_obligations(session, actor.principal, "2026-01").items[
+                            0
+                        ]
+                    return service.summary(session, actor.principal, "2026-01")
+                finally:
+                    event.remove(connection, "before_cursor_execute", pause_before_actual)
+
+        def write():
+            with Session(db_engine) as session:
+                pids["writer"] = session.connection().connection.driver_connection.info.backend_pid
+                writer_ready.set()
+                return service.settle(
+                    session,
+                    actor.principal,
+                    UUID(obligation["id"]),
+                    SettlementCreate(amount_krw="10", occurred_on="2026-01-31"),
+                    '"1"',
+                    "synthetic-snapshot-write",
+                )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            reader = pool.submit(read)
+            try:
+                assert ready.wait(10)
+                writer = pool.submit(write)
+                assert writer_ready.wait(10)
+                with db_engine.connect() as observer:
+                    deadline = monotonic() + 10
+                    blockers = []
+                    while monotonic() < deadline:
+                        blockers = observer.scalar(
+                            text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["writer"]}
+                        )
+                        if pids["reader"] in blockers:
+                            break
+                        sleep(0.01)
+                    assert pids["reader"] in blockers
+                release.set()
+                before = reader.result(timeout=10)
+                payment = writer.result(timeout=10)
+            finally:
+                release.set()
+        assert before.actual_amount_krw == "0"
+        if view != "summary":
+            assert before.version == 1 and before.status == "unpaid"
+        assert payment.cash.amount_krw == "10"
+        with Session(db_engine) as session:
+            after = service.get_obligation(session, actor.principal, UUID(obligation["id"]))
+        assert after.version == 2 and after.actual_amount_krw == "10"

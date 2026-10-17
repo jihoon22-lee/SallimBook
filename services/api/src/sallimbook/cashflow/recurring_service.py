@@ -8,7 +8,7 @@ from sqlalchemy import or_, select
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
 from sallimbook.cashflow import service as cash
-from sallimbook.cashflow.models import CashRecord
+from sallimbook.cashflow.models import CashRecord, CashRecordRevision
 from sallimbook.cashflow.recurring_models import (
     FixedSettlement,
     ObligationGeneration,
@@ -134,7 +134,9 @@ def _versions(session, principal, rule_id):
     )
 
 
-def _rule_response(session, principal, row):
+def _rule_response(session, principal, row, *, versions=None):
+    if versions is None:
+        versions = _versions(session, principal, row.id)
     return RuleResponse(
         id=row.id,
         household_id=row.household_id,
@@ -153,7 +155,7 @@ def _rule_response(session, principal, row):
                 reason=version.reason,
                 created_at=version.created_at,
             )
-            for version in _versions(session, principal, row.id)
+            for version in versions
         ],
     )
 
@@ -328,6 +330,7 @@ def end_rule(session, principal, rule_id, payload, if_match, key):
 
 
 def get_rule(session, principal, rule_id):
+    cash.lock_cash_household(session, principal)
     response = _rule_response(
         session, principal, scoped_entity(session, RecurringRule, rule_id, principal)
     )
@@ -336,12 +339,27 @@ def get_rule(session, principal, rule_id):
 
 
 def list_rules(session, principal, *, cursor=None, limit=50):
+    cash.lock_cash_household(session, principal)
     query = select(RecurringRule).where(RecurringRule.household_id == principal.household_id)
     if cursor:
         query = query.where(RecurringRule.id < cursor)
     rows = list(session.scalars(query.order_by(RecurringRule.id.desc()).limit(limit + 1)))
+    versions = {row.id: [] for row in rows[:limit]}
+    if versions:
+        for version in session.scalars(
+            select(RecurringRuleVersion)
+            .where(
+                RecurringRuleVersion.household_id == principal.household_id,
+                RecurringRuleVersion.rule_id.in_(versions),
+            )
+            .order_by(RecurringRuleVersion.rule_id, RecurringRuleVersion.effective_from)
+        ):
+            versions[version.rule_id].append(version)
     response = RuleListResponse(
-        items=[_rule_response(session, principal, row) for row in rows[:limit]],
+        items=[
+            _rule_response(session, principal, row, versions=versions[row.id])
+            for row in rows[:limit]
+        ],
         next_cursor=rows[limit - 1].id if len(rows) > limit else None,
     )
     session.commit()
@@ -385,25 +403,33 @@ def _touch(session, principal, row, action, reason=None):
     _remember(session, principal, row, action, reason=reason, before=before)
 
 
-def _active_settlements(session, principal, obligation_id):
-    return list(
-        session.execute(
-            select(FixedSettlement, CashRecord)
-            .join(
-                CashRecord,
-                (
-                    (CashRecord.id == FixedSettlement.cash_record_id)
-                    & (CashRecord.household_id == FixedSettlement.household_id)
-                ),
-            )
-            .where(
-                FixedSettlement.household_id == principal.household_id,
-                FixedSettlement.obligation_id == obligation_id,
-                CashRecord.state == "active",
-            )
-            .order_by(FixedSettlement.id)
+def _active_settlements_by_obligation(session, principal, obligation_ids):
+    grouped = {obligation_id: [] for obligation_id in obligation_ids}
+    if not grouped:
+        return grouped
+    rows = session.execute(
+        select(FixedSettlement, CashRecord)
+        .join(
+            CashRecord,
+            (
+                (CashRecord.id == FixedSettlement.cash_record_id)
+                & (CashRecord.household_id == FixedSettlement.household_id)
+            ),
         )
+        .where(
+            FixedSettlement.household_id == principal.household_id,
+            FixedSettlement.obligation_id.in_(grouped),
+            CashRecord.state == "active",
+        )
+        .order_by(FixedSettlement.id)
     )
+    for payment, fact in rows:
+        grouped[payment.obligation_id].append((payment, fact))
+    return grouped
+
+
+def _active_settlements(session, principal, obligation_id):
+    return _active_settlements_by_obligation(session, principal, [obligation_id])[obligation_id]
 
 
 def _generate_rows(session, principal, start, end, rules):
@@ -551,8 +577,9 @@ def generate(session, principal, payload: GenerateObligations, key):
     return response
 
 
-def _obligation_response(session, principal, row):
-    actuals = _active_settlements(session, principal, row.id)
+def _obligation_response(session, principal, row, *, actuals=None):
+    if actuals is None:
+        actuals = _active_settlements(session, principal, row.id)
     try:
         totals = settlement_totals(
             row.expected_amount_krw, [fact.amount_krw for _, fact in actuals]
@@ -592,6 +619,7 @@ def _obligation_response(session, principal, row):
 
 
 def get_obligation(session, principal, obligation_id):
+    cash.lock_cash_household(session, principal)
     row = scoped_entity(session, ScheduledObligation, obligation_id, principal)
     response = _obligation_response(session, principal, row)
     session.commit()
@@ -604,6 +632,7 @@ def _month_bounds(month):
 
 
 def list_obligations(session, principal, month, *, cursor=None, limit=50):
+    cash.lock_cash_household(session, principal)
     start, end = _month_bounds(month)
     query = select(ScheduledObligation).where(
         ScheduledObligation.household_id == principal.household_id,
@@ -612,8 +641,14 @@ def list_obligations(session, principal, month, *, cursor=None, limit=50):
     if cursor:
         query = query.where(ScheduledObligation.id < cursor)
     rows = list(session.scalars(query.order_by(ScheduledObligation.id.desc()).limit(limit + 1)))
+    actuals = _active_settlements_by_obligation(
+        session, principal, [row.id for row in rows[:limit]]
+    )
     response = ObligationListResponse(
-        items=[_obligation_response(session, principal, row) for row in rows[:limit]],
+        items=[
+            _obligation_response(session, principal, row, actuals=actuals[row.id])
+            for row in rows[:limit]
+        ],
         next_cursor=rows[limit - 1].id if len(rows) > limit else None,
     )
     session.commit()
@@ -712,9 +747,10 @@ def obligation_history(session, principal, obligation_id, *, cursor=None, limit=
     return response
 
 
-def _settlement_response(session, principal, row, version=None):
-    fact = scoped_entity(session, CashRecord, row.cash_record_id, principal)
-    revision = cash._revision(session, principal, fact.id, version or fact.version)
+def _settlement_response(session, principal, row, version=None, *, revision=None):
+    if revision is None:
+        fact = scoped_entity(session, CashRecord, row.cash_record_id, principal)
+        revision = cash._revision(session, principal, fact.id, version or fact.version)
     return SettlementResponse(
         id=row.id,
         obligation_id=row.obligation_id,
@@ -841,23 +877,47 @@ def void_settlement(session, principal, settlement_id, payload, if_match, key):
 
 
 def list_settlements(session, principal, obligation_id, *, cursor=None, limit=50):
+    cash.lock_cash_household(session, principal)
     scoped_entity(session, ScheduledObligation, obligation_id, principal)
-    query = select(FixedSettlement).where(
-        FixedSettlement.household_id == principal.household_id,
-        FixedSettlement.obligation_id == obligation_id,
+    query = (
+        select(FixedSettlement, CashRecordRevision)
+        .join(
+            CashRecord,
+            (
+                (CashRecord.id == FixedSettlement.cash_record_id)
+                & (CashRecord.household_id == FixedSettlement.household_id)
+            ),
+        )
+        .join(
+            CashRecordRevision,
+            (
+                (CashRecordRevision.cash_record_id == CashRecord.id)
+                & (CashRecordRevision.household_id == CashRecord.household_id)
+                & (CashRecordRevision.version == CashRecord.version)
+            ),
+        )
+        .where(
+            FixedSettlement.household_id == principal.household_id,
+            FixedSettlement.obligation_id == obligation_id,
+        )
     )
     if cursor:
         query = query.where(FixedSettlement.id < cursor)
-    rows = list(session.scalars(query.order_by(FixedSettlement.id.desc()).limit(limit + 1)))
+    rows = list(session.execute(query.order_by(FixedSettlement.id.desc()).limit(limit + 1)))
     response = SettlementListResponse(
-        items=[_settlement_response(session, principal, row) for row in rows[:limit]],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        items=[
+            _settlement_response(session, principal, payment, revision=revision)
+            for payment, revision in rows[:limit]
+        ],
+        next_cursor=rows[limit - 1][0].id if len(rows) > limit else None,
     )
     session.commit()
     return response
 
 
 def summary(session, principal, month):
+    # Share the mutation barrier so planned and actual queries agree.
+    cash.lock_cash_household(session, principal)
     start, end = _month_bounds(month)
     expected = list(
         session.scalars(
