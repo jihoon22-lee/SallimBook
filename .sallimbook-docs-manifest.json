@@ -222,8 +222,12 @@
       "git_sha1": "5c1b46d7e76a8bd475c0e2afef80159019363e46"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "5ce2cdc1621a3fbb1563f25be5f6c0c930ac2b80b0469052e6b74f7d4b502966",
-      "git_sha1": "017496e96ffea7a72ad4fdfc8cc4aacb1d38b4e7"
+      "sha256": "a89da28144101a0a19364d8b787737ff4e5c328b76b45d7b3aa751c651693226",
+      "git_sha1": "044a75fda09a9bf7470c814ad334190cb9883ef8"
+    },
+    "docs/testing/passkeys-web.md": {
+      "sha256": "645adbd1b1256dc193b7cbfe2779b8c668527a5512bbe8644a44185da1cb19b8",
+      "git_sha1": "afa8ae4ceee39c5e9bf7c664c9a4555443caf489"
     }
   }
 }

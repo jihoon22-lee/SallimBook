@@ -5,7 +5,8 @@
 export type NativeAuthErrorCode =
   | "AUTH_UNAVAILABLE" | "AUTH_CANCELLED" | "ACCESS_DENIED" | "SESSION_EXPIRED"
   | "KEY_INVALIDATED" | "NETWORK_UNAVAILABLE" | "INVALID_REQUEST"
-  | "AUTH_FAILED" | "REGISTRATION_FAILED";
+  | "AUTH_FAILED" | "REGISTRATION_FAILED" | "PASSKEYS_DISABLED" | "PASSKEY_REQUIRED"
+  | "PASSKEY_CANCELLED" | "PASSKEY_FAILED" | "REAUTHENTICATION_REQUIRED";
 
 export type NativeAuthResult<T> = { ok: true; value: T } | { ok: false; code: NativeAuthErrorCode };
 export type NativeJson = null | boolean | number | string | NativeJson[] | { [key: string]: NativeJson };
@@ -16,7 +17,7 @@ export interface NativeSessionState {
 }
 
 export interface NativeMetadataRequest {
-  /** Only GET /me, /household/members, /devices and DELETE /devices/{UUID} under /api/v1. */
+  /** Only GET /me, /household/members, /devices, /auth/passkeys and DELETE /devices/{UUID}. */
   method: "GET" | "DELETE";
   path: string;
   /** Required strong version tag for DELETE. Arbitrary headers/bodies are never accepted. */
@@ -30,6 +31,13 @@ export interface SallimBookAuth {
   acceptInvitationUI(): Promise<NativeAuthResult<{ status: "accepted" | "cancelled" }>>;
   /** Intended login and the generated invitation secret are handled/displayed only in native UI. */
   createInvitationUI(): Promise<NativeAuthResult<{ status: "created" | "cancelled" }>>;
+  /** Native Credential Manager owns all challenge, response, device binding and token data. */
+  passkeyLoginUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
+  registerPasskeyUI(): Promise<NativeAuthResult<{ status: "registered" | "cancelled" }>>;
+  revokePasskeyUI(options: { credentialId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "revoked" | "cancelled" }>>;
+  /** Scope and target are fixed internally; no reusable step-up grant crosses the bridge. */
+  revokeDeviceUI(options: { deviceId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "revoked" | "cancelled" }>>;
+  createInvitationWithPasskeyUI(): Promise<NativeAuthResult<{ status: "created" | "cancelled" }>>;
   logout(): Promise<NativeAuthResult<{ status: "signedOut"; serverRevoked: boolean }>>;
   request(options: NativeMetadataRequest): Promise<NativeAuthResult<{ status: number; body: NativeJson }>>;
 }

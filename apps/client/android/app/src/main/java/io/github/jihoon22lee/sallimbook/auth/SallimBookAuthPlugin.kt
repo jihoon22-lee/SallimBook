@@ -90,9 +90,24 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
     @PluginMethod fun createInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.CREATE_INVITATION) } }
+    @PluginMethod fun passkeyLoginUI(call: PluginCall) { main.post { launchForm(call, NativePasskeyActivity.LOGIN) } }
+    @PluginMethod fun registerPasskeyUI(call: PluginCall) { main.post { launchForm(call, NativePasskeyActivity.REGISTER) } }
+    @PluginMethod fun createInvitationWithPasskeyUI(call: PluginCall) { main.post { launchForm(call, NativePasskeyActivity.INVITE) } }
+    @PluginMethod fun revokePasskeyUI(call: PluginCall) { main.post { launchTargetForm(call, NativePasskeyActivity.REVOKE, "credentialId") } }
+    @PluginMethod fun revokeDeviceUI(call: PluginCall) { main.post { launchTargetForm(call, NativePasskeyActivity.DEVICE, "deviceId") } }
 
-    private fun launchForm(call: PluginCall, mode: String) {
-        if (!emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
+    private fun launchTargetForm(call: PluginCall, mode: String, idKey: String) {
+        val names = call.data.keys().asSequence().toSet()
+        val id = call.data.opt(idKey) as? String
+        val ifMatch = call.data.opt("ifMatch") as? String
+        if (names != setOf(idKey, "ifMatch") || !PasskeyPolicy.target(id, ifMatch)) {
+            failure(call, AuthCode.INVALID_REQUEST); return
+        }
+        launchForm(call, mode, id, ifMatch)
+    }
+
+    private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null) {
+        if (targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
         if (!trustedForeground() || !activity.hasWindowFocus()) { failure(call, AuthCode.ACCESS_DENIED); return }
         val now = SystemClock.elapsedRealtime()
         if (!auth.available || uiCall != null || pending.isNotEmpty() ||
@@ -104,8 +119,13 @@ class SallimBookAuthPlugin : Plugin() {
         uiCall = call
         uiMode = mode
         try {
-            startActivityForResult(call, Intent(activity, NativeAuthActivity::class.java)
-                .putExtra(NativeAuthActivity.EXTRA_MODE, mode), "authActivityResult")
+            val passkey = mode in setOf(NativePasskeyActivity.LOGIN, NativePasskeyActivity.REGISTER,
+                NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE, NativePasskeyActivity.INVITE)
+            val intent = Intent(activity, if (passkey) NativePasskeyActivity::class.java else NativeAuthActivity::class.java)
+                .putExtra(NativeAuthActivity.EXTRA_MODE, mode)
+            if (targetId != null) intent.putExtra(NativePasskeyActivity.EXTRA_ID, targetId)
+                .putExtra(NativePasskeyActivity.EXTRA_VERSION, ifMatch)
+            startActivityForResult(call, intent, "authActivityResult")
         } catch (_: Exception) {
             uiCall = null
             uiMode = null
@@ -117,15 +137,18 @@ class SallimBookAuthPlugin : Plugin() {
     private fun authActivityResult(call: PluginCall?, result: ActivityResult) {
         if (call == null || call !== uiCall) return
         val expected = when (uiMode) {
-            NativeAuthActivity.LOGIN -> "authenticated"
-            NativeAuthActivity.CREATE_INVITATION -> "created"
+            NativeAuthActivity.LOGIN, NativePasskeyActivity.LOGIN -> "authenticated"
+            NativeAuthActivity.CREATE_INVITATION, NativePasskeyActivity.INVITE -> "created"
+            NativePasskeyActivity.REGISTER -> "registered"
+            NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE -> "revoked"
             else -> "accepted"
         }
         val status = result.data?.getStringExtra(NativeAuthActivity.EXTRA_STATUS)
         uiOutcome = if (result.resultCode == Activity.RESULT_OK && status == expected) {
             AuthOutcome.success(mapOf("status" to expected))
-        } else if (result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) == AuthCode.AUTH_UNAVAILABLE.name) {
-            AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE)
+        } else if (result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) != null) {
+            val code = AuthCode.entries.firstOrNull { it.name == result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) }
+            AuthOutcome.failure(code ?: AuthCode.AUTH_UNAVAILABLE)
         } else AuthOutcome.success(mapOf("status" to "cancelled"))
         flushUiResult()
     }

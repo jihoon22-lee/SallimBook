@@ -18,6 +18,11 @@ async function invoke<T>(action: () => Promise<NativeAuthResult<T>>): Promise<T>
     case "AUTH_CANCELLED": throw new ApiError(0, "REQUEST_CANCELLED");
     case "KEY_INVALIDATED": throw new ApiError(401, "NATIVE_KEY_INVALIDATED");
     case "ACCESS_DENIED": throw new ApiError(403, "FORBIDDEN");
+    case "PASSKEYS_DISABLED": throw new ApiError(0, "PASSKEYS_DISABLED");
+    case "PASSKEY_REQUIRED": throw new ApiError(409, "PASSKEY_REQUIRED");
+    case "PASSKEY_CANCELLED": throw new ApiError(0, "PASSKEY_CANCELLED");
+    case "PASSKEY_FAILED": throw new ApiError(0, "PASSKEY_FAILED");
+    case "REAUTHENTICATION_REQUIRED": throw new ApiError(403, "REAUTHENTICATION_REQUIRED");
     default: throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
   }
 }
@@ -35,6 +40,11 @@ export async function nativeRequest<T>(options: NativeMetadataRequest): Promise<
 export const nativeAuth = {
   getSession: () => invoke(() => plugin.getSession()),
   login: () => invoke(() => plugin.loginUI()),
+  loginPasskey: () => invoke(() => plugin.passkeyLoginUI()),
+  registerPasskey: () => invoke(() => plugin.registerPasskeyUI()),
+  revokePasskey: (credentialId: string, ifMatch: string) => invoke(() => plugin.revokePasskeyUI({ credentialId, ifMatch })),
+  revokeDevice: (deviceId: string, ifMatch: string) => invoke(() => plugin.revokeDeviceUI({ deviceId, ifMatch })),
+  createInvitationWithPasskey: () => invoke(() => plugin.createInvitationWithPasskeyUI()),
   acceptInvitation: () => invoke(() => plugin.acceptInvitationUI()),
   createInvitation: () => invoke(() => plugin.createInvitationUI()),
   logout: () => invoke(() => plugin.logout()),

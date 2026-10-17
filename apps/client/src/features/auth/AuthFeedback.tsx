@@ -8,9 +8,19 @@ export function authErrorMessage(error: ApiError, login = false): string {
   switch (error.code) {
     case "NETWORK_UNAVAILABLE": return "서버 연결을 확인하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
     case "UNAUTHENTICATED": return "로그인이 만료되었거나 필요해요. 다시 로그인해 주세요.";
-    case "REAUTHENTICATION_REQUIRED": return "다시 로그인한 후 진행해 주세요. 기기 해제와 초대에는 최근 로그인이 필요해요.";
+    case "REAUTHENTICATION_REQUIRED": return "다시 로그인한 후 진행해 주세요. 패스키 등록과 해제에는 5분 이내 로그인이 필요해요. 초대와 기기 해제는 패스키로 해당 작업만 확인할 수도 있어요.";
+    case "PASSKEY_UNSUPPORTED": return "이 브라우저에서는 패스키를 사용할 수 없어요. 최신 브라우저의 HTTPS 주소에서 다시 시도하거나 비밀번호로 로그인해 주세요.";
+    case "PASSKEY_CANCELLED": return "패스키 인증을 완료하지 않았어요. 준비되면 다시 시도해 주세요.";
+    case "PASSKEY_EXPIRED": return "패스키 요청 시간이 지났어요. 다시 시작해 주세요.";
+    case "PASSKEY_CONFIGURATION_INVALID":
+    case "PASSKEYS_DISABLED": return "이 주소의 패스키 연결이 설정되지 않았어요. 비밀번호 로그인을 이용해 주세요.";
+    case "PASSKEY_VERIFICATION_FAILED":
+    case "PASSKEY_FAILED": return "패스키를 확인하지 못했어요. 이 계정에 등록된 패스키로 다시 시도해 주세요.";
+    case "PASSKEY_REQUIRED": return "먼저 패스키를 등록하거나 다시 로그인한 뒤 진행해 주세요.";
+    case "CREDENTIAL_UNAVAILABLE": return "이 패스키를 등록할 수 없어요. 등록 목록을 확인하거나 다른 패스키를 선택해 주세요.";
+    case "STEP_UP_REQUIRED": return "이 작업의 인증이 만료되었거나 사용할 수 없어요. 작업과 대상을 확인하고 다시 인증해 주세요.";
     case "CSRF_FAILED": return "인증 상태가 다시 변경되어 요청을 완료하지 않았어요. 세션을 다시 확인한 뒤 시도해 주세요.";
-    case "VERSION_CONFLICT": return "기기 정보가 다른 곳에서 변경됐어요. 목록을 다시 불러온 뒤 확인해 주세요.";
+    case "VERSION_CONFLICT": return "정보가 다른 곳에서 변경됐어요. 목록을 다시 불러온 뒤 확인해 주세요.";
     case "HOUSEHOLD_FULL": return "이 가계에는 이미 두 계정이 등록되어 있어요.";
     case "LOGIN_UNAVAILABLE": return "이 로그인 이름은 사용할 수 없어요. 다른 이름을 입력해 주세요.";
     case "INVALID_INVITATION": return "초대 코드가 만료되었거나 사용할 수 없어요. 새 초대를 확인해 주세요.";

@@ -5,6 +5,9 @@ import type { components } from "@sallimbook/api-client";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { NativeAuthAction } from "./NativeAuthAction";
+import { PasskeyPanel } from "./PasskeyPanel";
+import { useAuthCeremony } from "./useAuthCeremony";
+import { supportsWebAuthn } from "../../platform/webauthn";
 import { AuthError, SessionStatus, useMounted } from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
 import type { Device, Member } from "./AuthProvider";
@@ -17,6 +20,7 @@ function localDate(value: string) {
 
 function InvitationPanel() {
   const { createPartnerInvitation } = useAuth();
+  const ceremony = useAuthCeremony();
   const mounted = useMounted();
   const generation = useRef(0);
   const [busy, setBusy] = useState(false);
@@ -53,7 +57,8 @@ function InvitationPanel() {
     setInvitation(null);
     setRevealed(false);
     try {
-      const response = await createPartnerInvitation(input);
+      const stepUp = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("name") === "step_up";
+      const response = await ceremony.run((signal) => createPartnerInvitation(input, { signal, stepUp }));
       if (mounted.current && generation.current === requestGeneration && document.visibilityState === "visible") setInvitation(response);
     } catch (failure) {
       if (mounted.current && generation.current === requestGeneration) setError(toApiError(failure));
@@ -71,6 +76,8 @@ function InvitationPanel() {
       </div>
       <AuthError error={error} />
       <button type="submit" disabled={busy}>{busy ? "초대 생성 중…" : "초대 만들기"}</button>
+      {supportsWebAuthn() && <button type="submit" name="step_up" disabled={busy}>패스키로 확인하고 초대</button>}
+      {busy && <button type="button" onClick={ceremony.cancel}>인증 요청 취소</button>}
     </form>
     {invitation && <div className="invitation-result">
       <p role="status">초대를 만들었어요. 만료: {localDate(invitation.expires_at)} (서울 기준)</p>
@@ -84,6 +91,7 @@ function InvitationPanel() {
 
 function DevicePanel() {
   const { listDevices, revokeDevice } = useAuth();
+  const ceremony = useAuthCeremony();
   const mounted = useMounted();
   const generation = useRef(0);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -113,13 +121,13 @@ function DevicePanel() {
 
   useEffect(() => { void load(); return () => { generation.current += 1; }; }, [load]);
 
-  async function revoke(device: Device) {
+  async function revoke(device: Device, stepUp = false) {
     if (revoking || loading) return;
     setRevoking(true);
     setActionError(null);
     try {
-      await revokeDevice(device);
-      if (mounted.current && !device.current) await load();
+      const revoked = await ceremony.run((signal) => revokeDevice(device, { signal, stepUp }));
+      if (revoked && mounted.current && !device.current) await load();
     } catch (failure) {
       if (mounted.current) setActionError(toApiError(failure));
     } finally {
@@ -144,7 +152,8 @@ function DevicePanel() {
         ? <div role="group" aria-label={`${device.label} 연결 해제 확인`}>
             <p>{device.current ? "이 기기에서 로그아웃하고 연결을 해제할까요?" : "이 기기의 로그인 연결을 해제할까요?"}</p>
             <div className="form-actions"><button type="button" autoFocus disabled={revoking || loading || Boolean(error)} onClick={() => void revoke(device)}>{revoking ? "연결 해제 중…" : "연결 해제 확인"}</button>
-              <button type="button" disabled={revoking} onClick={() => setConfirming(null)}>취소</button></div>
+              {(supportsWebAuthn() || isNativeAuth()) && <button type="button" disabled={revoking || loading || Boolean(error)} onClick={() => void revoke(device, true)}>패스키로 확인하고 연결 해제</button>}
+              <button type="button" onClick={() => { ceremony.cancel(); if (!revoking) setConfirming(null); }}>취소</button></div>
           </div>
         : <button type="button" disabled={revoking || loading || Boolean(error)} aria-label={`${device.label} 연결 해제`} onClick={() => { setActionError(null); setConfirming(device.id); }}>연결 해제</button>)}
     </li>)}</ul>
@@ -176,6 +185,7 @@ function AuthenticatedSettings({ member }: { member: Member }) {
       <div className="form-actions"><button type="button" disabled={busy} onClick={() => void signOut()}>{busy ? "로그아웃 중…" : "로그아웃"}</button><Link className="button-link" to="/login">최근 로그인 다시 확인</Link></div>
     </section>
     <DevicePanel />
+    <PasskeyPanel />
     {member.role === "owner" ? isNativeAuth() ? <NativeAuthAction mode="invite" /> : <InvitationPanel key={secretReset} /> : <section className="card"><h2>구성원 초대</h2><p>두 번째 구성원 초대는 가계 관리자 계정에서 만들 수 있어요.</p></section>}
   </div>;
 }
