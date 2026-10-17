@@ -18,7 +18,7 @@ import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select, text
+from sqlalchemy import event, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 from test_accounts import asset_payload, make_actor, write_keyring
@@ -35,6 +35,7 @@ from sallimbook.documents.models import Document, DocumentLink
 from sallimbook.documents.router import router
 from sallimbook.documents.schemas import DocumentReason
 from sallimbook.documents.storage import PrivateStore
+from sallimbook.homecare.router import router as homecare_router
 from sallimbook.identity.auth_models import AuthSession
 
 pytestmark = pytest.mark.database
@@ -60,6 +61,7 @@ def document_app(db_engine, tmp_path, monkeypatch):
     )
     install_http_contract(app)
     app.include_router(asset_router)
+    app.include_router(homecare_router)
     app.include_router(router)
     monkeypatch.setattr(service, "validate_document", lambda *args, **kwargs: None)
     return app
@@ -730,3 +732,81 @@ def test_slow_upload_body_does_not_block_session_revocation(document_app, actors
 
     asyncio.run(scenario())
     assert not document_app.state.settings.document_storage_directory.exists()
+
+
+def test_unlink_waits_for_parent_without_holding_its_child_link(document_app, actors):
+    actor, partner, _ = actors
+    with TestClient(document_app) as client:
+        row = pending(client, actor)
+        link = client.get(f"/api/v1/documents/{row['id']}/links", headers=actor.headers).json()[
+            "items"
+        ][0]
+    attempting_parent = Event()
+
+    def observe(connection, cursor, statement, parameters, context, executemany):
+        if "FROM documents" in statement and "FOR UPDATE" in statement:
+            attempting_parent.set()
+
+    def unlink_request():
+        with TestClient(document_app) as client:
+            return client.post(
+                f"/api/v1/document-links/{link['id']}/end",
+                json={"reason": "합성 동시 연결 종료"},
+                headers=headers(partner, version=link["version"]),
+            )
+
+    # Emulate a storage writer that already owns the parent. It must still be able
+    # to end its child while the API waits; opposite lock ordering would deadlock.
+    blocker = Session(document_app.state.engine)
+    locked_document = blocker.scalar(
+        select(Document).where(Document.id == UUID(row["id"])).with_for_update()
+    )
+    event.listen(document_app.state.engine, "before_cursor_execute", observe)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        operation = executor.submit(unlink_request)
+        try:
+            assert attempting_parent.wait(timeout=5)
+            child = blocker.scalar(
+                select(DocumentLink)
+                .where(DocumentLink.id == UUID(link["id"]))
+                .with_for_update(nowait=True)
+            )
+            now = datetime.now(UTC)
+            child.active, child.ended_at, child.end_reason = False, now, "합성 문서 삭제"
+            child.version += 1
+            locked_document.state = "deleted"
+            locked_document.deleted_at, locked_document.deletion_reason = now, "합성 문서 삭제"
+            locked_document.version += 1
+            blocker.commit()
+        finally:
+            blocker.rollback()
+            blocker.close()
+            event.remove(document_app.state.engine, "before_cursor_execute", observe)
+        result = operation.result(timeout=5)
+    assert result.status_code == 409, result.text
+    with TestClient(document_app) as client:
+        assert detail(client, actor, row)["state"] == "deleted"
+
+
+def test_appliance_document_reference_preserves_parent_even_after_unlink(document_app, actors):
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        appliance = client.post(
+            "/api/v1/appliances", json={"name": "합성 구매 문서 기기"}, headers=actor.headers
+        )
+        assert appliance.status_code == 201
+        item = appliance.json()
+        row = pending(client, actor, target={"kind": "appliance", "id": item["id"]})
+        path = f"/api/v1/appliances/{item['id']}"
+        assert client.delete(path, headers=headers(actor, version=1)).status_code == 409
+        link = client.get(f"/api/v1/documents/{row['id']}/links", headers=actor.headers).json()[
+            "items"
+        ][0]
+        ended = client.post(
+            f"/api/v1/document-links/{link['id']}/end",
+            headers=headers(actor, version=1),
+            json={"reason": "합성 연결 해제"},
+        )
+        assert ended.status_code == 200
+        assert client.delete(path, headers=headers(actor, version=1)).status_code == 409
+        assert client.get(path, headers=actor.headers).status_code == 200

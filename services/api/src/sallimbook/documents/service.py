@@ -376,11 +376,16 @@ def unlink(session, principal, link_id, payload, if_match, key):
     recheck = _lock(session, principal)
 
     def execute():
+        # The household writer lock serializes API mutations; retain the same
+        # parent-before-child order as document deletion and direct storage writes.
+        reference = scoped_entity(session, DocumentLink, link_id, principal)
+        document = scoped_entity(
+            session, Document, reference.document_id, principal, for_update=True
+        )
         row = scoped_entity(session, DocumentLink, link_id, principal, for_update=True)
         require_version(row, if_match)
         if not row.active:
             raise DomainError("DOCUMENT_LINK_ENDED", "이미 해제한 연결입니다.", 409)
-        document = scoped_entity(session, Document, row.document_id, principal, for_update=True)
         now = datetime.now(UTC)
         before = _touch(row, principal)
         row.active, row.ended_at, row.end_reason = False, now, payload.reason

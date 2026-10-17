@@ -14,7 +14,7 @@ uv run --project services/api ruff check services/api/src services/api/tests ser
 python3 scripts/validate_docs.py
 ```
 
-API·실제 PostgreSQL 28개, 암호화·파일 저장소 30개, 검사 계약 81개로 **139개 통과**했다.
+API·실제 PostgreSQL 30개, 암호화·파일 저장소 30개, 검사 계약 81개로 **141개 통과**했다.
 Alembic `upgrade head`, drift 검사, 전체 downgrade/upgrade도 통과했으며 전용 DB를 정지했다.
 초기 실패는 링크 종료 중 autoflush로 문서 버전을 두 번 올린 문제와 긴 임시 Unix socket 경로였다.
 버전 갱신 전 링크 수를 조회하고 합성 socket 경로를 짧게 고친 뒤 관련 검사와 135개 전체를 다시 통과했다.
@@ -58,3 +58,8 @@ PR 리뷰 보완: 본문을 읽기 전에 API 프로세스당 업로드 한 개�
 worker는 요청 dependency와 별도 DB session을 소유해 취소된 요청의 session 종료와 겹치지 않는다.
 실제 비동기 ASGI 수신으로 선행 제한·본문 미수신·취소/실패 후 재사용·worker 완료를 4개 추가 검증했다.
 새 서명 갱신 날짜 build 인자를 포함한 도구 이미지의 build-only도 통과했다.
+
+두 번째 리뷰 보완: API의 가계 잠금에 더해 연결 종료도 문서→연결 순서로 잠근다.
+부모를 잠근 직접 저장소 트랜잭션이 자식 링크를 기다리지 않고 끝낼 수 있으며, 그 뒤 API는
+변경된 버전을 409로 반환함을 실제 경합 시험으로 확인했다. 가전의 문서 연결을 종료해도 과거
+연결 이력이 있으면 가전 물리 삭제를 막는 회귀를 추가했다. 총141개와 Alembic drift/왕복을 통과했다.
