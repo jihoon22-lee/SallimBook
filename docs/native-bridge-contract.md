@@ -302,3 +302,45 @@ Digest는 연결 변경 확인 값이며 인증 수단이 아니고, 실제 종�
 `TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test cashflow-native-bridge.spec.ts assets.spec.ts accounts.spec.ts accounts-native.spec.ts --config playwright.finance.config.ts --workers=2`는
 46개 명령 전달·4개 종료 명령 확인값·기존 자산/계좌 흐름을 포함해 **54개**를 통과했다.
 브라우저는 DB 시험 컨테이너 정지 확인 후 실행했고 실제 Android 기기 시험은 미실행이다.
+
+## 16. 보험계약·사건·진료 트리와 증권번호 (SB-019/020)
+
+생성 API의 보험 메타데이터 20개 operationId를 같은 이름의 네이티브 명령으로 연결했다.
+보험계약 목록·생성·상세·수정, 보장 목록·생성·수정, 보험료 규칙 연결 목록·생성·수정,
+독립 사건 목록·생성·상세·수정·이력, 진료 노드 목록·생성·상세·수정·삭제를 제공한다.
+TS 입력·응답은 공식 생성 DTO를 참조하고 기존 자원 수정·삭제에는 강한 `ifMatch`가 필요하다.
+계약 생성·수정의 TS 입력은 `policy_number`를 제외하며 JS와 Kotlin 모두 해당 키를 null까지 거부한다.
+일반 `request` 명령과 임의 경로·헤더·원문 본문 입력은 확장하지 않는다.
+
+계약/보장/납입 날짜를 각각 검증하고 보장금액은 null·0원·최대 20자리 정수 원 문자열을 보존한다.
+보험료 연결은 기존 `RuleResponse` 검증을 재사용하며 계약·규칙·가계 ID를 대조한다.
+사건의 치료 상태와 정산 상태는 독립이고, 치료 종료일과 시작일 관계를 검증한다.
+사건 목록에는 진단 메모·코드를 허용하지 않으며 상세와 typed 변경 이력에서만 길이를 제한해 전달한다.
+진료 노드는 종류·부모·정렬 순서·실제 날짜와 요청 사건 ID를 검증한다. 전체 트리의 순환·가계 권한과
+최종 계산은 서버가 판단한다. 일반 목록의 ID/이력 version은 내림차순·중복 없음·cursor/limit을 검증한다.
+진료 노드는 서버의 부모 우선·형제 정렬 순서를 보존하고 UUID cursor를 위치로 취급하며,
+ID 중복·마지막 행 cursor·limit·사건 ID를 검증한다.
+네이티브는 진료 노드에 금액을 추가하거나 보험료를 자산 스냅샷에 자동 합산하지 않는다.
+
+`editInsurancePolicyNumberUI({policyId, ifMatch})`와
+`showInsurancePolicyNumberUI({policyId})`는 별도의 비공개 native Activity를 연다.
+`nativeFinance`에서는 각각 `editInsurancePolicyNumber`와 `showInsurancePolicyNumber`로 호출한다.
+원문은 native 입력/HTTP/표시 내부에서만 사용하고 JS에는 saved/deleted/completed/cancelled 상태 또는
+고정 오류 코드만 반환한다. 증권번호 전용 PATCH/POST reveal 경로는 계좌번호 경로와 분리해 검증한다.
+계약 번호를 지울 때는 네이티브 화면에서 명시적으로 확인하며 기존 번호는 마스킹으로만 미리 읽는다.
+
+이 화면은 FLAG_SECURE, 저장 상태·자동완성·content capture·문맥 메뉴 차단을 적용하고
+최대 30초의 monotonic 표시 시간을 사용한다. focus 상실·pause·화면 꺼짐·앱 잠금·닫기·파괴 시
+요청을 취소하고 입력/표시 버퍼를 지운다. 늦은 응답은 foreground gate와 앱 잠금 세대로 차단한다.
+서버는 현재 세션의 최근 비밀번호 인증을 확인한다. 재인증 필요 시 화면을 닫고 기존 native 비밀번호
+재인증을 사용하도록 안내하며 증권번호용 passkey scope나 우회 버튼은 추가하지 않는다.
+서버 필드 암호화와 카드 보관함 E2EE는 다른 경계다.
+
+공식 계약 재생성(`0010_insurance_core`) 및 `pnpm android:sync`를 통과했다.
+`JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=2 testDebugUnitTest compileReleaseKotlin`은
+신규 보험 경계 15개를 포함한 JVM **173개**를 실패·오류·건너뜀 없이 통과했고 release Kotlin을 컴파일했다.
+`TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.finance.config.ts --workers=2`는
+보험 브리지 14개와 기존 금융/계좌 브리지 20개, 총 **34개**를 통과했다.
+브라우저 결과는 두 화면 크기의 JS 전달 모의시험이며 실제 Android 보호 화면·암호화·서버 권한의 증명이 아니다.
+이 작업에서는 APK 조립과 실제 기기 시험을 실행하지 않았다. 운영 키 설정과 실기기의 화면 캡처·
+Home/화면 꺼짐·30초 만료·앱 잠금·늦은 HTTP 응답 시나리오는 별도 검증 항목으로 남는다.

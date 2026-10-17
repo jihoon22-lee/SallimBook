@@ -380,6 +380,53 @@ internal class NativeAuthSession private constructor(context: Context) {
         }
     }
 
+    fun editInsurancePolicyNumber(
+        policyId: String, ifMatch: String, number: CharArray?, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,
+    ) {
+        executor.execute {
+            var payload: JSONObject? = null
+            val outcome = try {
+                authorize(gate, AppRequestKind.PROTECTED)
+                requireAvailable(); gate.check()
+                if (!PasskeyPolicy.target(policyId, ifMatch) || number != null && !FinancePolicy.number(number)) {
+                    throw AuthFailure(AuthCode.INVALID_REQUEST)
+                }
+                payload = JSONObject().put("policy_number", number?.let(::String) ?: JSONObject.NULL)
+                number?.fill('\u0000')
+                val response = http.send("PATCH", "/api/v1/insurance/policies/$policyId", gate, body = payload,
+                    accessToken = access(gate), ifMatch = ifMatch, nativeInsurancePolicyNumber = true)
+                if (response.status != 200) accountNumberFailure(response)
+                val safe = try { InsurancePolicy.policy(response.body) } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+                if (safe["id"] != policyId) throw AuthFailure(AuthCode.ACCESS_DENIED)
+                gate.check()
+                AuthOutcome.success(mapOf("status" to if (number == null) "deleted" else "saved"))
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            finally { payload?.remove("policy_number"); number?.fill('\u0000') }
+            callback(outcome)
+        }
+    }
+
+    fun revealInsurancePolicyNumber(
+        policyId: String, gate: ForegroundRequest, callback: (AuthOutcome, NativePolicyNumber?) -> Unit,
+    ) {
+        executor.execute {
+            var number: NativePolicyNumber? = null
+            val outcome = try {
+                authorize(gate, AppRequestKind.PROTECTED)
+                requireAvailable(); gate.check(); FinancePolicy.id(policyId)
+                val response = http.send("POST", "/api/v1/insurance/policies/$policyId/reveal", gate,
+                    body = JSONObject(), accessToken = access(gate), nativeInsurancePolicyNumber = true)
+                if (response.status != 200) accountNumberFailure(response)
+                number = NativePolicyNumber(InsurancePolicy.readNumber(response.body, policyId))
+                gate.check()
+                AuthOutcome.success(mapOf("status" to "completed"))
+            } catch (failure: AuthFailure) { number?.discard(); number = null; AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { number?.discard(); number = null; AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            callback(outcome, number)
+        }
+    }
+
     private fun passkeyFailure(response: NativeHttpResponse, unauthenticatedLogin: Boolean = false): Nothing {
         PasskeyPolicy.reject(response.status, response.body, unauthenticatedLogin, ::clearLocal)
     }

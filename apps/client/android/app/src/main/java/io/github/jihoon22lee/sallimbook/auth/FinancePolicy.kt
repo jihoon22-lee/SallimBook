@@ -18,6 +18,7 @@ internal enum class FinanceOperation {
     RESCHEDULE_OBLIGATION, SKIP_OBLIGATION, UNSKIP_OBLIGATION, COMPLETE_OBLIGATION, REOPEN_OBLIGATION,
     SETTLE_OBLIGATION, LIST_OBLIGATION_SETTLEMENTS, VOID_FIXED_SETTLEMENT,
     GET_CARD_PAYMENT_LINKS, GET_ACCOUNT_PAYMENT_LINKS,
+    LIST_INSURANCE_CASES, CREATE_INSURANCE_CASE, GET_INSURANCE_CASE, UPDATE_INSURANCE_CASE, INSURANCE_CASE_HISTORY, LIST_MEDICAL_NODES, CREATE_MEDICAL_NODE, DELETE_MEDICAL_NODE, GET_MEDICAL_NODE, UPDATE_MEDICAL_NODE, LIST_INSURANCE_POLICIES, CREATE_INSURANCE_POLICY, GET_INSURANCE_POLICY, UPDATE_INSURANCE_POLICY, LIST_INSURANCE_COVERAGES, CREATE_INSURANCE_COVERAGE, UPDATE_INSURANCE_COVERAGE, LIST_POLICY_PREMIUM_LINKS, CREATE_POLICY_PREMIUM_LINK, UPDATE_POLICY_PREMIUM_LINK,
 }
 
 /** Constructed from named metadata commands, never from a JS URL, headers or encoded body. */
@@ -155,6 +156,7 @@ internal object FinancePolicy {
         if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
         if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.prepare(operation, value)
         if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.prepare(operation, value)
+        if (InsurancePolicy.supports(operation)) return InsurancePolicy.prepare(operation, value)
         val args = objectValue(value)
         val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
         val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
@@ -199,6 +201,7 @@ internal object FinancePolicy {
         if (CardMetadataPolicy.httpAllowed(method, path, body, ifMatch)) return true
         if (ComparisonPolicy.httpAllowed(method, path, body, ifMatch)) return true
         if (PaymentLinksPolicy.httpAllowed(method, path, body, ifMatch)) return true
+        if (InsurancePolicy.httpAllowed(method, path, body, ifMatch)) return true
         val uri = URI(path)
         if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path ||
             path.any { it.isWhitespace() || it.code < 32 }) false
@@ -304,6 +307,7 @@ internal object FinancePolicy {
             if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
             if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.response(operation, request, status, value)
             if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.response(operation, request, status, value)
+            if (InsurancePolicy.supports(operation)) return InsurancePolicy.response(operation, request, status, value)
             if (operation == FinanceOperation.DELETE_ASSET) {
                 if (status != 204 || value != null) invalid()
                 return null
