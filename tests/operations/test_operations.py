@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from ops import backup, build_context, deploy, release
+from ops import backup, build_context, deploy, recovery, release
 
 
 def config():
@@ -148,6 +148,18 @@ class BackupTests(unittest.TestCase):
                 backup.publish_json(path, {"complete": False})
             self.assertEqual(json.loads(path.read_text()), {"complete": True})
             self.assertEqual(list(Path(tmp).glob("*.partial")), [])
+
+    def test_reverification_receipts_preserve_previous_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            first = recovery.write_verification_receipt(directory, {"observed": "first"})
+            original = (directory / first["receipt"]).read_bytes()
+            second = recovery.write_verification_receipt(directory, {"observed": "second"})
+            self.assertNotEqual(first["verification_id"], second["verification_id"])
+            self.assertEqual((directory / first["receipt"]).read_bytes(), original)
+            self.assertEqual(json.loads((directory / second["receipt"]).read_text()), second)
+            self.assertEqual(len(list(directory.glob("recovery-check-*.json"))), 2)
+            self.assertEqual(list(directory.glob("*.partial")), [])
 
     def test_tar_rejects_traversal_links_duplicate_unexpected_and_incomplete(self):
         cases = [

@@ -55,9 +55,16 @@ def verify_role(conn):
     required = conn.execute(
         "SELECT has_schema_privilege('public','USAGE'), "
         "has_database_privilege(current_database(),'CONNECT'), "
-        "has_table_privilege('alembic_version','SELECT'), "
-        "(SELECT bool_and(has_table_privilege('users',privilege)) FROM "
-        "unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS privilege)"
+        "has_table_privilege('public.alembic_version','SELECT'), "
+        "NOT EXISTS (SELECT 1 FROM pg_class c "
+        "CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS privilege "
+        "WHERE c.relnamespace='public'::regnamespace "
+        "AND c.relkind IN ('r','p','v','m','f') AND c.relname<>'alembic_version' "
+        "AND NOT has_table_privilege(c.oid,privilege)), "
+        "NOT EXISTS (SELECT 1 FROM pg_class c "
+        "CROSS JOIN unnest(ARRAY['USAGE','SELECT']) AS privilege "
+        "WHERE c.relnamespace='public'::regnamespace AND c.relkind='S' "
+        "AND NOT has_sequence_privilege(c.oid,privilege))"
     ).fetchone()
     if not all(required):
         raise OperationError(

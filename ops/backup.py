@@ -106,6 +106,47 @@ def table_counts(conn):
     }
 
 
+def require_pristine_restore_target(conn, database):
+    """Reject user-created objects without modifying a fresh template0 database."""
+    from psycopg import sql
+
+    current, version = conn.execute(
+        "SELECT current_database(),current_setting('server_version_num')::integer"
+    ).fetchone()
+    if current != database or not 180000 <= version < 190000:
+        raise OperationError("Restore requires the intended PostgreSQL 18 database")
+    # PostgreSQL reserves OIDs below 16384 for bootstrap/initdb. Normal object
+    # allocation never enters that range, including after OID wraparound. Scan
+    # every local catalog with an OID rather than allowing whole system schemas:
+    # user functions/types/extensions/event triggers can live there too.
+    # https://www.postgresql.org/docs/18/system-catalog-initial-data.html
+    catalogs = conn.execute(
+        "SELECT c.relname FROM pg_catalog.pg_class c "
+        "JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid "
+        "WHERE c.relnamespace='pg_catalog'::regnamespace AND c.relkind='r' "
+        "AND NOT c.relisshared AND c.oid<16384 "
+        "AND a.attname='oid' AND a.attnum>0 AND NOT a.attisdropped "
+        "ORDER BY c.relname"
+    ).fetchall()
+    for (catalog,) in catalogs:
+        if conn.execute(
+            sql.SQL("SELECT EXISTS (SELECT 1 FROM pg_catalog.{} WHERE oid>=16384)").format(
+                sql.Identifier(catalog)
+            )
+        ).fetchone()[0]:
+            raise OperationError("Restore target must contain only pristine system objects")
+    # Large-object creation accepts caller-selected OIDs. Subscriptions are in a
+    # shared catalog but belong to one database; settings have no independent OID.
+    if conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_largeobject_metadata) OR "
+        "EXISTS (SELECT 1 FROM pg_catalog.pg_subscription "
+        "WHERE subdbid=(SELECT oid FROM pg_database WHERE datname=current_database())) OR "
+        "EXISTS (SELECT 1 FROM pg_catalog.pg_db_role_setting "
+        "WHERE setdatabase=(SELECT oid FROM pg_database WHERE datname=current_database()))"
+    ).fetchone()[0]:
+        raise OperationError("Restore target has existing large objects or database configuration")
+
+
 def encode_manifest(manifest):
     content = json.dumps(manifest, sort_keys=True).encode("utf-8")
     if len(content) > MAX_MANIFEST_BYTES:
@@ -488,14 +529,7 @@ def restore(archive, identity, service_file, output, expected_sha256):
             unpack_stream(proc.stdout, work)
         manifest = verify_inventory(work)
         with connect(env) as conn:
-            if conn.execute("SELECT current_database()").fetchone()[0] != dbname:
-                raise OperationError("Unexpected restore target")
-            if conn.execute(
-                "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
-                "WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema' "
-                "AND c.relkind IN ('r','p','v','m','S','f')"
-            ).fetchone()[0]:
-                raise OperationError("Restore target must be empty")
+            require_pristine_restore_target(conn, dbname)
         with process(
             ["age", "-d", "-i", str(identity), str(work / "database.dump.age")],
             stdout=subprocess.PIPE,

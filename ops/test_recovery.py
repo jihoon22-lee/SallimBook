@@ -83,7 +83,9 @@ def run_synthetic(admin_url, temporary):
     created = []
     try:
         for name in (source_name, target_name):
-            admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+            admin.execute(
+                sql.SQL("CREATE DATABASE {} TEMPLATE template0").format(sql.Identifier(name))
+            )
             created.append(name)
         source = make_engine(source_url)
         target = make_engine(target_url)
@@ -225,6 +227,74 @@ def run_synthetic(admin_url, temporary):
         assert CONTENT not in archive.read_bytes()
         assert list(destination.glob("*.partial")) == []
         assert len(list(destination.glob("*.complete.json"))) == 1
+        # A relation-only guard misses routines, types, extensions, event triggers
+        # and empty schemas. Every rejected restore must preserve the preexisting
+        # object and leave the application schema uncreated.
+        target_env, _ = backup.service_environment(target_service, restore=True)
+        probes = (
+            (
+                "CREATE FUNCTION public.restore_probe() RETURNS integer "
+                "LANGUAGE sql AS 'SELECT 42'",
+                "SELECT public.restore_probe()=42",
+                "DROP FUNCTION public.restore_probe()",
+            ),
+            (
+                "CREATE FUNCTION pg_catalog.restore_probe() RETURNS integer "
+                "LANGUAGE sql AS 'SELECT 42'",
+                "SELECT pg_catalog.restore_probe()=42",
+                "DROP FUNCTION pg_catalog.restore_probe()",
+            ),
+            (
+                "CREATE TYPE public.restore_probe AS ENUM ('synthetic')",
+                "SELECT 'synthetic'::public.restore_probe::text='synthetic'",
+                "DROP TYPE public.restore_probe",
+            ),
+            (
+                "CREATE SCHEMA restore_probe",
+                "SELECT to_regnamespace('restore_probe') IS NOT NULL",
+                "DROP SCHEMA restore_probe",
+            ),
+            (
+                "CREATE EXTENSION hstore",
+                "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='hstore')",
+                "DROP EXTENSION hstore",
+            ),
+            (
+                "CREATE FUNCTION public.restore_probe() RETURNS event_trigger "
+                "LANGUAGE plpgsql AS 'BEGIN RETURN; END'; "
+                "CREATE EVENT TRIGGER restore_probe ON ddl_command_start "
+                "EXECUTE FUNCTION public.restore_probe()",
+                "SELECT EXISTS (SELECT 1 FROM pg_event_trigger WHERE evtname='restore_probe')",
+                "DROP EVENT TRIGGER restore_probe; DROP FUNCTION public.restore_probe()",
+            ),
+            (
+                "SELECT lo_create(42)",
+                "SELECT EXISTS (SELECT 1 FROM pg_largeobject_metadata WHERE oid=42)",
+                "SELECT lo_unlink(42)",
+            ),
+        )
+        with backup.connect(target_env) as conn:
+            backup.require_pristine_restore_target(conn, target_name)
+            for index, (create, retained, undo) in enumerate(probes):
+                conn.execute(create)
+                try:
+                    rejected = temporary / ("rejected-restore-" + str(index))
+                    try:
+                        backup.restore(
+                            archive, age_identity, target_service, rejected, receipt["sha256"]
+                        )
+                    except backup.OperationError:
+                        pass
+                    else:
+                        raise AssertionError("Non-pristine restore target was accepted")
+                    assert conn.execute(retained).fetchone()[0]
+                    assert conn.execute("SELECT to_regclass('public.alembic_version')").fetchone()[
+                        0
+                    ] is None
+                    assert (rejected / "QUARANTINE").is_file()
+                finally:
+                    conn.execute(undo)
+                backup.require_pristine_restore_target(conn, target_name)
         restored = temporary / "restored"
         backup.restore(
             archive, age_identity, target_service, restored, receipt["sha256"]
@@ -329,6 +399,32 @@ def run_synthetic(admin_url, temporary):
             result["status"] == "ready-for-operator-review"
             and (restored / "QUARANTINE").exists()
         )
+        first_receipt = restored / result["receipt"]
+        first_receipt_bytes = first_receipt.read_bytes()
+        # A subsequent database change requires a fresh observation. Neither a
+        # successful recheck nor a failed check may overwrite previous evidence.
+        with backup.connect(target_env) as conn:
+            conn.execute(
+                "UPDATE households SET name='synthetic-reverified',version=version+1"
+            )
+        repeated = recovery.verify(target_service, restored, keyring, evidence)
+        assert repeated["verification_id"] != result["verification_id"]
+        assert first_receipt.read_bytes() == first_receipt_bytes
+        assert json.loads((restored / repeated["receipt"]).read_text()) == repeated
+        assert len(list(restored.glob("recovery-check-*.json"))) == 2
+        with backup.connect(target_env) as conn:
+            conn.execute(
+                "UPDATE vault_states SET rotation_required=true,version=version+1,"
+                "updated_at=clock_timestamp()"
+            )
+        try:
+            recovery.verify(target_service, restored, keyring, evidence)
+        except backup.OperationError:
+            pass
+        else:
+            raise AssertionError("Changed database with failed rotation gate was accepted")
+        assert first_receipt.read_bytes() == first_receipt_bytes
+        assert len(list(restored.glob("recovery-check-*.json"))) == 2
         # Wrong expected digest fails before restore database mutation.
         try:
             backup.restore(
@@ -339,7 +435,8 @@ def run_synthetic(admin_url, temporary):
             assert not (temporary / "wrong").exists()
         print(
             "PASS: encrypted backup/restore, lock-before-snapshot, table counts, "
-            "document+account AEAD, auth reset, pending abort/new rotation gate; "
+            "pristine-target rejection, document+account AEAD, auth reset, "
+            "pending abort/new rotation gate, immutable repeated verification; "
             "synthetic metadata vault fixtures only."
         )
     finally:
