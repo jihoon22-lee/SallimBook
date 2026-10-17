@@ -51,6 +51,7 @@ class AssetValue:
     kind: Literal["asset", "liability"] = "asset"
     verification_state: Verification = "verified"
     included: bool = True
+    household_share: Decimal = Decimal(1)
 
     def __post_init__(self):
         if not isinstance(self.asset_id, str) or not self.asset_id:
@@ -61,10 +62,19 @@ class AssetValue:
             raise ValueError("Unknown verification state")
         if not isinstance(self.included, bool):
             raise ValueError("Included must be boolean")
+        if (
+            not isinstance(self.household_share, Decimal)
+            or not self.household_share.is_finite()
+            or not 0 <= self.household_share <= 1
+        ):
+            raise ValueError("Household share requires a finite Decimal between zero and one")
         if self.amount_krw is not None:
             _amount(self.amount_krw)
-        if self.verification_state == "verified" and self.amount_krw is None:
-            raise ValueError("A verified asset requires an amount, including explicit zero")
+        if (
+            self.verification_state in {"verified", "carried_unconfirmed"}
+            and self.amount_krw is None
+        ):
+            raise ValueError("A verified or carried asset requires an amount, including zero")
         if self.verification_state == "missing" and self.amount_krw is not None:
             raise ValueError("A missing asset has no amount")
 
@@ -130,6 +140,7 @@ class MonthComparison:
     scope_changed: bool | None
     added_asset_ids: tuple[str, ...] = ()
     removed_asset_ids: tuple[str, ...] = ()
+    changed_share_asset_ids: tuple[str, ...] = ()
 
 
 def compare_months(previous: AssetMonth | None, current: AssetMonth) -> MonthComparison:
@@ -154,12 +165,16 @@ def compare_months(previous: AssetMonth | None, current: AssetMonth) -> MonthCom
         return _amount(value.amount_krw) * (-1 if value.kind == "liability" else 1)
 
     delta = sum(map(signed, now.values())) - sum(map(signed, prior.values()))
-    common = sum(signed(now[key]) - signed(prior[key]) for key in shared)
+    changed_share = {
+        key for key in shared if prior[key].household_share != now[key].household_share
+    }
+    common = sum(signed(now[key]) - signed(prior[key]) for key in shared - changed_share)
     return MonthComparison(
         "available",
         int(krw_string(delta)),
         int(krw_string(common)),
-        prior.keys() != now.keys(),
+        prior.keys() != now.keys() or bool(changed_share),
         tuple(sorted(now.keys() - prior.keys())),
         tuple(sorted(prior.keys() - now.keys())),
+        tuple(sorted(changed_share)),
     )

@@ -87,6 +87,7 @@ Windows의 별도 checkout이 필요하면 Git으로 동기화하고 생성 파�
 현재 실행 명령은 [README](../README.md#개발-실행)에 있다.
 SB-001은 기본 화면·프로세스 health·웹/Android 빌드, SB-002는 PostgreSQL·migration·공통 계약을 포함한다.
 개발 포트는 API 18741, Vite 18742, 웹 E2E 18743, 개발 DB 18744, 일회용 시험 DB 18745다.
+시험 DB는 데이터·WAL을 tmpfs에 두므로 확장된 migration/이력 회귀의 메모리 사용을 포함해 한도를 1 GiB로 둔다. 개발 DB 한도는 384 MiB로 유지한다.
 기존 서버를 종료하거나 점유 포트를 빼앗지 않는다.
 `scripts/setup_dev.py`는 기존 `.env`를 덮어쓰지 않고 새 파일에만 난수 개발 비밀번호를 저장한다(mode 0600).
 `pnpm db:up`과 `db:stop`은 Compose 프로젝트 `sallimbook-dev`의 `db` 서비스만 제어한다.
