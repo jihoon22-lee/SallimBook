@@ -96,7 +96,7 @@ class PaymentLinksPolicyTest {
         bad { FinancePolicy.prepare(FinanceOperation.UPDATE_ACCOUNT, mapOf("accountId" to accountId, "input" to closure(), "ifMatch" to tag)) }
         val cardGet = FinancePolicy.prepare(FinanceOperation.GET_CARD, mapOf("cardId" to cardId))
         val publicCard = mapOf<String, Any?>("id" to cardId, "household_id" to assetId, "owner_member_id" to assetId, "issuer_name" to "합성", "product_name" to "합성",
-            "alias" to null, "card_type" to "credit", "last_four" to null, "masked_number" to null, "settlement_day" to null, "settlement_account_id" to null,
+            "alias" to null, "card_type" to "credit", "has_secret" to false, "last_four" to null, "masked_number" to null, "settlement_day" to null, "settlement_account_id" to null,
             "settlement_account_status" to null, "started_on" to null, "ended_on" to null, "status" to "active", "note" to null,
             "created_by_member_id" to assetId, "updated_by_member_id" to assetId, "created_at" to "2026-01-01T00:00:00Z", "updated_at" to "2026-01-01T00:00:00Z", "version" to 7)
         assertEquals(publicCard, FinancePolicy.response(FinanceOperation.GET_CARD, cardGet, 200, publicCard))
