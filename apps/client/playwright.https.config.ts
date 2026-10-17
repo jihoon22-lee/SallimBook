@@ -4,7 +4,7 @@ if (!process.env.SALLIMBOOK_HTTPS_ORIGIN || !process.env.SALLIMBOOK_HTTPS_FIXTUR
 
 export default defineConfig({
   testDir: "./integration",
-  testMatch: process.env.SALLIMBOOK_HTTPS_EXPORTS === "1" ? "exports-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_DOCUMENTS === "1" ? "documents-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_HOMECARE === "1" ? "homecare-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_INSURANCE === "1" ? "insurance-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_CASHFLOW === "1" ? "cashflow-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_MONTHS === "1" ? "months-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_FINANCE === "1" ? "finance-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_PASSKEYS === "1" ? "passkeys-https.spec.ts" : "auth-https.spec.ts",
+  testMatch: process.env.SALLIMBOOK_HTTPS_VAULT === "1" ? "vault-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_EXPORTS === "1" ? "exports-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_DOCUMENTS === "1" ? "documents-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_HOMECARE === "1" ? "homecare-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_INSURANCE === "1" ? "insurance-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_CASHFLOW === "1" ? "cashflow-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_MONTHS === "1" ? "months-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_FINANCE === "1" ? "finance-https.spec.ts" : process.env.SALLIMBOOK_HTTPS_PASSKEYS === "1" ? "passkeys-https.spec.ts" : "auth-https.spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,

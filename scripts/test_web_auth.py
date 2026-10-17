@@ -51,6 +51,7 @@ def execute(
     homecare: bool = False,
     documents: bool = False,
     exports: bool = False,
+    vault: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -82,6 +83,7 @@ def execute(
             homecare=homecare,
             documents=documents,
             exports=exports,
+            vault=vault,
         )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
@@ -99,6 +101,7 @@ def run_browser(
     homecare: bool = False,
     documents: bool = False,
     exports: bool = False,
+    vault: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -224,7 +227,7 @@ def run_browser(
                 app.router.lifespan_context = lifespan
                 dist = (ROOT / "apps/client/dist").resolve()
                 control = secrets.token_urlsafe(32)
-                if passkeys or exports:
+                if passkeys or exports or vault:
 
                     @app.post("/__test/expire-freshness", include_in_schema=False)
                     def expire_freshness(
@@ -320,6 +323,7 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_HOMECARE": "1" if homecare else "0",
                         "SALLIMBOOK_HTTPS_DOCUMENTS": "1" if documents else "0",
                         "SALLIMBOOK_HTTPS_EXPORTS": "1" if exports else "0",
+                        "SALLIMBOOK_HTTPS_VAULT": "1" if vault else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -330,7 +334,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents|exports)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents|exports|vault)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -402,6 +406,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--documents", action="store_true", help="Verify attachments with the real pinned scanner/OCR tool container and HTTPS API.")
     parser.add_argument("--exports", action="store_true", help="Verify private ZIP exports and selected originals with real HTTPS and PostgreSQL.")
+    parser.add_argument("--vault", action="store_true", help="Verify real WebCrypto vault sharing, recovery, rotation and purge through HTTPS.")
     args = parser.parse_args()
     with test_service_lock():
         execute(
@@ -414,4 +419,5 @@ if __name__ == "__main__":
             homecare=args.homecare,
             documents=args.documents,
             exports=args.exports,
+            vault=args.vault,
         )
