@@ -182,4 +182,8 @@ Android 번호 입력·표시 실기기 시험은 빌드/JVM/브라우저 bridge
 `pnpm --filter @sallimbook/client exec playwright test --config playwright.months.config.ts`는 18749 포트를 사용한다.
 `uv run --project services/api python scripts/test_web_auth.py --months`는 실제 HTTPS·일회용 DB의 월 전체 흐름을 검증한다.
 [월 입력 검증 기록](testing/monthly-assets-client.md)에 재현 명령과 구현/검증 경계를 기록한다.
-Android 월 adapter는 별도 연결 중이며 JS fetch로 네이티브 인증 경계를 우회하지 않는다.
+Android 월 adapter는 같은 생성 계약과 네이티브 인증에 연결되며 잠금 중 요청·응답을 차단한다.
+
+### 병렬 검증 자원
+
+같은 WSL에서 UI 브라우저 검사를 실행하는 동안 Docker 시험 컨테이너의 생성·시작·중지를 병행하지 않는다. 네트워크 인터페이스 변경이 Chromium의 모듈 요청에 `ERR_NETWORK_CHANGED`를 일으킬 수 있어 순서를 조정한다. 별도 UI 포트는 config 하나의 webServer로 지정한다. `/tmp`가 메모리 기반이고 공간이 부족하면 재생성 가능한 이전 빌드 캐시를 정리하거나 TMPDIR를 충분한 로컬 저장소로 지정한다. 소스·사용자 파일·기존 서비스는 정리 대상이 아니다.

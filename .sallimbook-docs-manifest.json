@@ -66,8 +66,8 @@
       "git_sha1": "de819030a4bc6eb7d5b149fea602422501161e45"
     },
     "docs/api-contract.md": {
-      "sha256": "2689af522277ec53b4fc4382e0b7fc9c195929d4aa642d749090abbd2059bb18",
-      "git_sha1": "686098d26fdb3c151cbe9cb6f317014cdb4755a3"
+      "sha256": "ddfab534b78e37ae9323670a5caad9d9cc34b028b7f3e27619bab52280f61be0",
+      "git_sha1": "ea7c388e71077c6f8d7e7fb62cf21ce6cfce7bfe"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "46151d06d1419958dc6efb8704056b78bb4b01bd8b28d159d6d46000d01800f2",
-      "git_sha1": "c2c0afc4158b3c1098ef1a1010678b6805581a08"
+      "sha256": "690985aa1b8341467b8ca8537e7dee654b30e16f61c933d72bd2f6dc45212ba6",
+      "git_sha1": "47237ec3f3aaadd1cd7c2b5f3fa1f43705686910"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -226,16 +226,16 @@
       "git_sha1": "7250499e9fb779754bba02d0a83d475e3d8ca427"
     },
     "docs/testing/passkeys-web.md": {
-      "sha256": "0cd7cbd733b3706915dfecec81130634d2ba674852122201229c25ef2e1ab695",
-      "git_sha1": "27adc2b410f7b6bffd125eac24e385165479a16e"
+      "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
+      "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
       "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
     },
     "docs/testing/assets-accounts-client.md": {
-      "sha256": "719325e09cd72867a9a2610e4d5682eca24fbf3f4b48f93e607a9bf78b792fc7",
-      "git_sha1": "cc99d9219cc23eb80159791a85e3edf58b91d2ef"
+      "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",
+      "git_sha1": "88a225ab372b6af9991373b5111a018b7b696aca"
     },
     "docs/testing/monthly-assets-client.md": {
       "sha256": "d1f8af7845fa22f3ecb85d8db595254c7cc6bcaf18864ffb99cf55dbb9e0e916",

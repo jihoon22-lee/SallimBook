@@ -44,10 +44,10 @@ Chromium 가상 인증기가 실제 서명을 만들고 API가 실제 PostgreSQL
 
 | 검사 | 결과 |
 |---|---|
-| `pnpm --filter @sallimbook/client exec playwright test --config playwright.passkeys.config.ts` | 전체 UI **120개 통과** |
+| `pnpm --filter @sallimbook/client exec playwright test --config playwright.passkeys.config.ts --workers=2` | 최신 서버 병합 후 전체 UI **120개 통과** |
 | `uv run --project services/api python scripts/test_web_auth.py --passkeys` | 실제 HTTPS WebAuthn **2개 통과** |
 | `uv run --project services/api python scripts/test_web_auth.py` | 실제 HTTPS 쿠키·CSRF·동일 세션 비밀번호 재인증 **2개 통과** |
-| `uv run --project services/api python scripts/test_database.py services/api/tests/test_identity.py services/api/tests/test_passkeys.py` | API·권한·검증 **100개 통과**, Alembic drift 없음, downgrade/upgrade 성공 |
+| 최종 서버 `b097ace`의 `uv run --project services/api python scripts/test_database.py` | API·권한·검증 **242개 통과**, Alembic drift 없음, downgrade/upgrade 성공 |
 | `pnpm api:generate`, `pnpm typecheck` | 통합 서버에서 API 계약 재생성·타입 검사 통과 |
 | `pnpm android:build` 및 `:app:compileReleaseKotlin` | PR60 후속 수정 브랜치에서 JVM **51개 통과**(인증 32·기존 debug POC 19), 개발 APK·release Kotlin 컴파일 성공 |
 
@@ -88,3 +88,7 @@ Credential Manager의 불투명 화면으로 발생하는 pause/stop/save는 현
 해당 앱 잠금 통합 브랜치의 JVM은 **90개 통과**(실패·오류·건너뜀 0)이며 개발 APK가 생성됐다.
 이 수치는 위 PR60 단독 검증과 별개다. 실제 기기에서 opaque 제공자·Home·화면 꺼짐·
 60초 대기·늦은 callback 시나리오는 아직 실행하지 않았으므로 성공으로 기록하지 않는다.
+
+최신 자산·계좌 client와 월 기록 서버 계약을 병합한 뒤 전체 UI **168개**를 다시 통과했다.
+자산 종류 제한 오류의 후속 보완을 포함한 최종 native JVM은 **91개**(실패·오류·건너뜀 0)이며
+release Kotlin 컴파일도 통과했다. 자산 오류 보완 자체의 PC/Android 크기 화면 회귀 16개는 자산 client에서 별도로 통과했다.
