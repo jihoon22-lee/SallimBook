@@ -62,24 +62,24 @@
       "git_sha1": "d2c30f84e40f9de4b7101610d4fd140c36949ea0"
     },
     "docs/data-model.md": {
-      "sha256": "aa0ea455eda479b5c576456feead2c34528ccc2a05742c76f60d850649c58f75",
-      "git_sha1": "760863352d43a67144ae02644e7249f437da60e1"
+      "sha256": "a0b44f5370facfb15016366ea1e39eac5d65d6fc9614f1a79fe040be3cf115ce",
+      "git_sha1": "7172a9f659236b69994b55b85ed30fb15f0c9029"
     },
     "docs/api-contract.md": {
-      "sha256": "c558919cc9b1290b5c9b51e3269ed383dca2e0f98d73d1e47efea66ccedc06d8",
-      "git_sha1": "7489a18d09ef207e15c33bfb9c8cd488f079b0be"
+      "sha256": "e8d97d36213ef575c0796dabb84ccdb79fdacfd612d7a1f821d4a276d715446b",
+      "git_sha1": "bc9a76a276ab31b45326152cbd7bbde2454563a6"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "399c52231f5783f949c4aa7ec5568fbf8340c2fe3d64d6ca35e51c5c2d5511e8",
-      "git_sha1": "ad089ae630e2d5fc701316300fdcd68b0e426457"
+      "sha256": "b54b0ff8cf804451000e1d9ef1f37986d9d173853be17fb4ff28577ba630389d",
+      "git_sha1": "f2d9284b132b9a534a0551b5baf96fa75c3b1bf4"
     },
     "docs/vault-key-lifecycle.md": {
-      "sha256": "4fda7d2fb36ddc154a3ad9a12f7c5f7a199e7895346f6061a0f318f2a0441c21",
-      "git_sha1": "59981686f4e8c38dbe0015cd3dc264b93fc13638"
+      "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
+      "git_sha1": "7e9827ebf39404d2d5cb7db850a7bfec0cf53d64"
     },
     "docs/insurance-workflows.md": {
       "sha256": "69f31432e1da3442901d867f590e907f42026ae14c6044873b4b1c22e0878f0e",
@@ -126,8 +126,8 @@
       "git_sha1": "0e5a5b8fcb1aac58888751ef9fd6ff2fab3ad024"
     },
     "docs/README.md": {
-      "sha256": "60ae8fd99bc3d67388e64f5a02e0f6c1b9c001e6224b82ef0da5b61e0c2473a3",
-      "git_sha1": "e193d605a8320772e7cb9588f95e04b1a2bb3251"
+      "sha256": "b7d3abd81abf3185b531452db5de9d82bd8f3517470ab966e09dc26dee8427ea",
+      "git_sha1": "f0bc97a1d84aa78f4adb23c4955242df7569802d"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -222,8 +222,8 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "67c9d3b807aa9d22c8846cabddb8296d9c18a84569b2da00312f2261e85b2f25",
-      "git_sha1": "4b2c02ddf3afa66b9e4d58774e23faa3b80223f9"
+      "sha256": "5f566de73bdee1565e9b61f09a76cd16e3866dd44f6cb41bc04f5de3ab285876",
+      "git_sha1": "c7bc88fb44a9ca51b43acba7cbe92938c6cf2fb2"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
@@ -278,8 +278,8 @@
       "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
     },
     "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "c2b156b565b0eb924891761a1c8ace1655e5fc703efd879afd8b9e7325d0a538",
-      "git_sha1": "fd3c7a9582c764480c3faa34d44d016b77ee9b2e"
+      "sha256": "c71c4699eb3ab00b200a627575047fdf1418db19a1562b8ce6e151873013bcb9",
+      "git_sha1": "c0650670ed9eeb16d573d48770849fa10b2f9907"
     },
     "docs/testing/insurance-client.md": {
       "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
@@ -304,6 +304,22 @@
     "docs/testing/native-exports.md": {
       "sha256": "fe77acf9c24919fbafbc64cc82738fa42f3e3f69b138572f3b16a37cb0524a93",
       "git_sha1": "6ef8968d7834e085c346ce7e4e2ede0840e7970d"
+    },
+    "docs/testing/vault-server.md": {
+      "sha256": "3a745029c31d11afe5eaa28fd17a51b0cdaf90e68ad45472813d77a503a11e4e",
+      "git_sha1": "cf2aaea53031c656128669b3562f632b49caa399"
+    },
+    "scripts/generate_vault_vectors.py": {
+      "sha256": "1c562545fc2d1dc8ec3e863ccfa632395b8d8fdfd8527a1092a1f948241a0913",
+      "git_sha1": "cee6563e6b1f449757cba5e178b742b8c4039964"
+    },
+    "docs/testing/vault-web.md": {
+      "sha256": "974918b98d22ed5d7c16781c0c3e40fbbdb8aa909f98388cc897f7d4312cfe74",
+      "git_sha1": "6575fd34f4311b4ea9cdfece99a9881c4bf5eb3a"
+    },
+    "docs/testing/exports-server.md": {
+      "sha256": "47335f81fdc13dd47c9e1174982a41cd8c7790c95282757996df29f0808f768e",
+      "git_sha1": "4f990254002c6e8efc564087cdc56c3bf48b6133"
     }
   }
 }

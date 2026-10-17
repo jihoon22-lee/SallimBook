@@ -97,6 +97,12 @@ export class VaultKey {
     return new VaultKey(raw);
   }
   destroy() { wipe(this.#bytes); this.#bytes = null; }
+  /** In-memory continuity proof only; never persist or send this digest. */
+  async fingerprint(): Promise<string> {
+    const raw = this.#require().slice();
+    try { const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", raw)); this.#require(); return encode64(digest); }
+    finally { wipe(raw); }
+  }
   #require(): Bytes { requireValue(this.#bytes !== null); return this.#bytes; }
   async #operate(nonce: Bytes, aad: Bytes, value: Bytes, decrypt: boolean): Promise<Bytes> {
     const key = await crypto.subtle.importKey("raw", this.#require(), "AES-GCM", false, ["encrypt", "decrypt"]);

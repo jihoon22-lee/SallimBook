@@ -9,7 +9,7 @@ import { VaultCryptoError, cardPayload, decode64, passwordBytes, wipe } from "./
 import type { Bytes } from "./crypto";
 import { VaultLifetime } from "./lifetime";
 import { usePrivateVaultApi } from "./privateApi";
-import { VaultWorkflow } from "./workflow";
+import { needsReauthentication, VaultWorkflow } from "./workflow";
 import type { VaultInputs, VaultPublicContext } from "./workflow";
 
 const titles = {
@@ -21,7 +21,8 @@ const titles = {
 function failureMessage(error: unknown): string {
   if (error instanceof VaultCryptoError) return "보관함 암호·복구코드와 입력 형식을 확인해 주세요. 보호된 정보는 표시하지 않았고 입력값은 지웠어요.";
   if (!(error instanceof ApiError)) return "작업 결과를 확인하지 못했어요. 보호된 입력은 지웠어요.";
-  if (error.code === "REAUTHENTICATION_REQUIRED" || error.code === "STEP_UP_REQUIRED") return "최근 5분 이내의 계정 인증이 필요해요. 다시 인증한 뒤 보관함에서 작업을 시작해 주세요.";
+  if (error.code === "REAUTHENTICATION_REQUIRED" || error.code === "STEP_UP_REQUIRED") return "최근 5분 이내의 계정 인증이 필요해요. 아래에서 계정 비밀번호를 다시 확인한 뒤 이어갈 수 있어요.";
+  if (error.code === "REAUTHENTICATION_FAILED") return "계정 로그인 비밀번호를 확인해 다시 입력해 주세요.";
   if (error.status === 401) return "계정 로그인이 만료됐어요. 다시 로그인해 주세요.";
   if (error.code === "VAULT_ROTATION_IN_PROGRESS") return "진행 중인 키 교체를 마치거나 중단한 뒤 이 작업을 다시 시작해 주세요.";
   if (error.code === "VAULT_ROTATION_REQUIRED") return "접근 권한을 철회한 뒤에는 보관함 키 전체 교체를 먼저 마쳐 주세요.";
@@ -38,6 +39,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
   const { state } = useAuth(); const api = usePrivateVaultApi();
   const me = state.status === "authenticated" ? state.member : null;
   const root = useRef<HTMLElement>(null), recoveryOutput = useRef<HTMLOutputElement>(null), cardOutput = useRef<HTMLOutputElement>(null);
+  const accountPassword = useRef<HTMLInputElement>(null);
   const password = useRef<HTMLInputElement>(null), stagedPassword = useRef<HTMLInputElement>(null), code = useRef<HTMLInputElement>(null);
   const pan = useRef<HTMLInputElement>(null), year = useRef<HTMLInputElement>(null), month = useRef<HTMLInputElement>(null);
   const newPasswords = useRef(new Map<string, { first: HTMLInputElement | null; second: HTMLInputElement | null }>());
@@ -46,13 +48,14 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
   const [context, setContext] = useState<VaultPublicContext | null>(null), [busy, setBusy] = useState(false), [locked, setLocked] = useState(false);
   const [phase, setPhase] = useState<"form" | "confirm-recovery" | "displayed">("form"), [error, setError] = useState<unknown>(null);
   const [ack, setAck] = useState(false), [backupAck, setBackupAck] = useState(false), [reload, setReload] = useState(0);
+  const [notice, setNotice] = useState(""), [reauthRequired, setReauthRequired] = useState(false);
   const [reason, setReason] = useState<VaultInputs["reason"]>("routine");
   const requestKey = JSON.stringify(request);
 
   useEffect(() => {
     if (!me || !root.current || isNativeAuth()) return;
     requireWebAuth(); let active = true;
-    setLocked(false); setBusy(true); setContext(null); setPhase("form"); setError(null); setAck(false); setBackupAck(false); flight.current = true;
+    setLocked(false); setBusy(true); setContext(null); setPhase("form"); setError(null); setNotice(""); setReauthRequired(false); setAck(false); setBackupAck(false); flight.current = true;
     const life = new VaultLifetime(root.current, () => {
       workflow.current?.dispose(); workflow.current = null;
       if (active) { setLocked(true); setBusy(false); setPhase("form"); setContext(null); flight.current = false; }
@@ -70,10 +73,10 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
 
   const needsPassword = ["view", "edit", "change-password", "share", "accept-share", "rotate", "resume-rotation"].includes(request.action);
   const needsAck = ["purge", "share", "cancel-share", "revoke-member", "rotate", "resume-rotation", "abort-rotation"].includes(request.action);
-  const preparedRotation = request.action === "resume-rotation" && context?.rotation?.key_check_prepared;
+  const preparedRotation = ["rotate", "resume-rotation"].includes(request.action) && context?.rotation?.key_check_prepared;
   const passwordMembers = !context || !me ? [] : ["setup", "change-password", "recover"].includes(request.action) ? [me.member_id]
     : request.action === "share" ? [request.memberId]
-      : request.action === "rotate" ? context.status.members.filter((member) => member.status === "active").map((member) => member.member_id)
+      : request.action === "rotate" && !preparedRotation ? context.status.members.filter((member) => member.status === "active").map((member) => member.member_id)
         : request.action === "resume-rotation" && !preparedRotation ? context.rotation?.members.map((member) => member.member_id) ?? [] : [];
   function take(ref: HTMLInputElement | null, life: VaultLifetime, creating = false): Bytes {
     if (!ref) throw new VaultCryptoError();
@@ -107,7 +110,11 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
     flight.current = true; setBusy(true); setError(null); let input: VaultInputs | undefined;
     try {
       life.assert();
-      if (kind === "retry") { await work.retry(); callbacks.current.onCompleted(); return; }
+      if (kind === "retry") {
+        if (await work.retry() === "completed") callbacks.current.onCompleted();
+        else { setContext(work.context); setPhase("form"); setAck(false); setNotice("같은 요청의 저장 결과를 확인했어요. 보관함 암호를 다시 입력해 남은 키 교체를 계속해 주세요."); }
+        return;
+      }
       if (kind === "confirm") { await work.confirmRecovery(); callbacks.current.onCompleted(); return; }
       input = collect(life);
       const outcome = await work.run(input);
@@ -116,11 +123,22 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
       else { setContext(work.context); setPhase(outcome); setBackupAck(false); }
     } catch (failure) {
       life.clearSecrets();
-      if (!life.signal.aborted && workflow.current === work) { setError(failure instanceof ApiError ? failure : new VaultCryptoError()); setPhase("form"); setAck(false); setBackupAck(false); }
+      if (!life.signal.aborted && workflow.current === work) { life.waitForInput(); setContext(work.context); if (needsReauthentication(failure)) setReauthRequired(true); setError(failure instanceof ApiError ? failure : new VaultCryptoError()); setPhase("form"); setAck(false); setBackupAck(false); }
     } finally {
       for (const bytes of [input?.password, input?.stagedPassword, input?.recoveryCode, input?.card, ...input?.newPasswords.values() ?? []]) { if (bytes) { life.forgetBytes(bytes); wipe(bytes); } }
       if (!life.signal.aborted && workflow.current === work) { setBusy(false); flight.current = false; }
     }
+  }
+  async function reauthenticate(event: FormEvent) {
+    event.preventDefault(); const work = workflow.current, life = lifetime.current;
+    if (!work || !life || flight.current || !accountPassword.current) return;
+    flight.current = true; setBusy(true);
+    let value = accountPassword.current.value; accountPassword.current.value = "";
+    try {
+      await work.reauthenticate(value); value = ""; life.assert();
+      setContext(work.context); setError(null); setReauthRequired(false); setNotice("계정 인증을 확인했어요. 보관함 암호를 다시 입력해 계속해 주세요. 이미 검증한 카드의 진행 위치는 이 화면에서만 유지돼요.");
+    } catch (failure) { if (!life.signal.aborted) setError(failure instanceof ApiError ? failure : new VaultCryptoError()); }
+    finally { value = ""; if (!life.signal.aborted && workflow.current === work) { setBusy(false); flight.current = false; } }
   }
   function close() { lifetime.current?.close(); callbacks.current.onClose(); }
   function setPasswordRef(memberId: string, field: "first" | "second", node: HTMLInputElement | null) {
@@ -131,14 +149,15 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
   return <section className="card vault-private" ref={root} aria-label="보관함 보호 작업">
     <h2>{titles[request.action]}</h2>
     <p>이 화면을 떠나거나 다른 창으로 이동하면 입력과 표시를 지워요. PC 웹은 화면 캡처를 막을 수 없어요. CVC/CVV는 입력하지 마세요.</p>
+    {notice && <p role="status">{notice}</p>}
     {context?.card && <p>대상 카드: {context.card.alias || context.card.product_name} · {context.card.masked_number ?? "번호 미등록"}</p>}
     {locked && <p role="status">화면 이동 또는 제한 시간으로 보관함을 잠갔어요. 보호된 정보와 입력값을 지웠어요.</p>}
     <output ref={cardOutput} data-vault-output className="revealed-number" aria-label="일시적으로 표시하는 카드 번호와 유효기간" hidden={phase !== "displayed"} />
     {phase === "displayed" && <p role="status">최대 30초 동안 보여요. 화면을 떠나거나 권한·카드 상태가 바뀌면 지워요.</p>}
     <output ref={recoveryOutput} data-vault-output className="revealed-number" aria-label="새 보관함 복구코드" hidden={phase !== "confirm-recovery"} />
-    {phase === "confirm-recovery" && <div className="review-panel"><h3>새 복구코드를 보관해 주세요</h3><p>아직 새 복구 설정을 서버에 저장하지 않았어요. 다른 기기나 종이에 기록해 안전하게 보관하세요. 이 화면을 떠나면 코드를 지워요.</p><label className="checkbox-field"><input type="checkbox" checked={backupAck} disabled={busy} onChange={(event) => setBackupAck(event.target.checked)} />새 복구코드를 오프라인으로 보관했어요</label><button type="button" disabled={!backupAck || busy} onClick={() => void execute("confirm")}>보관 확인·설정 완료</button></div>}
+    {phase === "confirm-recovery" && <div className="review-panel"><h3>새 복구코드를 보관해 주세요</h3><p>아직 새 복구 설정을 서버에 저장하지 않았어요. 다른 기기나 종이에 기록해 안전하게 보관하세요. 코드는 최대 30초 동안 표시하며 이 화면을 떠나도 지워요.</p><label className="checkbox-field"><input type="checkbox" checked={backupAck} disabled={busy} onChange={(event) => setBackupAck(event.target.checked)} />새 복구코드를 오프라인으로 보관했어요</label><button type="button" disabled={!backupAck || busy} onClick={() => void execute("confirm")}>보관 확인·설정 완료</button></div>}
     {context && !locked && phase === "form" && <form autoComplete="off" onSubmit={(event: FormEvent) => { event.preventDefault(); void execute("run"); }}>
-      <fieldset disabled={busy || !!error}><legend>보호된 입력</legend>
+      <fieldset disabled={busy || !!error || workflow.current?.canRetry}><legend>보호된 입력</legend>
         {needsPassword && <div className="form-field"><label>현재 보관함 암호<input ref={password} data-vault-secret type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={1024} required /></label><p className="muted">로그인 암호와 다른 보관함 전용 암호예요. 앞뒤 공백과 문자를 입력한 그대로 사용해요.</p></div>}
         {request.action === "recover" && <div className="form-field"><label>보관 중인 복구코드<input ref={code} data-vault-secret type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={43} required /></label></div>}
         {preparedRotation && <div className="form-field"><label>이번 키 교체에서 정한 내 새 보관함 암호<input ref={stagedPassword} data-vault-secret type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={1024} required /></label></div>}
@@ -152,10 +171,12 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
         {request.action === "abort-rotation" && <p>준비한 새 키를 사용하지 않고 현재 키를 유지해요. 이번에 발급한 새 복구코드는 사용할 수 없어요.</p>}
         {needsAck && <label className="checkbox-field"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />대상과 작업 내용을 확인했어요</label>}
       </fieldset>
-      <button type="submit" disabled={busy || !!error || needsAck && !ack}>{request.action === "view" ? "보관함 암호로 30초 보기" : "보호 작업 진행"}</button>
+      <button type="submit" disabled={busy || !!error || workflow.current?.canRetry || needsAck && !ack}>{request.action === "view" ? "보관함 암호로 30초 보기" : "보호 작업 진행"}</button>
     </form>}
     {busy && <p role="status">보관함 작업을 처리하고 있어요. 저장 중 닫았다면 현재 상태에서 결과를 다시 확인해 주세요.</p>}
-    {error != null && <div role="alert"><p>{failureMessage(error)}</p>{workflow.current?.canRetry && <button type="button" disabled={busy} onClick={() => void execute("retry")}>같은 요청으로 저장 결과 확인</button>}<button type="button" disabled={busy} onClick={() => setReload((value) => value + 1)}>최신 보관함 상태 다시 확인</button>{error instanceof ApiError && (error.code === "REAUTHENTICATION_REQUIRED" || error.code === "STEP_UP_REQUIRED" || error.status === 401) && <Link to="/login">계정 다시 인증</Link>}</div>}
+    {error != null && <div role="alert"><p>{failureMessage(error)}</p><button type="button" disabled={busy} onClick={() => setReload((value) => value + 1)}>최신 보관함 상태 다시 확인</button>{error instanceof ApiError && error.status === 401 && <Link to="/login">계정 다시 로그인</Link>}</div>}
+    {!locked && reauthRequired && <form autoComplete="off" onSubmit={(event) => void reauthenticate(event)}><label>현재 계정 로그인 비밀번호<input ref={accountPassword} data-vault-secret type="password" autoComplete="current-password" maxLength={128} required disabled={busy} /></label><button type="submit" disabled={busy}>이 화면에서 계정 다시 인증</button></form>}
+    {!locked && workflow.current?.canRetry && <button type="button" disabled={busy || reauthRequired} onClick={() => void execute("retry")}>같은 요청으로 저장 결과 확인</button>}
     <button type="button" onClick={close}>보호 작업 닫기·잠금</button>
   </section>;
 }

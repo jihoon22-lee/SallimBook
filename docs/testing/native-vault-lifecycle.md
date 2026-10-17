@@ -32,7 +32,8 @@ JS에 전달한다. 키 wrapping과 카드 envelope API는 private native 전송
 
 `NativeVaultWire`는 고정 method/path/body/If-Match/Idempotency-Key를 만든다.
 관리 작업은 서버의 최근 계정 비밀번호 재인증 조건을 사용하며 생체 성공을 step-up 증거로 보내지 않는다.
-기존 재인증이 만료되면 화면을 닫고 계정 재인증 후 다시 시작하거나 회전을 재개해야 한다.
+기존 재인증이 만료되면 같은 보호 화면에서 현재 계정 비밀번호를 다시 확인한다. 회전의 검증 위치는
+동일한 원본 manifest와 키를 다시 확인한 경우에만 유지하며, 화면을 닫으면 폐기한다.
 서버 실패의 원문 메시지·제출값은 표시하거나 반환하지 않고 알려진 코드와 로컬 문구만 쓴다.
 
 `NativeVaultHttp`는 고정 HTTPS와 플랫폼 TLS 검증을 사용한다. 쿠키·리디렉션·캐시·HTTP 로그·
