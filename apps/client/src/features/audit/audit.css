@@ -1,0 +1,7 @@
+.audit-page { min-width: 0; }
+.audit-page input, .audit-page select { max-width: 100%; }
+.audit-page .record-list li, .audit-metadata dd { overflow-wrap: anywhere; }
+.audit-metadata { display: grid; grid-template-columns: minmax(6rem, auto) minmax(0, 1fr); gap: .5rem 1rem; }
+.audit-metadata dd { margin: 0; min-width: 0; }
+.audit-page summary { cursor: pointer; padding-block: .7rem; }
+@media (max-width: 480px) { .audit-metadata { grid-template-columns: minmax(0, 1fr); } }

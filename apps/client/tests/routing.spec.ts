@@ -33,9 +33,8 @@ test("all 26 specified routes support direct entry and reload without inventing 
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-      if (!["/", "/assets/compare", "/login", "/onboarding", "/assets", "/assets/synthetic-asset", "/accounts", "/accounts/synthetic-account", "/living", "/income", "/income/new", "/fixed-payments", "/fixed-payments/synthetic-payment", "/cards", "/cards/synthetic-card", "/vault", "/insurance", "/insurance/policies", "/insurance/policies/synthetic-policy", "/insurance/cases", "/insurance/cases/synthetic-case", "/insurance/payouts/new"].includes(path) && !path.startsWith("/assets/months/") && !path.startsWith("/appliances") && !path.startsWith("/consumables")) {
-        await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toBeVisible();
-      }
+      await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "기록 기능을 준비하고 있어요", exact: true })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     });
   }

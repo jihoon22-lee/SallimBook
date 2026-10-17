@@ -41,6 +41,7 @@ export type NativeVaultEntry =
   | { action: "resume-rotation" | "abort-rotation"; rotationId: string };
 
 export interface SallimBookAuth {
+  listAuditEvents(options: { query?: NonNullable<operations["listAuditEvents"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AuditListResponse"]>>>;
   openVaultUI(options: NativeVaultEntry): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
   getVaultStatus(): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultStatusResponse"]>>>;
   listVaultShares(options: { query?: NonNullable<operations["listVaultShares"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultShareListResponse"]>>>;

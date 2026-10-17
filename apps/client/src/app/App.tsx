@@ -29,14 +29,15 @@ import { PolicyListPage, PolicyNewPage, PolicyDetailPage } from "../features/ins
 import { CaseListPage, CaseNewPage, CaseDetailPage } from "../features/insurance/cases/CasePages";
 import { ClaimNewPage, ClaimDetailPage } from "../features/insurance/claims/ClaimPages";
 import { EventDetailPage, ExpenseNewPage, PayoutNewPage, PayoutListPage, ReturnNewPage } from "../features/insurance/events/EventPages";
+import { AuditPage } from "../features/audit/AuditPage";
+import { SettingsPage } from "../features/household/SettingsPage";
 import { ExportsPage } from "../features/exports/ExportsPage";
 import { VaultPage } from "../features/vault/VaultPage";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
 import { MonthProvider } from "../shared/MonthContext";
-import { PlannedPage, RelatedLinks } from "../shared/PlannedPage";
+import { RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens.filter((screen) => screen.path !== "/more" && !screen.path.startsWith("/appliances") && !screen.path.startsWith("/consumables"))];
 const screens = [
   { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <Dashboard /> },
   { path: "/more", title: "더보기", group: "more" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><div className="intro"><h1>더보기</h1><p>우리 집 물건과 공동 가계의 설정을 관리해요.</p></div><RelatedLinks links={householdScreens.find((screen) => screen.path === "/more")!.links ?? []} /></> },
@@ -56,6 +57,8 @@ const screens = [
   { path: "/exports", title: "자료 내보내기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <ExportsPage /> },
   { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <VaultPage /> },
   ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
+  { path: "/settings", title: "설정", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <SettingsPage /> },
+  { path: "/settings/audit", title: "감사 이력", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <AuditPage /> },
   { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <SessionSettings /> },
   ...assetScreens.filter((screen) => screen.path === "/assets" || screen.path === "/assets/:id").map((screen) => ({ ...screen, live: true, element: screen.path === "/assets" ? <AssetListPage /> : <AssetDetailPage /> })),
   { path: "/assets/new", title: "자산·부채 등록", group: "assets" as NavigationGroup, parent: { to: "/assets", label: "자산 목록" }, live: true, element: <AssetNewPage /> },
@@ -107,7 +110,6 @@ const screens = [
   { path: "/insurance/claims/new", title: "보험 청구 기록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ClaimNewPage /> },
   { path: "/insurance/claims/:id", title: "보험 청구 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ClaimDetailPage /> },
   { path: "/insurance/claims/:id/edit", title: "보험 청구 정정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ClaimDetailPage edit /> },
-  ...plannedScreens.map((screen) => ({ ...screen, live: false, element: <PlannedPage screen={screen} /> })),
 ];
 
 const navigation: { group: NavigationGroup; to: string; label: string; icon: string; children?: ScreenLink[] }[] = [
@@ -185,7 +187,6 @@ function AppShell() {
           {isNativeAuth() && <button type="button" onClick={() => void nativeAuth.lock().catch(() => {})}>앱 잠금</button>}
         </header>
         <div className="page">
-          {!current?.live && <p className="preview-notice">기능 준비 중 · 현재는 화면 탐색만 가능해요.</p>}
           {location.pathname !== "/" && <div className="back-row"><button className="back-button" onClick={goBack}><span aria-hidden="true">← </span>뒤로</button><span className="muted">{current?.parent.label ?? "홈"}</span></div>}
           <main id="main-content" ref={mainRef} tabIndex={-1}>
             <Routes>{screens.map((screen) => <Route key={screen.path} path={screen.path} element={screen.element} />)}<Route path="*" element={<NotFound />} /></Routes>
