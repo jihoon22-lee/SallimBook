@@ -154,6 +154,12 @@ class StockMovement(ImmutableFields, Base):
             "household_id", "consumable_id", "id", name="uq_stock_movements_stock_target"
         ),
         UniqueConstraint("household_id", "reversal_of", name="uq_stock_movements_reversal"),
+        UniqueConstraint(
+            "household_id",
+            "consumable_id",
+            "stock_version",
+            name="uq_stock_movements_stock_version",
+        ),
         household_fk("stock_movements", "consumable_id", "consumables"),
         household_fk("stock_movements", "created_by_member_id", "household_members"),
         ForeignKeyConstraint(

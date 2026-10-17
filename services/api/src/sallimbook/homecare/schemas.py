@@ -198,6 +198,7 @@ class ReplacementCreate(InputModel):
     replaced_on: DateOnly
     quantity: PositiveQuantity
     link_version: Version
+    clear_next_check_override: bool = Field(strict=True)
     note: Note | None = Field(default=None, repr=False)
 
 
@@ -244,6 +245,7 @@ class ApplianceConsumableResponse(ApplianceConsumableFields, EntityResponse):
     last_replacement_id: UUID | None
     last_replaced_on: DateOnly | None
     next_check_on: DateOnly | None
+    next_check_source: Literal["override", "replacement", "unknown"]
     stock_quantity: Quantity
     stock_version: Version
     as_of: DateOnly
