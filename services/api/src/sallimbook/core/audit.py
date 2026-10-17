@@ -90,6 +90,7 @@ def record_event(
         "card_secret_envelope",
         "document",
         "document_link",
+        "user_export",
     ],
     entity_id: UUID,
     action: Literal[
@@ -111,6 +112,7 @@ def record_event(
         "complete",
         "settle",
         "void_settlement",
+        "export",
     ],
     before_version: int | None,
     after_version: int | None,
@@ -158,6 +160,7 @@ def record_event(
         "card_secret_envelope",
         "document",
         "document_link",
+        "user_export",
     } or action not in {
         "create",
         "update",
@@ -177,6 +180,7 @@ def record_event(
         "complete",
         "settle",
         "void_settlement",
+        "export",
     }:
         raise ValueError("Audit operation is not registered")
     event = AuditEvent(
