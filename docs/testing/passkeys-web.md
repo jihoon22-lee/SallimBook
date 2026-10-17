@@ -44,12 +44,16 @@ Chromium 가상 인증기가 실제 서명을 만들고 API가 실제 PostgreSQL
 
 | 검사 | 결과 |
 |---|---|
-| `pnpm --filter @sallimbook/client exec playwright test --config playwright.passkeys.config.ts` | 전체 UI **120개 통과** |
+| `pnpm --filter @sallimbook/client exec playwright test --config playwright.passkeys.config.ts --workers=2` | 최신 서버 병합 후 전체 UI **120개 통과** |
 | `uv run --project services/api python scripts/test_web_auth.py --passkeys` | 실제 HTTPS WebAuthn **2개 통과** |
 | `uv run --project services/api python scripts/test_web_auth.py` | 실제 HTTPS 쿠키·CSRF·동일 세션 비밀번호 재인증 **2개 통과** |
-| `uv run --project services/api python scripts/test_database.py services/api/tests/test_identity.py services/api/tests/test_passkeys.py` | API·권한·검증 **100개 통과**, Alembic drift 없음, downgrade/upgrade 성공 |
+| 최종 서버 `b097ace`의 `uv run --project services/api python scripts/test_database.py` | API·권한·검증 **242개 통과**, Alembic drift 없음, downgrade/upgrade 성공 |
 | `pnpm api:generate`, `pnpm typecheck` | 통합 서버에서 API 계약 재생성·타입 검사 통과 |
-| `pnpm android:sync` 후 `:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin` | 인증 JVM **27개 통과**, 개발 APK·release Kotlin 컴파일 성공 |
+| `pnpm android:build` 및 `:app:compileReleaseKotlin` | JVM **46개 통과**(인증 27·기존 debug POC 19), 개발 APK·release Kotlin 컴파일 성공 |
+
+최종 병합 후 HTTPS 두 명령도 각각 2개씩 다시 통과했다. 초기 병행 UI 실행은 라우팅 reload 1건에서
+5초 timeout이 있었고, 같은 코드의 해당 테스트 단독 실행과 최종 2-worker 전체 실행은 통과했다.
+CI에서는 일반 HTTPS 인증에 더해 `--passkeys`의 실제 서명 검증도 실행한다.
 
 WebAuthn 검사는 등록·로그인·공개 목록·폐기와 폐기 키 재로그인 거부를 확인했다. 초대·기기 해제용 scoped
 grant를 실제로 소비한 뒤에도 패스키 등록·폐기에 필요한 계정 인증 시각이 갱신되지 않음을 확인했다.
