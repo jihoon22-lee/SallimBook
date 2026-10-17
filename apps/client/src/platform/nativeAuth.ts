@@ -2,7 +2,8 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import type { NativeAuthResult, NativeMetadataRequest, SallimBookAuth } from "../../../../plugins/sallimbook-auth/src/definitions";
 import { ApiError, apiErrorCode } from "./api";
 
-const plugin = registerPlugin<SallimBookAuth>("SallimBookAuth");
+export const nativeAuthPlugin = registerPlugin<SallimBookAuth>("SallimBookAuth");
+const plugin = nativeAuthPlugin;
 export const isNativeAuth = () => Capacitor.isNativePlatform();
 export const hasNativeAuth = () => Capacitor.getPlatform() === "android" && Capacitor.isPluginAvailable("SallimBookAuth");
 
