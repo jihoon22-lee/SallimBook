@@ -226,8 +226,8 @@
       "git_sha1": "05095fa6358915dcd93ec86267885a56087ed409"
     },
     "docs/testing/passkeys-web.md": {
-      "sha256": "39bc00205650af240e05d901fef3291955321af7b742541e660cf42393575184",
-      "git_sha1": "d548090ee6e9563549ceb34ae9f9f02ea0616b99"
+      "sha256": "0ffc2a8c5e4917630d6b7166f3079195c038e9bfef097ed80cd33736966ab87a",
+      "git_sha1": "eff57f649151381e78b9e97012c2af7b02780ac9"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",

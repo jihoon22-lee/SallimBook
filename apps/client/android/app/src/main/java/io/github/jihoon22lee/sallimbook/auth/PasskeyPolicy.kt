@@ -155,6 +155,35 @@ internal object PasskeyPolicy {
     }
 }
 
+/** Fetches all metadata pages for the selected target without trusting a JavaScript label. */
+internal class PasskeyTargetPages(passkey: Boolean, private val targetId: String, private val ifMatch: String) {
+    private val base = if (passkey) "/api/v1/auth/passkeys?limit=200" else "/api/v1/devices?limit=200"
+    private val cursors = mutableSetOf<String>()
+    var nextPath: String? = base
+        private set
+
+    fun accept(body: Any?): Map<*, *>? {
+        if (nextPath == null) throw AuthFailure(AuthCode.ACCESS_DENIED)
+        val page = body as? Map<*, *> ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+        val items = page["items"] as? List<*> ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+        val matches = items.filterIsInstance<Map<*, *>>().filter { it["id"] == targetId }
+        if (matches.size > 1) throw AuthFailure(AuthCode.ACCESS_DENIED)
+        matches.singleOrNull()?.let { row ->
+            if ("\"${row["version"]}\"" != ifMatch) throw AuthFailure(AuthCode.ACCESS_DENIED)
+            nextPath = null
+            return row
+        }
+        val cursor = page["next_cursor"]
+        nextPath = if (cursor == null) null else {
+            if (cursor !is String || !PasskeyPolicy.uuid.matches(cursor) || !cursors.add(cursor) || items.isEmpty()) {
+                throw AuthFailure(AuthCode.ACCESS_DENIED)
+            }
+            "$base&cursor=$cursor"
+        }
+        return null
+    }
+}
+
 /** One ceremony, one verification, never a reusable authentication grant. */
 internal class PasskeyPresentationPolicy(private val clock: () -> Long, private val expiresAt: Long) {
     private enum class Phase { FETCHED, PROVIDER, WAITING, VERIFYING, CANCELLED }
