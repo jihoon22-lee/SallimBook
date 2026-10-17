@@ -16,7 +16,7 @@ from sallimbook.cashflow.recurring_models import (
 )
 from sallimbook.core.audit import AuditEvent
 from sallimbook.core.idempotency import IdempotencyRecord
-from sallimbook.documents.models import Document, DocumentLink
+from sallimbook.documents.models import Document, DocumentLink, DocumentStorageReservation
 from sallimbook.homecare.models import (
     Appliance,
     ApplianceConsumable,
@@ -118,6 +118,7 @@ __all__ = [
     "CashRecordRevision",
     "Document",
     "DocumentLink",
+    "DocumentStorageReservation",
     "FinancialAccount",
     "FixedSettlement",
     "Household",
