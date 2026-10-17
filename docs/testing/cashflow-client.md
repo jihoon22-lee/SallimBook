@@ -90,3 +90,23 @@ git diff --check
 release Kotlin 컴파일 성공을 확인했다. 실제 `--cashflow` HTTPS 흐름도 다시 통과했으며
 DB 정지와 시험 잠금 반환을 확인했다. CI에 이 실제 HTTPS 검사를 추가했다.
 카드·계좌·연결 자산의 종료 화면과 Android의 확인/digest 경로를 서버 강제 검사와 함께 배포한다.
+
+## SB-017 카드 종료일 검증 보완 (PR #68)
+
+카드 수정과 상세 사용 종료에서 서울 기준 오늘 이후의 종료일을 입력하면 즉시 안내하고 저장을 막는다.
+시작일과 같은 종료일은 허용하며, 시작일 이전 날짜는 별도로 안내한다. 두 날짜 입력의 `max`와
+공통 payload 검증을 함께 적용하고, 잘못된 종료일로는 연결 납부 계획을 조회하지 않는다.
+서버의 `INVALID_CARD_DATES` 안내도 시작일 포함 하한과 서울 오늘 상한을 모두 설명한다.
+API 계약·DB 스키마·네이티브 경로·민감정보 처리는 변경하지 않았다.
+
+`pnpm typecheck`, `pnpm build`와 카드/현금흐름 모델 회귀 **28개**가 통과했다(기존 20개, 신규 8개).
+빌드에는 기존 단일 JS chunk 500KB 경고가 남아 있다.
+수정·종료 양쪽의 미래일 차단, 시작일 이전 차단, 오늘/시작일 포함 허용, 직접 form submit 차단,
+서울 자정 전후, 종료일 미입력과 잘못된 달력 날짜, 서버 오류의 한국어 안내를 확인했다.
+desktop과 Android 크기 브라우저를 사용했으며 실기기 검증은 아니다.
+동시 작업의 포트 충돌을 피하려고 기본 Playwright 설정의 baseURL/webServer만 18754로 바꾼
+임시 `playwright.card-date.local.config.ts`를 사용했고 실행 후 제거했다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test cards.spec.ts cashflow-model.spec.ts --config playwright.card-date.local.config.ts --workers=2
+```

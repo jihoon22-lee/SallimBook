@@ -32,7 +32,7 @@ export function CashflowError({ error }: { error: ApiError | null }) {
     CARD_IN_USE: "연결된 기록이 있는 카드는 삭제할 수 없어요. 사용 종료로 과거 기록을 보존해 주세요.",
     PAYMENT_LINK_CONFIRMATION_REQUIRED: "선택한 종료일 이후의 연결된 납부 계획을 확인해 주세요.",
     PAYMENT_LINKS_CHANGED: "연결된 계획이 변경됐어요. 입력한 종료일은 유지했어요. 종료 영향을 다시 확인해 주세요.",
-    INVALID_CARD: "카드의 일반정보와 결제계좌를 확인해 주세요.", INVALID_CARD_DATES: "사용 종료일은 시작일 이후여야 해요.",
+    INVALID_CARD: "카드의 일반정보와 결제계좌를 확인해 주세요.", INVALID_CARD_DATES: "카드 사용 종료일은 사용 시작일과 같거나 늦어야 하며, 서울 기준 오늘을 넘을 수 없어요.",
   };
   return messages[error.code] ? <div className="auth-message" role="alert"><p>{messages[error.code]}</p></div> : <MonthError error={error} />;
 }
