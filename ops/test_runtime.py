@@ -33,18 +33,37 @@ def main(image):
     with tempfile.TemporaryDirectory(prefix=project + "-") as temporary:
         directory = Path(temporary)
         password = secrets.token_urlsafe(32)
+        admin_password = secrets.token_urlsafe(32)
         database = "sallimbook_ops_" + uuid4().hex[:12] + "_test"
         env = directory / "synthetic.env"
         env.write_text(
-            "OPS_DB_PASSWORD="
-            + password
-            + "\nSALLIMBOOK_DATABASE_URL=postgresql+psycopg://sallimbook:"
+            "SALLIMBOOK_DATABASE_URL=postgresql+psycopg://sallimbook_app:"
             + password
             + "@db:5432/"
             + database
             + "\n"
         )
         env.chmod(0o600)
+        migration_env = directory / "synthetic-migration.env"
+        migration_env.write_text(
+            "SALLIMBOOK_DATABASE_URL=postgresql+psycopg://sallimbook_admin:"
+            + admin_password
+            + "@db:5432/"
+            + database
+            + "\n"
+        )
+        migration_env.chmod(0o600)
+        init_env = directory / "synthetic-init.env"
+        init_env.write_text(
+            "OPS_DB_PASSWORD="
+            + password
+            + "\nOPS_ADMIN_DB_PASSWORD="
+            + admin_password
+            + "\nOPS_DATABASE="
+            + database
+            + "\n"
+        )
+        init_env.chmod(0o600)
         config = {
             "format": 1,
             "project": "sallimbook-staging",
@@ -80,27 +99,66 @@ def main(image):
             "synthetic_secrets:/run/secrets:ro",
         ]
         services["db"]["restart"] = "no"
+        services["db"]["command"][2] = "cluster_name=" + project
         init = """import base64,json,os,pathlib
-for name in ['/run/secrets','/srv/documents','/run/scanner']:
+for name in ['/run/secrets','/srv/documents','/run/scanner','/run/operator']:
  p=pathlib.Path(name); p.mkdir(exist_ok=True); p.chmod(0o700); os.chown(p,10001,10001)
 p=pathlib.Path('/run/secrets/field-keyring.json')
 p.write_text(json.dumps({'schema_version':1,'active_key_version':1,'keys':{'1':base64.b64encode(bytes(range(32))).decode()}}))
 p.chmod(0o600); os.chown(p,10001,10001)
-p=pathlib.Path('/run/secrets/db-password'); p.write_text(os.environ['OPS_DB_PASSWORD']); p.chmod(0o600)
+p=pathlib.Path('/run/secrets/db-admin-password'); p.write_text(os.environ['OPS_ADMIN_DB_PASSWORD']); p.chmod(0o600)
+p=pathlib.Path('/run/operator/app-db-password'); p.write_text(os.environ['OPS_DB_PASSWORD']); p.chmod(0o600); os.chown(p,10001,10001)
+p=pathlib.Path('/run/operator/admin-service.conf')
+p.write_text('[sallimbook]\\nhost=db\\nport=5432\\nuser=sallimbook_admin\\nsslmode=disable\\ndbname='+os.environ['OPS_DATABASE']+'\\npassword='+os.environ['OPS_ADMIN_DB_PASSWORD']+'\\n')
+p.chmod(0o600); os.chown(p,10001,10001)
 """
         services["init"] = {
             "image": image_id,
             "user": "0:0",
             "network_mode": "none",
             "restart": "no",
-            "env_file": [str(env)],
+            "env_file": [str(init_env)],
             "volumes": [
                 "synthetic_secrets:/run/secrets",
                 "synthetic_documents:/srv/documents",
                 "scanner_socket:/run/scanner",
+                "operator_secrets:/run/operator",
             ],
             "entrypoint": ["python", "-c", init],
             "mem_limit": "128m",
+        }
+        services["migrate"] = {
+            "image": image_id,
+            "user": "10001:10001",
+            "read_only": True,
+            "networks": ["database"],
+            "env_file": [str(migration_env)],
+            "profiles": ["tools"],
+            "command": [
+                "alembic",
+                "-c",
+                "/opt/sallimbook/alembic.ini",
+                "upgrade",
+                "head",
+            ],
+        }
+        services["provision"] = {
+            "image": image_id,
+            "user": "10001:10001",
+            "read_only": True,
+            "networks": ["database"],
+            "volumes": ["operator_secrets:/run/operator:ro"],
+            "profiles": ["tools"],
+            "command": [
+                "python",
+                "-m",
+                "ops.database",
+                "provision",
+                "--admin-service-file",
+                "/run/operator/admin-service.conf",
+                "--application-password-file",
+                "/run/operator/app-db-password",
+            ],
         }
         compose = {
             "name": project,
@@ -113,6 +171,7 @@ p=pathlib.Path('/run/secrets/db-password'); p.write_text(os.environ['OPS_DB_PASS
                     "scanner_socket",
                     "synthetic_secrets",
                     "synthetic_documents",
+                    "operator_secrets",
                 )
             },
         }
@@ -122,20 +181,8 @@ p=pathlib.Path('/run/secrets/db-password'); p.write_text(os.environ['OPS_DB_PASS
         try:
             run(command + ["run", "--rm", "init"])
             run(command + ["up", "-d", "--wait", "db", "scanner"])
-            run(
-                command
-                + [
-                    "run",
-                    "--rm",
-                    "--no-deps",
-                    "api",
-                    "alembic",
-                    "-c",
-                    "/opt/sallimbook/alembic.ini",
-                    "upgrade",
-                    "head",
-                ]
-            )
+            run(command + ["run", "--rm", "--no-deps", "migrate"])
+            run(command + ["run", "--rm", "--no-deps", "provision"])
             run(command + ["up", "-d", "--wait", "--wait-timeout", "90", "api"])
             run(
                 command + ["exec", "-T", "api", "python", "-m", "ops.runtime_probe"],

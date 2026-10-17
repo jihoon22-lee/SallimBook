@@ -268,11 +268,21 @@ def pack_encrypted(work, target, recipient):
         os.fsync(output.fileno())
 
 
-def backup(service_file, documents, destination, recipient, source_commit):
+def backup(
+    service_file, documents, destination, recipient, source_commit, deployment_manifest
+):
+    from ops.deploy import validate
+
     if not re.fullmatch(r"age1[0-9a-z]{58}", recipient):
         raise OperationError("One standard age X25519 public recipient required")
     if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
         raise OperationError("Exact source commit required")
+    deployment_path = Path(deployment_manifest)
+    if deployment_path.stat().st_size > 64 * 1024:
+        raise OperationError("Public deployment manifest is too large")
+    deployment = validate(json.loads(deployment_path.read_text()))
+    if deployment["source_commit"] != source_commit:
+        raise OperationError("Backup source/deployment commit mismatch")
     verify_tools("age", "pg_dump")
     destination = private_directory(destination)
     documents = private_directory(documents)
@@ -352,6 +362,7 @@ def backup(service_file, documents, destination, recipient, source_commit):
                     "snapshot_at": taken_at.isoformat(),
                     "schema_revision": revision,
                     "source_commit": source_commit,
+                    "deployment": deployment,
                     "postgres_major": 18,
                     "vault_max_versions": versions,
                     "table_counts": table_counts(conn),
@@ -515,6 +526,9 @@ def restore(archive, identity, service_file, output, expected_sha256):
         (output / "backup-manifest.json").write_text(
             json.dumps(manifest, sort_keys=True)
         )
+        (output / "deployment.json").write_text(
+            json.dumps(manifest["deployment"], sort_keys=True)
+        )
         result = {
             "status": "quarantined",
             "backup_id": manifest["id"],
@@ -535,6 +549,7 @@ def main():
     make.add_argument("--destination", required=True, type=Path)
     make.add_argument("--recipient", required=True)
     make.add_argument("--source-commit", required=True)
+    make.add_argument("--deployment-manifest", required=True, type=Path)
     recover = sub.add_parser("restore")
     recover.add_argument("--archive", required=True, type=Path)
     recover.add_argument("--identity", required=True, type=Path)

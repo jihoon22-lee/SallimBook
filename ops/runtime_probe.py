@@ -19,8 +19,12 @@ def main():
     from sallimbook.core.database import make_engine
     from sallimbook.identity import service
     from sallimbook.identity.schemas import InvitationAcceptance
+    from sqlalchemy import text
     from sqlalchemy.engine import make_url
+    from sqlalchemy.exc import DBAPIError
     from sqlalchemy.orm import Session
+
+    from ops.database import verify_runtime
 
     settings = Settings(_env_file=None)
     url = settings.database_url.get_secret_value()
@@ -55,6 +59,23 @@ def main():
                 raise RuntimeError("Synthetic scanner did not become ready") from None
             time.sleep(0.25)
     engine = make_engine(url)
+    assert verify_runtime()["status"] == "runtime-role-verified"
+    with engine.connect() as connection:
+        for statement in (
+            "CREATE TABLE public.ops_forbidden(id integer)",
+            "ALTER TABLE documents DISABLE TRIGGER ALL",
+            "TRUNCATE users CASCADE",
+        ):
+            transaction = connection.begin_nested()
+            try:
+                connection.execute(text(statement))
+            except DBAPIError as error:
+                assert getattr(error.orig, "sqlstate", None) == "42501"
+            else:
+                raise RuntimeError("Runtime role unexpectedly changed protected schema")
+            finally:
+                transaction.rollback()
+        connection.rollback()
     password = "Synthetic runtime password only 2026!"
     with Session(engine) as session:
         invitation = service.create_bootstrap_invitation(
@@ -185,7 +206,7 @@ def main():
         and stat.S_IMODE(objects[0].stat().st_mode) == 0o600
     )
     print(
-        "PASS: API UID10001, private socket, tmpfs, native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial"
+        "PASS: API UID10001, DDL/trigger-disable/TRUNCATE denied, private socket, tmpfs, native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial"
     )
 
 

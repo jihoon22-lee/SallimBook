@@ -206,7 +206,7 @@ http://:8080 {{
             "image": c["api_image"],
             "user": "10001:10001",
             "read_only": True,
-            "env_file": [runtime + "/api.env"],
+            "env_file": [{"path": runtime + "/api.env", "format": "raw"}],
             "environment": {
                 "SALLIMBOOK_ENVIRONMENT": "production",
                 "SALLIMBOOK_ALLOWED_ORIGINS": json.dumps([origin]),
@@ -281,19 +281,20 @@ http://:8080 {{
             "security_opt": ["no-new-privileges:true"],
             "environment": {
                 "POSTGRES_DB": "sallimbook_prod",
-                "POSTGRES_USER": "sallimbook",
-                "POSTGRES_PASSWORD_FILE": "/run/secrets/db-password",
+                "POSTGRES_USER": "sallimbook_admin",
+                "POSTGRES_PASSWORD_FILE": "/run/secrets/db-admin-password",
+                "POSTGRES_HOST_AUTH_METHOD": "scram-sha-256",
             },
             "volumes": [
                 "db_data:/var/lib/postgresql",
-                runtime + "/db-password:/run/secrets/db-password:ro",
+                runtime + "/db-admin-password:/run/secrets/db-admin-password:ro",
             ],
             "healthcheck": {
                 "test": [
                     "CMD",
                     "pg_isready",
                     "-U",
-                    "sallimbook",
+                    "sallimbook_admin",
                     "-d",
                     "sallimbook_prod",
                 ],
@@ -302,6 +303,17 @@ http://:8080 {{
                 "retries": 30,
             },
             "mem_limit": "1g",
+            "command": [
+                "postgres",
+                "-c",
+                "cluster_name=" + c["project"],
+                "-c",
+                "log_statement=none",
+                "-c",
+                "log_parameter_max_length=0",
+                "-c",
+                "log_parameter_max_length_on_error=0",
+            ],
             "logging": common["logging"],
         },
     }

@@ -94,8 +94,8 @@
       "git_sha1": "b32558882df96fac658918bb3cfe2706bfe3df6b"
     },
     "docs/deployment-backup-operations.md": {
-      "sha256": "680c2fc917712cf66652a0747662522ec0c7821be245d8cf5e25625ec3981973",
-      "git_sha1": "6e84f7687d9c79bac36f7a0d75813fac08455482"
+      "sha256": "fc4d6b68aa5addf8cc4a844f153fb3568d7f0f444af42c410c895eeadbb0276b",
+      "git_sha1": "22ebd6e1cbe619b94593618ed3f1f3ecf64e754c"
     },
     "docs/roadmap-and-milestones.md": {
       "sha256": "95dd42215c69f32da823697ea9779b74fc22bb7ac86001c227082c5870b7b4db",
@@ -272,6 +272,10 @@
     "docs/testing/insurance-client.md": {
       "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
       "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
+    },
+    "docs/operations-runbook.md": {
+      "sha256": "06969551578eb0635b3862a165109384c93a105ae102b2f4f7f630e81f0b412d",
+      "git_sha1": "c62509c2b063833394924d06395305b9bb5de696"
     }
   }
 }

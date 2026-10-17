@@ -11,6 +11,7 @@
 | `python3 -m ops.deploy MANIFEST NEW_DIRECTORY` | 공개 배포 manifest를 검사하고 Compose/Caddy/Serve/Digital Asset Links/Android 설정 생성 | 컨테이너 시작, 노드 등록, 키 생성 |
 | `python3 -m ops.build_context NEW_DIRECTORY --commit SHA` | 깨끗한 commit의 최소 이미지 빌드 입력 생성, frozen 의존성 및 웹 빌드 | 이미지 게시, 운영 배포 |
 | `uv run --project services/api python -m ops.preflight CONFIG_DIRECTORY` | 생성 설정·전용 DB 접속 대상/비밀번호 일치·파일 소유권·로컬 이미지 확인 | 서비스 시작, 노드 등록 |
+| `… -m ops.database provision …` / `verify-runtime` | 전용 migration/admin 역할과 제한된 API 역할 분리·권한 확인 | 업무 스키마 변경, 기존 역할 비밀번호 덮어쓰기 |
 | `uv run --project services/api python -m ops.backup create …` | 일관된 DB/첨부 스냅샷을 age로 암호화하고 완료 receipt 생성 | 서버 암호화키·서명키·Tailscale 상태·CVC 포함 |
 | `… -m ops.backup restore …` | 빈 전용 `*_restorecheck` DB와 새 디렉터리로 복원 | 기존 DB 덮어쓰기, API 시작, 운영 승격 |
 | `… -m ops.recovery prepare …` | 격리 복원 DB의 인증 폐기와 두 계정 비밀번호 재설정 | 보관함/금전/진료 기록 삭제 |
@@ -71,12 +72,28 @@ Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy �
 
 | 경로 | 소유/권한 | 내용 |
 |---|---|---|
-| `api.env` | 운영자 소유 0600 | `SALLIMBOOK_DATABASE_URL=postgresql+psycopg://…@db:5432/sallimbook_prod` 한 항목만 허용 |
-| `db-password` | 운영자 소유 0400/0600, PostgreSQL entrypoint가 읽음 | API 접속 비밀번호와 같은 24자 이상 DB 비밀번호 |
+| `api.env` | 운영자 소유 0600 | `SALLIMBOOK_DATABASE_URL=postgresql+psycopg://sallimbook_app:…@db:5432/sallimbook_prod` 한 항목만 허용; quote/interpolation 없이 raw 형식 |
+| `app-db-password` | 운영자 소유 0400/0600, API container에는 mount하지 않음 | API URL과 같은 24자 이상 runtime DB 비밀번호 |
+| `db-admin-password` | 운영자 소유 0400/0600, DB container만 읽음 | 별도의 24자 이상 admin/migration DB 비밀번호; runtime 비밀번호와 다름 |
 | `field-keyring.json` | API UID 10001 소유 0400/0600 | 기존 서버 field/document keyring, 백업 데이터와 별도 보관 |
 | `documents/` | API UID 10001 소유 0700 | 암호화 `.sbdoc` 객체; 파일은 0600 |
 
 API/scanner의 root filesystem은 읽기 전용이고 처리 임시 파일은 tmpfs다. 메모리 한도와 같은 swap 한도를 설정한다. scanner는 네트워크가 없고 Unix socket만 공유한다. 이 설정 외에 호스트 swap/WSL 메모리 설정을 자동 수정하지 않는다. 실제 cgroup/tmpfs/스캐너 신선도·서비스 재시작 인수는 배포 전에 확인한다.
+
+DB 최초 owner/migration 역할은 `sallimbook_admin`이며 API에는 전달하지 않는다. API의 `sallimbook_app`은 LOGIN만 허용하고 superuser/DB 생성/역할 생성/replication/RLS 우회/역할 상속을 주지 않는다. schema CREATE, TRUNCATE, 테이블 소유권, trigger 비활성화, Alembic version 수정 권한도 없다. 업무 테이블의 필요한 SELECT/INSERT/UPDATE/DELETE와 sequence/function 사용만 허용한다. `public` schema/database의 PUBLIC 기본 권한을 회수하고 migration admin이 만드는 후속 객체의 default privileges도 설정한다.
+
+다음은 운영 실행이 별도로 승인된 뒤의 순서다. 전용 DB만 먼저 시작하고 admin credential로 migration을 적용한다. 외부 비공개 admin service 파일과 app 비밀번호 파일을 **일회용 운영 도구 container에만** 읽기 전용으로 주입하여 실행한다. 일반 API container에는 admin service/비밀번호를 mount하지 않는다.
+
+```bash
+# 전용 database 네트워크에 연결한 운영 도구 container 안에서:
+python -m ops.database provision \
+  --admin-service-file /run/operator/admin-service.conf \
+  --application-password-file /run/operator/app-db-password
+# operator host에서, DB/migration/역할 준비 뒤 API 시작 전:
+uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/RENDERED_DIRECTORY --verify-database
+```
+
+`admin-service.conf`는 아래 백업 service 형식에서 user를 `sallimbook_admin`으로 설정한다. `provision`은 전용 cluster_name/DB 소유자/단일 애플리케이션 DB를 검사하고 기존 app 역할이 있으면 덮어쓰지 않는다. 기존 역할은 `verify-runtime`으로 검사한다. 비밀번호는 libpq의 표준 SCRAM 변환 후 SQL에 전달하여 평문을 SQL·활동 조회·서버 명령 로그에 넣지 않는다. migration은 계속 admin 역할로만 수행한다. `preflight --verify-database`는 프로젝트 label이 맞는 내부 DB 네트워크에서 일회용 읽기 전용 client로 실제 역할을 확인하며, 기존 서비스를 시작/재설정하지 않는다.
 
 ## 4. 일관된 암호화 백업
 
@@ -102,6 +119,7 @@ uv run --project services/api python -m ops.backup create \
   --documents /PRIVATE_RUNTIME/documents \
   --destination /PRIVATE_BACKUP_DIRECTORY \
   --recipient PUBLIC_AGE_RECIPIENT \
+  --deployment-manifest /PRIVATE_CONFIG/deployment.json \
   --source-commit REVIEWED_SHA
 ```
 
@@ -111,7 +129,7 @@ uv run --project services/api python -m ops.backup create \
 2. 잠금 확보 뒤 `REPEATABLE READ READ ONLY` transaction을 시작하고 snapshot을 export한다. `pg_dump --snapshot`이 같은 시점을 읽는다.
 3. custom-format dump를 pipe로 age에 전달한다. 평문 SQL dump 파일은 만들지 않는다.
 4. 잠금을 유지한 채 암호화 객체를 복사하고 DB 참조·크기·SHA-256 inventory를 대조한다. 업로드/cleanup의 같은 barrier 덕분에 DB와 파일이 어긋나지 않는다. 금전/일반 데이터는 PostgreSQL snapshot에 고정된다.
-5. snapshot 시각·schema revision·source commit·전체 public 테이블 행 수·가계별 최대 vault key version·암호화 dump/object checksum을 manifest에 넣는다. 이 manifest와 암호화 dump/object를 다시 tar→age로 묶는다.
+5. snapshot 시각·schema revision·source commit·공개 배포 manifest(이미지/RP/FQDN/서명 인증서/앱 버전)·전체 public 테이블 행 수·가계별 최대 vault key version·암호화 dump/object checksum을 manifest에 넣는다. 이 manifest와 암호화 dump/object를 다시 tar→age로 묶는다. manifest는 생성과 복원 모두 같은 2MiB 상한을 적용한다.
 6. fsync된 암호화 `.partial`을 새 UUID 이름으로 게시하고 `.complete.json`을 마지막에 기록한다. 완료 receipt 없는 파일은 복구 가능한 완료 백업으로 세지 않는다.
 
 작업 중 디스크에는 암호화 dump·기존 암호화 객체·비공개 inventory만 있다. 오류 시 새 완료 receipt를 만들지 않는다. 15분 subprocess 제한을 두고 객체별 20MiB+태그, 전체 8GiB, 객체 10,000개를 넘으면 실패한다. 일반 HTTP 문서 다운로드 한도와 별도 운영 한도다.
@@ -193,11 +211,15 @@ python3 -m ops.release \
 ```bash
 python3 -m unittest discover -s tests/operations -v
 python3 -m ops.test_deployment
+python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE
+JAVA_HOME=/SELECTED_JDK_21 python3 -m ops.test_release --sdk /DEDICATED_ANDROID_SDK
 PATH=/VERIFIED_AGE_AND_POSTGRES_TOOL_DIRECTORY:$PATH \
   uv run --project services/api python -m ops.test_recovery
 ```
 
 `test_deployment`는 network-none 단발 컨테이너로 Compose/Caddy 설정·공개 JSON/404와 이미지 버전만 검사한다. 실제 tailnet 노드를 만들지 않는다. `test_recovery`는 공통 DB 시험 lock과 `sallimbook-dev`의 `db-test`만 사용하고 새 UUID 이름의 합성 source/restore DB를 만든다. 종료 시 자신이 만든 DB만 제거하고 test 컨테이너를 중지한다. 임시 합성 age/field key는 시험 종료 후 제거하며 실제 키를 사용하지 않는다. vault rotation fixture는 서버 metadata/상태전이를 검사하는 opaque fixture이며 클라이언트 암호학 증거가 아니다.
+
+`test_runtime`은 새 `sallimbook-ops-smoke-*` Compose 프로젝트·내부 네트워크·합성 볼륨에서 migration, 제한된 DB 역할, UID10001/scanner socket/tmpfs, 실제 한국어 OCR/ClamAV 업로드와 암호화 저장·다운로드를 검사하고 그 프로젝트만 제거한다. 호스트 포트/노드를 만들지 않는다. `test_release`는 임시 합성 서명키로 연속 두 release를 만들고 서명/버전/변조 거부를 검사한 뒤 키·APK를 제거한다. 실제 서명키나 기기 설치는 사용하지 않는다. Docker 네트워크를 생성/제거하는 시험과 Chromium 전체 검사는 순차 실행하여 `ERR_NETWORK_CHANGED` 간섭을 피한다.
 
 운영 완료에는 별도로 실제 허용/비허용 기기의 사설 접근, 외부 443의 JSON 이외 차단, DB 비노출, 실제 패스키, 이전 앱-새 API, 두 기기 데이터 보존 업데이트, WSL 재시작 복귀, 서명키/서버키/복구코드 별도 보관, 전체 도메인 fixture·G1~G6 인수, 실제 새 환경 복원 시각과 RPO/RTO 측정이 필요하다. 이 문서나 단위검사만으로 SB-036~040을 완료 처리하지 않는다.
 

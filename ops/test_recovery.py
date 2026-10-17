@@ -173,6 +173,23 @@ def run_synthetic(admin_url, temporary):
         ).strip()
         destination = temporary / "backups"
         destination.mkdir(mode=0o700)
+        deployment_manifest = temporary / "deployment.json"
+        deployment_manifest.write_text(
+            json.dumps(
+                {
+                    "format": 1,
+                    "project": "sallimbook-staging",
+                    "fqdn": "synthetic.example.ts.net",
+                    "certificate_sha256": ":".join(["AB"] * 32),
+                    "api_image": "example.invalid/api:test@sha256:" + "1" * 64,
+                    "web_image": "example.invalid/web:test@sha256:" + "2" * 64,
+                    "runtime_directory": "/srv/sallimbook/sallimbook-staging",
+                    "version_code": 2,
+                    "version_name": "0.1.1",
+                    "source_commit": "a" * 40,
+                }
+            )
+        )
         env, _ = backup.service_environment(source_service)
 
         # Reproduce a transaction that writes while backup waits for the storage
@@ -186,6 +203,7 @@ def run_synthetic(admin_url, temporary):
                 destination,
                 recipient,
                 "a" * 40,
+                deployment_manifest,
             )
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:
