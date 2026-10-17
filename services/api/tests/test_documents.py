@@ -10,7 +10,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import UTC, datetime, timedelta
-from threading import Event
+from threading import Barrier, Event
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import httpx
@@ -18,7 +19,7 @@ import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select, text
+from sqlalchemy import event, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 from test_accounts import asset_payload, make_actor, write_keyring
@@ -31,10 +32,11 @@ from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.documents import service
 from sallimbook.documents.cleanup import cleanup_files
-from sallimbook.documents.models import Document, DocumentLink
+from sallimbook.documents.models import Document, DocumentLink, DocumentStorageReservation
 from sallimbook.documents.router import router
 from sallimbook.documents.schemas import DocumentReason
 from sallimbook.documents.storage import PrivateStore
+from sallimbook.homecare.router import router as homecare_router
 from sallimbook.identity.auth_models import AuthSession
 
 pytestmark = pytest.mark.database
@@ -60,6 +62,7 @@ def document_app(db_engine, tmp_path, monkeypatch):
     )
     install_http_contract(app)
     app.include_router(asset_router)
+    app.include_router(homecare_router)
     app.include_router(router)
     monkeypatch.setattr(service, "validate_document", lambda *args, **kwargs: None)
     return app
@@ -277,6 +280,125 @@ def test_failed_inspection_never_stores_or_changes_pending(document_app, actors,
         assert upload(client, actors[0], row).status_code == 422
         assert detail(client, actors[0], row)["state"] == "pending"
     assert not document_app.state.settings.document_storage_directory.exists()
+
+
+@pytest.mark.parametrize("first_result", ["success", "invalid", "cancelled"])
+def test_upload_slot_precedes_body_buffer_and_releases_on_every_exit(
+    document_app, actors, first_result
+):
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        first = pending(client, actor)
+        second = pending(client, actor)
+
+    async def scenario():
+        started, continue_body = asyncio.Event(), asyncio.Event()
+        rejected_body_reads = 0
+
+        async def slow_body():
+            yield CONTENT[:8]
+            started.set()
+            await continue_body.wait()
+            yield CONTENT[8:] if first_result == "success" else b"INVALID"
+
+        async def rejected_body():
+            nonlocal rejected_body_reads
+            rejected_body_reads += 1
+            yield CONTENT
+
+        transport = httpx.ASGITransport(app=document_app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="https://synthetic.test"
+        ) as client:
+            first_request = asyncio.create_task(
+                client.put(
+                    f"/api/v1/documents/{first['id']}/content",
+                    content=slow_body(),
+                    headers=headers(actor, version=1)
+                    | {"Content-Type": "application/octet-stream"},
+                )
+            )
+            await asyncio.wait_for(started.wait(), timeout=5)
+            response = await client.put(
+                f"/api/v1/documents/{second['id']}/content",
+                content=rejected_body(),
+                headers=headers(actor, version=1) | {"Content-Type": "application/octet-stream"},
+            )
+            assert response.status_code == 503
+            assert response.json()["error"]["code"] == "DOCUMENT_UPLOAD_BUSY"
+            assert rejected_body_reads == 0
+            if first_result == "cancelled":
+                first_request.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await first_request
+            else:
+                continue_body.set()
+                result = await asyncio.wait_for(first_request, timeout=5)
+                assert result.status_code == (200 if first_result == "success" else 422)
+            retry = await client.put(
+                f"/api/v1/documents/{second['id']}/content",
+                content=CONTENT,
+                headers=headers(actor, version=1) | {"Content-Type": "application/octet-stream"},
+            )
+            assert retry.status_code == 200, retry.text
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_http_upload_keeps_slot_until_worker_releases_owned_session(
+    document_app, actors, monkeypatch
+):
+    from sallimbook.documents.router import _UPLOAD_TASKS
+
+    actor = actors[0]
+    started, finish = Event(), Event()
+
+    def inspect(*args, **kwargs):
+        started.set()
+        assert finish.wait(timeout=10)
+
+    monkeypatch.setattr(service, "validate_document", inspect)
+    with TestClient(document_app) as client:
+        first, second = pending(client, actor), pending(client, actor)
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=document_app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="https://synthetic.test"
+        ) as client:
+            first_request = asyncio.create_task(
+                client.put(
+                    f"/api/v1/documents/{first['id']}/content",
+                    content=CONTENT,
+                    headers=headers(actor, version=1)
+                    | {"Content-Type": "application/octet-stream"},
+                )
+            )
+            assert await asyncio.to_thread(started.wait, 5)
+            first_request.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first_request
+            try:
+                response = await client.put(
+                    f"/api/v1/documents/{second['id']}/content",
+                    content=CONTENT,
+                    headers=headers(actor, version=1)
+                    | {"Content-Type": "application/octet-stream"},
+                )
+                assert response.status_code == 503
+            finally:
+                finish.set()
+            await asyncio.wait_for(asyncio.gather(*tuple(_UPLOAD_TASKS)), timeout=5)
+            current = await client.get(f"/api/v1/documents/{first['id']}", headers=actor.headers)
+            assert current.json()["state"] == "ready"
+            retried = await client.put(
+                f"/api/v1/documents/{second['id']}/content",
+                content=CONTENT,
+                headers=headers(actor, version=1) | {"Content-Type": "application/octet-stream"},
+            )
+            assert retried.status_code == 200, retried.text
+
+    asyncio.run(scenario())
 
 
 def test_revocation_during_inspection_rechecked_before_storage(document_app, actors, monkeypatch):
@@ -611,3 +733,248 @@ def test_slow_upload_body_does_not_block_session_revocation(document_app, actors
 
     asyncio.run(scenario())
     assert not document_app.state.settings.document_storage_directory.exists()
+
+
+def test_unlink_waits_for_parent_without_holding_its_child_link(document_app, actors):
+    actor, partner, _ = actors
+    with TestClient(document_app) as client:
+        row = pending(client, actor)
+        link = client.get(f"/api/v1/documents/{row['id']}/links", headers=actor.headers).json()[
+            "items"
+        ][0]
+    attempting_parent = Event()
+
+    def observe(connection, cursor, statement, parameters, context, executemany):
+        if "FROM documents" in statement and "FOR UPDATE" in statement:
+            attempting_parent.set()
+
+    def unlink_request():
+        with TestClient(document_app) as client:
+            return client.post(
+                f"/api/v1/document-links/{link['id']}/end",
+                json={"reason": "합성 동시 연결 종료"},
+                headers=headers(partner, version=link["version"]),
+            )
+
+    # Emulate a storage writer that already owns the parent. It must still be able
+    # to end its child while the API waits; opposite lock ordering would deadlock.
+    blocker = Session(document_app.state.engine)
+    locked_document = blocker.scalar(
+        select(Document).where(Document.id == UUID(row["id"])).with_for_update()
+    )
+    event.listen(document_app.state.engine, "before_cursor_execute", observe)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        operation = executor.submit(unlink_request)
+        try:
+            assert attempting_parent.wait(timeout=5)
+            child = blocker.scalar(
+                select(DocumentLink)
+                .where(DocumentLink.id == UUID(link["id"]))
+                .with_for_update(nowait=True)
+            )
+            now = datetime.now(UTC)
+            child.active, child.ended_at, child.end_reason = False, now, "합성 문서 삭제"
+            child.version += 1
+            locked_document.state = "deleted"
+            locked_document.deleted_at, locked_document.deletion_reason = now, "합성 문서 삭제"
+            locked_document.version += 1
+            blocker.commit()
+        finally:
+            blocker.rollback()
+            blocker.close()
+            event.remove(document_app.state.engine, "before_cursor_execute", observe)
+        result = operation.result(timeout=5)
+    assert result.status_code == 409, result.text
+    with TestClient(document_app) as client:
+        assert detail(client, actor, row)["state"] == "deleted"
+
+
+def test_appliance_document_reference_preserves_parent_even_after_unlink(document_app, actors):
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        appliance = client.post(
+            "/api/v1/appliances", json={"name": "합성 구매 문서 기기"}, headers=actor.headers
+        )
+        assert appliance.status_code == 201
+        item = appliance.json()
+        row = pending(client, actor, target={"kind": "appliance", "id": item["id"]})
+        path = f"/api/v1/appliances/{item['id']}"
+        assert client.delete(path, headers=headers(actor, version=1)).status_code == 409
+        link = client.get(f"/api/v1/documents/{row['id']}/links", headers=actor.headers).json()[
+            "items"
+        ][0]
+        ended = client.post(
+            f"/api/v1/document-links/{link['id']}/end",
+            headers=headers(actor, version=1),
+            json={"reason": "합성 연결 해제"},
+        )
+        assert ended.status_code == 200
+        assert client.delete(path, headers=headers(actor, version=1)).status_code == 409
+        assert client.get(path, headers=actor.headers).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "scope,unit",
+    [("household", "bytes"), ("household", "count"), ("global", "bytes"), ("global", "count")],
+)
+def test_persistent_quota_rejects_before_disk_write_and_allows_idempotent_replay(
+    document_app, actors, scope, unit, monkeypatch
+):
+    settings = document_app.state.settings
+    setattr(settings, f"document_{scope}_quota_{unit}", len(CONTENT) + 16 if unit == "bytes" else 1)
+    actor = actors[0]
+    original = PrivateStore.put
+    writes = []
+
+    def put(*args, **kwargs):
+        writes.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(PrivateStore, "put", put)
+    with TestClient(document_app) as client:
+        first = pending(client, actor)
+        assert upload(client, actor, first, key="quota-first").status_code == 200
+        # A replay has no new reservation, including when capacity is exhausted.
+        assert upload(client, actor, first, key="quota-first").status_code == 200
+        rejected = pending(client, actors[2] if scope == "global" else actors[1])
+        result = upload(client, actors[2] if scope == "global" else actors[1], rejected)
+        assert result.status_code == 413, result.text
+        assert result.json()["error"]["code"] == "DOCUMENT_STORAGE_QUOTA_EXCEEDED"
+        assert detail(client, actor, first)["state"] == "ready"
+    assert len(writes) == 1
+    with Session(document_app.state.engine) as session:
+        rows = list(session.scalars(select(DocumentStorageReservation)))
+        assert len(rows) == 1 and rows[0].size_bytes == len(CONTENT) + 16
+
+
+def test_concurrent_households_cannot_overbook_global_capacity(document_app, actors):
+    document_app.state.settings.document_global_quota_count = 1
+    with TestClient(document_app) as client:
+        rows = [pending(client, actor) for actor in (actors[0], actors[2])]
+    start = Barrier(2)
+
+    def store(actor, row):
+        start.wait(timeout=5)
+        with Session(document_app.state.engine) as session:
+            try:
+                service.upload_content(
+                    session,
+                    actor.principal,
+                    UUID(row["id"]),
+                    CONTENT,
+                    '"1"',
+                    "parallel-capacity",
+                    document_app.state.settings,
+                )
+                return "stored"
+            except DomainError as error:
+                return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        jobs = [
+            pool.submit(store, actor, row)
+            for actor, row in zip((actors[0], actors[2]), rows, strict=True)
+        ]
+        results = [job.result(timeout=10) for job in jobs]
+    assert sorted(results) == ["DOCUMENT_STORAGE_QUOTA_EXCEEDED", "stored"]
+    assert len(list(document_app.state.settings.document_storage_directory.iterdir())) == 1
+
+
+def test_failed_document_commit_keeps_orphan_charge_until_physical_cleanup(
+    document_app, actors, monkeypatch
+):
+    settings = document_app.state.settings
+    settings.document_household_quota_count = 1
+    actor = actors[0]
+    original = PrivateStore.put
+
+    def write_then_fail(*args, **kwargs):
+        original(*args, **kwargs)
+        raise DomainError("SYNTHETIC_COMMIT_FAILURE", "합성 저장 실패", 503)
+
+    with TestClient(document_app) as client:
+        first, second = pending(client, actor), pending(client, actor)
+        monkeypatch.setattr(PrivateStore, "put", write_then_fail)
+        assert upload(client, actor, first).status_code == 503
+        monkeypatch.setattr(PrivateStore, "put", original)
+        assert detail(client, actor, first)["state"] == "pending"
+        assert upload(client, actor, second).status_code == 413
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True)["removed"] == 0
+        assert upload(client, actor, second).status_code == 413
+        with Session(document_app.state.engine) as session:
+            result = cleanup_files(
+                session, settings, apply=True, now=datetime.now(UTC) + timedelta(hours=25)
+            )
+            assert result["removed"] == 1
+        assert upload(client, actor, second).status_code == 200
+
+
+def test_deleted_and_unlinked_documents_keep_charge_until_durable_cleanup(document_app, actors):
+    settings = document_app.state.settings
+    settings.document_household_quota_count = 1
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        row = pending(client, actor)
+        assert upload(client, actor, row).status_code == 200
+        link = client.get(f"/api/v1/documents/{row['id']}/links", headers=actor.headers).json()[
+            "items"
+        ][0]
+        assert (
+            client.post(
+                f"/api/v1/document-links/{link['id']}/end",
+                json={"reason": "합성"},
+                headers=headers(actor, version=1),
+            ).status_code
+            == 200
+        )
+        other = pending(client, actor)
+        future = datetime.now(UTC) + timedelta(hours=25)
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 0
+        assert upload(client, actor, other).status_code == 413
+        version = detail(client, actor, row)["version"]
+        assert (
+            client.post(
+                f"/api/v1/documents/{row['id']}/delete",
+                json={"reason": "합성 삭제"},
+                headers=headers(actor, version=version),
+            ).status_code
+            == 200
+        )
+        assert upload(client, actor, other).status_code == 413
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True)["removed"] == 0
+            assert cleanup_files(session, settings, now=future)["eligible"] == 1
+        assert upload(client, actor, other).status_code == 413  # dry run never releases quota
+        with Session(document_app.state.engine) as session:
+            assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 1
+        assert upload(client, actor, other).status_code == 200
+
+
+def test_low_disk_space_rejects_before_reservation_or_write(document_app, actors, monkeypatch):
+    from sallimbook.documents import quota
+
+    monkeypatch.setattr(quota.os, "fstatvfs", lambda _: SimpleNamespace(f_bavail=0, f_frsize=4096))
+    with TestClient(document_app) as client:
+        row = pending(client, actors[0])
+        result = upload(client, actors[0], row)
+        assert result.status_code == 503
+        assert result.json()["error"]["code"] == "DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE"
+    assert list(document_app.state.settings.document_storage_directory.iterdir()) == []
+    with Session(document_app.state.engine) as session:
+        assert list(session.scalars(select(DocumentStorageReservation))) == []
+
+
+def test_reservation_identity_and_live_charge_cannot_be_changed_directly(document_app, actors):
+    with TestClient(document_app) as client:
+        row = pending(client, actors[0])
+        assert upload(client, actors[0], row).status_code == 200
+    for statement in (
+        "DELETE FROM document_storage_reservations",
+        "UPDATE document_storage_reservations SET size_bytes=17",
+        "UPDATE document_storage_reservations SET released_at=now()",
+    ):
+        with Session(document_app.state.engine) as session, pytest.raises(DBAPIError):
+            session.execute(text(statement))
+            session.commit()

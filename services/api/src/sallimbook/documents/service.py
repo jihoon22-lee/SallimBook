@@ -13,6 +13,7 @@ from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
 from sallimbook.documents.models import Document, DocumentLink
+from sallimbook.documents.quota import STORAGE_BARRIER, reserve
 from sallimbook.documents.schemas import (
     DocumentLinkListResponse,
     DocumentLinkResponse,
@@ -268,15 +269,26 @@ def upload_content(session, principal, document_id, content, if_match, key, sett
     store = PrivateStore(settings.document_storage_directory)
 
     def execute():
-        row = scoped_entity(session, Document, document_id, principal, for_update=True)
+        # The independently committed reservation checks a composite FK against this row.
+        # NO KEY UPDATE retains writer exclusion while allowing its KEY SHARE check.
+        row = session.scalar(
+            select(Document)
+            .where(Document.id == document_id, Document.household_id == principal.household_id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            raise DomainError("NOT_FOUND", "첨부파일을 찾을 수 없습니다.", 404)
         require_version(row, if_match)
         _usable(row)
         _linked(session, principal, row)
         if row.state != "pending":
             raise DomainError("DOCUMENT_CONTENT_EXISTS", "이미 업로드한 첨부파일입니다.", 409)
         recheck()
-        session.execute(text("SELECT pg_advisory_xact_lock_shared(91544042505043)"))
-        envelope = store.put(row, content, load_keys(settings.field_encryption_key_file))
+        session.execute(text(f"SELECT pg_advisory_xact_lock({STORAGE_BARRIER})"))
+        keyring = load_keys(settings.field_encryption_key_file)
+        name = reserve(session.get_bind(), row, settings, store)
+        envelope = store.put(row, content, keyring, storage_key=name)
         before = _touch(row, principal)
         row.storage_key = envelope.storage_key
         row.encryption_key_version = envelope.key_version
@@ -376,11 +388,16 @@ def unlink(session, principal, link_id, payload, if_match, key):
     recheck = _lock(session, principal)
 
     def execute():
+        # The household writer lock serializes API mutations; retain the same
+        # parent-before-child order as document deletion and direct storage writes.
+        reference = scoped_entity(session, DocumentLink, link_id, principal)
+        document = scoped_entity(
+            session, Document, reference.document_id, principal, for_update=True
+        )
         row = scoped_entity(session, DocumentLink, link_id, principal, for_update=True)
         require_version(row, if_match)
         if not row.active:
             raise DomainError("DOCUMENT_LINK_ENDED", "이미 해제한 연결입니다.", 409)
-        document = scoped_entity(session, Document, row.document_id, principal, for_update=True)
         now = datetime.now(UTC)
         before = _touch(row, principal)
         row.active, row.ended_at, row.end_reason = False, now, payload.reason

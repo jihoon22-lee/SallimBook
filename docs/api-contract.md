@@ -349,7 +349,8 @@ SB-023은 PDF/JPEG/PNG 원본을 파일당 **20MiB(20,971,520바이트)**까지 
 
 `PUT /documents/{id}/content`는 `application/octet-stream` 원본과 문서 If-Match/Idempotency-Key를
 받는다. 크기·해시·실제 형식·악성 내용·카드 정보 검사를 모두 통과한 원본만 암호화해 ready로 전환한다.
-본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
+본문을 읽기 전부터 프로세스당 업로드 한 개로 제한하며 초과는 503 `DOCUMENT_UPLOAD_BUSY`다.
+HTTP 취소 후에도 시작한 worker가 끝날 때까지 처리 슬롯을 유지한다. 본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
 503이다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
 검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
 
@@ -367,7 +368,10 @@ target.kind는 policy/case/medical_node/expense/claim/appliance/asset 중 하나
 응답에는 저장소 경로·암호화 키·nonce가 없으며 다운로드는 no-store/nosniff/CSP sandbox와
 attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만들지 않는다.
 pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
-정리 명령과 검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
+업로드 저장 전에 가계·전체 byte/count 한도를 영속 예약하며 한도 초과는
+413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유 부족은 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
+예약에는 암호문 tag·실패 업로드·삭제 후 유예 파일도 포함하며 물리 정리 확인 뒤 용량을 반환한다.
+정리 명령·기본 한도·설정·검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.

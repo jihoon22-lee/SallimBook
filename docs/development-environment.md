@@ -233,7 +233,7 @@ SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외
 검사 설정은 `SALLIMBOOK_DOCUMENT_SCANNER_SOCKET`, `SALLIMBOOK_DOCUMENT_TESSERACT_PATH`,
 `SALLIMBOOK_DOCUMENT_PDFTOPPM_PATH`이며 기본 미설정 상태는 업로드 503으로 실패한다.
 호스트에 도구를 임의 설치하거나 운영 키를 생성하지 않았다. 격리된 [실제 검사 도구 이미지](../infra/documents/README.md)와
-[서버 135개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
+[서버 141개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
 정리 명령 `uv run --project services/api python scripts/cleanup_documents.py`는 기본 dry-run이다.
 검토 후 `--apply`를 명시하면 24시간이 지난 DB 미참조/삭제 암호문만 제거하며 metadata 이력은 유지한다.
 

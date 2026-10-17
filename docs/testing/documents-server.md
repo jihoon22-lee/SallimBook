@@ -14,7 +14,7 @@ uv run --project services/api ruff check services/api/src services/api/tests ser
 python3 scripts/validate_docs.py
 ```
 
-API·실제 PostgreSQL 24개, 암호화·파일 저장소 30개, 검사 계약 81개로 **135개 통과**했다.
+API·실제 PostgreSQL 39개, 암호화·파일 저장소 30개, 검사 계약 81개로 **150개 통과**했다.
 Alembic `upgrade head`, drift 검사, 전체 downgrade/upgrade도 통과했으며 전용 DB를 정지했다.
 초기 실패는 링크 종료 중 autoflush로 문서 버전을 두 번 올린 문제와 긴 임시 Unix socket 경로였다.
 버전 갱신 전 링크 수를 조회하고 합성 socket 경로를 짧게 고친 뒤 관련 검사와 135개 전체를 다시 통과했다.
@@ -43,7 +43,7 @@ uv run --project services/api python scripts/cleanup_documents.py --apply
 ```
 
 정리는 저장소 안의 서비스 소유·0600·단일 link·규격 UUID 파일만 검사한다. 다른 파일·symlink·
-현재 DB 참조·최근 파일은 보존한다. 업로드는 DB commit까지 shared advisory lock을 가지며
+현재 DB 참조·최근 파일은 보존한다. 업로드는 DB commit까지 exclusive advisory lock을 가지며
 정리는 exclusive lock 안에서 DB 참조와 파일을 대조해 진행 중인 업로드를 지우지 않는다.
 정리 결과에는 개수만 출력하며 파일명·원문·암호키를 출력하지 않는다.
 
@@ -52,3 +52,31 @@ uv run --project services/api python scripts/cleanup_documents.py --apply
 이 PR은 서버와 검사 도구 범위다. 웹·Android 파일 선택/저장·연결 화면과 실제 HTTPS 흐름은
 클라이언트 변경에서 검증한다. 실제 Galaxy 실패 시나리오와 운영 scanner 배포·백업 복원은
 전체 기능 구현 뒤에 수행하며 서버 시험이나 debug 빌드를 실기기 보안 인수로 간주하지 않는다.
+
+PR 리뷰 보완: 본문을 읽기 전에 API 프로세스당 업로드 한 개로 제한하며 초과는 503이다.
+본문 취소·검증 실패 때 슬롯을 반환하고, 검사 중 HTTP 취소는 worker가 끝날 때까지 슬롯을 유지한다.
+worker는 요청 dependency와 별도 DB session을 소유해 취소된 요청의 session 종료와 겹치지 않는다.
+실제 비동기 ASGI 수신으로 선행 제한·본문 미수신·취소/실패 후 재사용·worker 완료를 4개 추가 검증했다.
+새 서명 갱신 날짜 build 인자를 포함한 도구 이미지의 build-only도 통과했다.
+
+두 번째 리뷰 보완: API의 가계 잠금에 더해 연결 종료도 문서→연결 순서로 잠근다.
+부모를 잠근 직접 저장소 트랜잭션이 자식 링크를 기다리지 않고 끝낼 수 있으며, 그 뒤 API는
+변경된 버전을 409로 반환함을 실제 경합 시험으로 확인했다. 가전의 문서 연결을 종료해도 과거
+연결 이력이 있으면 가전 물리 삭제를 막는 회귀를 추가했다. 총141개와 Alembic drift/왕복을 통과했다.
+
+
+세 번째 리뷰 보완: 저장 전에 독립 DB 트랜잭션으로 파일명·가계·문서·암호문 크기를 예약한다.
+기본 가계 한도는 256MiB/200개, 전체는 2GiB/2,000개이며 AES-GCM tag 16바이트도 센다.
+실패·취소·DB rollback이나 commit 결과 불명에도 예약은 유지된다. ready 문서의 마지막 연결 종료나
+논리 삭제만으로는 용량을 반환하지 않는다. 24시간 유예 뒤 정리 작업이 실제 제거와 fsync 또는 파일
+부재를 확인해야 반환한다. dry-run은 예약을 바꾸지 않는다. 모든 API worker는 같은 설정과 DB를 사용한다.
+저장/정리 공통 exclusive barrier가 프로세스 사이의 디스크 쓰기를 직렬화하며 별도 quota 잠금이
+용량 집계·예약 commit을 보호한다. 문서는 NO KEY UPDATE로 잠가 독립 예약의 가계 복합 FK 검사를 허용한다.
+현재 파일을 가리키는 용량 예약의 직접 해제·변조·삭제와 예약 없는 ready 전환도 DB가 거부한다.
+
+가계/전체 byte·count 경계, 한도 중 멱등 재전송, 다른 가계 동시 업로드, 저장 후 오류로 남은 파일,
+연결 종료/삭제/정리의 용량 반환, 디스크 여유 공간과 직접 DB 우회 9개를 추가해 총150개를 통과했다.
+설정은 `SALLIMBOOK_DOCUMENT_HOUSEHOLD_QUOTA_BYTES/COUNT`, `SALLIMBOOK_DOCUMENT_GLOBAL_QUOTA_BYTES/COUNT`,
+`SALLIMBOOK_DOCUMENT_MIN_FREE_BYTES`이며 기본 여유 공간 1GiB를 남기지 못하면 쓰기 전에 503을 반환한다.
+용량은 413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유는 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
+이미 내려받은 파일이나 운영 백업 공간은 이 온라인 저장소 한도와 별도로 관리한다.
