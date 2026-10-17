@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "cf38a7e3ab69a3c0a8d3ee4ad25770eaf60939fb9d76719607f875626f37f73a",
-      "git_sha1": "76bcd875c30eabe260692c8509a17ccce12a47f4"
+      "sha256": "20ab0d83853e0e5abd87a80ed78dbd1fe019de27f4e34bbe5422292f91f43924",
+      "git_sha1": "152aba0228a10b38ccac6aa4b2c17be2e6d43fa5"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -216,6 +216,14 @@
     "scripts/test_android_runtime_config.py": {
       "sha256": "dd8de566a7a18cf61bfe6cfad86e7c3cd02a556d189840120ae7e278f543606a",
       "git_sha1": "92f6d43b8f73f1a998304733736b8bf131e9562d"
+    },
+    "docs/testing/browser-authentication.md": {
+      "sha256": "e752ccef30e8242ab2b50c7bfdac0f27aa6eb5dec3d601116b4086a9e1693cea",
+      "git_sha1": "5c1b46d7e76a8bd475c0e2afef80159019363e46"
+    },
+    "scripts/test_web_auth.py": {
+      "sha256": "5ce2cdc1621a3fbb1563f25be5f6c0c930ac2b80b0469052e6b74f7d4b502966",
+      "git_sha1": "017496e96ffea7a72ad4fdfc8cc4aacb1d38b4e7"
     }
   }
 }

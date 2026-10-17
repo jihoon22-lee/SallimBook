@@ -100,6 +100,7 @@ pnpm test:api
 pnpm test:database  # 일회용 *_test DB: 18745, 시험 후 이 컨테이너만 중지
 pnpm --filter @sallimbook/client exec playwright install chromium
 pnpm test:web  # 전용 시험 포트 18743, 다른 실행 중인 서버를 재사용하지 않음
+uv run --project services/api python scripts/test_web_auth.py  # 실제 HTTPS + 격리 PostgreSQL 인증
 ```
 
 Android는 WSL의 SDK와 JDK를 명시적으로 선택합니다.
@@ -126,6 +127,7 @@ Android 인증 서버 주소는 빌드 시 Gradle 속성 `sallimbookApiOrigin`�
 두 Galaxy의 실기기·백업/전송·잠금 실패 시나리오는 전체 기능 개발 뒤에 수행합니다.
 
 자세한 환경·검증 범위는 [개발 환경](docs/development-environment.md)을 참고합니다.
+[실제 브라우저 인증 검사](docs/testing/browser-authentication.md)는 임시 HTTPS 인증서와 합성 계정을 사용합니다.
 `pnpm db:stop`은 SallimBook 개발 DB만 중지하며 데이터 볼륨은 유지합니다.
 DB 시험은 개별 격리 schema에 실제 migration을 적용합니다. `pnpm test:api`만 실행하여
 DB 환경이 없을 때 표시되는 skip을 DB 검증 통과로 간주하지 않습니다.

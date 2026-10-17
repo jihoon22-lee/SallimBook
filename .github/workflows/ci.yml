@@ -142,9 +142,11 @@ jobs:
           uv run --project services/api alembic -c services/api/alembic.ini upgrade head
 
   web-smoke:
-    name: Desktop and Android viewport web smoke
+    name: Web UI and real HTTPS authentication
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      UV_FROZEN: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -160,6 +162,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @sallimbook/client exec playwright install --with-deps chromium
       - run: pnpm test:web
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - run: uv sync --project services/api --frozen
+      - run: uv run --project services/api ruff check scripts/test_web_auth.py
+      - run: uv run --project services/api python scripts/setup_dev.py
+      - run: uv run --project services/api python scripts/test_web_auth.py
 
   android:
     name: Android debug compile and available unit tests
@@ -194,7 +205,7 @@ jobs:
             "ANDROID_SDK_ROOT=$RUNNER_TEMP/sallimbook-android-sdk" >> "$GITHUB_ENV"
       - name: Install checksum-pinned Android command line tools and SDK
         run: uv run --no-project python scripts/setup_android_sdk.py --sdk-root "$ANDROID_HOME" --accept-licenses
-      # NO-SOURCE means no native unit cases exist yet, not that device security passed.
+      # JVM policies and APK compilation do not establish physical-device security.
       # The debug APK remains on this disposable runner; no signing secrets or uploads.
       - run: uv run --no-project pnpm android:build
       - run: uv run --no-project python scripts/test_android_runtime_config.py
