@@ -172,6 +172,7 @@ jobs:
       - run: uv run --project services/api python scripts/setup_dev.py
       - run: uv run --project services/api python scripts/test_web_auth.py
       - run: uv run --project services/api python scripts/test_web_auth.py --passkeys
+      - run: uv run --project services/api python scripts/test_web_auth.py --finance
 
   android:
     name: Android debug compile and available unit tests
