@@ -1,6 +1,7 @@
 # API 계약
 
-상태: 구현 명세. SB-001~002에서 health/readiness와 공통 오류·타입 기반을 구현했다. 아래 업무 API는 후속 Issue 대상이다.
+상태: 구현 명세. health/readiness·공통 계약과 SB-005/007 계정·가계 권한 기반 API를 구현했다.
+패스키와 금융·보험·재고·보관함 업무 API는 아래 명세에 따라 순차 구현한다.
 기본 경로 `/api/v1`, JSON UTF-8, 원화는 정수 문자열, ID는 UUID.
 FastAPI OpenAPI를 구현 시 단일 계약으로 관리하고 TS client를 생성한다([S11](references.md)).
 
@@ -15,6 +16,23 @@ DB 미설정·접속 실패·스키마 미준비는 503이며 내부 연결 정�
 입력값·검증 context·SQL을 노출하지 않는다.
 개발 OpenAPI는 `/api/openapi.json`, 운영 환경에서는 대화형 문서·OpenAPI HTTP 공개를 끈다.
 `pnpm api:generate`로 구현에서 OpenAPI와 TypeScript client를 생성한다.
+
+### 계정·세션 구현
+
+웹은 `POST /auth/web/login`, `GET /auth/web/csrf`, `POST /auth/web/logout`을 사용한다.
+로그인은 `login_name`, `password`, `device_label`을 받고 HttpOnly/Secure/SameSite=Strict
+`__Host-sallimbook_session` 쿠키와 메모리 전용 CSRF 토큰을 발급한다. 변경 요청은 정확한 Origin과
+`X-CSRF-Token`을 요구한다. 재로딩 후 CSRF를 새로 받으며 이전 토큰은 무효화된다.
+네이티브는 `POST /auth/native/login`, `/refresh`, `/logout`으로 분리한다. native 전용 transport는
+`X-SallimBook-Native: 1`을 요구하고 Cookie/Origin을 거부한다. 이 헤더를 기기 신뢰 증거로 사용하지 않는다.
+native access/refresh 응답은 Kotlin 인증 adapter에서만 처리한다. refresh 회전 재사용은 세션을 폐기한다.
+
+`POST /auth/invitations/accept`는 일회성 초대 코드로 계정을 만들고 로그인은 별도로 수행한다.
+인증된 `GET /me`, `GET /household/members`, `POST /household/invitations`,
+`GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다.
+초대와 기기 폐기는 최근 5분 내 실제 로그인을 요구한다. 패스키 목적별 step-up은 SB-006에서 연결한다.
+기기 폐기 후에는 연결된 access/refresh 모두 기기 상태 검사에서 거부한다.
+일반 개인정보나 토큰 원문을 오류·서버 로그로 출력하지 않는다.
 
 ## 1. 공통 규약
 
@@ -47,7 +65,9 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 
 | 도메인 | 메서드·경로 | 주요 계약 |
 |---|---|---|
-| 인증 | POST /auth/login, /auth/logout, /auth/refresh | 웹 쿠키와 native token 응답 분리 |
+| 인증 | POST /auth/web/login, /auth/web/logout; GET /auth/web/csrf | 웹 보안 쿠키·CSRF |
+| 인증 | POST /auth/native/login, /auth/native/refresh, /auth/native/logout | native 전용 토큰 응답·회전 |
+| 등록 | POST /auth/invitations/accept | 최초/파트너 초대 일회성 등록, 자동 로그인 없음 |
 | 패스키 | POST /auth/passkeys/options, /auth/passkeys/verify | challenge/RP ID/origin/UV 검증 |
 | 재인증 | POST /auth/step-up/options, /auth/step-up/verify | 짧은 목적 제한 인증 상태 |
 | 사용자 | GET /me, GET /household/members | 허용된 공동 가계만 |

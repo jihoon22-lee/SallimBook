@@ -2,8 +2,9 @@
 
 상태: 구현용 논리 모델. 실제 DDL/Alembic migration은 개발 단계에서 작성·검증한다.
 테이블 명세에 없는 임의의 PAN/CVC 평문 칼럼을 추가하지 않는다.
-SB-002의 실제 migration `0001_households`는 가계 루트와 KRW/Asia·Seoul/version 제약만 생성한다.
-아래의 나머지 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
+SB-002의 `0001_households`는 가계 루트와 KRW/Asia·Seoul/version 제약을 생성한다.
+SB-005/007의 `0002_identity_auth`는 사용자·구성원·초대·기기·세션·refresh 이력·요청 제한·멱등 기록을 추가한다.
+아래 나머지 업무 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
 공통 ORM은 UUID·UTC timestamp·낙관적 version을 제공하며, `KrwNumeric` 바인딩은
 float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. 새 DB에 사용자 가계를 자동 생성하지 않는다.
 
@@ -31,14 +32,20 @@ float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. �
 |---|---|---|
 | users | id, login_name, display_name, password_hash, disabled_at | login_name unique; 평문 비밀번호 금지 |
 | households | id, name, timezone, base_currency | v1 Asia/Seoul, KRW |
-| household_members | id, household_id, user_id, role, status | unique(household_id,user_id); active 최대 2는 트랜잭션 내 검사 |
+| household_members | id, household_id, user_id, slot, role, status | slot 1/2 CHECK + 활성 (가계,slot) partial UNIQUE; 가계 잠금과 함께 최대 2명 보장 |
 | invitations | token_hash, household_id, intended_login, expires_at, used_at | 일회성 초대; 원본 토큰 영구 저장 금지 |
 | auth_credentials | user_id, credential_id, public_key, sign_count, transports, backed_up | 패스키 credential_id unique; 비밀키 없음 |
 | auth_sessions | user_id, device_id?, session_hash, refresh_hash?, expires_at, revoked_at, last_seen_at | 웹 세션/Android refresh 갱신·폐기 |
+| refresh_tokens | household_id, session_id, token_hash, expires_at, consumed_at | 소비한 해시도 보존해 이전 refresh 재사용 탐지; 세션 복합 FK |
+| login_throttles | key_hash, window_started_at, attempts | 로그인/초대/갱신 시도 제한; 인증 실패에도 카운터는 유지 |
 | registered_devices | user_id, household_id, label, platform, status, last_seen_at | 기기 해지와 세션 제거 연계; 키 원문 없음 |
 | auth_challenges | user_id?, kind, challenge_hash, expires_at, consumed_at | 등록·로그인·step-up 재생 방지 |
 
 부부의 법적 실명·연락처는 필수값으로 강제하지 않는다. 초기 데이터에는 합성 표시명만 둔다.
+실제 `auth_sessions`는 web/native를 구분하고 웹 CSRF 해시와 native access 만료를 분리한다.
+refresh 해시는 세션 칼럼 대신 `refresh_tokens` 이력 테이블에 둔다. 기기는 반드시 등록되며 가계·사용자와 복합 FK로 묶는다.
+기기 상태는 모든 인증/refresh의 폐기 기준이다. 요청 중 기기 행 갱신과 세션 잠금의 순서 역전을 피하기 위해
+활동 시각은 세션에서 집계하고, 기기 폐기 시 다른 세션을 일괄 잠그지 않는다.
 
 ## 3. 자산·금융계좌·월간 기록
 
