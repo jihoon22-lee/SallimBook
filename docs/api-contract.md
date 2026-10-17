@@ -349,3 +349,13 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
+
+### SB-018 결제수단 연결 조회와 종료 확인
+
+`GET /api/v1/cards/{resource_id}/payment-links`와 `GET /api/v1/accounts/{resource_id}/payment-links`는 현재·미래 규칙 버전, 미납/부분 납부 회차와 연결 카드를 각각 count/cursor 페이지로 반환한다. `as_of_date`는 기본 서울 오늘이며 종료 화면에서는 선택한 종료일을 전달한다. 카드 승인 계획과 계좌 직접 납부 계획을 구분하고, 응답은 `registered_recurring_only` 및 `account_withdrawal_total_available=false`로 전체 카드대금 출금액을 알 수 없음을 명시한다.
+
+카드 PATCH/archive 및 계좌에 연결된 자산 PATCH/archive에서 새 종료일을 저장할 때 서버는 가계 잠금 안에서 연결을 다시 읽는다. 영향이 있으면 `closure_ack=true`와 조회에서 받은 `usage_digest`가 필요하며, 누락은 409 `PAYMENT_LINK_CONFIRMATION_REQUIRED`, 조회 이후 내용·버전·종료일 변경은 409 `PAYMENT_LINKS_CHANGED`다. digest는 페이지 밖의 연결까지 포함하며 권한 증명이 아니다. 종료일을 바꾸면 다시 조회한다. 확인 필드만 보낸 PATCH는 거부한다. 확인 필드는 DB·감사 변경 필드 목록에 저장하지 않는다.
+
+기존에 종료된 항목의 일반 메타데이터 수정에는 다시 확인을 요구하지 않는다. 종료일을 다른 날짜로 바꾸면 다시 확인한다. 과거 규칙·회차·현금 기록은 자동 이동하거나 삭제하지 않으며, 결제수단 교체는 사용자가 규칙 변경 또는 카드 납부계좌 수정으로 명시한다.
+
+웹/Android 화면은 종료일 기준 모든 페이지를 읽고 같은 digest·자원 버전·총건수를 확인한 뒤 명시 확인을 요구한다. 연결 변경409에서는 작성한 종료일을 유지하고 내역을 다시 읽으며 이전 확인을 재사용하지 않는다. Android 네이티브 경로도 확인 여부와 digest를 함께 전달한다.

@@ -84,3 +84,9 @@ python3 scripts/validate_docs.py
 uv run --project services/api ruff check scripts/test_web_auth.py
 git diff --check
 ```
+
+최종 통합 `abb90a1`에서 최신 앱 잠금·자산 연결·비교 날짜 보완을 함께 검증했다.
+전체 UI **342개 통과**, Android JVM **159개 통과**(실패·오류·skip 0), 디버그 APK 조립과
+release Kotlin 컴파일 성공을 확인했다. 실제 `--cashflow` HTTPS 흐름도 다시 통과했으며
+DB 정지와 시험 잠금 반환을 확인했다. CI에 이 실제 HTTPS 검사를 추가했다.
+카드·계좌·연결 자산의 종료 화면과 Android의 확인/digest 경로를 서버 강제 검사와 함께 배포한다.
