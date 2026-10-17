@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { isNativeAuth, nativeAuth } from "../platform/nativeAuth";
 import { Link, matchRoutes, NavLink, Route, Routes, useLocation, useNavigate } from "react-router";
 import { AccountListPage, AccountNewPage, AccountDetailPage } from "../features/accounts/AccountPages";
 import { accountScreens } from "../features/accounts/screens";
@@ -107,6 +108,7 @@ function AppShell() {
         <header className="topbar">
           <Link className="brand" to="/" aria-label="SallimBook 홈"><span className="brand-mark" aria-hidden="true">살림</span><span>SallimBook</span></Link>
           <Link className="topbar-link" to="/settings">설정</Link>
+          {isNativeAuth() && <button type="button" onClick={() => void nativeAuth.lock().catch(() => {})}>앱 잠금</button>}
         </header>
         <div className="page">
           {!current?.live && <p className="preview-notice">기능 준비 중 · 현재는 화면 탐색만 가능해요.</p>}

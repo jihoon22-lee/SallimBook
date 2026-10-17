@@ -8,7 +8,7 @@ export type NativeAuthErrorCode =
   | "AUTH_UNAVAILABLE" | "AUTH_CANCELLED" | "ACCESS_DENIED" | "SESSION_EXPIRED"
   | "KEY_INVALIDATED" | "NETWORK_UNAVAILABLE" | "INVALID_REQUEST"
   | "AUTH_FAILED" | "REGISTRATION_FAILED" | "PASSKEYS_DISABLED" | "PASSKEY_REQUIRED"
-  | "PASSKEY_CANCELLED" | "PASSKEY_FAILED" | "REAUTHENTICATION_REQUIRED" | "VERSION_CONFLICT";
+  | "PASSKEY_CANCELLED" | "PASSKEY_FAILED" | "REAUTHENTICATION_REQUIRED" | "VERSION_CONFLICT" | "APP_LOCKED";
 
 export type NativeAuthResult<T> = { ok: true; value: T } | { ok: false; code: NativeAuthErrorCode };
 export type NativeJson = null | boolean | number | string | NativeJson[] | { [key: string]: NativeJson };
@@ -33,6 +33,10 @@ export type NativeAccountPatch = Omit<components["schemas"]["AccountPatch"], "ac
 export type NativeFinanceResponse<T> = { status: number; body: T | components["schemas"]["ErrorResponse"] | null };
 
 export interface SallimBookAuth {
+  /** Safe status only. Unlock is controlled exclusively by the native screen. */
+  getAppLock(): Promise<NativeAuthResult<{ locked: boolean }>>;
+  lockApp(): Promise<NativeAuthResult<{ locked: true }>>;
+  addListener(event: "appLockChanged", listener: (state: { locked: boolean }) => void): Promise<{ remove(): Promise<void> }>;
   getSession(): Promise<NativeAuthResult<NativeSessionState>>;
   loginUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
   /** Confirms the current account password without creating another device or session. */

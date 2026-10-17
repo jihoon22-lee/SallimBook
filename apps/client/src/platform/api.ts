@@ -6,6 +6,7 @@ import type { components } from "@sallimbook/api-client";
 export const apiClient = createApiClient();
 
 const knownCodes = [
+  "APP_LOCKED",
   "UNAUTHENTICATED", "REAUTHENTICATION_REQUIRED", "CSRF_FAILED", "FORBIDDEN",
   "ORIGIN_REJECTED", "WRONG_AUTH_TRANSPORT", "AMBIGUOUS_AUTH", "RATE_LIMITED",
   "HOUSEHOLD_FULL", "LOGIN_UNAVAILABLE", "INVALID_INVITATION", "REGISTRATION_CONFLICT",

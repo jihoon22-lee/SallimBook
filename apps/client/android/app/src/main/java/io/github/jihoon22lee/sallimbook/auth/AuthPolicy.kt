@@ -247,6 +247,36 @@ internal object AuthPolicy {
 internal class ForegroundRequest {
     private var active = true
     private var cancelNetwork: (() -> Unit)? = null
+    private var lockPolicy: AppLockPolicy? = null
+    private var lockTicket: AppLockTicket? = null
+    private var deviceUnlocked: (() -> Boolean)? = null
+    private var lockBound = false
+
+    init { AppLockRequests.register?.invoke(this) }
+
+    @Synchronized fun captureAppLock(policy: AppLockPolicy, ticket: AppLockTicket, unlocked: () -> Boolean) {
+        lockPolicy = policy; lockTicket = ticket; deviceUnlocked = unlocked
+    }
+
+    @Synchronized fun bindAppLock(policy: AppLockPolicy, ticket: AppLockTicket, unlocked: () -> Boolean) {
+        if (lockPolicy != null) {
+            if (lockPolicy !== policy || lockTicket?.generation != ticket.generation ||
+                lockBound && lockTicket?.kind != ticket.kind) throw AuthFailure(AuthCode.APP_LOCKED)
+            if (lockBound) return
+        }
+        lockPolicy = policy; lockTicket = ticket; deviceUnlocked = unlocked
+        lockBound = true
+    }
+    @Synchronized fun appLockTicket(): AppLockTicket? = lockTicket
+    @Synchronized private fun checkLock() {
+        val ticket = lockTicket ?: return
+        if (lockPolicy?.allowed(ticket) != true || deviceUnlocked?.invoke() != true) throw AuthFailure(AuthCode.APP_LOCKED)
+    }
+    @Synchronized fun checkHttp(method: String, path: String) {
+        check()
+        val ticket = lockTicket ?: throw AuthFailure(AuthCode.APP_LOCKED)
+        if (lockPolicy?.httpAllowed(ticket, method, path) != true) throw AuthFailure(AuthCode.APP_LOCKED)
+    }
 
     @Synchronized fun cancel() {
         active = false
@@ -261,11 +291,13 @@ internal class ForegroundRequest {
 
     @Synchronized fun <T> whileActive(action: () -> T): T {
         if (!active) throw AuthFailure(AuthCode.AUTH_CANCELLED)
+        checkLock()
         return action()
     }
 
     fun check() {
         if (!isActive()) throw AuthFailure(AuthCode.AUTH_CANCELLED)
+        checkLock()
     }
 }
 
@@ -273,7 +305,7 @@ internal enum class AuthCode {
     AUTH_UNAVAILABLE, AUTH_CANCELLED, ACCESS_DENIED, SESSION_EXPIRED, KEY_INVALIDATED,
     NETWORK_UNAVAILABLE, INVALID_REQUEST, AUTH_FAILED, REGISTRATION_FAILED,
     PASSKEYS_DISABLED, PASSKEY_REQUIRED, PASSKEY_CANCELLED, PASSKEY_FAILED, REAUTHENTICATION_REQUIRED,
-    VERSION_CONFLICT,
+    VERSION_CONFLICT, APP_LOCKED,
 }
 
 /** Exception messages and causes deliberately contain no request, response, or credential. */

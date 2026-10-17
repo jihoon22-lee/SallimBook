@@ -13,6 +13,7 @@ async function invoke<T>(action: () => Promise<NativeAuthResult<T>>): Promise<T>
   catch { throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE"); }
   if (result.ok) return result.value;
   switch (result.code) {
+    case "APP_LOCKED": throw new ApiError(0, "APP_LOCKED");
     case "SESSION_EXPIRED": throw new ApiError(401, "UNAUTHENTICATED");
     case "KEY_INVALIDATED": throw new ApiError(401, "NATIVE_KEY_INVALIDATED");
     case "ACCESS_DENIED": throw new ApiError(403, "FORBIDDEN");
