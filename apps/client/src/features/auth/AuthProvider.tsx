@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { components } from "@sallimbook/api-client";
 import { ApiError, apiClient, isNativeAuthUnavailable, requestApi, requireWebAuth, toApiError } from "../../platform/api";
 import { isNativeAuth, nativeAuth, nativeRequest } from "../../platform/nativeAuth";
+import { createPasskey, getPasskey } from "../../platform/webauthn";
 
 export type Member = components["schemas"]["MemberResponse"];
 export type Device = components["schemas"]["DeviceResponse"];
@@ -11,6 +12,11 @@ type InvitationInput = components["schemas"]["InvitationAcceptance"];
 type InvitationRequest = components["schemas"]["InvitationRequest"];
 type Invitation = components["schemas"]["InvitationResponse"];
 type DeviceList = components["schemas"]["DeviceListResponse"];
+export type Passkey = components["schemas"]["CredentialResponse"];
+type PasskeyList = components["schemas"]["CredentialListResponse"];
+type PasskeyLoginInput = components["schemas"]["LoginOptionsRequest"];
+type StepUpPurpose = "household.invite" | "device.revoke";
+export type OperationProof = { signal: AbortSignal; stepUp: boolean };
 
 export type AuthState =
   | { status: "loading" }
@@ -23,12 +29,16 @@ interface AuthContextValue {
   state: AuthState;
   reloadSession(): Promise<void>;
   login(input: LoginInput): Promise<void>;
-  loginNative(): Promise<boolean>;
+  loginNative(passkey?: boolean): Promise<boolean>;
+  loginPasskey(input: PasskeyLoginInput, signal: AbortSignal): Promise<void>;
+  registerPasskey(label: string, signal: AbortSignal): Promise<boolean>;
+  listPasskeys(cursor?: string): Promise<PasskeyList>;
+  revokePasskey(passkey: Passkey): Promise<boolean>;
   logout(): Promise<void>;
   acceptInvitation(input: InvitationInput): Promise<Member>;
-  createPartnerInvitation(input: InvitationRequest): Promise<Invitation>;
+  createPartnerInvitation(input: InvitationRequest, proof?: OperationProof): Promise<Invitation>;
   listDevices(cursor?: string): Promise<DeviceList>;
-  revokeDevice(device: Device): Promise<void>;
+  revokeDevice(device: Device, proof?: OperationProof): Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -132,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return data;
     } catch (error) {
       const failure = toApiError(error);
-      if (failure.status === 401 && generation.current === requestGeneration) clearSession();
+      if (failure.status === 401 && failure.code !== "PASSKEY_VERIFICATION_FAILED" && generation.current === requestGeneration) clearSession();
       throw failure;
     }
   }, [clearSession, ensureCurrent]);
@@ -171,10 +181,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: "authenticated", member: data.member });
   }, [ensureCurrent, mutation]);
 
-  const loginNative = useCallback(async () => {
+  const loginNative = useCallback(async (passkey = false) => {
     if (!isNativeAuth()) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
     const requestGeneration = ++generation.current;
-    const result = member.current ? await nativeAuth.reauthenticate() : await nativeAuth.login();
+    const result = member.current ? await nativeAuth.reauthenticate() : await (passkey ? nativeAuth.loginPasskey() : nativeAuth.login());
     ensureCurrent(requestGeneration);
     if (result.status !== "authenticated") {
       // A native form may discover an expired session before the user closes it.
@@ -225,9 +235,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return requestApi(() => apiClient.POST("/api/v1/auth/invitations/accept", { body: input }));
   }, []);
 
-  const createPartnerInvitation = useCallback((input: InvitationRequest): Promise<Invitation> => mutation((token) => requestApi(() =>
-    apiClient.POST("/api/v1/household/invitations", { body: input, headers: { "X-CSRF-Token": token } }),
-  )), [mutation]);
+  const scopedOperation = useCallback(<T,>(purpose: StepUpPurpose, targetId: string, signal: AbortSignal, action: (token: string, grant: string) => Promise<T>): Promise<T> => authenticatedRequest(async (requestGeneration) => {
+    signal.throwIfAborted();
+    const options = await mutation((token) => requestApi(() => apiClient.POST("/api/v1/auth/step-up/options", {
+      body: { purpose, target_id: targetId }, headers: { "X-CSRF-Token": token }, signal,
+    })));
+    ensureCurrent(requestGeneration);
+    const credential = await getPasskey(options, signal);
+    ensureCurrent(requestGeneration);
+    const grant = await mutation((token) => requestApi(() => apiClient.POST("/api/v1/auth/step-up/verify", {
+      body: { challenge_id: options.challenge_id, credential }, headers: { "X-CSRF-Token": token }, signal,
+    })));
+    ensureCurrent(requestGeneration);
+    signal.throwIfAborted();
+    if (grant.purpose !== purpose || grant.target_id !== targetId) throw new ApiError(0, "STEP_UP_REQUIRED");
+    // A grant stays in this call only and is consumed by this one exact operation.
+    // It never updates session freshness, UI state, storage, or another operation.
+    return mutation((token) => { signal.throwIfAborted(); return action(token, grant.grant_token); });
+  }), [authenticatedRequest, mutation, ensureCurrent]);
+
+  const loginPasskey = useCallback(async (input: PasskeyLoginInput, signal: AbortSignal) => {
+    requireWebAuth();
+    if (member.current) throw new ApiError(0, "ALREADY_AUTHENTICATED");
+    signal.throwIfAborted();
+    const requestGeneration = ++generation.current;
+    const options = await requestApi(() => apiClient.POST("/api/v1/auth/web/passkeys/options", { body: input, signal }));
+    ensureCurrent(requestGeneration);
+    const credential = await getPasskey(options, signal);
+    ensureCurrent(requestGeneration);
+    const data = await requestApi(() => apiClient.POST("/api/v1/auth/web/passkeys/verify", { body: { challenge_id: options.challenge_id, credential }, signal }));
+    ensureCurrent(requestGeneration);
+    signal.throwIfAborted();
+    csrf.current = data.csrf_token;
+    member.current = data.member;
+    setState({ status: "authenticated", member: data.member });
+  }, [ensureCurrent]);
+
+  const registerPasskey = useCallback((label: string, signal: AbortSignal): Promise<boolean> => authenticatedRequest(async (requestGeneration) => {
+    signal.throwIfAborted();
+    if (isNativeAuth()) {
+      const result = await nativeAuth.registerPasskey();
+      signal.throwIfAborted();
+      return result.status === "registered";
+    }
+    const options = await mutation((token) => requestApi(() => apiClient.POST("/api/v1/auth/passkeys/register/options", { body: { label }, headers: { "X-CSRF-Token": token }, signal })));
+    ensureCurrent(requestGeneration);
+    const credential = await createPasskey(options, signal);
+    ensureCurrent(requestGeneration);
+    await mutation((token) => requestApi(() => apiClient.POST("/api/v1/auth/passkeys/register/verify", { body: { challenge_id: options.challenge_id, credential }, headers: { "X-CSRF-Token": token }, signal })));
+    signal.throwIfAborted();
+    return true;
+  }), [authenticatedRequest, mutation, ensureCurrent]);
+
+  const listPasskeys = useCallback((cursor?: string): Promise<PasskeyList> => authenticatedRequest(() => isNativeAuth()
+    ? nativeRequest<PasskeyList>({ method: "GET", path: `/api/v1/auth/passkeys?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}` })
+    : requestApi(() => apiClient.GET("/api/v1/auth/passkeys", { params: { query: { limit: 50, ...(cursor ? { cursor } : {}) } } }))), [authenticatedRequest]);
+
+  const revokePasskey = useCallback(async (passkey: Passkey): Promise<boolean> => {
+    if (!Number.isSafeInteger(passkey.version) || passkey.version < 1) throw new ApiError(400, "INVALID_VERSION");
+    if (isNativeAuth()) return authenticatedRequest(async () => (await nativeAuth.revokePasskey(passkey.id, `"${passkey.version}"`)).status === "revoked");
+    await mutation((token) => requestApi(() => apiClient.DELETE("/api/v1/auth/passkeys/{credential_id}", {
+      params: { path: { credential_id: passkey.id }, header: { "If-Match": `"${passkey.version}"` } }, headers: { "X-CSRF-Token": token },
+    })));
+    return true;
+  }, [authenticatedRequest, mutation]);
+
+  const createPartnerInvitation = useCallback((input: InvitationRequest, proof?: OperationProof): Promise<Invitation> => {
+    const action = (token: string, grant?: string) => requestApi(() => apiClient.POST("/api/v1/household/invitations", {
+      body: input, headers: { "X-CSRF-Token": token, ...(grant ? { "X-Step-Up-Token": grant } : {}) }, signal: proof?.signal,
+    }));
+    if (proof?.stepUp) {
+      if (!member.current) throw new ApiError(401, "UNAUTHENTICATED");
+      return scopedOperation("household.invite", member.current.household_id, proof.signal, action);
+    }
+    return mutation((token) => action(token));
+  }, [mutation, scopedOperation]);
 
   const listDevices = useCallback((cursor?: string): Promise<DeviceList> => authenticatedRequest(() => isNativeAuth()
     ? nativeRequest<DeviceList>({ method: "GET", path: `/api/v1/devices?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}` })
@@ -235,18 +317,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiClient.GET("/api/v1/devices", { params: { query: { limit: 50, ...(cursor ? { cursor } : {}) } } }),
   )), [authenticatedRequest]);
 
-  const revokeDevice = useCallback(async (device: Device) => {
+  const revokeDevice = useCallback(async (device: Device, proof?: OperationProof): Promise<boolean> => {
     if (!Number.isSafeInteger(device.version) || device.version < 1) throw new ApiError(400, "INVALID_VERSION");
-    if (isNativeAuth()) await authenticatedRequest(() => nativeRequest({ method: "DELETE", path: `/api/v1/devices/${device.id}`, ifMatch: `"${device.version}"` }));
-    else await mutation((token) => requestApi(() => apiClient.DELETE("/api/v1/devices/{device_id}", {
-      params: { path: { device_id: device.id }, header: { "If-Match": `"${device.version}"` } },
-      headers: { "X-CSRF-Token": token },
-    })));
+    if (isNativeAuth()) {
+      if (proof?.stepUp) {
+        const result = await authenticatedRequest(() => nativeAuth.revokeDevice(device.id, `"${device.version}"`));
+        if (result.status !== "revoked") return false;
+      } else await authenticatedRequest(() => nativeRequest({ method: "DELETE", path: `/api/v1/devices/${device.id}`, ifMatch: `"${device.version}"` }));
+    }
+    else {
+      const action = (token: string, grant?: string) => requestApi(() => apiClient.DELETE("/api/v1/devices/{device_id}", {
+        params: { path: { device_id: device.id }, header: { "If-Match": `"${device.version}"` } },
+        headers: { "X-CSRF-Token": token, ...(grant ? { "X-Step-Up-Token": grant } : {}) }, signal: proof?.signal,
+      }));
+      if (proof?.stepUp) await scopedOperation("device.revoke", device.id, proof.signal, action);
+      else await mutation((token) => action(token));
+    }
     if (device.current) clearSession();
-  }, [authenticatedRequest, clearSession, mutation]);
+    return true;
+  }, [authenticatedRequest, clearSession, mutation, scopedOperation]);
 
-  const value = useMemo(() => ({ state, reloadSession, login, loginNative, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
-    [state, reloadSession, login, loginNative, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
+  const value = useMemo(() => ({ state, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
+    [state, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
