@@ -158,6 +158,26 @@ def test_concurrent_replacements_contend_for_one_household_consumable():
     assert inputs["initial_stock"] == 1 and expected["final_stock"] == 0
 
 
+def test_payout_cases_exist_in_the_same_household_before_sum_validation():
+    resources = {row["id"]: row for row in IDENTITIES["resources"]}
+    household_id = MEDICAL["household_id"]
+    for number in (18, 19):
+        inputs, _ = parts(number)
+        for allocation in inputs["allocations"]:
+            case = resources[allocation["case_id"]]
+            assert case["kind"] == "insurance_case"
+            assert case["household_id"] == household_id
+
+
+def test_benefit_types_match_the_documented_contract():
+    benefits = {
+        value["benefit_type"]
+        for _, value in walk(CATALOG)
+        if isinstance(value, dict) and "benefit_type" in value
+    }
+    assert benefits == {"reimbursement", "fixed_benefit"}
+
+
 def test_net_assets_ownership_and_reference_holdings_examples():
     inputs, expected = parts(1)
     assert int(inputs["assets_krw"]) - int(inputs["liabilities_krw"]) == int(

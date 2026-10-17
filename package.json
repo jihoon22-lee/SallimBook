@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "packageManager": "pnpm@9.15.9",
   "engines": { "node": ">=24.18.0 <25", "pnpm": "9.15.9" },
+  "pnpm": { "overrides": { "xcode@3.0.1>uuid": "11.1.1" } },
   "scripts": {
     "dev": "pnpm --filter @sallimbook/client dev",
     "dev:api": "uv run --env-file .env --project services/api uvicorn sallimbook.main:app --host 127.0.0.1 --port 18741 --reload",

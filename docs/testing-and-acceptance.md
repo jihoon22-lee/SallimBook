@@ -5,7 +5,7 @@
 ## 구현된 검사 기반
 
 SB-004의 [공유 합성 fixture](../packages/test-fixtures/README.md)는 H1/H2와 T-01~T-24의
-입력·기대 결과를 JSON으로 제공한다. fixture 구조·금액·관계 검사 45개는 예제 자체의 일관성 검사이며,
+입력·기대 결과를 JSON으로 제공한다. fixture 구조·금액·관계 검사 47개는 예제 자체의 일관성 검사이며,
 아래 제품 인수 완료를 뜻하지 않는다. 각 vector의 제품 인수 상태는 현재 `pending`이다.
 
 GitHub Actions는 문서·도구, API lint/단위, 타입·OpenAPI 생성 drift, PostgreSQL migration/API,
