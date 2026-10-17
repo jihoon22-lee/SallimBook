@@ -55,6 +55,13 @@ def install_http_contract(app: FastAPI) -> None:
             for item in exc.errors()
         ):
             return error_response(request, 400, "VERSION_REQUIRED", "수정할 버전을 지정해 주세요.")
+        if any(
+            item["type"] == "missing" and item["loc"] == ("header", "Idempotency-Key")
+            for item in exc.errors()
+        ):
+            return error_response(
+                request, 400, "INVALID_IDEMPOTENCY_KEY", "재시도 식별자를 확인해 주세요."
+            )
         fields = [
             # Later loc segments can be submitted dict keys, extra field names,
             # or discriminator values. Return only the framework-owned source.

@@ -19,8 +19,19 @@ from sallimbook.core.types import YearMonth
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
 router = APIRouter(prefix="/api/v1/asset-months", tags=["asset-months"])
-VersionHeader = Annotated[str | None, Header(alias="If-Match")]
-IdempotencyHeader = Annotated[str | None, Header(alias="Idempotency-Key", max_length=128)]
+VersionHeader = Annotated[str, Header(alias="If-Match")]
+IdempotencyHeader = Annotated[str, Header(alias="Idempotency-Key", max_length=128)]
+
+ETAG_HEADERS = {
+    "ETag": {
+        "description": "Quoted value or revision version for If-Match.",
+        "schema": {"type": "string"},
+    }
+}
+REFERENCE_HEADERS = {
+    **ETAG_HEADERS,
+    "Location": {"description": "Referenced month revision path.", "schema": {"type": "string"}},
+}
 
 
 def _reference_headers(response: Response, result: MonthReference) -> None:
@@ -35,6 +46,7 @@ def _reference_headers(response: Response, result: MonthReference) -> None:
     response_model=MonthReference,
     status_code=201,
     operation_id="createAssetMonthDraft",
+    responses={201: {"headers": REFERENCE_HEADERS}},
 )
 def create_draft(
     month: YearMonth,
@@ -42,14 +54,19 @@ def create_draft(
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    idempotency_key: IdempotencyHeader = None,
+    idempotency_key: IdempotencyHeader,
 ) -> MonthReference:
     result = service.create_draft(session, principal, month, payload, idempotency_key)
     _reference_headers(response, result)
     return result
 
 
-@router.get("/{month}", response_model=MonthResponse, operation_id="getAssetMonth")
+@router.get(
+    "/{month}",
+    response_model=MonthResponse,
+    operation_id="getAssetMonth",
+    responses={200: {"headers": ETAG_HEADERS}},
+)
 def get_month(
     month: YearMonth,
     principal: PrincipalDependency,
@@ -67,6 +84,7 @@ def get_month(
     "/{month}/values/{asset_id}",
     response_model=MonthValueResult,
     operation_id="updateAssetMonthValue",
+    responses={200: {"headers": ETAG_HEADERS}},
 )
 def update_value(
     month: YearMonth,
@@ -75,7 +93,7 @@ def update_value(
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    if_match: VersionHeader = None,
+    if_match: VersionHeader,
 ) -> MonthValueResult:
     result = service.update_value(session, principal, month, asset_id, payload, if_match)
     response.headers["ETag"] = f'"{result.value.version}"'
@@ -83,7 +101,10 @@ def update_value(
 
 
 @router.post(
-    "/{month}/sync-scope", response_model=MonthReference, operation_id="synchronizeAssetMonthScope"
+    "/{month}/sync-scope",
+    response_model=MonthReference,
+    operation_id="synchronizeAssetMonthScope",
+    responses={200: {"headers": REFERENCE_HEADERS}},
 )
 def synchronize_scope(
     month: YearMonth,
@@ -91,22 +112,27 @@ def synchronize_scope(
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    if_match: VersionHeader = None,
+    if_match: VersionHeader,
 ) -> MonthReference:
     result = service.synchronize_scope(session, principal, month, payload, if_match)
     _reference_headers(response, result)
     return result
 
 
-@router.post("/{month}/confirm", response_model=MonthReference, operation_id="confirmAssetMonth")
+@router.post(
+    "/{month}/confirm",
+    response_model=MonthReference,
+    operation_id="confirmAssetMonth",
+    responses={200: {"headers": REFERENCE_HEADERS}},
+)
 def confirm_month(
     month: YearMonth,
     payload: MonthConfirm,
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    if_match: VersionHeader = None,
-    idempotency_key: IdempotencyHeader = None,
+    if_match: VersionHeader,
+    idempotency_key: IdempotencyHeader,
 ) -> MonthReference:
     result = service.confirm_month(session, principal, month, payload, if_match, idempotency_key)
     _reference_headers(response, result)
@@ -118,6 +144,7 @@ def confirm_month(
     response_model=MonthReference,
     status_code=201,
     operation_id="reopenAssetMonth",
+    responses={201: {"headers": REFERENCE_HEADERS}},
 )
 def reopen_month(
     month: YearMonth,
@@ -125,8 +152,8 @@ def reopen_month(
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
-    if_match: VersionHeader = None,
-    idempotency_key: IdempotencyHeader = None,
+    if_match: VersionHeader,
+    idempotency_key: IdempotencyHeader,
 ) -> MonthReference:
     result = service.reopen_month(session, principal, month, payload, if_match, idempotency_key)
     _reference_headers(response, result)
@@ -152,6 +179,7 @@ def revision_history(
     "/{month}/revisions/{revision_no}",
     response_model=MonthResponse,
     operation_id="getAssetMonthRevision",
+    responses={200: {"headers": ETAG_HEADERS}},
 )
 def get_revision(
     month: YearMonth,

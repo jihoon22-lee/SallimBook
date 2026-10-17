@@ -102,3 +102,18 @@ def test_required_version_header_preserves_custom_missing_response():
     assert missing.status_code == 400
     assert missing.json()["error"]["code"] == "VERSION_REQUIRED"
     assert present.status_code == 200
+
+
+def test_required_idempotency_header_preserves_custom_missing_response():
+    app = create_app(Settings(environment="test"))
+
+    @app.post("/test-only/idempotency")
+    def submit(key: Annotated[str, Header(alias="Idempotency-Key")]):
+        return {"accepted": True}
+
+    with TestClient(app) as client:
+        missing = client.post("/test-only/idempotency")
+        present = client.post("/test-only/idempotency", headers={"Idempotency-Key": "synthetic"})
+    assert missing.status_code == 400
+    assert missing.json()["error"]["code"] == "INVALID_IDEMPOTENCY_KEY"
+    assert present.status_code == 200
