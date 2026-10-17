@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -12,6 +13,23 @@ from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REVISION_LABEL = "org.opencontainers.image.revision"
+ROLE_LABEL = "io.sallimbook.image-role"
+
+
+def write_image_source(context, template, commit, role):
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or role not in {"api", "web"}:
+        raise ValueError("Exact source revision and application image role required")
+    (context / "source-revision.json").write_text(
+        json.dumps({"source_commit": commit, "image_role": role}, sort_keys=True) + "\n"
+    )
+    # Literal generated labels cannot be forgotten or changed through a build ARG.
+    # Both the image metadata and filesystem record the archived source revision.
+    (context / "Dockerfile").write_text(
+        template.read_text().rstrip() + "\n"
+        "COPY source-revision.json /usr/share/sallimbook/source-revision.json\n"
+        f'LABEL {REVISION_LABEL}="{commit}" {ROLE_LABEL}="{role}"\n'
+    )
 
 
 @contextmanager
@@ -122,7 +140,7 @@ def stage_snapshot(output, commit, checkout):
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache"),
         )
     shutil.copyfile(checkout / "services/api/alembic.ini", api / "alembic.ini")
-    shutil.copyfile(checkout / "ops/Dockerfile.api", api / "Dockerfile")
+    write_image_source(api, checkout / "ops/Dockerfile.api", commit, "api")
     shutil.copyfile(checkout / "infra/documents/freshclam.conf", api / "freshclam.conf")
     scanner = (checkout / "infra/documents/clamd.conf").read_text()
     scanner = scanner.replace(
@@ -137,7 +155,7 @@ def stage_snapshot(output, commit, checkout):
     )
     subprocess.run(["pnpm", "build"], cwd=checkout, env=build_environment(), check=True)
     shutil.copytree(checkout / "apps/client/dist", web / "dist")
-    shutil.copyfile(checkout / "ops/Dockerfile.web", web / "Dockerfile")
+    write_image_source(web, checkout / "ops/Dockerfile.web", commit, "web")
     files = {
         path.relative_to(output).as_posix(): hashlib.sha256(
             path.read_bytes()

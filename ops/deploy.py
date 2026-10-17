@@ -207,7 +207,10 @@ http://:8080 {{
                 "/config:mode=0700,uid=10001,gid=10001",
                 "/data:mode=0700,uid=10001,gid=10001",
             ],
-            "depends_on": ["node", "api"],
+            "depends_on": {
+                "node": {"condition": "service_started"},
+                "api": {"condition": "service_healthy"},
+            },
             "mem_limit": "128m",
         },
         "api": {
@@ -251,19 +254,18 @@ http://:8080 {{
             ],
             "depends_on": {
                 "db": {"condition": "service_healthy"},
-                "scanner": {"condition": "service_started"},
+                "scanner": {"condition": "service_healthy"},
             },
             "healthcheck": {
                 "test": [
                     "CMD",
                     "python",
-                    "-c",
-                    "import urllib.request; "
-                    "urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', "
-                    "timeout=2).close()",
+                    "-m",
+                    "ops.health",
+                    "api",
                 ],
                 "interval": "30s",
-                "timeout": "3s",
+                "timeout": "5s",
                 "retries": 3,
             },
         },
@@ -284,6 +286,13 @@ http://:8080 {{
             ],
             "mem_limit": "1536m",
             "memswap_limit": "1536m",
+            "healthcheck": {
+                "test": ["CMD", "python", "-m", "ops.health", "scanner"],
+                "interval": "10s",
+                "timeout": "5s",
+                "retries": 3,
+                "start_period": "90s",
+            },
         },
         "db": {
             "image": POSTGRES,

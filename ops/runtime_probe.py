@@ -9,7 +9,9 @@ import stat
 import time
 import urllib.error
 import urllib.request
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 
@@ -24,6 +26,7 @@ def main():
     from sqlalchemy.exc import DBAPIError
     from sqlalchemy.orm import Session
 
+    from ops import health
     from ops.database import verify_runtime
 
     settings = Settings(_env_file=None)
@@ -58,6 +61,24 @@ def main():
             if time.monotonic() >= deadline:
                 raise RuntimeError("Synthetic scanner did not become ready") from None
             time.sleep(0.25)
+    # Use the real Unix daemon protocol with a synthetic clock only in this test
+    # process. Database HTTP readiness remains 200 but stale CVD must fail both
+    # Compose health modes, using the exact upload freshness policy.
+    health.check("scanner")
+    health.check("api")
+    from sallimbook.core.errors import DomainError
+
+    with patch(
+        "sallimbook.documents.validation._utc_now",
+        return_value=datetime.now(UTC) + timedelta(days=8),
+    ):
+        for mode in ("scanner", "api"):
+            try:
+                health.check(mode)
+            except DomainError as error:
+                assert error.code == "DOCUMENT_SCAN_UNAVAILABLE"
+            else:
+                raise AssertionError("Stale scanner passed container readiness")
     engine = make_engine(url)
     assert verify_runtime()["status"] == "runtime-role-verified"
     with engine.connect() as connection:
@@ -215,7 +236,7 @@ def main():
         "PASS: API UID10001, DDL/trigger-disable/TRUNCATE/audit-UPDATE-DELETE denied, "
         "private socket, tmpfs, "
         "native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial, "
-        "audit INSERT/SELECT"
+        "audit INSERT/SELECT, real scanner PING and stale readiness rejection"
     )
 
 
