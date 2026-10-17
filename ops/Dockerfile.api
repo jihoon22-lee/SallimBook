@@ -1,0 +1,50 @@
+FROM postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c AS postgres_tools
+# Preserve the complete matched PostgreSQL client runtime, including its loader;
+# never mix bookworm libpq/OpenSSL/LDAP with the API's trixie libraries.
+RUN mkdir -p /pg-runtime/lib /pg-runtime/bin \
+    && cp /usr/lib/postgresql/18/bin/pg_dump /usr/lib/postgresql/18/bin/pg_restore /pg-runtime/bin/ \
+    && ldd /usr/lib/postgresql/18/bin/pg_dump /usr/lib/postgresql/18/bin/pg_restore \
+       | awk '$2 == "=>" { print $3 }' | sort -u | xargs -I '{}' cp -L '{}' /pg-runtime/lib/ \
+    && cp -L /lib64/ld-linux-x86-64.so.2 /pg-runtime/
+FROM python:3.14.7-slim-trixie@sha256:7bf6c3111fe094f8ee1a1cbcdc63c4cfb345b0e3df42d5aa9a90b3b4b022ab6d
+
+RUN printf '%s\n' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20261017T000000Z trixie main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20261017T000000Z trixie-security main' \
+      > /etc/apt/sources.list \
+    && rm /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      poppler-utils=25.03.0-5+deb13u4 tesseract-ocr=5.5.0-1+b1 \
+      tesseract-ocr-eng=1:4.1.0-2 tesseract-ocr-kor=1:4.1.0-2 \
+      fonts-noto-cjk=1:20240730+repack1-1 \
+    && rm -rf /var/lib/apt/lists/*
+ADD --checksum=sha256:d3ee9e401974855a1edc1761b1425417d126de618d5f0c91cd51209f69f6fcc2 https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.4.6/clamav-1.4.6.linux.x86_64.deb /opt/clamav.deb
+RUN dpkg -i /opt/clamav.deb && rm /opt/clamav.deb \
+    && install -d -o 65534 -g 65534 /var/lib/clamav \
+    && install -d -o 10001 -g 10001 -m 0700 /run/scanner /srv/documents
+COPY freshclam.conf /etc/sallimbook/freshclam.conf
+ARG SALLIMBOOK_CVD_REFRESH
+RUN test -n "$SALLIMBOOK_CVD_REFRESH" \
+    && /usr/local/bin/freshclam --config-file=/etc/sallimbook/freshclam.conf --stdout \
+    && chmod -R a+rX /var/lib/clamav
+COPY clamd.conf /etc/sallimbook/clamd.conf
+COPY requirements.txt /opt/sallimbook/requirements.txt
+RUN python -m pip install --no-cache-dir --require-hashes -r /opt/sallimbook/requirements.txt
+COPY --from=postgres_tools /pg-runtime /opt/pg-runtime
+RUN printf '%s\n' '#!/bin/sh' 'exec /opt/pg-runtime/ld-linux-x86-64.so.2 --library-path /opt/pg-runtime/lib /opt/pg-runtime/bin/pg_dump "$@"' > /usr/local/bin/pg_dump \
+    && printf '%s\n' '#!/bin/sh' 'exec /opt/pg-runtime/ld-linux-x86-64.so.2 --library-path /opt/pg-runtime/lib /opt/pg-runtime/bin/pg_restore "$@"' > /usr/local/bin/pg_restore \
+    && chmod 0755 /usr/local/bin/pg_dump /usr/local/bin/pg_restore \
+    && pg_dump --version && pg_restore --version
+ADD --checksum=sha256:cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10 https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz /opt/age.tar.gz
+RUN tar -xzf /opt/age.tar.gz -C /opt \
+    && install -m 0755 /opt/age/age /usr/local/bin/age \
+    && rm -rf /opt/age /opt/age.tar.gz
+COPY src /opt/sallimbook/src
+COPY migrations /opt/sallimbook/migrations
+COPY alembic.ini /opt/sallimbook/alembic.ini
+COPY ops /opt/sallimbook/ops
+ENV PYTHONPATH=/opt/sallimbook/src:/opt/sallimbook PYTHONDONTWRITEBYTECODE=1 TZ=Etc/UTC
+WORKDIR /opt/sallimbook
+USER 10001:10001
+CMD ["uvicorn", "sallimbook.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log", "--no-proxy-headers"]
