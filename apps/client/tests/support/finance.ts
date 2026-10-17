@@ -54,6 +54,10 @@ export async function mockFinance(page: Page) {
       const account = { ...sampleAccount, ...input, id: uid(60 + state.accountCreates.length), asset_id: asset.id, asset, has_number: false, masked_number: null };
       state.accounts.push(account); return route.fulfill({ status: 201, json: project(account) });
     }
+    if (path.endsWith("/payment-links") && method === "GET") {
+      const id = path.split("/")[4]!; const account = state.accounts.find((row) => row.id === id);
+      return route.fulfill({ json: { resource_kind: "account", resource_id: id, resource_version: account?.version ?? 1, asset_id: account?.asset_id ?? null, as_of_date: url.searchParams.get("as_of_date") ?? "2025-02-20", usage_digest: "0".repeat(64), requires_confirmation: false, coverage: "registered_recurring_only", account_withdrawal_total_available: false, rules: { items: [], total_count: 0, next_cursor: null }, obligations: { items: [], total_count: 0, next_cursor: null }, cards: { items: [], total_count: 0, next_cursor: null } } });
+    }
     if (path.startsWith("/api/v1/accounts/")) {
       const account = state.accounts.find((item) => item.id === path.split("/")[4]); if (!account) return error(route, 404, "NOT_FOUND");
       if (method === "GET") { state.accountGets++; return route.fulfill({ json: project(account) }); }
@@ -71,6 +75,12 @@ export async function mockFinance(page: Page) {
         Object.assign(account, body, { version: account.version + 1 }); return route.fulfill({ json: project(account) });
       }
     }
+    if (path === "/api/v1/asset-comparison" && method === "GET") {
+      const to = url.searchParams.get("to") ?? "2026-10"; const from = url.searchParams.get("from") ?? "2026-09";
+      const period = (month: string) => ({ month, state: "missing", revision: null, confirmed_at: null, totals: null, dates: { non_month_end_asset_ids: [], missing_date_asset_ids: [], mixed_dates: false } });
+      return route.fulfill({ json: { from_month: from, to_month: to, filters: {}, state: "current_missing", previous: period(from), current: period(to), total_delta_krw: null, common_scope_delta_krw: null, change_percent: null, change_percent_unavailable_reason: "current_missing", scope_changed: null, added_asset_ids: [], removed_asset_ids: [], changed_share_asset_ids: [], item_count: 0, items: [], next_cursor: null } });
+    }
+    if (path === "/api/v1/asset-trends" && method === "GET") return route.fulfill({ json: { from_month: url.searchParams.get("from"), to_month: url.searchParams.get("to"), filters: {}, series_kind: url.searchParams.has("asset_id") ? "asset_owned_amount" : "household_net_assets", points: [] } });
     if (path === "/api/v1/assets" && method === "GET") {
       state.queries.push(url.searchParams);
       if (state.listFailure) return error(route, 503, "UNAVAILABLE");

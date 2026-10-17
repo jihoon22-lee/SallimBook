@@ -57,6 +57,7 @@ internal class NativeAuthHttp(private val origin: String) {
         ifMatch: String? = null,
         stepUpToken: String? = null,
         nativeAccountNumber: Boolean = false,
+        idempotencyKey: String? = null,
     ): NativeHttpResponse {
         gate.checkHttp(method, path)
         if (AuthPolicy.apiOrigin(origin) == null) {
@@ -73,7 +74,7 @@ internal class NativeAuthHttp(private val origin: String) {
         ) && method == "POST" && ifMatch == null
         val internalRevoke = method == "DELETE" && PasskeyPolicy.revokePath(path) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && body == null
-        val metadata = FinancePolicy.metadataHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch)
+        val metadata = FinancePolicy.metadataHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch, idempotencyKey)
         val numberFields = body?.keys()?.asSequence()?.toSet()
         val numberMutation = nativeAccountNumber && method == "PATCH" && FinancePolicy.numberPath(path, false) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && numberFields == setOf("account_number") &&
@@ -87,6 +88,7 @@ internal class NativeAuthHttp(private val origin: String) {
             (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
+        if (idempotencyKey != null && !metadata) throw AuthFailure(AuthCode.INVALID_REQUEST)
         if (nativeAccountNumber && !numberMutation && !numberReveal) throw AuthFailure(AuthCode.INVALID_REQUEST)
         if (stepUpToken != null && !PasskeyPolicy.stepUpHeaderAllowed(method, path, ifMatch, stepUpToken)) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
@@ -102,6 +104,7 @@ internal class NativeAuthHttp(private val origin: String) {
                 .apply {
                     if (accessToken != null) header("Authorization", "Bearer $accessToken")
                     if (ifMatch != null) header("If-Match", ifMatch)
+                    if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey)
                     if (stepUpToken != null) header("X-Step-Up-Token", stepUpToken)
                 }.build()
             gate.checkHttp(method, path)
