@@ -216,6 +216,10 @@
     "scripts/test_android_runtime_config.py": {
       "sha256": "dd8de566a7a18cf61bfe6cfad86e7c3cd02a556d189840120ae7e278f543606a",
       "git_sha1": "92f6d43b8f73f1a998304733736b8bf131e9562d"
+    },
+    "docs/testing/native-security-proof.md": {
+      "sha256": "bac2a774e9818292508424bfe1d7c2c0937003164ed89e7a259516d9d60f7d9f",
+      "git_sha1": "12f7ea272f0ab67223af7d68aaa431c9d16294a3"
     }
   }
 }
