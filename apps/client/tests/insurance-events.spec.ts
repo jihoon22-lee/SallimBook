@@ -3,6 +3,27 @@ import type { Page } from "@playwright/test";
 import catalog from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
 import { claimRow, expenseRow, mockInsuranceEvents, payoutRow } from "./support/insurance-events";
 import { policyRow } from "./support/insurance";
+
+test("claim payout-list action preserves its case policy and claim through receipt creation", async ({ page }) => {
+  const state = await mockInsuranceEvents(page);
+  const currentClaim = claimRow(1200);
+  state.claims.push(currentClaim);
+  state.payouts = [];
+  await page.goto(`/insurance/claims/${currentClaim.id}`);
+  await page.getByRole("link", { name: "실제 보험금 수령 추가", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "배분 사건", exact: true })).toHaveValue(currentClaim.case_id);
+  await expect(page.getByRole("combobox", { name: "배분 보험계약", exact: true })).toHaveValue(currentClaim.policy_id);
+  await expect(page.getByRole("combobox", { name: "배분 청구 (선택)", exact: true })).toHaveValue(currentClaim.id);
+  await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("10000");
+  await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("10000");
+  await page.getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true }).check();
+  await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "보험금 수령 상세", exact: true })).toBeVisible();
+  expect(state.payouts).toHaveLength(1);
+  expect(state.payouts[0]!.allocations[0]).toMatchObject({ case_id: currentClaim.case_id, policy_id: currentClaim.policy_id, claim_id: currentClaim.id });
+  await page.goto(`/insurance/claims/${currentClaim.id}`);
+  await expect(page.getByRole("link", { name: "입금 원본 10,000원", exact: true })).toBeVisible();
+});
 import { uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => { await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z")); });
