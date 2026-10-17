@@ -25,3 +25,7 @@ class Settings(BaseSettings):
     webauthn_web_origins: list[str] = Field(default_factory=list)
     webauthn_native_origins: list[str] = Field(default_factory=list)
     field_encryption_key_file: Path | None = None
+    document_storage_directory: Path | None = None
+    document_scanner_socket: Path | None = None
+    document_tesseract_path: Path = Path("/usr/bin/tesseract")
+    document_pdftoppm_path: Path = Path("/usr/bin/pdftoppm")

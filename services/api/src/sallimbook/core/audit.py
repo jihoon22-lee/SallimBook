@@ -81,6 +81,8 @@ def record_event(
         "insurance_payout",
         "payout_allocation",
         "insurance_return",
+        "document",
+        "document_link",
     ],
     entity_id: UUID,
     action: Literal[
@@ -140,6 +142,8 @@ def record_event(
         "insurance_payout",
         "payout_allocation",
         "insurance_return",
+        "document",
+        "document_link",
     } or action not in {
         "create",
         "update",
