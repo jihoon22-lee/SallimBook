@@ -224,6 +224,10 @@
     "scripts/test_web_auth.py": {
       "sha256": "5ce2cdc1621a3fbb1563f25be5f6c0c930ac2b80b0469052e6b74f7d4b502966",
       "git_sha1": "017496e96ffea7a72ad4fdfc8cc4aacb1d38b4e7"
+    },
+    "docs/testing/native-security-proof.md": {
+      "sha256": "75e50c296b96865b339ad3604d9c2573b64df85fde44ea3312df6774d41c394f",
+      "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
     }
   }
 }
