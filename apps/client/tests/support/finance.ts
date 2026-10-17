@@ -71,6 +71,12 @@ export async function mockFinance(page: Page) {
         Object.assign(account, body, { version: account.version + 1 }); return route.fulfill({ json: project(account) });
       }
     }
+    if (path === "/api/v1/asset-comparison" && method === "GET") {
+      const to = url.searchParams.get("to") ?? "2026-10"; const from = url.searchParams.get("from") ?? "2026-09";
+      const period = (month: string) => ({ month, state: "missing", revision: null, confirmed_at: null, totals: null, dates: { non_month_end_asset_ids: [], missing_date_asset_ids: [], mixed_dates: false } });
+      return route.fulfill({ json: { from_month: from, to_month: to, filters: {}, state: "current_missing", previous: period(from), current: period(to), total_delta_krw: null, common_scope_delta_krw: null, change_percent: null, change_percent_unavailable_reason: "current_missing", scope_changed: null, added_asset_ids: [], removed_asset_ids: [], changed_share_asset_ids: [], item_count: 0, items: [], next_cursor: null } });
+    }
+    if (path === "/api/v1/asset-trends" && method === "GET") return route.fulfill({ json: { from_month: url.searchParams.get("from"), to_month: url.searchParams.get("to"), filters: {}, series_kind: url.searchParams.has("asset_id") ? "asset_owned_amount" : "household_net_assets", points: [] } });
     if (path === "/api/v1/assets" && method === "GET") {
       state.queries.push(url.searchParams);
       if (state.listFailure) return error(route, 503, "UNAVAILABLE");

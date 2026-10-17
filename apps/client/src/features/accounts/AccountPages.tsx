@@ -5,6 +5,7 @@ import { ApiError, toApiError } from "../../platform/api";
 import { useAuth } from "../auth/AuthProvider";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
 import { dateLabel, FinanceError, isDateOnly, isUuid, MemberLoadError, MissingAmount, todaySeoul, useHouseholdMembers } from "../finance/FinanceSupport";
+import { AssetMonthlyData } from "../assets/comparison/AssetMonthlyData";
 import { AssetSummary, ownerLabel } from "../assets/AssetPages";
 import { useAssetsApi } from "../assets/api";
 import { AccountEditor } from "./AccountEditor";
@@ -65,7 +66,8 @@ function AccountDetail({ id }: { id: string }) {
   const account = state.account;
   return <>{location.state?.saved && <p role="status">계좌 정보를 저장했어요.</p>}<section className="card"><h2>{account.asset.name}</h2><dl className="metadata-grid"><div><dt>금융기관</dt><dd>{account.institution_name}</dd></div><div><dt>계좌 유형</dt><dd>{accountTypes[account.account_type]}</dd></div><div><dt>용도</dt><dd>{account.purpose || "미입력"}</dd></div><div><dt>개설일</dt><dd>{dateLabel(account.opened_on)}</dd></div><div><dt>종료일</dt><dd>{dateLabel(account.closed_on)}</dd></div><div><dt>계좌 상태</dt><dd>{account.status === "closed" ? "종료" : "사용 중"}</dd></div></dl><div className="form-actions"><Link className="button-link" to={`/accounts/${id}/edit`}>계좌 정보 수정</Link>{account.status === "active" && <button type="button" onClick={() => { setError(null); setClosing(true); }}>계좌 사용 종료하기</button>}<Link to="/accounts">계좌 목록</Link></div></section>
     <AccountNumber key={account.id} account={account} refresh={state.reload} />
-    <section className="card"><h2>연결된 금융 자산</h2><p>계좌와 이 자산은 하나의 평가액을 공유해요. 수입이나 납부 입력으로 잔액을 자동 변경하지 않아요.</p><AssetSummary asset={account.asset} members={members.members} /><MemberLoadError error={members.error} retry={members.retry} /><Link to={`/assets/${account.asset_id}`}>연결된 자산 보기</Link><MissingAmount monthLink /></section>
+    <section className="card"><h2>연결된 금융 자산</h2><p>계좌와 이 자산은 하나의 평가액을 공유해요. 수입이나 납부 입력으로 잔액을 자동 변경하지 않아요.</p><AssetSummary asset={account.asset} members={members.members} /><MemberLoadError error={members.error} retry={members.retry} /><Link to={`/assets/${account.asset_id}`}>연결된 자산 보기</Link></section>
+    <AssetMonthlyData assetId={account.asset_id} />
     {closing && <section className="card"><h2>계좌 사용 종료</h2><p>연결된 금융 자산도 함께 사용 종료돼요. 계좌 정보와 과거 기록은 보존해요.</p><form className="finance-form" onSubmit={(event) => void close(event)}><div className="form-field"><label htmlFor="account-closed">계좌 종료일</label><input id="account-closed" type="date" required max="9999-12-31" min={account.opened_on && account.opened_on > account.asset.started_on ? account.opened_on : account.asset.started_on} value={endedOn} onChange={(event) => setEndedOn(event.target.value)} disabled={busy} /></div>{formError && <p role="alert">{formError}</p>}<FinanceError error={error} />{error?.code === "VERSION_CONFLICT" && <button type="button" onClick={() => { setError(null); state.reload(); }}>종료 전 최신 계좌 정보 확인</button>}<div className="form-actions"><button type="submit" disabled={busy || error?.code === "VERSION_CONFLICT"}>계좌 사용 종료 확인</button><button type="button" disabled={busy} onClick={() => setClosing(false)}>계좌 종료 취소</button></div></form></section>}
   </>;
 }

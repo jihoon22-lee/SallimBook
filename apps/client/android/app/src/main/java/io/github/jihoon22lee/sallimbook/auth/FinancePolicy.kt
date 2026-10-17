@@ -7,10 +7,16 @@ import java.time.OffsetDateTime
 internal enum class FinanceOperation {
     LIST_ASSETS, GET_ASSET, CREATE_ASSET, UPDATE_ASSET, ARCHIVE_ASSET, DELETE_ASSET,
     LIST_ACCOUNTS, GET_ACCOUNT, CREATE_ACCOUNT, UPDATE_ACCOUNT,
+    GET_ASSET_MONTH, GET_ASSET_MONTH_REVISION, LIST_ASSET_MONTH_REVISIONS, CREATE_ASSET_MONTH_DRAFT,
+    UPDATE_ASSET_MONTH_VALUE, SYNCHRONIZE_ASSET_MONTH_SCOPE, CONFIRM_ASSET_MONTH, REOPEN_ASSET_MONTH,
+    LIST_INCOME, INCOME_SUMMARY, INCOME_DUPLICATE_CANDIDATES, GET_INCOME, INCOME_HISTORY,
+    CREATE_INCOME, CORRECT_INCOME, VOID_INCOME, RETURN_INCOME, CONVERT_INCOME_PRECISION,
+    LIST_CARDS, GET_CARD, CREATE_CARD, UPDATE_CARD, ARCHIVE_CARD, DELETE_CARD,
+    GET_ASSET_COMPARISON, GET_ASSET_TRENDS,
 }
 
 /** Constructed from named metadata commands, never from a JS URL, headers or encoded body. */
-internal class FinanceRequest(val method: String, val path: String, val body: Map<String, Any?>?, val ifMatch: String?) {
+internal class FinanceRequest(val method: String, val path: String, val body: Map<String, Any?>?, val ifMatch: String?, val idempotencyKey: String? = null) {
     override fun toString() = "FinanceRequest(redacted)"
 }
 
@@ -137,6 +143,9 @@ internal object FinancePolicy {
     }
 
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
+        if (CashflowPolicy.supports(operation)) return CashflowPolicy.prepare(operation, value)
+        if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.prepare(operation, value)
+        if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
         val args = objectValue(value)
         val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
         val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
@@ -169,10 +178,15 @@ internal object FinancePolicy {
                 if (args.keys != setOf(idKey, "ifMatch")) invalid()
                 FinanceRequest("DELETE", "$base/${id(args[idKey])}", null, tag(args["ifMatch"]))
             }
+            else -> invalid()
         }
     }
 
-    fun metadataHttpAllowed(method: String, path: String, body: Any?, ifMatch: String?): Boolean = try {
+    fun metadataHttpAllowed(method: String, path: String, body: Any?, ifMatch: String?, idempotencyKey: String? = null): Boolean { return try {
+        if (CashflowPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
+        if (idempotencyKey != null) return false
+        if (CardMetadataPolicy.httpAllowed(method, path, body, ifMatch)) return true
+        if (ComparisonPolicy.httpAllowed(method, path, body, ifMatch)) return true
         val uri = URI(path)
         if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path ||
             path.any { it.isWhitespace() || it.code < 32 }) false
@@ -234,6 +248,7 @@ internal object FinancePolicy {
             }
         }
     } catch (_: Exception) { false }
+    }
 
     fun asset(value: Any?): Map<String, Any?> {
         val row = objectValue(value)
@@ -272,6 +287,9 @@ internal object FinancePolicy {
 
     fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
         try {
+            if (CashflowPolicy.supports(operation)) return CashflowPolicy.response(operation, request, status, value)
+            if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.response(operation, request, status, value)
+            if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
             if (operation == FinanceOperation.DELETE_ASSET) {
                 if (status != 204 || value != null) invalid()
                 return null

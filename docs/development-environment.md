@@ -166,7 +166,7 @@ API 변경 후 `pnpm api:generate`와 `pnpm typecheck`로 OpenAPI·TS 계약을 
 ### 자산·계좌 화면 검증
 
 자산 목록·등록·상세·수정·사용 종료와 계좌 목록·등록·상세·수정·사용 종료를 실제 생성 API client에 연결했다.
-월 스냅샷/월간 비교 API 연결은 별도 작업이며 현재 화면은 아직 조회하지 않은 금액을 0원으로 채우지 않는다.
+기본정보 목록은 아직 조회하지 않은 금액을 0원으로 채우지 않는다. 웹 월 입력·확정·정정은 별도 월 기록 화면에서 제공한다. 월간 비교·추이와 홈 요약은 확정 월 기록을 조회한다.
 계좌는 하나의 금융 자산과 연결하고 평가액을 중복 합산하지 않는다.
 
 `pnpm --filter @sallimbook/client exec playwright test --config playwright.finance.config.ts`는 별도
@@ -178,6 +178,15 @@ loopback 18748 포트에서 UI 회귀를 실행한다. `uv run --project service
 
 구현 범위와 검증 결과는 [자산·계좌 UI 검증 기록](testing/assets-accounts-client.md)을 따른다.
 Android 번호 입력·표시 실기기 시험은 빌드/JVM/브라우저 bridge 모의시험과 구분한다.
+
+### 웹 월 기록 입력 검증
+
+`/assets/months/:month`는 실제 월 작성본·전월 복사·행 확인·명시 범위 반영·확정·정정에 연결된다.
+`?revision=N`으로 당시 범위와 금액을 읽기 전용 조회한다. 전월 미확인은 0원이 아니고, 확정 전 날짜와 비교 범위를 확인한다.
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.months.config.ts`는 18749 포트를 사용한다.
+`uv run --project services/api python scripts/test_web_auth.py --months`는 실제 HTTPS·일회용 DB의 월 전체 흐름을 검증한다.
+[월 입력 검증 기록](testing/monthly-assets-client.md)에 재현 명령과 구현/검증 경계를 기록한다.
+Android 월 adapter는 같은 생성 계약과 네이티브 인증에 연결되며 잠금 중 요청·응답을 차단한다.
 
 ### 병렬 검증 자원
 

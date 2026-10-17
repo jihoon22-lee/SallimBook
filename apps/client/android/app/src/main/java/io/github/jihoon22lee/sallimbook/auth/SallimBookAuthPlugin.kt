@@ -134,6 +134,36 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun createAccount(call: PluginCall) = finance(call, FinanceOperation.CREATE_ACCOUNT)
     @PluginMethod fun updateAccount(call: PluginCall) = finance(call, FinanceOperation.UPDATE_ACCOUNT)
 
+    @PluginMethod fun getAssetMonth(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_MONTH)
+    @PluginMethod fun getAssetMonthRevision(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_MONTH_REVISION)
+    @PluginMethod fun listAssetMonthRevisions(call: PluginCall) = finance(call, FinanceOperation.LIST_ASSET_MONTH_REVISIONS)
+    @PluginMethod fun createAssetMonthDraft(call: PluginCall) = finance(call, FinanceOperation.CREATE_ASSET_MONTH_DRAFT)
+    @PluginMethod fun updateAssetMonthValue(call: PluginCall) = finance(call, FinanceOperation.UPDATE_ASSET_MONTH_VALUE)
+    @PluginMethod fun synchronizeAssetMonthScope(call: PluginCall) = finance(call, FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE)
+    @PluginMethod fun confirmAssetMonth(call: PluginCall) = finance(call, FinanceOperation.CONFIRM_ASSET_MONTH)
+    @PluginMethod fun reopenAssetMonth(call: PluginCall) = finance(call, FinanceOperation.REOPEN_ASSET_MONTH)
+
+    @PluginMethod fun listIncome(call: PluginCall) = finance(call, FinanceOperation.LIST_INCOME)
+    @PluginMethod fun incomeSummary(call: PluginCall) = finance(call, FinanceOperation.INCOME_SUMMARY)
+    @PluginMethod fun incomeDuplicateCandidates(call: PluginCall) = finance(call, FinanceOperation.INCOME_DUPLICATE_CANDIDATES)
+    @PluginMethod fun getIncome(call: PluginCall) = finance(call, FinanceOperation.GET_INCOME)
+    @PluginMethod fun incomeHistory(call: PluginCall) = finance(call, FinanceOperation.INCOME_HISTORY)
+    @PluginMethod fun createIncome(call: PluginCall) = finance(call, FinanceOperation.CREATE_INCOME)
+    @PluginMethod fun correctIncome(call: PluginCall) = finance(call, FinanceOperation.CORRECT_INCOME)
+    @PluginMethod fun voidIncome(call: PluginCall) = finance(call, FinanceOperation.VOID_INCOME)
+    @PluginMethod fun returnIncome(call: PluginCall) = finance(call, FinanceOperation.RETURN_INCOME)
+    @PluginMethod fun convertIncomePrecision(call: PluginCall) = finance(call, FinanceOperation.CONVERT_INCOME_PRECISION)
+
+    @PluginMethod fun listCards(call: PluginCall) = finance(call, FinanceOperation.LIST_CARDS)
+    @PluginMethod fun getCard(call: PluginCall) = finance(call, FinanceOperation.GET_CARD)
+    @PluginMethod fun createCard(call: PluginCall) = finance(call, FinanceOperation.CREATE_CARD)
+    @PluginMethod fun updateCard(call: PluginCall) = finance(call, FinanceOperation.UPDATE_CARD)
+    @PluginMethod fun archiveCard(call: PluginCall) = finance(call, FinanceOperation.ARCHIVE_CARD)
+    @PluginMethod fun deleteCard(call: PluginCall) = finance(call, FinanceOperation.DELETE_CARD)
+
+    @PluginMethod fun getAssetComparison(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_COMPARISON)
+    @PluginMethod fun getAssetTrends(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_TRENDS)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }

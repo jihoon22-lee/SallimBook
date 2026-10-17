@@ -148,3 +148,30 @@ footer { font-size: .75rem; color: var(--muted); padding-top: 32px; }
 
 .revealed-number { display: block; overflow-wrap: anywhere; font-size: 1.2rem; padding: 1rem; border: 1px solid var(--border); border-radius: 0.7rem; margin: 0.8rem 0; }
 .revealed-number[hidden] { display: none; }
+
+.month-warning { padding: 1rem; border-left: 4px solid #b87920; background: color-mix(in srgb, #b87920 10%, transparent); border-radius: 0.4rem; }
+.month-row-editor { scroll-margin-top: 1rem; outline: none; border: 2px solid #367a67; }
+.month-action-panel { border: 2px solid #367a67; }
+.month-summary dd { font-variant-numeric: tabular-nums; }
+.month-value-card dd, .month-history p { overflow-wrap: anywhere; }
+.checkbox-field { display: flex; align-items: flex-start; gap: 0.65rem; line-height: 1.65; }
+.checkbox-field input { flex: 0 0 auto; width: 1.2rem; height: 1.2rem; margin-top: 0.2rem; }
+.amount-preview { padding: 0.85rem; border-radius: 0.5rem; background: color-mix(in srgb, #367a67 10%, transparent); }
+.unverified-chip { color: #754800; background: #fff0ce; }
+.month-history { padding-left: 1.2rem; }
+.month-history li + li { margin-top: 1rem; }
+
+.comparison-numbers dd { font-variant-numeric: tabular-nums; font-size: 1.12rem; overflow-wrap: anywhere; }
+.comparison-observations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.comparison-observations > section { min-width: 0; padding: 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; }
+.observation-grid { grid-template-columns: 1fr; }
+.date-warning { border-left: 4px solid #b87920; padding-left: 0.9rem; margin: 1rem 0; }
+.asset-trend-chart { width: 100%; height: auto; min-height: 150px; overflow: visible; }
+.chart-axis { stroke: #9baca5; stroke-width: 1; }
+.chart-line { stroke: #34846a; stroke-width: 3; stroke-linejoin: round; }
+.chart-point { fill: #34846a; stroke: white; stroke-width: 2; cursor: pointer; }
+.chart-point:focus { outline: none; stroke: #aa6818; stroke-width: 4; }
+.chart-gap { stroke: #9baca5; stroke-width: 2; stroke-dasharray: 2 2; }
+.chart-label { fill: currentColor; font-size: 12px; }
+.chart-inspector { border-top: 1px solid var(--border); padding-top: 1rem; }
+@media (max-width: 640px) { .comparison-observations { grid-template-columns: 1fr; } }
