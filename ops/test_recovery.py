@@ -413,7 +413,10 @@ def run_synthetic(admin_url, temporary):
         assert json.loads((restored / repeated["receipt"]).read_text()) == repeated
         assert len(list(restored.glob("recovery-check-*.json"))) == 2
         with backup.connect(target_env) as conn:
-            conn.execute("UPDATE vault_states SET rotation_required=true")
+            conn.execute(
+                "UPDATE vault_states SET rotation_required=true,version=version+1,"
+                "updated_at=clock_timestamp()"
+            )
         try:
             recovery.verify(target_service, restored, keyring, evidence)
         except backup.OperationError:
