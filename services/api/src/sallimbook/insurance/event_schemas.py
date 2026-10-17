@@ -142,8 +142,8 @@ class ClaimPatch(InputModel):
     decided_krw: KrwString | None = Field(default=None, repr=False)
     claim_state: ClaimState | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     decision_note: Note | None = Field(default=None, repr=False)
-    expense_ids: list[UUID] | SkipJsonSchema[None] = Field(
-        default_factory=lambda: None, max_length=200
+    expense_ids: Annotated[list[UUID], Field(max_length=200)] | SkipJsonSchema[None] = Field(
+        default_factory=lambda: None
     )
     reason: Reason = Field(repr=False)
 
@@ -315,3 +315,8 @@ class NodeSummaryResponse(BaseModel):
     medical_paid_krw: KrwString
     medical_refunded_krw: KrwString
     net_medical_krw: KrwString
+
+
+class EventCashHistoryResponse(BaseModel):
+    items: list[CashResponse]
+    next_cursor: int | None
