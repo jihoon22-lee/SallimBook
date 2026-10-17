@@ -1345,7 +1345,10 @@ export interface components {
              */
             created_by_member_id: string;
             date_precision: components["schemas"]["Precision"];
-            /** Editable */
+            /**
+             * Editable
+             * @description Current detail/list/duplicate reads only: active manual income without active returns. Historical and immutable command receipts are false; fetch current detail before acting.
+             */
             editable: boolean;
             /**
              * Flow
@@ -1392,7 +1395,10 @@ export interface components {
             updated_by_member_id: string;
             /** Version */
             version: number;
-            /** Voidable */
+            /**
+             * Voidable
+             * @description Current detail/list/duplicate reads only: active manual income or return without active returns. Historical and immutable command receipts are false; fetch current detail before acting.
+             */
             voidable: boolean;
         };
         /** ClientExtensions */
