@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import ValidationError
 from sqlalchemy import exists, select
 from sqlalchemy.dialects.postgresql import distinct_on
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from sallimbook.assets.locking import lock_asset_scope
@@ -58,6 +59,37 @@ def _actors(principal):
         created_by_member_id=principal.member_id,
         updated_by_member_id=principal.member_id,
     )
+
+
+def delete_metadata(session, principal, model, entity_id, if_match):
+    entity, code = {
+        Appliance: ("appliance", "APPLIANCE_IN_USE"),
+        Consumable: ("consumable", "CONSUMABLE_IN_USE"),
+        ApplianceConsumable: ("appliance_consumable", "APPLIANCE_CONSUMABLE_IN_USE"),
+    }[model]
+    lock_asset_scope(session, principal)
+    row = scoped_entity(session, model, entity_id, principal, for_update=True)
+    require_version(row, if_match)
+    record_event(
+        session,
+        principal,
+        entity_type=entity,
+        entity_id=row.id,
+        action="delete",
+        before_version=row.version,
+        after_version=None,
+    )
+    try:
+        session.delete(row)
+        session.flush()
+        session.commit()
+    except IntegrityError as error:
+        session.rollback()
+        if getattr(error.orig, "sqlstate", None) in {"23001", "23503"}:
+            raise DomainError(
+                code, "연결 또는 사용 이력이 있습니다. 사용 종료로 보관해 주세요.", 409
+            ) from None
+        raise
 
 
 def _touch(row, principal):

@@ -222,8 +222,8 @@ SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 �
 
 진료 트리 정렬 보완 뒤 보험 API27개와 Alembic drift/왕복 검사를 통과했다. 페이지 크기1·2·3에서 부모/자식·동순위 UUID·다른 사건 cursor·부모 이동을 확인하며 기존 계약/암호화20개·DB 보존4개와 함께 유지한다.
 
-SB-024~SB-027의 가전·재고 API 21개와 `0012_homecare`를 구현했다.
-관련 순수 계산/스키마 33개, 실제 PostgreSQL API 27개와 DB 불변식 15개, 총 75개 검사와
+SB-024~SB-027의 가전·재고 API 24개와 `0012_homecare`를 구현했다.
+관련 순수 계산/스키마 33개, 실제 PostgreSQL API 34개와 DB 불변식 15개, 총 82개 검사와
 migration drift 및 전체 downgrade/upgrade가 통과했다. 상세 범위는 [가전·재고 검증](testing/homecare-server.md)을 참고한다.
 웹·Android 화면과 가전 구매 문서 연결은 후속 통합 범위다.
 
