@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "0a49b5b441174bd47dd7408886cb3617116438c32f80d0ed0fe30774cbf80368",
-      "git_sha1": "7a0538f3a59fb1afc9ee446771119fdfc1ce0cd2"
+      "sha256": "bd989d11287a3f7c1a3b3ab929db9910246287380d5959e3fdc1cc4a4a6d0e00",
+      "git_sha1": "43d039840d91eef254bd13add72a3c98c431057b"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "933f888ea091741ceb6d5ded42e66e84665f12574a3f80adee078a6d31f46aaa",
-      "git_sha1": "42ce0c53d8174abc20b12b4cb913336cc3ad4311"
+      "sha256": "87fbbb8504e3e85717ee9f066cb0bb9617c4cb7a0d59df256eb2c910ccf469db",
+      "git_sha1": "7376f529f93df8eefec6d206802c4ae1fcbc57c2"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "a9d764228ed99f1ab8e9c2e73686d8599c46d5947ff3d2c53670093346b2f5e9",
@@ -194,12 +194,12 @@
       "git_sha1": "e7636beb259eac01e72f40a01d14c031c45ec234"
     },
     "scripts/setup_android_sdk.py": {
-      "sha256": "1c18dda27fdb2ec41fe09f812f69bf7e917c3c3573773f8820e8936f6c248c97",
-      "git_sha1": "277111af1e937f3b4ba2d1bf2cdbc00bc873ac7a"
+      "sha256": "0536f5a6c9bf06a22b50602942d8f4a04962f1c0d3791399d2bb539238f60c7c",
+      "git_sha1": "b504cafa36ec34cdba3a83c547db69117af162f3"
     },
     "tests/test_tool_safety.py": {
-      "sha256": "ae67405b91f2a170b8acddf7709692090d435c1be2beb9dab14411b8a1730200",
-      "git_sha1": "3caa898c4201967edf0403566f65a43eb73dcb40"
+      "sha256": "dd729d97a3d1fbd938b837916f32d6d46d4f77b32409ae7c79072cf3fea34e94",
+      "git_sha1": "4720047af3e9663869d3b9c3c8e82b7d4ed77c5d"
     },
     "scripts/setup_dev.py": {
       "sha256": "dd91e3c7a4c659b515af053066b5efa723a105f29b04848d129fb115b849b71d",
