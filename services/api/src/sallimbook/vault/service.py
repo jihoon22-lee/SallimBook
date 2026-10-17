@@ -326,7 +326,7 @@ def initialize(session, principal, payload, idempotency_key, *, step_up_token=No
             activated_at=identity.utcnow(),
         )
         session.add(version)
-        session.flush([version])
+        session.flush()
         membership = VaultMembership(
             **actor_fields(principal),
             member_id=principal.member_id,
@@ -334,7 +334,7 @@ def initialize(session, principal, payload, idempotency_key, *, step_up_token=No
             status="active",
         )
         session.add(membership)
-        session.flush([membership])
+        session.flush()
         store_key_check(session, principal, payload.key_check)
         store_member_wrapping(session, principal, payload.member_wrapping, state="current")
         store_recovery_wrapping(session, principal, payload.recovery_wrapping)
@@ -345,7 +345,7 @@ def initialize(session, principal, payload, idempotency_key, *, step_up_token=No
             rotation_required=False,
         )
         session.add(created)
-        session.flush([created])
+        session.flush()
         _audit(context, created, "vault", "create", ("current_key_version",))
         return _reference(created, "vault", status_code=201)
 
@@ -385,7 +385,7 @@ def rewrap_member(session, principal, payload, if_match, idempotency_key, *, ste
         context.management(StepUpPurpose.VAULT_MEMBERSHIP, principal.member_id, step_up_token)
         previous.state = "replaced"
         touch(previous, principal)
-        session.flush([previous])
+        session.flush()
         wrapping = store_member_wrapping(session, principal, payload.wrapping, state="current")
         touch(state, principal)
         _audit(context, wrapping, "vault_member_wrapping", "update", ("generation",))
@@ -435,12 +435,12 @@ def recover(session, principal, payload, if_match, idempotency_key, *, step_up_t
         previous_recovery.is_current = False
         touch(previous_member, principal)
         touch(previous_recovery, principal)
-        session.flush([previous_member, previous_recovery])
+        session.flush()
         member = store_member_wrapping(session, principal, payload.member_wrapping, state="current")
         recovery = store_recovery_wrapping(session, principal, payload.recovery_wrapping)
         old_version = state.version
         touch(state, principal)
-        session.flush([state])
+        session.flush()
         _audit(context, member, "vault_member_wrapping", "update", ("generation",))
         _audit(context, recovery, "vault_recovery_wrapping", "update", ("generation",))
         _audit(
@@ -483,12 +483,12 @@ def write_card_secret(session, principal, card_id, payload, if_match, idempotenc
         if previous is not None:
             previous.is_current = False
             touch(previous, principal)
-            session.flush([previous])
+            session.flush()
         envelope = store_card_envelope(session, principal, card, payload)
         old_version = card.version
         card.last_four = payload.last_four
         touch(card, principal)
-        session.flush([card])
+        session.flush()
         _audit(context, envelope, "card_secret_envelope", "create", ("ciphertext", "last_four"))
         _audit(context, card, "card", "update", ("last_four", "secret_envelope"), old_version)
         return _reference(card, "card")
@@ -644,7 +644,7 @@ def create_share(session, principal, payload, if_match, idempotency_key, *, step
         )
         session.add(offer)
         touch(state, principal)
-        session.flush([offer, state])
+        session.flush()
         _audit(context, offer, "vault_share", "create", ("target_member_id", "key_version"))
         return _reference(offer, "vault_share", status_code=201)
 
@@ -933,7 +933,7 @@ def start_rotation(session, principal, payload, if_match, idempotency_key, *, st
             expected_member_count=len(members),
         )
         session.add(rotation)
-        session.flush([rotation])
+        session.flush()
         for envelope in envelopes:
             session.add(
                 VaultRotationCard(
@@ -1087,7 +1087,7 @@ def prepare_rotation(
         store_recovery_wrapping(session, principal, payload.recovery_wrapping)
         before = rotation.version
         touch(rotation, principal)
-        session.flush([rotation])
+        session.flush()
         _audit(context, rotation, "vault_rotation", "update", ("wrappings", "key_check"), before)
         return _reference(rotation, "vault_rotation")
 
@@ -1158,7 +1158,7 @@ def stage_card(
         envelope = store_card_envelope(session, principal, card, payload.envelope)
         before = rotation.version
         touch(rotation, principal)
-        session.flush([rotation])
+        session.flush()
         _audit(context, envelope, "card_secret_envelope", "create", ("key_version", "ciphertext"))
         _audit(context, rotation, "vault_rotation", "update", ("cards",), before)
         return _reference(rotation, "vault_rotation")
@@ -1295,7 +1295,7 @@ def finalize_rotation(
         touch(previous, principal)
         # Release the partial-unique current slot before activating its successor.
         # Deferred lifecycle constraints verify the whole atomic switch at commit.
-        session.flush([previous])
+        session.flush()
         before = rotation.version
         rotation.state, rotation.activated_at = "current", now
         touch(rotation, principal)

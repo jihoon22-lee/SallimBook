@@ -119,7 +119,7 @@ def _nonce(session, principal, payload, purpose):
     )
     session.add(reservation)
     # FK ordering has no ORM relationships; materialize the reservation before its child.
-    session.flush([reservation])
+    session.flush()
     return nonce
 
 
@@ -176,7 +176,7 @@ def store_key_check(session, principal, payload):
         ciphertext=decode_opaque(payload.ciphertext),
     )
     session.add(row)
-    session.flush([row])
+    session.flush()
     return row
 
 
@@ -200,7 +200,7 @@ def store_member_wrapping(session, principal, payload, *, state):
         wrapped_hvk=decode_opaque(payload.wrapped_hvk),
     )
     session.add(row)
-    session.flush([row])
+    session.flush()
     return row
 
 
@@ -221,7 +221,7 @@ def store_recovery_wrapping(session, principal, payload):
         is_current=True,
     )
     session.add(row)
-    session.flush([row])
+    session.flush()
     return row
 
 
@@ -252,5 +252,5 @@ def store_card_envelope(session, principal, card, payload):
         is_current=True,
     )
     session.add(row)
-    session.flush([row])
+    session.flush()
     return row
