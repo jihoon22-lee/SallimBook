@@ -53,12 +53,13 @@ for (const failure of ["APP_LOCKED", "SESSION_EXPIRED", "NETWORK_UNAVAILABLE", "
 });
 
 test("native busy action rejects duplicate clicks and late completion cannot reopen departed overview", async ({ page }) => {
+  const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.name));
   const state = await mockVaultOverview(page, true); state.delay = 600; await page.goto("/vault");
   const action = page.getByRole("button", { name: "보관함 암호 변경", exact: true });
   await action.evaluate((element) => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
-  await expect(action).toBeDisabled(); await page.getByRole("link", { name: "계정과 등록 기기 관리", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings\/auth$/); await expect.poll(() => state.calls.filter((call) => call.method === "openVaultUI").length).toBe(1);
-  await page.waitForTimeout(700); await expect(page.getByText("보관함 작업을 마쳤어요. 현재 상태를 다시 확인해요.", { exact: true })).toHaveCount(0); expect(state.http).toEqual([]);
+  await expect(action).toBeDisabled(); await page.getByRole("link", { name: "합성 구독 카드", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/cards/${uid(50)}$`)); await expect(page.getByRole("heading", { name: "합성 구독 카드", exact: true })).toBeVisible(); await expect.poll(() => state.calls.filter((call) => call.method === "openVaultUI").length).toBe(1);
+  await page.waitForTimeout(700); await expect(page.getByText("보관함 작업을 마쳤어요. 현재 상태를 다시 확인해요.", { exact: true })).toHaveCount(0); expect(state.http).toEqual([]); expect(errors).toEqual([]);
 });
 
 test("native card details use native protected actions while ordinary metadata remains visible", async ({ page }) => {
