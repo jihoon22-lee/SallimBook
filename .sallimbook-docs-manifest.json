@@ -334,8 +334,8 @@
       "git_sha1": "fc5b8890830a7479bd2f640ff05edde22b65100d"
     },
     "docs/testing/settings-audit.md": {
-      "sha256": "0ade6569f4eb32396eb94ecc40370095a0725fe668d607ebbc7ec2fb3b54e921",
-      "git_sha1": "c7d371efda16791c12fa5d18a6b7c1e0bf8e26dc"
+      "sha256": "d95302db5994b34f380137d4e47862f759a9f2f90046be14a104159ed477a32f",
+      "git_sha1": "53e225a8ca7dcbe03016a047521deb39877684af"
     },
     "docs/testing/native-audit.md": {
       "sha256": "7195cf4f6fb6fc97af8d1f96331c3778184463c46d1f1e0dd56112d00bc13606",
