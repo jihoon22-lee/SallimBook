@@ -191,3 +191,12 @@ SB-018 결제수단 연결 조회·종료 확인은 새 migration 없이 `0009_r
 `test_payment_links.py`42개, 카드30개, 자산61개, 고정비69개, 계좌68개가 현재 코드에서 통과했다
 (총270개, 종료 확인이 필요한 기존 fixture 수정 후 분리 재검증 포함). Alembic drift 없음과
 downgrade/upgrade 왕복도 확인했다. 기존 서버·데이터는 변경하지 않고 일회용 시험 DB만 사용했다.
+
+### 수입·고정 납부·카드 화면 검증
+
+웹과 Android adapter를 수입·반복 규칙·예정 회차·실제 납부·카드 일반정보에 연결했다.
+카드·계좌·연결 자산 종료에는 선택 종료일 기준 연결 전체 조회와 명시 확인을 사용한다.
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.cashflow.config.ts`는
+18751 포트에서 UI/bridge 모의시험을 실행한다. 실제 HTTPS 흐름은
+`uv run --project services/api python scripts/test_web_auth.py --cashflow`로 실행한다.
+구체적인 금액·이력·종료 검증과 실행 한계는 [생활비 UI 검증 기록](testing/cashflow-client.md)을 따른다.

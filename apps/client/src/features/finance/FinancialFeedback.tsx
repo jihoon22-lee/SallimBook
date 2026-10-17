@@ -4,15 +4,15 @@ import { SessionStatus } from "../auth/AuthFeedback";
 import { MonthError } from "../assets/months/MonthFeedback";
 import type { ApiError } from "../../platform/api";
 
-export function AuthenticatedFinance({ title, children, description }: { title: string; description: string; children: ReactNode }) {
+export function AuthenticatedFinance({ title, children, description, navigation }: { title: string; description: string; children: ReactNode; navigation?: ReactNode }) {
   const { state } = useAuth();
-  return <><div className="intro"><p className="eyebrow">함께 기록하는 생활비</p><h1>{title}</h1><p>{description}</p></div>{state.status === "authenticated" ? children : <SessionStatus />}</>;
+  return <><div className="intro"><p className="eyebrow">함께 기록하는 생활비</p><h1>{title}</h1><p>{description}</p></div>{navigation}{state.status === "authenticated" ? children : <SessionStatus />}</>;
 }
 export function CashflowError({ error }: { error: ApiError | null }) {
   if (!error) return null;
   const messages: Partial<Record<ApiError["code"], string>> = {
     LOAN_UNAVAILABLE: "사용 중인 부채 항목을 선택해 주세요.", CARD_UNAVAILABLE: "사용 중인 납부 카드를 선택해 주세요.",
-    RULE_PERIOD_OVERLAP: "기존 마지막 규칙보다 뒤의 적용일을 선택해 주세요. 종료한 규칙에는 새 기간을 추가할 수 없어요.",
+    RULE_PERIOD_OVERLAP: "기존 마지막 적용일 뒤이면서 종료 적용일 전인 날짜를 선택해 주세요. 종료일을 연장하거나 지난 규칙을 덮어쓰지 않아요.",
     PAST_RULE_CHANGE: "지난 적용기간은 덮어쓸 수 없어요. 오늘 이후의 새 적용일을 선택해 주세요.",
     GENERATION_TOO_LARGE: "규칙 하나를 지정하거나 생성 기간을 줄여 주세요.", OBLIGATION_SUPERSEDED: "다른 규칙으로 대체된 회차예요. 현재 적용 중인 회차를 확인해 주세요.",
     OBLIGATION_HAS_PAYMENT: "실제 납부나 수동 처리 이력이 있어 예정일 변경·건너뛰기를 할 수 없어요. 현재 납부를 확인해 주세요.",

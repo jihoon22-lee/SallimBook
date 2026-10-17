@@ -54,6 +54,10 @@ export async function mockFinance(page: Page) {
       const account = { ...sampleAccount, ...input, id: uid(60 + state.accountCreates.length), asset_id: asset.id, asset, has_number: false, masked_number: null };
       state.accounts.push(account); return route.fulfill({ status: 201, json: project(account) });
     }
+    if (path.endsWith("/payment-links") && method === "GET") {
+      const id = path.split("/")[4]!; const account = state.accounts.find((row) => row.id === id);
+      return route.fulfill({ json: { resource_kind: "account", resource_id: id, resource_version: account?.version ?? 1, asset_id: account?.asset_id ?? null, as_of_date: url.searchParams.get("as_of_date") ?? "2025-02-20", usage_digest: "0".repeat(64), requires_confirmation: false, coverage: "registered_recurring_only", account_withdrawal_total_available: false, rules: { items: [], total_count: 0, next_cursor: null }, obligations: { items: [], total_count: 0, next_cursor: null }, cards: { items: [], total_count: 0, next_cursor: null } } });
+    }
     if (path.startsWith("/api/v1/accounts/")) {
       const account = state.accounts.find((item) => item.id === path.split("/")[4]); if (!account) return error(route, 404, "NOT_FOUND");
       if (method === "GET") { state.accountGets++; return route.fulfill({ json: project(account) }); }

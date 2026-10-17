@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { components, operations } from "@sallimbook/api-client";
 import { Link } from "react-router";
+import { nativeFinance } from "../../platform/nativeFinance";
 import { ApiError, toApiError } from "../../platform/api";
 import { useAuth } from "../auth/AuthProvider";
 import { useAccountsApi } from "../accounts/api";
@@ -14,7 +15,7 @@ type Kind = Usage["resource_kind"];
 type Query = NonNullable<operations["getCardPaymentLinks"]["parameters"]["query"]>;
 export type ClosureProof = Pick<components["schemas"]["CardArchive"], "closure_ack" | "usage_digest">;
 export async function completeUsage(read: (query: Query) => Promise<Usage>, date: string): Promise<Usage> {
-  const first = await read({ as_of_date: date, limit: 200 }); const result = structuredClone(first); const seen = new Set<string>();
+  const first = await read({ as_of_date: date, limit: 200 }); if (first.as_of_date !== date) throw new ApiError(409, "PAYMENT_LINKS_CHANGED"); const result = structuredClone(first); const seen = new Set<string>();
   for (let page = 0; page < 100; page++) {
     const cursors = { rule_cursor: result.rules.next_cursor, obligation_cursor: result.obligations.next_cursor, card_cursor: result.cards.next_cursor };
     if (!Object.values(cursors).some(Boolean)) {
@@ -23,7 +24,7 @@ export async function completeUsage(read: (query: Query) => Promise<Usage>, date
     }
     const key = JSON.stringify(cursors); if (seen.has(key)) throw new ApiError(0, "REQUEST_FAILED"); seen.add(key);
     const next = await read({ as_of_date: date, limit: 200, ...Object.fromEntries(Object.entries(cursors).filter(([, value]) => value !== null)) });
-    if (next.usage_digest !== first.usage_digest || next.resource_version !== first.resource_version || next.as_of_date !== first.as_of_date) throw new ApiError(409, "PAYMENT_LINKS_CHANGED");
+    if (next.resource_kind !== first.resource_kind || next.resource_id !== first.resource_id || next.usage_digest !== first.usage_digest || next.resource_version !== first.resource_version || next.as_of_date !== first.as_of_date) throw new ApiError(409, "PAYMENT_LINKS_CHANGED");
     for (const [group, cursor] of [["rules", "rule_cursor"], ["obligations", "obligation_cursor"], ["cards", "card_cursor"]] as const) {
       if (cursors[cursor] === null) continue;
       const ids = new Set(result[group].items.map((item) => item.id)); if (next[group].items.some((item) => ids.has(item.id)) || next[group].total_count !== first[group].total_count) throw new ApiError(409, "PAYMENT_LINKS_CHANGED");
@@ -42,7 +43,7 @@ export function useClosureReview(kind: Kind | null, id: string, date: string, ac
     const current = ++generation.current; setData(null); setError(null); setAck(false); setLoadedStamp("");
     if (!active || !kind || !isDateOnly(date)) { setLoading(false); return; }
     setLoading(true);
-    const read = (query: Query) => domainApi.read((client) => kind === "card" ? client.GET("/api/v1/cards/{resource_id}/payment-links", { params: { path: { resource_id: id }, query } }) : client.GET("/api/v1/accounts/{resource_id}/payment-links", { params: { path: { resource_id: id }, query } }));
+    const read = (query: Query) => domainApi.read((client) => kind === "card" ? client.GET("/api/v1/cards/{resource_id}/payment-links", { params: { path: { resource_id: id }, query } }) : client.GET("/api/v1/accounts/{resource_id}/payment-links", { params: { path: { resource_id: id }, query } }), () => kind === "card" ? nativeFinance.getCardPaymentLinks({ resourceId: id, query }) : nativeFinance.getAccountPaymentLinks({ resourceId: id, query }));
     void completeUsage(read, date).then((value) => { if (current === generation.current) { setData(value); setLoadedStamp(stamp); } }).catch((failure) => { if (current === generation.current) setError(toApiError(failure)); }).finally(() => { if (current === generation.current) setLoading(false); });
     return () => { generation.current++; };
   }, [domainApi, kind, id, date, active, retry, stamp]);
