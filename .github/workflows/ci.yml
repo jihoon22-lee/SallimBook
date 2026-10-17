@@ -189,6 +189,8 @@ jobs:
       - run: uv run --project services/api python scripts/test_web_auth.py
       - run: uv run --project services/api python scripts/test_web_auth.py --passkeys
       - run: uv run --project services/api python scripts/test_web_auth.py --finance
+      - run: uv run --project services/api python scripts/test_web_auth.py --insurance
+      - run: uv run --project services/api python scripts/test_web_auth.py --homecare
       - run: uv run --project services/api python scripts/test_web_auth.py --months
       - run: uv run --project services/api python scripts/test_web_auth.py --comparison
       - run: uv run --project services/api python scripts/test_web_auth.py --cashflow

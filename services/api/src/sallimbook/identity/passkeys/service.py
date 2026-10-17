@@ -6,7 +6,7 @@ import json
 import re
 import secrets
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Literal, NoReturn
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
@@ -683,14 +683,14 @@ def verify_step_up(
     return result
 
 
-def consume_step_up(
+def _validated_step_up(
     session: Session,
     principal: Principal,
     token: str | None,
     purpose: StepUpPurpose,
     target_id: UUID,
-) -> StepUpGrant:
-    """Consume in the protected mutation's transaction: Device -> Credential -> Grant.
+) -> tuple[StepUpGrant, datetime]:
+    """Validate without consuming: Device -> Credential -> Grant.
 
     Operations must acquire their complete device barrier BEFORE other resource locks.
     In particular device DELETE locks source+target together in sorted order beforehand.
@@ -746,6 +746,30 @@ def consume_step_up(
     ):
         raise DomainError("STEP_UP_REQUIRED", "이 작업을 다시 인증해 주세요.", 403)
     _active_account(session, principal.user_id, principal.household_id)
+    return grant, now
+
+
+def check_step_up(
+    session: Session,
+    principal: Principal,
+    token: str | None,
+    purpose: StepUpPurpose,
+    target_id: UUID,
+) -> StepUpGrant:
+    """Check the complete locked binding without consuming or committing the grant."""
+    grant, _ = _validated_step_up(session, principal, token, purpose, target_id)
+    return grant
+
+
+def consume_step_up(
+    session: Session,
+    principal: Principal,
+    token: str | None,
+    purpose: StepUpPurpose,
+    target_id: UUID,
+) -> StepUpGrant:
+    """Consume the validated grant in the caller's transaction; never commits."""
+    grant, now = _validated_step_up(session, principal, token, purpose, target_id)
     grant.consumed_at = now
     session.flush()
     return grant

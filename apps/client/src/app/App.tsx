@@ -17,19 +17,42 @@ import { IncomeListPage, IncomeNewPage, IncomeDetailPage } from "../features/inc
 import { IncomeConversionPage } from "../features/income/IncomeConversion";
 import { FixedListPage, FixedDetailPage, RuleListPage, RuleNewPage, RuleDetailPage } from "../features/fixed/FixedPages";
 import { LivingPage } from "../features/living/LivingPage";
+import { ApplianceListPage, ApplianceNewPage, ApplianceDetailPage } from "../features/homecare/AppliancePages";
+import { ConsumableListPage, ConsumableNewPage, ConsumableDetailPage } from "../features/homecare/ConsumablePages";
+import { DeviceDetailPage } from "../features/homecare/DeviceLinks";
+import { StockNewPage, StockDetailPage } from "../features/homecare/StockPages";
+import { ReplacementDetailPage } from "../features/homecare/ReplacementPages";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { householdScreens } from "../features/household/screens";
-import { insuranceScreens } from "../features/insurance/screens";
+import { InsuranceHome } from "../features/insurance/InsuranceHome";
+import { PolicyListPage, PolicyNewPage, PolicyDetailPage } from "../features/insurance/policies/PolicyPages";
+import { CaseListPage, CaseNewPage, CaseDetailPage } from "../features/insurance/cases/CasePages";
+import { ClaimNewPage, ClaimDetailPage } from "../features/insurance/claims/ClaimPages";
+import { EventDetailPage, ExpenseNewPage, PayoutNewPage, PayoutListPage, ReturnNewPage } from "../features/insurance/events/EventPages";
 import { VaultPage } from "../features/vault/VaultPage";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
 import { MonthProvider } from "../shared/MonthContext";
-import { PlannedPage } from "../shared/PlannedPage";
+import { PlannedPage, RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens, ...insuranceScreens];
+const plannedScreens = [...assetScreens.filter((screen) => screen.path !== "/assets" && screen.path !== "/assets/:id" && screen.path !== "/assets/months/:month" && screen.path !== "/assets/compare"), ...householdScreens.filter((screen) => screen.path !== "/more" && !screen.path.startsWith("/appliances") && !screen.path.startsWith("/consumables"))];
 const screens = [
   { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <Dashboard /> },
-  { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: false, element: <VaultPage /> },
+  { path: "/more", title: "더보기", group: "more" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><div className="intro"><h1>더보기</h1><p>우리 집 물건과 공동 가계의 설정을 관리해요.</p></div><RelatedLinks links={householdScreens.find((screen) => screen.path === "/more")!.links ?? []} /></> },
+  { path: "/appliances", title: "가전 관리", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <ApplianceListPage /> },
+  { path: "/appliances/new", title: "가전 등록", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceNewPage /> },
+  { path: "/appliances/:id", title: "가전 상세", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceDetailPage /> },
+  { path: "/appliances/:id/edit", title: "가전 정보 수정", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceDetailPage edit /> },
+  { path: "/consumables", title: "소모품 관리", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <ConsumableListPage /> },
+  { path: "/consumables/new", title: "소모품 등록", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ConsumableNewPage /> },
+  { path: "/consumables/:id", title: "소모품 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ConsumableDetailPage /> },
+  { path: "/consumables/:id/edit", title: "소모품 정보 수정", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ConsumableDetailPage edit /> },
+  { path: "/consumables/:id/stock/new", title: "입고·재고 조정", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "공용 재고" }, live: true, element: <StockNewPage /> },
+  { path: "/consumables/:id/stock/:movementId", title: "재고 원본 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "공용 재고" }, live: true, element: <StockDetailPage /> },
+  { path: "/appliance-consumables/:id", title: "기기별 소모품 관리", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <DeviceDetailPage /> },
+  { path: "/appliance-consumables/:id/replace", title: "소모품 교체 기록", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <DeviceDetailPage replacing /> },
+  { path: "/appliance-consumables/:id/replacements/:replacementId", title: "교체 기록 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ReplacementDetailPage /> },
+  { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <VaultPage /> },
   ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
   { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <SessionSettings /> },
   ...assetScreens.filter((screen) => screen.path === "/assets" || screen.path === "/assets/:id").map((screen) => ({ ...screen, live: true, element: screen.path === "/assets" ? <AssetListPage /> : <AssetDetailPage /> })),
@@ -56,6 +79,32 @@ const screens = [
   { path: "/fixed-payments/rules/:id", title: "납부 규칙 상세", group: "living" as NavigationGroup, parent: { to: "/fixed-payments/rules", label: "납부 규칙" }, live: true, element: <RuleDetailPage /> },
   { path: "/fixed-payments/rules/:id/edit", title: "납부 규칙 변경", group: "living" as NavigationGroup, parent: { to: "/fixed-payments/rules", label: "납부 규칙" }, live: true, element: <RuleDetailPage edit /> },
   { path: "/fixed-payments/:id", title: "고정 납부 상세", group: "living" as NavigationGroup, parent: { to: "/fixed-payments", label: "고정 납부 목록" }, live: true, element: <FixedDetailPage /> },
+  { path: "/insurance", title: "보험", group: "insurance" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <InsuranceHome /> },
+  { path: "/insurance/policies", title: "보험 계약", group: "insurance" as NavigationGroup, parent: { to: "/insurance", label: "보험" }, live: true, element: <PolicyListPage /> },
+  { path: "/insurance/policies/new", title: "보험 계약 등록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/policies", label: "보험 계약" }, live: true, element: <PolicyNewPage /> },
+  { path: "/insurance/policies/:id", title: "보험 계약 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/policies", label: "보험 계약" }, live: true, element: <PolicyDetailPage /> },
+  { path: "/insurance/policies/:id/edit", title: "보험 계약 수정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/policies", label: "보험 계약" }, live: true, element: <PolicyDetailPage edit /> },
+  { path: "/insurance/cases", title: "보험 사건", group: "insurance" as NavigationGroup, parent: { to: "/insurance", label: "보험" }, live: true, element: <CaseListPage /> },
+  { path: "/insurance/cases/new", title: "보험 사건 등록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseNewPage /> },
+  { path: "/insurance/cases/:id", title: "보험 사건 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseDetailPage /> },
+  { path: "/insurance/cases/:id/edit", title: "보험 사건 변경", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseDetailPage edit /> },
+  { path: "/insurance/cases/:id/nodes/:nodeId", title: "진료·약국 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <CaseDetailPage /> },
+  { path: "/insurance/expenses/new", title: "의료비 기록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ExpenseNewPage /> },
+  { path: "/insurance/expenses/:id", title: "의료비 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="expense" /> },
+  { path: "/insurance/expenses/:id/correct", title: "의료비 정정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="expense" edit /> },
+  { path: "/insurance/expenses/:id/refunds/new", title: "의료비 환불 기록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ReturnNewPage kind="refund" /> },
+  { path: "/insurance/refunds/:id", title: "의료비 환불 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="refund" /> },
+  { path: "/insurance/refunds/:id/correct", title: "의료비 환불 정정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="refund" edit /> },
+  { path: "/insurance/payouts", title: "보험금 수령 원본", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <PayoutListPage /> },
+  { path: "/insurance/payouts/new", title: "보험금 수령 입력", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <PayoutNewPage /> },
+  { path: "/insurance/payouts/:id", title: "보험금 수령 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="payout" /> },
+  { path: "/insurance/payouts/:id/correct", title: "보험금 수령 정정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="payout" edit /> },
+  { path: "/insurance/payouts/:id/returns/new", title: "보험금 반환 기록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ReturnNewPage kind="return" /> },
+  { path: "/insurance/returns/:id", title: "보험금 반환 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="return" /> },
+  { path: "/insurance/returns/:id/correct", title: "보험금 반환 정정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <EventDetailPage kind="return" edit /> },
+  { path: "/insurance/claims/new", title: "보험 청구 기록", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ClaimNewPage /> },
+  { path: "/insurance/claims/:id", title: "보험 청구 상세", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ClaimDetailPage /> },
+  { path: "/insurance/claims/:id/edit", title: "보험 청구 정정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ClaimDetailPage edit /> },
   ...plannedScreens.map((screen) => ({ ...screen, live: false, element: <PlannedPage screen={screen} /> })),
 ];
 

@@ -368,7 +368,11 @@ target.kind는 policy/case/medical_node/expense/claim/appliance/asset 중 하나
 응답에는 저장소 경로·암호화 키·nonce가 없으며 다운로드는 no-store/nosniff/CSP sandbox와
 attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만들지 않는다.
 pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
-정리 명령과 검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
+업로드 저장 전에 가계·전체 byte/count 한도를 영속 예약하며 한도 초과는
+413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유 부족은 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
+예약에는 암호문 tag·실패 업로드·삭제 후 유예 파일도 포함하며 물리 정리 확인 뒤 용량을 반환한다.
+정리 명령·기본 한도·설정·검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
+7개 부모 상세의 공유 패널·원본 전송·응답 유실 재시도·Android 보호 화면 연결은 [첨부 UI 검증](testing/documents-client.md)을 따른다.
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
@@ -389,7 +393,7 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 
 `/{policy_id}/premium-links` 목록/생성과 `/{link_id}` PATCH(active)로 기존 고정비 규칙에 연결한다. 한 계약은 여러 규칙을 가질 수 있고 한 규칙은 한 계약에 귀속한다. 연결 해제는 이력을 남기며 규칙·납부를 삭제하거나 금액을 복제하지 않는다. 연결 응답의 보험료·주기·결제수단은 현재와 과거의 동일한 recurring rule version에서 읽으며 금액 수정도 기존 고정비 규칙 변경 API를 사용한다. 납부 누계로 자산을 자동 생성하지 않는다. 확인된 평가액용 금융 자산을 선택해 연결할 수 있다.
 
-증권번호는 create/PATCH의 `policy_number`로 저장하되 일반 응답은 `masked_number`/`has_number`만 반환한다. `/policies/{policy_id}/reveal` POST는 현재 세션의 최근 로그인 검증·가계 권한·감사와 no-store를 거쳐 30초 표시용 값을 반환한다. 서버 필드 키 파일이 없어도 번호 없는 메타데이터와 번호 삭제는 사용할 수 있다. Android 원문 입력/표시는 후속 네이티브 보호 화면에서 연결하며 JS 메타데이터 bridge에 번호를 포함하지 않는다.
+증권번호는 create/PATCH의 `policy_number`로 저장하되 일반 응답은 `masked_number`/`has_number`만 반환한다. `/policies/{policy_id}/reveal` POST는 현재 세션의 최근 로그인 검증·가계 권한·감사와 no-store를 거쳐 30초 표시용 값을 반환한다. 서버 필드 키 파일이 없어도 번호 없는 메타데이터와 번호 삭제는 사용할 수 있다. Android 원문 입력/표시는 네이티브 보호 화면으로 연결했으며 JS 메타데이터 bridge에 번호를 포함하지 않는다. 웹은 별도의 일시 입력·30초 표시 화면을 사용한다.
 
 사건 `/insurance/cases`와 `/{case_id}`는 계약에 종속되지 않는다. 환자·실제 날짜·치료 상태(ongoing/ended)와 정산 상태(open/settled)를 독립 관리한다. PATCH에는 If-Match와 사유가 필요하며 변경 전후 내용은 삭제 불가능한 typed 이력으로 보존한다. `/{case_id}/history`는 version cursor를 제공한다. 목록에는 진단명/코드를 포함하지 않는다. 치료 종료에는 종료일이 필요하며 재개방 시 종료일을 비운다.
 
@@ -426,6 +430,8 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 
 금전 생성·정정·무효·환불·반환·배분 연결 변경은 Idempotency-Key를 요구한다. 기존 대상에 적용하는 명령은 If-Match도 요구하며 환불/반환 생성에는 부모 의료비/지급의 버전을 사용한다. 결과는 변경 당시 `{id, version}` 참조이고 재전송해도 변하지 않는다. 최신 상태와 가능한 후속 동작은 GET으로 다시 조회한다. 청구 메타데이터 수정은 If-Match와 사유를 요구한다. 소득 화면은 실제 보험금 원본을 읽기 전용으로 투영하며 계좌 잔액이나 자산 스냅샷을 자동 변경하지 않는다.
 
+보험 계약·사건·금전 화면의 생성 client/Android adapter 연결과 실제 HTTPS 검증은 [보험 UI 검증 기록](testing/insurance-client.md)을 따른다.
+
 ### SB-024~SB-027 가전·공용 재고·교체
 
 `/api/v1/appliances`와 `/consumables`는 POST/목록 GET, `/{id}`는 GET/PATCH를 제공한다.
@@ -453,3 +459,25 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 `replacement_due`는 날짜 미확인일 때 null, `purchase_needed`는 공용 재고가 기기별 교체 수량보다 적을 때 true이며
 `low_stock`은 별도의 재고 부족 임계와 비교한다. 자산의 선택 월은 입력으로 받지 않는다. 모든 목록은 UUID cursor와 최대 200개 limit로 나눈다.
 첨부파일의 연결·다운로드는 SB-023의 별도 typed 문서 계약을 사용한다.
+
+가전·재고·교체 24개 계약의 웹/Android 화면 연결과 홈의 월/오늘 분리는 [가전·재고 UI 검증](testing/homecare-client.md)을 따른다.
+
+## SB-037 사용자 내보내기·감사 조회 구현 계약 (R20)
+
+`POST /api/v1/exports`는 현재 공동 가계의 JSON/CSV와 선택 문서 원본을 하나의 ZIP 응답으로 반환한다. 요청 예시는 `{"formats":["json","csv"],"document_ids":[]}`이며 각 목록은 중복을 허용하지 않는다. `formats` 생략 시 두 형식을 모두 생성한다. 임의 가계 ID, SQL, 저장 경로, 출력 파일명은 받지 않는다. 전체 운영 백업과 서버 복원은 별도 작업이다.
+
+현재 세션의 5분 이내 로그인/재인증 또는 `X-Step-Up-Token`의 `data.export` 증명이 필요하다. 증명 target은 현재 `household_id`이고 사용자·세션·기기·자격증명까지 바인딩한다. 웹 쿠키 요청에는 기존 Origin/CSRF 검증이 적용된다. 먼저 증명을 소비 없이 검사하고, ZIP 준비 이후 새 트랜잭션에서 현재 권한과 선택 문서를 다시 확인한다. 성공 발급과 감사 기록에 한해 같은 트랜잭션에서 증명을 한 번 소비한다. 준비 실패 시 증명은 소비하지 않는다. 각 POST는 새 export ID와 새 스냅샷을 생성하며, 재사용 가능한 다운로드 URL이나 서버 작업 레코드를 만들지 않는다.
+
+데이터 조회는 첫 조회 전에 PostgreSQL `REPEATABLE READ READ ONLY`를 설정한다. 자산·월별 모든 revision/값, 계좌·카드 일반정보, 수입과 현금 원본/정정 이력, 고정비 규칙/회차/분할 납부, 보험 계약/진료 트리/비용/청구/지급/배분/반환, 가전·소모품·재고/교체, 문서 메타데이터/연결 이력을 포함한다. 화면의 200행 페이지 제한으로 잘라내지 않는다. 기록된 null/0/미확인 상태와 연결 ID를 그대로 유지하고 합계를 다시 만들거나 잔액을 자동 가감하지 않는다. 현금 원본은 한 행씩, 청구·배분 등은 참조 행으로 내보낸다. 구성원 이름은 member ID와 연결하며 계정 로그인 ID는 제외한다.
+
+명시적 필드 목록은 `services/api/src/sallimbook/exports/catalog.py`이며 새 테이블/컬럼은 공개 또는 비공개 분류 검사를 통과해야 한다. 보관함 전체, 카드 비밀 envelope/wrapping, 인증·세션·초대·grant·멱등 레코드, 전체 계좌/증권번호 및 암호문·nonce·키 버전, 비공개 파일 경로/암호화 키/예약 저장량은 내보내지 않는다. 선택 문서는 동일 가계의 ready 상태와 유효 연결을 요구하며 최종 발급 직전에 버전·checksum·크기·연결을 다시 확인한다. 파일명은 UUID와 검증된 MIME 확장자로 생성한다. 문서 원본과 업무 메모는 사용자가 입력한 내용을 유지하므로 그 안에 포함된 민감한 텍스트를 자동 삭제한다고 보장하지 않는다.
+
+ZIP의 `manifest.json`은 형식 버전 `sallimbook-user-export-v1`, export ID, 가계 ID, 스냅샷 시각, 발급 시한, KRW/Asia-Seoul 기준, 제외 범주, 각 파일의 크기/SHA-256/행 수를 담는다. 테이블 경로는 `json/{table}.json`, `csv/{table}.csv`, 문서 경로는 `documents/{uuid}.{pdf|png|jpg}`다. ZIP은 메모리에서 완성한 뒤 발급하며 평문 임시 파일을 디스크에 쓰지 않는다. 응답은 `application/zip`, `Content-Disposition: attachment`, `Cache-Control: no-store`, `Pragma: no-cache`, `X-Content-Type-Options: nosniff`, `X-Export-ID`, `X-Export-SHA256`, `Content-Length`를 제공한다.
+
+JSON 금액은 정밀한 십진 문자열, 월은 `YYYY-MM`, 날짜는 ISO 날짜, timestamp는 UTC다. CSV는 UTF-8·CRLF·전체 셀 인용 형식이며 **모든 문자열 앞에 눈에 보이는 `text:`를 붙인다**. 금액도 문자열이므로 이 규칙을 따른다. null은 접두사가 없는 `\N`, 빈 문자열은 `text:`, 실제 문자열 `\N`은 `text:\N`이다. 숫자형 개수와 bool만 접두사 없이 출력한다. 복원 시 문자열 접두사를 정확히 한 번 제거한다. 수식 기호·탭·줄바꿈·전각 기호를 포함한 문자열도 원래 값의 첫 문자로 시작하지 않도록 한다. 다른 CSV 처리기의 임의 재가공까지 보장하지 않으며 원본 문자열 교환에는 JSON을 사용한다.
+
+기본 한도는 전체 100,000행, JSON+CSV+manifest 합산 16MiB, 선택 문서 10개/합산 40MiB, ZIP 64MiB다. 초과 시 413으로 전체 실패하며 일부 자료를 성공 응답으로 내보내지 않는다. 준비/발급 시한은 30초이며 세션·재인증·grant가 먼저 만료되면 먼저 거부한다. 전송은 최대 120초다. API 프로세스당 준비와 전송을 합쳐 한 요청만 허용하고 중복 작업은 503을 반환한다. 취소돼도 실제 동기 작업이 끝나기 전에는 슬롯을 풀지 않는다. 발급 시한은 서버에서 새 파일을 발급할 수 있는 시한이며 이미 저장된 로컬 파일을 만료·회수하지 않는다.
+
+`GET /api/v1/audit-events`는 현재 가계의 감사 메타데이터만 반환한다. `limit` 1..200, `cursor`, `entity_type`, `entity_id`, `actor_member_id`, `action`, timezone을 포함한 `since`/`until` 필터를 지원한다. 기간은 `[since, until)`이다. 시각 내림차순·UUID 내림차순 keyset cursor에 가계/필터 바인딩을 검사한다. 삭제된 엔티티의 감사 이력도 조회할 수 있다. 응답은 ID, actor member ID, 엔티티/동작, 요청 ID, 전후 버전, UTC 시각, 알려진 변경 필드 이름만 제공한다. 원본 `safe_diff`나 전후 값은 반환하지 않으며 잘못된 메타데이터는 503으로 실패한다. 여러 HTTP 페이지 전체를 하나의 DB 스냅샷으로 보장하지 않는다.
+
+`user_export/export` 감사는 완성된 파일의 **서버 발급**을 뜻하며 클라이언트 저장 완료를 뜻하지 않는다. 선택 문서 열람 감사도 같은 요청 ID로 기록한다. 일반 audit API에는 최근 재인증을 추가로 요구하지 않지만 현재 세션·기기·활성 가계 구성원 권한은 검사한다. 이 API PR은 Android/웹 내보내기 화면, 운영 백업 스케줄과 실제 새 서버 복원 완료를 의미하지 않는다.
