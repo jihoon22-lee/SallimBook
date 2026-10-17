@@ -31,6 +31,8 @@ def verify_role(conn):
         "has_database_privilege(current_database(),'TEMP'), "
         "has_table_privilege('public.alembic_version',"
         "'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'), "
+        "has_table_privilege('public.audit_events','UPDATE,DELETE'), "
+        "has_any_column_privilege('public.audit_events','UPDATE'), "
         "EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
         "WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','f') "
         "AND has_table_privilege(c.oid,'TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')), "
@@ -60,6 +62,7 @@ def verify_role(conn):
         "CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) AS privilege "
         "WHERE c.relnamespace='public'::regnamespace "
         "AND c.relkind IN ('r','p','v','m','f') AND c.relname<>'alembic_version' "
+        "AND (c.relname<>'audit_events' OR privilege IN ('SELECT','INSERT')) "
         "AND NOT has_table_privilege(c.oid,privilege)), "
         "NOT EXISTS (SELECT 1 FROM pg_class c "
         "CROSS JOIN unnest(ARRAY['USAGE','SELECT']) AS privilege "
@@ -158,6 +161,7 @@ def provision(admin_service_file, application_password_file):
         conn.execute(
             "REVOKE INSERT,UPDATE,DELETE ON alembic_version FROM sallimbook_app"
         )
+        conn.execute("REVOKE UPDATE,DELETE ON audit_events FROM sallimbook_app")
         conn.execute(
             "GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO sallimbook_app"
         )

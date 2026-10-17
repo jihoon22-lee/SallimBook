@@ -107,6 +107,46 @@ def archive_bytes(members):
 
 
 class BackupTests(unittest.TestCase):
+    def test_backup_rejects_overlapping_paths_before_any_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            documents = root / "documents"
+            documents.mkdir(mode=0o700)
+            nested = documents / "backups"
+            nested.mkdir(mode=0o700)
+            sibling = root / "backups"
+            sibling.mkdir(mode=0o700)
+            manifest = root / "deployment.json"
+            manifest.write_text(json.dumps(config()))
+            before = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
+            with (
+                patch.object(backup, "verify_tools"),
+                patch.object(backup, "service_environment") as service,
+                patch.object(backup.tempfile, "TemporaryDirectory") as workspace,
+            ):
+                for destination in (documents, nested, root, sibling / ".."):
+                    with self.subTest(destination=destination), self.assertRaisesRegex(
+                        backup.OperationError, "separate from document storage"
+                    ):
+                        backup.backup(
+                            root / "unused-service", documents, destination,
+                            "age1" + "a" * 58, "a" * 40, manifest,
+                        )
+                service.assert_not_called()
+                workspace.assert_not_called()
+                self.assertEqual(
+                    sorted(str(path.relative_to(root)) for path in root.rglob("*")), before
+                )
+                # Valid siblings pass the separation boundary. The existing real
+                # PostgreSQL/age integration exercises their complete backup path.
+                service.side_effect = RuntimeError("valid sibling boundary reached")
+                with self.assertRaisesRegex(RuntimeError, "valid sibling boundary reached"):
+                    backup.backup(
+                        root / "unused-service", documents, sibling,
+                        "age1" + "a" * 58, "a" * 40, manifest,
+                    )
+                workspace.assert_not_called()
+
     def test_maximum_object_manifest_roundtrips_above_one_megabyte(self):
         import hashlib
 

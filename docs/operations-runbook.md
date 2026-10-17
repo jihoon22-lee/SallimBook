@@ -80,7 +80,7 @@ Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy �
 
 API/scanner의 root filesystem은 읽기 전용이고 처리 임시 파일은 tmpfs다. 메모리 한도와 같은 swap 한도를 설정한다. scanner는 네트워크가 없고 Unix socket만 공유한다. 이 설정 외에 호스트 swap/WSL 메모리 설정을 자동 수정하지 않는다. 실제 cgroup/tmpfs/스캐너 신선도·서비스 재시작 인수는 배포 전에 확인한다.
 
-DB 최초 owner/migration 역할은 `sallimbook_admin`이며 API에는 전달하지 않는다. API의 `sallimbook_app`은 LOGIN만 허용하고 superuser/DB 생성/역할 생성/replication/RLS 우회/역할 상속을 주지 않는다. schema CREATE, TRUNCATE, 테이블 소유권, trigger 비활성화, Alembic version 수정 권한도 없다. 업무 테이블의 필요한 SELECT/INSERT/UPDATE/DELETE와 sequence/function 사용만 허용한다. `public` schema/database의 PUBLIC 기본 권한을 회수하고 migration admin이 만드는 후속 객체의 default privileges도 설정한다.
+DB 최초 owner/migration 역할은 `sallimbook_admin`이며 API에는 전달하지 않는다. API의 `sallimbook_app`은 LOGIN만 허용하고 superuser/DB 생성/역할 생성/replication/RLS 우회/역할 상속을 주지 않는다. schema CREATE, TRUNCATE, 테이블 소유권, trigger 비활성화, Alembic version 수정 권한도 없다. 업무 테이블의 필요한 SELECT/INSERT/UPDATE/DELETE와 sequence/function 사용만 허용한다. 감사 이력 `audit_events`는 SELECT/INSERT만 허용하고 UPDATE/DELETE는 금지한다. `public` schema/database의 PUBLIC 기본 권한을 회수하고 migration admin이 만드는 후속 객체의 default privileges도 설정한다.
 
 다음은 운영 실행이 별도로 승인된 뒤의 순서다. 전용 DB만 먼저 시작하고 admin credential로 migration을 적용한다. 외부 비공개 admin service 파일과 app 비밀번호 파일을 **일회용 운영 도구 container에만** 읽기 전용으로 주입하여 실행한다. 일반 API container에는 admin service/비밀번호를 mount하지 않는다.
 
@@ -93,11 +93,11 @@ python -m ops.database provision \
 uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/RENDERED_DIRECTORY --verify-database
 ```
 
-`admin-service.conf`는 아래 백업 service 형식에서 user를 `sallimbook_admin`으로 설정한다. `provision`은 전용 cluster_name/DB 소유자/단일 애플리케이션 DB를 검사하고 기존 app 역할이 있으면 덮어쓰지 않는다. 기존 역할은 `verify-runtime`으로 검사한다. 이 검사는 모든 public 업무 테이블의 SELECT/INSERT/UPDATE/DELETE, 모든 시퀀스의 USAGE/SELECT, public USAGE, DB CONNECT를 확인하고 Alembic 테이블은 SELECT만 허용한다. 비밀번호는 libpq의 표준 SCRAM 변환 후 SQL에 전달하여 평문을 SQL·활동 조회·서버 명령 로그에 넣지 않는다. migration은 계속 admin 역할로만 수행한다. `preflight --verify-database`는 프로젝트 label이 맞는 내부 DB 네트워크에서 일회용 읽기 전용 client로 실제 역할을 확인하며, 기존 서비스를 시작/재설정하지 않는다.
+`admin-service.conf`는 아래 백업 service 형식에서 user를 `sallimbook_admin`으로 설정한다. `provision`은 전용 cluster_name/DB 소유자/단일 애플리케이션 DB를 검사하고 기존 app 역할이 있으면 덮어쓰지 않는다. 기존 역할은 `verify-runtime`으로 검사한다. 이 검사는 모든 public 업무 테이블의 필수 권한, 모든 시퀀스의 USAGE/SELECT, public USAGE, DB CONNECT를 확인한다. 일반 테이블은 SELECT/INSERT/UPDATE/DELETE, 감사 이력은 SELECT/INSERT, Alembic 테이블은 SELECT만 허용하며 감사 이력의 열 단위 UPDATE 권한도 거부한다. 비밀번호는 libpq의 표준 SCRAM 변환 후 SQL에 전달하여 평문을 SQL·활동 조회·서버 명령 로그에 넣지 않는다. migration은 계속 admin 역할로만 수행한다. `preflight --verify-database`는 프로젝트 label이 맞는 내부 DB 네트워크에서 일회용 읽기 전용 client로 실제 역할을 확인하며, 기존 서비스를 시작/재설정하지 않는다.
 
 ## 4. 일관된 암호화 백업
 
-백업 도구는 API와 같은 사용자로 실행하고 DB/암호화 첨부에만 접근한다. 백업 수신자의 **공개** age recipient만 주입한다. 개인 age identity, 서버 field keyring, APK 서명키, vault 복구코드는 이 백업 묶음에 넣지 않는다.
+백업 도구는 API와 같은 사용자로 실행하고 DB/암호화 첨부에만 접근한다. 백업 목적지와 문서 저장 디렉터리는 서로 독립된 경로여야 한다. 같은 경로, 문서 내부의 목적지, 문서를 포함하는 상위 목적지를 모두 쓰기 전에 거부한다. 백업 수신자의 **공개** age recipient만 주입한다. 개인 age identity, 서버 field keyring, APK 서명키, vault 복구코드는 이 백업 묶음에 넣지 않는다.
 
 libpq service 파일은 전용 0600 파일이고 한 섹션만 허용한다. 비밀번호는 이 파일에만 입력하며 명령행에 넣지 않는다.
 
