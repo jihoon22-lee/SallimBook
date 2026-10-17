@@ -9,6 +9,7 @@ export function authErrorMessage(error: ApiError, login = false): string {
     case "NETWORK_UNAVAILABLE": return "서버 연결을 확인하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
     case "UNAUTHENTICATED": return "로그인이 만료되었거나 필요해요. 다시 로그인해 주세요.";
     case "REAUTHENTICATION_REQUIRED": return "다시 로그인한 후 진행해 주세요. 기기 해제와 초대에는 최근 로그인이 필요해요.";
+    case "REAUTHENTICATION_FAILED": return "현재 계정의 비밀번호를 다시 확인해 주세요. 기존 로그인은 유지돼요.";
     case "CSRF_FAILED": return "인증 상태가 다시 변경되어 요청을 완료하지 않았어요. 세션을 다시 확인한 뒤 시도해 주세요.";
     case "VERSION_CONFLICT": return "기기 정보가 다른 곳에서 변경됐어요. 목록을 다시 불러온 뒤 확인해 주세요.";
     case "HOUSEHOLD_FULL": return "이 가계에는 이미 두 계정이 등록되어 있어요.";

@@ -36,6 +36,7 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    ReauthenticationRequest,
 )
 
 WEB_IDLE = timedelta(minutes=30)
@@ -451,6 +452,66 @@ def login(
         user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
     result = issue_session(session, user, member, request.device_label, transport)
+    session.commit()
+    return result
+
+
+def reauthenticate(
+    session: Session, principal: Principal, request: ReauthenticationRequest, source: str
+) -> MemberResponse:
+    """Verify the current account again without creating a device or extending session expiry."""
+    _admit_attempt(
+        session,
+        [(f"reauth-account:{principal.user_id}", 5), (f"reauth-source:{source}", 30)],
+        utcnow(),
+    )
+    # Admission intentionally commits failures. Reacquire session -> device in this
+    # order and recheck live state before elevating the existing session's recency.
+    auth = session.scalar(
+        select(AuthSession)
+        .where(
+            AuthSession.id == principal.session_id,
+            AuthSession.household_id == principal.household_id,
+            AuthSession.user_id == principal.user_id,
+            AuthSession.device_id == principal.device_id,
+            AuthSession.kind == principal.transport,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    now = utcnow()
+    if (
+        auth is None
+        or auth.revoked_at is not None
+        or auth.expires_at <= now
+        or (auth.kind == "web" and auth.last_seen_at <= now - WEB_IDLE)
+        or (auth.kind == "native" and auth.access_expires_at <= now)
+    ):
+        raise _unauthenticated()
+    device = session.scalar(
+        select(RegisteredDevice)
+        .where(
+            RegisteredDevice.id == principal.device_id,
+            RegisteredDevice.household_id == principal.household_id,
+            RegisteredDevice.user_id == principal.user_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if device is None or device.status != "active" or device.revoked_at is not None:
+        raise _unauthenticated()
+    user, member, _ = _active_identity(session, auth)
+    if not _verify_password(user.password_hash, request.password.get_secret_value()):
+        raise DomainError("REAUTHENTICATION_FAILED", "비밀번호를 확인해 주세요.", 403)
+    # Password verification can take time; no previously expired access/session is revived.
+    now = utcnow()
+    if auth.expires_at <= now or (auth.kind == "native" and auth.access_expires_at <= now):
+        raise _unauthenticated()
+    auth.authenticated_at = now
+    auth.last_seen_at = now
+    if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
+        user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
+    result = member_response(user, member)
     session.commit()
     return result
 

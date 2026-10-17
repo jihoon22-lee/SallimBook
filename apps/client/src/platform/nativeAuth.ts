@@ -35,6 +35,7 @@ export async function nativeRequest<T>(options: NativeMetadataRequest): Promise<
 export const nativeAuth = {
   getSession: () => invoke(() => plugin.getSession()),
   login: () => invoke(() => plugin.loginUI()),
+  reauthenticate: () => invoke(() => plugin.reauthenticateUI()),
   acceptInvitation: () => invoke(() => plugin.acceptInvitationUI()),
   createInvitation: () => invoke(() => plugin.createInvitationUI()),
   logout: () => invoke(() => plugin.logout()),

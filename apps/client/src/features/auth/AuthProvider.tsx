@@ -155,20 +155,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (input: LoginInput) => {
     requireWebAuth();
+    if (member.current) {
+      const currentMember = await mutation((token) => requestApi(() => apiClient.POST("/api/v1/auth/web/reauthenticate", {
+        body: { password: input.password }, headers: { "X-CSRF-Token": token },
+      })));
+      member.current = currentMember;
+      setState({ status: "authenticated", member: currentMember });
+      return;
+    }
     const requestGeneration = ++generation.current;
     const data = await requestApi(() => apiClient.POST("/api/v1/auth/web/login", { body: input }));
     ensureCurrent(requestGeneration);
     csrf.current = data.csrf_token;
     member.current = data.member;
     setState({ status: "authenticated", member: data.member });
-  }, [ensureCurrent]);
+  }, [ensureCurrent, mutation]);
 
   const loginNative = useCallback(async () => {
     if (!isNativeAuth()) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
     const requestGeneration = ++generation.current;
-    const result = await nativeAuth.login();
+    const result = member.current ? await nativeAuth.reauthenticate() : await nativeAuth.login();
     ensureCurrent(requestGeneration);
-    if (result.status !== "authenticated") return false;
+    if (result.status !== "authenticated") {
+      // A native form may discover an expired session before the user closes it.
+      // Restore the actual native state instead of keeping a stale authenticated view.
+      await reloadSession();
+      return false;
+    }
     // Keep the native action mounted until it can navigate after success. A global
     // loading transition here would unmount its completion handler before navigation.
     try {
@@ -185,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw failure;
     }
     return true;
-  }, [ensureCurrent]);
+  }, [ensureCurrent, reloadSession]);
 
   const logout = useCallback(async () => {
     if (isNativeAuth()) {

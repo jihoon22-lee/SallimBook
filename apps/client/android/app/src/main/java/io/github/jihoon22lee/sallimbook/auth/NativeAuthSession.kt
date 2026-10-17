@@ -125,13 +125,45 @@ internal class NativeAuthSession private constructor(context: Context) {
             val outcome = try {
                 requireAvailable()
                 gate.check()
-                clearLocal()
                 payload = JSONObject().put("login_name", loginName).put("password", String(password))
                     .put("device_label", deviceLabel)
                 password.fill('\u0000')
                 val response = http.send("POST", "/api/v1/auth/native/login", gate, body = payload)
                 if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
                 acceptTokens(response.body, gate)
+                AuthOutcome.success(mapOf("status" to "authenticated"))
+            } catch (failure: AuthFailure) {
+                AuthOutcome.failure(failure.code)
+            } catch (_: Exception) {
+                AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE)
+            } finally {
+                payload?.remove("password")
+                password.fill('\u0000')
+            }
+            callback(outcome)
+        }
+    }
+
+    fun reauthenticate(
+        password: CharArray, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,
+    ) {
+        executor.execute {
+            var payload: JSONObject? = null
+            val outcome = try {
+                requireAvailable()
+                gate.check()
+                val token = access(gate)
+                payload = JSONObject().put("password", String(password))
+                password.fill('\u0000')
+                val response = http.send("POST", "/api/v1/auth/native/reauthenticate", gate,
+                    body = payload, accessToken = token)
+                if (response.status == 401) {
+                    clearLocal()
+                    throw AuthFailure(AuthCode.SESSION_EXPIRED)
+                }
+                if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
+                AuthPolicy.metadataBody("GET", "/api/v1/me", response.status, response.body)
+                gate.check()
                 AuthOutcome.success(mapOf("status" to "authenticated"))
             } catch (failure: AuthFailure) {
                 AuthOutcome.failure(failure.code)

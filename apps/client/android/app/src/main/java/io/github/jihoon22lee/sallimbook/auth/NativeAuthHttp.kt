@@ -63,6 +63,7 @@ internal class NativeAuthHttp(private val origin: String) {
             "/api/v1/auth/native/login", "/api/v1/auth/native/refresh",
             "/api/v1/auth/native/logout", "/api/v1/auth/invitations/accept",
             "/api/v1/household/invitations",
+            "/api/v1/auth/native/reauthenticate",
         ) && method == "POST" && ifMatch == null
         if (!internalAuthPath && (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)

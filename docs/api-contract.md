@@ -27,6 +27,12 @@ DB 미설정·접속 실패·스키마 미준비는 503이며 내부 연결 정�
 `X-SallimBook-Native: 1`을 요구하고 Cookie/Origin을 거부한다. 이 헤더를 기기 신뢰 증거로 사용하지 않는다.
 native access/refresh 응답은 Kotlin 인증 adapter에서만 처리한다. refresh 회전 재사용은 세션을 폐기한다.
 
+로그인 상태에서 `POST /auth/web/reauthenticate` 또는 `POST /auth/native/reauthenticate`에
+`{"password":"..."}`를 보내 현재 계정의 비밀번호를 확인한다. 응답은 `MemberResponse`이며 웹은 CSRF,
+native는 현재 access token과 전용 transport 규칙을 적용한다. 기존 세션·기기·쿠키/토큰·절대 만료를
+유지하고 최근 인증 시각만 갱신한다. 비밀번호 실패는 `403 REAUTHENTICATION_FAILED`, 시도 제한은 429이며
+기존 세션을 파기하지 않는다. 만료·폐기된 세션/기기는 401로 거부한다.
+
 `POST /auth/invitations/accept`는 일회성 초대 코드로 계정을 만들고 로그인은 별도로 수행한다.
 인증된 `GET /me`, `GET /household/members`, `POST /household/invitations`,
 `GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다.
@@ -67,6 +73,7 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 |---|---|---|
 | 인증 | POST /auth/web/login, /auth/web/logout; GET /auth/web/csrf | 웹 보안 쿠키·CSRF |
 | 인증 | POST /auth/native/login, /auth/native/refresh, /auth/native/logout | native 전용 토큰 응답·회전 |
+| 재인증 | POST /auth/web/reauthenticate, /auth/native/reauthenticate | 현재 계정 비밀번호 확인, 같은 기기·세션 유지 |
 | 등록 | POST /auth/invitations/accept | 최초/파트너 초대 일회성 등록, 자동 로그인 없음 |
 | 패스키 | POST /auth/passkeys/options, /auth/passkeys/verify | challenge/RP ID/origin/UV 검증 |
 | 재인증 | POST /auth/step-up/options, /auth/step-up/verify | 짧은 목적 제한 인증 상태 |
