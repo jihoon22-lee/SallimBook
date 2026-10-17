@@ -89,8 +89,15 @@ class RecurringRuleVersion(ScheduleFields, Base):
     __tablename__ = "recurring_rule_versions"
     __table_args__ = (
         UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "rule_id", "id"),
-        UniqueConstraint("household_id", "rule_id", "effective_from"),
+        UniqueConstraint(
+            "household_id", "rule_id", "id", name="uq_rule_versions_household_rule_id"
+        ),
+        UniqueConstraint(
+            "household_id",
+            "rule_id",
+            "effective_from",
+            name="uq_rule_versions_household_rule_start",
+        ),
         household_fk("recurring_rule_versions", "rule_id", "recurring_rules"),
         *schedule_constraints("recurring_rule_versions"),
         CheckConstraint(
@@ -153,7 +160,12 @@ class ScheduledObligation(ObligationFields, EntityMixin, Base):
     __tablename__ = "scheduled_obligations"
     __table_args__ = (
         UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "rule_id", "nominal_date"),
+        UniqueConstraint(
+            "household_id",
+            "rule_id",
+            "nominal_date",
+            name="uq_obligations_household_rule_occurrence",
+        ),
         *obligation_constraints("scheduled_obligations"),
         Index("ix_obligations_household_scheduled", "household_id", "scheduled_date", "id"),
     )
