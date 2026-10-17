@@ -58,16 +58,16 @@
       "git_sha1": "a859a5895a58d90b2c4f945c80f5ff17c571853d"
     },
     "docs/domain-and-calculation-rules.md": {
-      "sha256": "bc27fed3ed021a29700dbc716c9b2ee33a5b3c0d3a29797cee4c1e8bfdbf36f0",
-      "git_sha1": "5295b42faf4cc729d600f80d563839d7a3420612"
+      "sha256": "f37f48c573a6ea930d72a29b48d2877572c1c1c683cc348ea4729bfc7cbac5ed",
+      "git_sha1": "8b1efc9af0109b44edebba0787076a0962c6dfd9"
     },
     "docs/data-model.md": {
-      "sha256": "ef4b790a59ea631057c81f4a175b8e167a283748a6173103f1910987c6bcc0e2",
-      "git_sha1": "0140c9483d11818be204056d9906ed03faa74e59"
+      "sha256": "4da5983e1f3856c7b4203d14db58b792b392e31883b37048101e0f57a34f1de2",
+      "git_sha1": "a54962840468add4c16bb829ddd7f4186bb84bc3"
     },
     "docs/api-contract.md": {
-      "sha256": "1c88047172c0f5599c46a2b59beea46536158e1a112f310091d599f249606a78",
-      "git_sha1": "5310cacbe0052ac91b3d95aeab834f8348c616e0"
+      "sha256": "3612545ceca90d2e69041c87b9afc2fb5510053bdc75c4e20e75b3cced2a0088",
+      "git_sha1": "e4c9e80572e22ce7fbdabb6666d64daf8be2e48c"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -134,8 +134,8 @@
       "git_sha1": "ba20afe8971e29f28548e785695e9709f37a0c54"
     },
     "docs/adr/snapshot-first-not-ledger.md": {
-      "sha256": "769490febd740e1ae372ed19b1733a78997a40286a379d6140b986176850de06",
-      "git_sha1": "8261ee3b5ebc31a4c705afa7688d193619506dda"
+      "sha256": "2f85fb913acde72d46ceba5fa270a3d3a691eae87a12dd57633422749bbc59d6",
+      "git_sha1": "9225ad9bcc93bdfa5020500577fe453f68554264"
     },
     "docs/adr/insurance-case-and-payment.md": {
       "sha256": "9c70f90a401abab198dfc1d7e07b3dc9092b6af4cc6cb24df42193b9fa329030",

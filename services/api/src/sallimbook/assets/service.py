@@ -10,7 +10,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from sallimbook.accounts.models import FinancialAccount
+from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
+from sallimbook.assets.month_models import AssetMonthValue
 from sallimbook.assets.schemas import (
     AssetArchive,
     AssetCategory,
@@ -66,6 +68,7 @@ def _save(session: Session, asset: Asset) -> AssetResponse:
 
 def prepare_asset(session: Session, principal: Principal, payload: AssetCreate) -> Asset:
     """Create within the caller's transaction; account creation can share this commit."""
+    lock_asset_scope(session, principal)
     _validate_owner(session, principal, payload.owner_member_id)
     values = payload.model_dump()
     values["household_share"] = Decimal(payload.household_share)
@@ -157,6 +160,7 @@ def update_asset(
     *,
     action: str = "update",
 ) -> AssetResponse:
+    lock_asset_scope(session, principal)
     asset = scoped_entity(session, Asset, asset_id, principal, for_update=True)
     require_version(asset, if_match)
     previous_version = asset.version
@@ -165,6 +169,21 @@ def update_asset(
         candidate = AssetCreate.model_validate(merged)
     except ValidationError:
         raise DomainError("INVALID_ASSET", "소유자와 시작·종료일을 확인해 주세요.", 422) from None
+    if (
+        candidate.kind != asset.kind
+        and session.scalar(
+            select(AssetMonthValue.id)
+            .where(
+                AssetMonthValue.household_id == principal.household_id,
+                AssetMonthValue.asset_id == asset.id,
+            )
+            .limit(1)
+        )
+        is not None
+    ):
+        raise DomainError(
+            "ASSET_KIND_IN_USE", "월 기록이 있는 자산의 자산·부채 구분은 바꿀 수 없습니다.", 409
+        )
     # Account edits and asset lifecycle changes share Asset -> FinancialAccount order.
     account = session.scalar(
         select(FinancialAccount)
@@ -232,6 +251,7 @@ def archive_asset(
 def delete_asset(
     session: Session, principal: Principal, asset_id: UUID, if_match: str | None
 ) -> None:
+    lock_asset_scope(session, principal)
     asset = scoped_entity(session, Asset, asset_id, principal, for_update=True)
     require_version(asset, if_match)
     record_event(

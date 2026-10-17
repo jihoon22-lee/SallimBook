@@ -6,7 +6,8 @@ SB-002의 `0001_households`는 가계 루트와 KRW/Asia·Seoul/version 제약�
 SB-005/007의 `0002_identity_auth`는 사용자·구성원·초대·기기·세션·refresh 이력·요청 제한·멱등 기록을 추가한다.
 SB-006의 `0003_passkeys`는 `auth_credentials`, `auth_challenges`, `auth_step_up_grants` 세 테이블을 추가한다.
 SB-010의 `0004_assets`는 자산 식별 정보와 `audit_events`를 추가한다.
-SB-011의 `0005_accounts`는 금융 자산과 1:1 연결되는 `financial_accounts`를 추가한다. 월 평가액은 후속 migration이다.
+SB-011의 `0005_accounts`는 금융 자산과 1:1 연결되는 `financial_accounts`를 추가한다.
+SB-012의 `0006_asset_months`는 월·revision·확인 금액과 확정 이력의 DB 변경 차단을 추가한다.
 아래 나머지 업무 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
 공통 ORM은 UUID·UTC timestamp·낙관적 version을 제공하며, `KrwNumeric` 바인딩은
 float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. 새 DB에 사용자 가계를 자동 생성하지 않는다.
@@ -73,7 +74,7 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 | financial_accounts | asset_id, institution_name, account_type, account_number_ciphertext?, number_nonce?, number_key_version?, last_four?, purpose?, opened_on?, created_by_member_id, updated_by_member_id | asset_id unique; 가계·자산 및 작성/수정 구성원 복합 FK; 번호 envelope 전체 null 또는 전체 유효 |
 | asset_months | household_id, period_month, current_revision_id | unique(household_id,period_month) |
 | asset_month_revisions | month_id, revision_no, state, confirmed_at, reopened_reason, previous_revision_id? | unique(month_id,revision_no), 완료본 보존 |
-| asset_values | revision_id, asset_id, input_amount_krw?, owned_amount_krw?, as_of_date?, verification_state, origin(carried/manual), change_reason | unique(revision_id,asset_id); null과 0 구분 |
+| asset_values | revision_id, asset_id, source_asset_version, name, kind, category, ownership_kind, owner_member_id?, household_share, amount_basis, inclusion_status, started_on, ended_on?, input_amount_krw?, owned_amount_krw?, as_of_date?, verification_state, origin(carried/manual), origin_revision_id?, change_reason? | unique(revision_id,asset_id); 금액과 당시 범위의 독립 보존; null과 0 구분 |
 
 계좌 유형 enum: checking, savings, term_deposit, brokerage, pension_savings, irp, dc_pension, isa, cma, other.
 연금저축보험 같은 상품은 보험계약이 평가용 asset_id를 참조할 수 있다. 동일 평가액의 계좌를 따로 더하지 않는다.
@@ -89,6 +90,17 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 계좌번호는 선택 입력이다. 저장 시 AES-256-GCM 암호문·12바이트 nonce·키 버전과 마지막 4자리만 남긴다.
 가계·계좌 UUID·필드명·키 버전을 AAD에 넣어 다른 행으로 옮긴 암호문을 거부한다.
 자산을 새로 만들며 계좌를 등록할 때 두 행과 감사 행을 한 트랜잭션으로 저장한다.
+
+월의 current revision과 이전 revision은 가계·월 복합 FK로 연결한다. 값 행도 가계·revision·자산을 복합 FK로 검증한다.
+확정 revision/값의 UPDATE·DELETE 및 확정본에 대한 값 INSERT는 DB trigger로 거부한다. 값의 소속 identity 이동도 거부한다.
+값을 수정할 때 revision 행을 함께 잠그므로 확정과 동시 편집은 한쪽만 성공한다.
+자산 집합/지분 변경과 월 확인은 가계 행 잠금을 공유한다. 순서는 가계 → 월 → revision → 자산/계좌이며,
+인증 세션 잠금이 앞선다. 금액 확인 행의 수정도 revision version을 증가시켜 열린 확정 화면의 충돌을 검출한다.
+PATCH에는 revision UUID·값 행 UUID·값 version이 모두 필요하다. 범위에서 제거했다 다시 추가한 행과 새 정정본의 version이
+각각 1부터 시작해도 오래된 화면의 저장은 UUID 불일치로 거부한다.
+일반 draft는 바뀐 현재 자산 범위를 명시적으로 동기화한 뒤 다시 확인해야 한다. 정정본은 이전 확정본의 당시 범위를
+복사하며, 현재 지분·이름이 바뀌었다는 이유로 과거 금액을 자동 재계산하지 않는다.
+draft/확정/재개방의 멱등 응답은 원래 revision ID·번호·version을 보존하는 참조다. 재전송 뒤 최신 내용은 별도 GET으로 읽는다.
 
 ## 4. 카드와 보관함
 
@@ -229,7 +241,7 @@ erDiagram
 ## 12. 마이그레이션
 
 초기 순서: identity → assets/accounts → cards metadata → insurance contracts → cashflow → insurance cases/claims/payouts → homecare → vault/documents.
-현재 적용 순서는 `0001_households` → `0002_identity_auth` → `0003_passkeys` → `0004_assets` → `0005_accounts`이며 readiness도 이 revision을 요구한다.
+현재 적용 순서는 `0001_households` → `0002_identity_auth` → `0003_passkeys` → `0004_assets` → `0005_accounts` → `0006_asset_months`이며 readiness도 이 revision을 요구한다.
 단계 간 FK 대상은 먼저 만들고, 순환 참조가 필요하면 별도 migration에서 제약을 추가한다.
 각 단계의 테스트 DB 생성·migration round-trip을 검증한다.
 운영 데이터가 있는 migration은 백업/복구와 하위 호환 API 기간을 먼저 계획한다.
