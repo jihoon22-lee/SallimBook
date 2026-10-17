@@ -230,8 +230,8 @@
       "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
     },
     "docs/testing/native-security-proof.md": {
-      "sha256": "0c089aeac836039f8c70c459e9c93d1112e56788c94eca8359e989041d63095d",
-      "git_sha1": "4afecaf9d8745a62bd06193b4f9f6c75d1bdb047"
+      "sha256": "d75115e8222f75b0d12035b4c0c240c0841bf1027e4725221042ee572b8c8585",
+      "git_sha1": "ecdb1270586433902b11fa97f65b5963a1f0b872"
     },
     "docs/testing/assets-accounts-client.md": {
       "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",

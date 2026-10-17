@@ -187,8 +187,11 @@ adb -s "$SALLIMBOOK_TEST_SERIAL" shell am start -W -n \
 ```
 
 새 `NativeVaultCvcAcceptanceTest` 7개는 기본/종료 gate, 정확한 합성 대상·namespace, 실제 Keystore의
-미인증 Cipher 거절, 별도 합성 namespace 삭제 격리, 경로 이탈 거절을 검사한다. 미인증 Cipher 검사는
-강한 생체 인증이 없거나 이전 합성 키/기록이 있으면 건너뛴다. 후자는 수동 증거를 지우지 않기 위한 제한이며
+미인증 Cipher 거절, 실행마다 고유한 합성 namespace 삭제 격리, 경로 이탈 거절을 검사한다.
+미인증 Cipher 검사는 파일 저장 전에 실제 `updateAAD`/`doFinal`을 호출하고, 공개 구조화 오류의
+인증 필요 원인만 허용한다. 일반 저장 실패를 인증 거절로 간주하지 않는다. 이 정밀검사는 공개
+`KeyStoreException` 오류 API가 없는 API 30–32, 강한 생체 인증 미지원, 이전 합성 키/기록 존재 시 건너뛴다.
+마지막 조건은 수동 증거를 지우지 않기 위한 제한이며
 명시적 합성 초기화 후 다시 실행한다. 기존 WebView instrumentation 4개도 같은 테스트 APK에 들어간다.
 instrumentation 성공만으로 정상 생체 인증·복호화·원자적 교체의 성공을 주장하지 않는다.
 
@@ -213,6 +216,8 @@ Galaxy S25 Ultra와 S24 Ultra의 모델·Android/One UI·보안 패치·WebView 
 플랫폼 negative 버튼은 dialog 종료 시 별도 listener로 전달되므로 종료 이벤트로 처리한다.
 [AOSP BiometricPrompt 구현](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/android/hardware/biometrics/BiometricPrompt.java)의
 `onDialogDismissed`와 기존 `onAuthenticationError` 경로를 함께 고려했다.
+미인증 거절 원인은 API 33부터 제공하는
+[KeyStoreException 공개 오류](https://developer.android.com/reference/android/security/KeyStoreException)로 검사한다.
 
 ### 이번 변경의 실행 증거
 

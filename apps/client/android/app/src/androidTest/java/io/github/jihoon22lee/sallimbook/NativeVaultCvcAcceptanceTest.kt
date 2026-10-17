@@ -2,7 +2,10 @@ package io.github.jihoon22lee.sallimbook
 
 import android.content.Intent
 import android.hardware.biometrics.BiometricManager
+import android.os.Build
 import android.os.SystemClock
+import android.security.KeyStoreException
+import android.security.keystore.UserNotAuthenticatedException
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -16,6 +19,7 @@ import io.github.jihoon22lee.sallimbook.debugproof.CvcAcceptanceActivity
 import io.github.jihoon22lee.sallimbook.debugproof.CvcAcceptanceFixtures
 import java.io.File
 import java.security.KeyStore
+import java.util.UUID
 import org.junit.Assert.*
 import org.junit.Assume.assumeFalse
 import org.junit.Assume.assumeTrue
@@ -88,6 +92,9 @@ class NativeVaultCvcAcceptanceTest {
         assertFalse(NativeVaultAcceptanceGate.armSyntheticCvcWriteFailure(activity))
     }
     @Test fun ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization() {
+        // The public structured Keystore error API starts at 33. Do not use hidden APIs or
+        // message matching to pretend to establish the cause on API 30–32.
+        assumeTrue("Structured Keystore authentication cause requires API 33+", Build.VERSION.SDK_INT >= 33)
         assumeTrue(context.getSystemService(BiometricManager::class.java)
             .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS)
         val store = NativeVaultStore(context, CvcAcceptanceFixtures.NAMESPACE)
@@ -100,14 +107,26 @@ class NativeVaultCvcAcceptanceTest {
             val operation = store.prepareEncryption(binding)
             val value = CvcAcceptanceFixtures.value(false)
             try {
-                try { store.finish(operation, operation.cipher, value); fail("Unauthenticated Cipher must not write") }
-                catch (_: NativeVaultFailure) { /* Android Keystore rejects doFinal without prompt authorization. */ }
+                // Stop at the real cryptographic operation: a later file/path/write failure
+                // must never masquerade as proof that Android rejected missing authentication.
+                var failure: Exception? = null
+                try {
+                    operation.cipher.updateAAD(binding.aad())
+                    operation.cipher.doFinal(value).fill(0)
+                } catch (denied: Exception) { failure = denied }
+                assertNotNull("Unauthenticated Cipher must fail before any file write", failure)
+                val authRequired = generateSequence<Throwable>(failure!!) { it.cause }.take(8).any {
+                    it is UserNotAuthenticatedException || it is KeyStoreException &&
+                        it.numericErrorCode == KeyStoreException.ERROR_USER_AUTHENTICATION_REQUIRED && it.requiresUserAuthentication()
+                }
+                assertTrue("Only a structured authentication-required cause proves denial", authRequired)
                 assertFalse(store.exists(binding))
             } finally { value.fill(0); operation.discard(); store.clearAll() }
         }
     }
     @Test fun clearingOneSyntheticNamespacePreservesAnother() {
-        val names = listOf("instrumentation-cvc-isolation-a", "instrumentation-cvc-isolation-b")
+        val run = UUID.randomUUID().toString()
+        val names = listOf("cvc-isolation-$run-a", "cvc-isolation-$run-b")
         val stores = names.map { NativeVaultStore(context, it) }
         val files = names.map { File(context.noBackupFilesDir, "sallimbook-$it/synthetic.bin") }
         try {
