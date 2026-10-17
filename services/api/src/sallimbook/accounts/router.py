@@ -15,13 +15,26 @@ from sallimbook.accounts.schemas import (
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
 router = APIRouter(prefix="/api/v1/accounts", tags=["accounts"])
+ETAG_HEADERS = {
+    "ETag": {"description": "Quoted account version for If-Match.", "schema": {"type": "string"}}
+}
+CREATED_HEADERS = {
+    **ETAG_HEADERS,
+    "Location": {"description": "Created account resource path.", "schema": {"type": "string"}},
+}
 
 
 def _key_file(request: Request):
     return request.app.state.settings.field_encryption_key_file
 
 
-@router.post("", response_model=AccountResponse, status_code=201, operation_id="createAccount")
+@router.post(
+    "",
+    response_model=AccountResponse,
+    status_code=201,
+    operation_id="createAccount",
+    responses={201: {"headers": CREATED_HEADERS}},
+)
 def create_account(
     payload: AccountCreate,
     principal: PrincipalDependency,
@@ -58,7 +71,12 @@ def list_accounts(
     )
 
 
-@router.get("/{account_id}", response_model=AccountResponse, operation_id="getAccount")
+@router.get(
+    "/{account_id}",
+    response_model=AccountResponse,
+    operation_id="getAccount",
+    responses={200: {"headers": ETAG_HEADERS}},
+)
 def get_account(
     account_id: UUID, principal: PrincipalDependency, session: SessionDependency, response: Response
 ) -> AccountResponse:
@@ -67,7 +85,12 @@ def get_account(
     return result
 
 
-@router.patch("/{account_id}", response_model=AccountResponse, operation_id="updateAccount")
+@router.patch(
+    "/{account_id}",
+    response_model=AccountResponse,
+    operation_id="updateAccount",
+    responses={200: {"headers": ETAG_HEADERS}},
+)
 def update_account(
     account_id: UUID,
     payload: AccountPatch,
@@ -75,7 +98,7 @@ def update_account(
     session: SessionDependency,
     request: Request,
     response: Response,
-    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    if_match: Annotated[str, Header(alias="If-Match")],
 ) -> AccountResponse:
     result = service.update_account(
         session,

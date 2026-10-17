@@ -38,6 +38,22 @@ CATALOG = json.loads(
 )
 
 
+def test_income_contract_requires_mutation_headers_and_describes_resource_headers():
+    app = FastAPI()
+    app.include_router(router)
+    for path, operations in app.openapi()["paths"].items():
+        for method, operation in operations.items():
+            if method not in {"post", "patch"}:
+                continue
+            headers = {p["name"]: p for p in operation["parameters"] if p["in"] == "header"}
+            assert headers["Idempotency-Key"]["required"] is True
+            if "{record_id}" in path:
+                assert headers["If-Match"]["required"] is True
+            if not path.endswith("/convert"):
+                status = "201" if path.endswith(("income", "returns")) else "200"
+                assert "ETag" in operation["responses"][status]["headers"]
+
+
 def income_payload(actor=None, **overrides):
     return {
         "kind": "salary",

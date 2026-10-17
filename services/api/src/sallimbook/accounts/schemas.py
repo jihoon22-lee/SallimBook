@@ -12,6 +12,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 
 from sallimbook.assets.schemas import AssetCreate, AssetResponse, DateOnly
 
@@ -79,8 +80,8 @@ class AccountCreate(AccountInput):
 
 
 class AccountPatch(AccountInput):
-    institution_name: InstitutionName | None = None
-    account_type: AccountType | None = None
+    institution_name: InstitutionName | SkipJsonSchema[None] = Field(default_factory=lambda: None)
+    account_type: AccountType | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     account_number: AccountNumber | None = Field(default=None, repr=False)
     purpose: Purpose | None = None
     opened_on: DateOnly | None = None
