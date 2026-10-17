@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
 from sallimbook.assets.schemas import (
     AssetArchive,
@@ -164,6 +165,29 @@ def update_asset(
         candidate = AssetCreate.model_validate(merged)
     except ValidationError:
         raise DomainError("INVALID_ASSET", "소유자와 시작·종료일을 확인해 주세요.", 422) from None
+    # Account edits and asset lifecycle changes share Asset -> FinancialAccount order.
+    account = session.scalar(
+        select(FinancialAccount)
+        .where(
+            FinancialAccount.household_id == principal.household_id,
+            FinancialAccount.asset_id == asset.id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if account is not None:
+        if candidate.kind != "asset" or candidate.category != "financial":
+            raise DomainError(
+                "FINANCIAL_ASSET_REQUIRED", "계좌와 연결된 자산은 금융 자산으로 유지해 주세요.", 422
+            )
+        if (
+            candidate.ended_on is not None
+            and account.opened_on is not None
+            and candidate.ended_on < account.opened_on
+        ):
+            raise DomainError(
+                "INVALID_ACCOUNT_DATES", "계좌 개설일 이후의 종료일을 선택해 주세요.", 422
+            )
     if candidate.owner_member_id != asset.owner_member_id:
         _validate_owner(session, principal, candidate.owner_member_id)
     for field, value in candidate.model_dump().items():

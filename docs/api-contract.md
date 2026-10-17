@@ -91,7 +91,19 @@ step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
 응답의 `household_share`는 정확한 십진 문자열이고 생성·수정 응답은 `ETag`, 생성은 `Location`도 반환한다.
 수정·종료·삭제는 `If-Match`가 필요하며 다른 가계의 자산/소유자는 404, 버전 충돌은 409다.
 종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다.
-metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액과 계좌 연결은 후속 API다.
+metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액은 후속 API다.
+
+### 7) 금융계좌 (SB-011)
+
+`POST /api/v1/accounts`, `GET /api/v1/accounts`, `GET/PATCH /api/v1/accounts/{account_id}`,
+`POST /api/v1/accounts/{account_id}/reveal`을 구현했다.
+생성 시 기존 금융 자산 `asset_id` 또는 새 자산 입력 `asset` 중 하나만 받는다. 자산 1건에 계좌는 1건이다.
+생성·상세·목록·수정 응답에는 `masked_number`, `has_number`와 연결 자산을 제공하며 번호 원문·암호문은 없다.
+번호는 생성/PATCH의 선택 입력이고 PATCH에서 명시적 null로 지울 수 있다. 키 설정이 없어도 번호 없는 metadata 조회·저장과 번호 제거는 가능하다.
+전체 보기는 서버 재인증 또는 해당 계좌 UUID에 바인딩한 `account.reveal` 증명을 요구하며, 감사 commit 후 원문과 `display_for_seconds=30`을 반환한다.
+계좌 PATCH에는 계좌 version의 `If-Match`를 사용한다. 자산 소유·종료 변경은 자산 API와 자산 version을 사용한다.
+목록은 유형·소유자·active/closed/all 및 UUID cursor를 지원한다. 개설일과 자산 종료일을 양쪽 수정 경로에서 검증한다.
+금액·잔액은 받지 않으며 계좌의 종료일과 상태는 자산에서 파생한다. Android 번호 입력/전체 보기 화면 연결과 실기기 검증은 후속 client 변경에서 완료한다.
 
 ## 1. 공통 규약
 

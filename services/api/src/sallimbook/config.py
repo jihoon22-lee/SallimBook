@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -23,3 +24,4 @@ class Settings(BaseSettings):
     webauthn_rp_id: str | None = None
     webauthn_web_origins: list[str] = Field(default_factory=list)
     webauthn_native_origins: list[str] = Field(default_factory=list)
+    field_encryption_key_file: Path | None = None
