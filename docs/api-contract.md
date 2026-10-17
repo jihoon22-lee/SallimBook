@@ -96,8 +96,11 @@ step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
 목록은 UUID cursor와 최대 200건, 자산/부채·분류·소유자·소유 방식·합산 여부·활성/종료 상태 필터를 사용한다.
 응답의 `household_share`는 정확한 십진 문자열이고 생성·수정 응답은 `ETag`, 생성은 `Location`도 반환한다.
 수정·종료·삭제는 `If-Match`가 필요하며 다른 가계의 자산/소유자는 404, 버전 충돌은 409다.
+생성 계약에도 `If-Match` 필수 여부와 `ETag`·`Location` 응답 헤더를 명시한다. 누락된 버전 헤더는 `400 VERSION_REQUIRED`로 반환한다.
 종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다.
 metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액은 후속 API다.
+PATCH에서 생략한 필드는 유지한다. null로 지울 수 있는 필드는 `owner_member_id`, `ended_on`, `note`뿐이며
+OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다.
 
 ### 7) 금융계좌 (SB-011)
 
@@ -128,6 +131,7 @@ metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받�
 
 draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `version`만 가진다. 이후 편집해도 같은 멱등키는
 같은 참조를 반환한다. 값 PATCH는 수정 행·현재 revision version·전체 합계를 반환한다.
+필수 버전·멱등 헤더와 성공 응답의 `ETag`·`Location`도 OpenAPI 및 생성 client에 명시한다.
 월 GET의 `version`은 현재 revision version이고 값 행마다 별도 version이 있다. 부모 revision이 바뀌면
 `REVISION_CONFLICT`, 범위 재생성으로 행 UUID가 바뀌면 `VALUE_CONFLICT`, 기존 행 버전 충돌이면 `VERSION_CONFLICT`로 409를 반환한다.
 포함된 항목이 미입력이면 해당 합계는 null이다. 전월 복사값은 숫자를 보여도 `provisional=true`이고 확정할 수 없다.

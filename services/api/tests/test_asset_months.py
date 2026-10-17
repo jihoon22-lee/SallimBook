@@ -31,6 +31,31 @@ from sallimbook.identity.router import router as identity_router
 SYNTHETIC_REVISION = UUID("00000000-0000-4000-8000-000000000001")
 
 
+def test_month_openapi_describes_required_mutation_headers():
+    app = FastAPI()
+    app.include_router(month_router)
+    paths = app.openapi()["paths"]
+    expected = {
+        "/{month}/draft": {"Idempotency-Key"},
+        "/{month}/values/{asset_id}": {"If-Match"},
+        "/{month}/sync-scope": {"If-Match"},
+        "/{month}/confirm": {"If-Match", "Idempotency-Key"},
+        "/{month}/reopen": {"If-Match", "Idempotency-Key"},
+    }
+    for suffix, names in expected.items():
+        operation = paths["/api/v1/asset-months" + suffix][
+            "patch" if "values" in suffix else "post"
+        ]
+        headers = {p["name"]: p for p in operation["parameters"] if p["in"] == "header"}
+        for name in names:
+            assert headers[name]["required"] is True
+            assert headers[name]["schema"]["type"] == "string"
+        status = "201" if suffix.endswith(("draft", "reopen")) else "200"
+        response_headers = operation["responses"][status]["headers"]
+        assert "ETag" in response_headers
+        assert ("Location" in response_headers) == ("values" not in suffix)
+
+
 @pytest.mark.parametrize(
     "payload",
     [
