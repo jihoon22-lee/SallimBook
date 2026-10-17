@@ -711,3 +711,26 @@ def summary(session, principal, month):
     )
     session.commit()
     return response
+
+
+def prepare_void_cash_record(
+    session: Session,
+    principal: Principal,
+    record_id: UUID,
+    *,
+    kind: str,
+    reason: str,
+    if_match: str | None = None,
+) -> CashRecord:
+    """Flush-only subtype cancellation; callers lock their source and reserve idempotency first."""
+    lock_cash_household(session, principal)
+    row = scoped_entity(session, CashRecord, record_id, principal, for_update=True)
+    if row.kind != kind or kind in PROJECTED_INCOME_KINDS:
+        raise DomainError("SOURCE_DOMAIN_REQUIRED", "원본을 등록한 영역에서 취소해 주세요.", 409)
+    if if_match is not None:
+        require_version(row, if_match)
+    if row.state != "active":
+        raise DomainError("CASH_ALREADY_VOID", "이미 무효 처리된 납부입니다.", 409)
+    _no_returns(session, principal, row)
+    _void(session, principal, row, reason)
+    return row

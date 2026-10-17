@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import create_account, make_actor
@@ -28,6 +28,7 @@ from sallimbook.core.audit import AuditEvent
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.core.types import SEOUL
+from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.router import router as identity_router
 from sallimbook.identity.service import utcnow
 
@@ -382,3 +383,47 @@ def test_parallel_card_updates_have_one_winner(app, client, actor):
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(update_alias, label) for label in ("합성 A", "합성 B")]
         assert sorted(f.result() for f in futures) == [200, 409]
+
+
+def test_reactivation_requires_an_active_owner_even_when_unchanged(client, actor, db_engine):
+    spouse = make_actor(db_engine, actor.household_id)
+    card = create_card(client, actor, owner_member_id=str(spouse.member_id), ended_on="2026-01-31")
+    with Session(db_engine) as session:
+        member = session.get(HouseholdMember, spouse.member_id)
+        member.status = "revoked"
+        session.commit()
+    url = "/api/v1/cards/" + card["id"]
+    denied = client.patch(url, headers=version(actor), json={"ended_on": None})
+    assert denied.status_code == 422 and denied.json()["error"]["code"] == "MEMBER_UNAVAILABLE"
+    active = client.patch(
+        url,
+        headers=version(actor),
+        json={"ended_on": None, "owner_member_id": str(actor.member_id)},
+    )
+    assert active.status_code == 200 and active.json()["status"] == "active"
+
+
+def test_card_page_loads_account_statuses_in_one_batch(client, actor, db_engine):
+    accounts = [create_account(client, actor, account_number=None) for _ in range(2)]
+    for index in range(6):
+        create_card(client, actor, settlement_account_id=accounts[index % 2]["id"])
+    client.post(
+        "/api/v1/assets/" + accounts[0]["asset_id"] + "/archive",
+        headers=version(actor),
+        json={"ended_on": "2026-01-31"},
+    )
+    queries = []
+
+    def count_account_queries(connection, cursor, statement, parameters, context, executemany):
+        if "financial_accounts" in statement and "SELECT" in statement:
+            queries.append(True)
+
+    event.listen(db_engine, "before_cursor_execute", count_account_queries)
+    try:
+        response = client.get("/api/v1/cards?limit=200", headers=actor.headers)
+    finally:
+        event.remove(db_engine, "before_cursor_execute", count_account_queries)
+    assert response.status_code == 200 and len(queries) == 1
+    rows = response.json()["items"]
+    assert len(rows) == 6
+    assert sum(row["settlement_account_status"] == "closed" for row in rows) == 3
