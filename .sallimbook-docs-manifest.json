@@ -66,16 +66,16 @@
       "git_sha1": "7172a9f659236b69994b55b85ed30fb15f0c9029"
     },
     "docs/api-contract.md": {
-      "sha256": "2a42e6a5954f718fc8a5bc6823e1c43ba7f80bb679b5678d686d0b89452e1b22",
-      "git_sha1": "0ae1b6c6c5341f0586b1511e3caedc331c2557e6"
+      "sha256": "e8d97d36213ef575c0796dabb84ccdb79fdacfd612d7a1f821d4a276d715446b",
+      "git_sha1": "bc9a76a276ab31b45326152cbd7bbde2454563a6"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "95eeae80e607343147cad3cecaf01fbc834bafcbc07b92a8003e24a75ba32076",
-      "git_sha1": "35b70baf430bf2e9a1e0b44b62d05f8458cc4923"
+      "sha256": "b54b0ff8cf804451000e1d9ef1f37986d9d173853be17fb4ff28577ba630389d",
+      "git_sha1": "f2d9284b132b9a534a0551b5baf96fa75c3b1bf4"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -94,8 +94,8 @@
       "git_sha1": "b32558882df96fac658918bb3cfe2706bfe3df6b"
     },
     "docs/deployment-backup-operations.md": {
-      "sha256": "2df325fa1228bd019d5c95b9a7e59481b02cc64fb23317d37528afd896a723e6",
-      "git_sha1": "b6ce33e8c5b0abe081aa244868677186825e56ed"
+      "sha256": "680c2fc917712cf66652a0747662522ec0c7821be245d8cf5e25625ec3981973",
+      "git_sha1": "6e84f7687d9c79bac36f7a0d75813fac08455482"
     },
     "docs/roadmap-and-milestones.md": {
       "sha256": "95dd42215c69f32da823697ea9779b74fc22bb7ac86001c227082c5870b7b4db",
@@ -312,6 +312,10 @@
     "docs/testing/vault-web.md": {
       "sha256": "974918b98d22ed5d7c16781c0c3e40fbbdb8aa909f98388cc897f7d4312cfe74",
       "git_sha1": "6575fd34f4311b4ea9cdfece99a9881c4bf5eb3a"
+    },
+    "docs/testing/exports-server.md": {
+      "sha256": "47335f81fdc13dd47c9e1174982a41cd8c7790c95282757996df29f0808f768e",
+      "git_sha1": "4f990254002c6e8efc564087cdc56c3bf48b6133"
     }
   }
 }
