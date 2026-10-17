@@ -11,6 +11,8 @@ export type HouseholdMember = components["schemas"]["MemberResponse"];
 export function FinanceError({ error }: { error: ApiError | null }) {
   if (!error) return null;
   const messages: Partial<Record<ApiError["code"], string>> = {
+    PAYMENT_LINK_CONFIRMATION_REQUIRED: "선택한 종료일 이후의 연결된 납부 계획을 확인해 주세요.",
+    PAYMENT_LINKS_CHANGED: "연결된 계획이 변경됐어요. 입력한 종료일은 유지했어요. 종료 영향을 다시 확인해 주세요.",
     NOT_FOUND: "항목을 찾을 수 없거나 볼 권한이 없어요. 현재 가계의 목록에서 다시 확인해 주세요.",
     VERSION_CONFLICT: "다른 곳에서 정보가 변경됐어요. 작성한 내용은 그대로 두었어요. 서버의 최신 내용을 확인해 주세요.",
     OWNER_UNAVAILABLE: "현재 가계의 구성원을 소유자로 선택해 주세요.",

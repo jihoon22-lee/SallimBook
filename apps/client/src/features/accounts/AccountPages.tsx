@@ -5,6 +5,7 @@ import { ApiError, toApiError } from "../../platform/api";
 import { useAuth } from "../auth/AuthProvider";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
 import { dateLabel, FinanceError, isDateOnly, isUuid, MemberLoadError, MissingAmount, todaySeoul, useHouseholdMembers } from "../finance/FinanceSupport";
+import { ClosureReview, useClosureReview } from "../finance/PaymentLinks";
 import { AssetMonthlyData } from "../assets/comparison/AssetMonthlyData";
 import { AssetSummary, ownerLabel } from "../assets/AssetPages";
 import { useAssetsApi } from "../assets/api";
@@ -53,12 +54,13 @@ function useAccount(id: string) {
 function AccountDetail({ id }: { id: string }) {
   const state = useAccount(id); const api = useAssetsApi(); const members = useHouseholdMembers(); const mounted = useMounted(); const location = useLocation();
   const [closing, setClosing] = useState(false); const [endedOn, setEndedOn] = useState(todaySeoul); const [busy, setBusy] = useState(false); const [error, setError] = useState<ApiError | null>(null); const [formError, setFormError] = useState("");
+  const closure = useClosureReview("account", id, endedOn, closing);
   async function close(event: FormEvent) {
-    event.preventDefault(); if (!state.account || busy) return;
+    event.preventDefault(); if (!state.account || busy || !closure.ready) return;
     if (!isDateOnly(endedOn) || endedOn < state.account.asset.started_on || (state.account.opened_on && endedOn < state.account.opened_on)) { setFormError("종료일은 보유 시작일과 계좌 개설일 이후의 실제 날짜로 입력해 주세요."); return; }
     setBusy(true); setError(null); setFormError("");
-    try { await api.archive(state.account.asset_id, { ended_on: endedOn }, state.account.asset.version); if (mounted.current) { setClosing(false); state.reload(); } }
-    catch (failure) { if (mounted.current) setError(toApiError(failure)); }
+    try { await api.archive(state.account.asset_id, { ended_on: endedOn, ...closure.proof }, state.account.asset.version); if (mounted.current) { setClosing(false); state.reload(); } }
+    catch (failure) { if (mounted.current) { const error = toApiError(failure); setError(error); if (error.code === "PAYMENT_LINKS_CHANGED" || error.code === "PAYMENT_LINK_CONFIRMATION_REQUIRED") closure.refresh(); } }
     finally { if (mounted.current) setBusy(false); }
   }
   if (state.loading && !state.account) return <p role="status">계좌 정보를 불러오고 있어요.</p>;
@@ -68,7 +70,7 @@ function AccountDetail({ id }: { id: string }) {
     <AccountNumber key={account.id} account={account} refresh={state.reload} />
     <section className="card"><h2>연결된 금융 자산</h2><p>계좌와 이 자산은 하나의 평가액을 공유해요. 수입이나 납부 입력으로 잔액을 자동 변경하지 않아요.</p><AssetSummary asset={account.asset} members={members.members} /><MemberLoadError error={members.error} retry={members.retry} /><Link to={`/assets/${account.asset_id}`}>연결된 자산 보기</Link></section>
     <AssetMonthlyData assetId={account.asset_id} />
-    {closing && <section className="card"><h2>계좌 사용 종료</h2><p>연결된 금융 자산도 함께 사용 종료돼요. 계좌 정보와 과거 기록은 보존해요.</p><form className="finance-form" onSubmit={(event) => void close(event)}><div className="form-field"><label htmlFor="account-closed">계좌 종료일</label><input id="account-closed" type="date" required max="9999-12-31" min={account.opened_on && account.opened_on > account.asset.started_on ? account.opened_on : account.asset.started_on} value={endedOn} onChange={(event) => setEndedOn(event.target.value)} disabled={busy} /></div>{formError && <p role="alert">{formError}</p>}<FinanceError error={error} />{error?.code === "VERSION_CONFLICT" && <button type="button" onClick={() => { setError(null); state.reload(); }}>종료 전 최신 계좌 정보 확인</button>}<div className="form-actions"><button type="submit" disabled={busy || error?.code === "VERSION_CONFLICT"}>계좌 사용 종료 확인</button><button type="button" disabled={busy} onClick={() => setClosing(false)}>계좌 종료 취소</button></div></form></section>}
+    {closing && <section className="card"><h2>계좌 사용 종료</h2><p>연결된 금융 자산도 함께 사용 종료돼요. 계좌 정보와 과거 기록은 보존해요.</p><form className="finance-form" onSubmit={(event) => void close(event)}><div className="form-field"><label htmlFor="account-closed">계좌 종료일</label><input id="account-closed" type="date" required max="9999-12-31" min={account.opened_on && account.opened_on > account.asset.started_on ? account.opened_on : account.asset.started_on} value={endedOn} onChange={(event) => setEndedOn(event.target.value)} disabled={busy} /></div><ClosureReview review={closure} disabled={busy} />{formError && <p role="alert">{formError}</p>}<FinanceError error={error} />{error?.code === "VERSION_CONFLICT" && <button type="button" onClick={() => { setError(null); state.reload(); }}>종료 전 최신 계좌 정보 확인</button>}<div className="form-actions"><button type="submit" disabled={busy || error?.code === "VERSION_CONFLICT" || !closure.ready}>계좌 사용 종료 확인</button><button type="button" disabled={busy} onClick={() => setClosing(false)}>계좌 종료 취소</button></div></form></section>}
   </>;
 }
 function AccountEdit({ id }: { id: string }) { const state = useAccount(id); if (state.loading) return <p role="status">수정할 계좌를 불러오고 있어요.</p>; return state.account ? <AccountEditor initial={state.account} /> : <><FinanceError error={state.error} /><button type="button" onClick={state.reload}>계좌 다시 확인</button></>; }

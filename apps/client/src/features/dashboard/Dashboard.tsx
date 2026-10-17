@@ -25,8 +25,8 @@ export function Dashboard() {
       </div>
       <div className="secondary-summary" aria-label="다른 기록 살펴보기">
         <RelatedLinks links={[
-          { to: "/income", label: "이번 달 수입", description: "등록 기준 · 준비 중" },
-          { to: "/fixed-payments", label: "등록된 고정 납부", description: "등록 기준 · 준비 중" },
+          { to: "/income", label: "이번 달 수입", description: "등록 수입과 실제 반환" },
+          { to: "/fixed-payments", label: "등록된 고정 납부", description: "예정 회차와 실제 납부" },
           { to: "/insurance/cases", label: "진행 보험 사건", description: "치료·청구·지급 · 준비 중" },
         ]} />
       </div>

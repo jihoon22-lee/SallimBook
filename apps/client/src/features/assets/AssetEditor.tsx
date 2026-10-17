@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { useMounted } from "../auth/AuthFeedback";
 import { FinanceError, MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport";
+import { ClosureReview, useAssetClosure } from "../finance/PaymentLinks";
 import { AssetFields, assetFieldLabels } from "./AssetFields";
 import { useAssetsApi } from "./api";
 import { amountBases, assetDraft, assetInput, assetKinds, categories, changedAssetFields, mergeAssetDraft, newAssetDraft } from "./model";
@@ -22,21 +23,24 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
   const flight = useRef(false);
   const [latest, setLatest] = useState<Asset | null>(null);
   const [conflict, setConflict] = useState(false);
+  const closing = !!base && !!draft.ended_on && draft.ended_on !== (base.ended_on ?? "");
+  const closure = useAssetClosure(base, draft.ended_on, closing);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (flight.current || conflict) return;
+    if (flight.current || conflict || !closure.ready) return;
     const input = assetInput(draft);
     if (!input) { setFormError("필수 항목과 0~100 사이의 가계 지분, 시작일·종료일을 확인해 주세요."); return; }
     const before = base ? assetInput(assetDraft(base))! : null;
-    const patch = before ? Object.fromEntries(Object.entries(input).filter(([key, value]) => value !== before[key as keyof typeof before])) as AssetPatch : null;
-    if (patch && Object.keys(patch).length === 0) { setFormError("변경한 내용이 없어요."); return; }
+    const changes = before ? Object.fromEntries(Object.entries(input).filter(([key, value]) => value !== before[key as keyof typeof before])) as Omit<AssetPatch, "closure_ack"> : null;
+    const patch: AssetPatch | null = changes ? { ...changes, ...(closing ? closure.proof : { closure_ack: false }) } : null;
+    if (changes && Object.keys(changes).length === 0) { setFormError("변경한 내용이 없어요."); return; }
     flight.current = true; setBusy(true); setError(null); setFormError("");
     try {
       const saved = base && patch ? await api.update(base.id, patch, base.version) : await api.create(input);
       if (mounted.current) navigate(`/assets/${saved.id}`, { replace: true, state: { saved: true } });
     } catch (failure) {
-      if (mounted.current) { const value = toApiError(failure); setError(value); if (value.code === "VERSION_CONFLICT") setConflict(true); }
+      if (mounted.current) { const value = toApiError(failure); setError(value); if (value.code === "VERSION_CONFLICT") setConflict(true); if (value.code === "PAYMENT_LINKS_CHANGED" || value.code === "PAYMENT_LINK_CONFIRMATION_REQUIRED") closure.refresh(); }
     } finally { flight.current = false; if (mounted.current) setBusy(false); }
   }
 
@@ -69,6 +73,7 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
     {members.loading && <p role="status">가계 구성원을 확인하고 있어요.</p>}
     <form className="finance-form" onSubmit={(event) => void submit(event)}>
       <AssetFields value={draft} onChange={setDraft} members={members.members} disabled={busy || members.loading || Boolean(members.error)} />
+      {closing && base?.category === "financial" && <ClosureReview review={closure} disabled={busy} />}
       {formError && <p role="alert">{formError}</p>}
       <FinanceError error={error} />
       {conflict && <section className="conflict-panel" aria-labelledby="asset-conflict-title">
@@ -81,7 +86,7 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
           <div className="form-actions"><button type="button" onClick={() => resolve(true)}>비교한 내 수정 유지</button><button type="button" className="secondary-button" onClick={() => resolve(false)}>내 수정 버리고 서버 값 사용</button></div>
         </>}
       </section>}
-      <div className="form-actions"><button type="submit" disabled={busy || conflict || members.loading || Boolean(members.error)}>{busy ? "저장 중…" : base ? "자산 수정 저장" : "자산 등록"}</button><Link className="button-link secondary-button" aria-disabled={busy} onClick={(event) => { if (busy) event.preventDefault(); }} to={base ? `/assets/${base.id}` : "/assets"}>취소하고 돌아가기</Link></div>
+      <div className="form-actions"><button type="submit" disabled={busy || conflict || members.loading || Boolean(members.error) || !closure.ready}>{busy ? "저장 중…" : base ? "자산 수정 저장" : "자산 등록"}</button><Link className="button-link secondary-button" aria-disabled={busy} onClick={(event) => { if (busy) event.preventDefault(); }} to={base ? `/assets/${base.id}` : "/assets"}>취소하고 돌아가기</Link></div>
     </form>
   </section>;
 }

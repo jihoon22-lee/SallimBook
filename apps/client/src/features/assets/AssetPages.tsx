@@ -7,6 +7,7 @@ import { SessionStatus, useMounted } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import { dateLabel, FinanceError, isDateOnly, isUuid, MemberLoadError, MissingAmount, todaySeoul, useHouseholdMembers } from "../finance/FinanceSupport";
 import type { HouseholdMember } from "../finance/FinanceSupport";
+import { ClosureReview, useAssetClosure } from "../finance/PaymentLinks";
 import { AssetMonthlyData } from "./comparison/AssetMonthlyData";
 import { AssetEditor } from "./AssetEditor";
 import { useAssetsApi } from "./api";
@@ -114,13 +115,14 @@ function AssetDetail({ id }: { id: string }) {
   const [error, setError] = useState<ApiError | null>(null);
   const [formError, setFormError] = useState("");
   const location = useLocation();
+  const closure = useAssetClosure(state.asset, endedOn, closing);
   async function archive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!state.asset || busy) return;
+    if (!state.asset || busy || !closure.ready) return;
     if (!isDateOnly(endedOn) || endedOn < state.asset.started_on) { setFormError("종료일은 보유 시작일 이후의 실제 날짜로 입력해 주세요."); return; }
     setBusy(true); setError(null); setFormError("");
-    try { const result = await api.archive(id, { ended_on: endedOn }, state.asset.version); if (mounted.current) { state.setAsset(result); setClosing(false); } }
-    catch (failure) { if (mounted.current) setError(toApiError(failure)); }
+    try { const result = await api.archive(id, { ended_on: endedOn, ...closure.proof }, state.asset.version); if (mounted.current) { state.setAsset(result); setClosing(false); } }
+    catch (failure) { if (mounted.current) { const error = toApiError(failure); setError(error); if (error.code === "PAYMENT_LINKS_CHANGED" || error.code === "PAYMENT_LINK_CONFIRMATION_REQUIRED") closure.refresh(); } }
     finally { if (mounted.current) setBusy(false); }
   }
   if (state.loading) return <p role="status">자산 정보를 불러오고 있어요.</p>;
@@ -135,9 +137,10 @@ function AssetDetail({ id }: { id: string }) {
     <AssetMonthlyData assetId={id} />
     {closing && <section className="card" aria-labelledby="asset-archive-title"><h2 id="asset-archive-title">자산 사용 종료</h2><p>자산 항목과 과거 연결 기록은 남겨두고 사용 종료 상태로 바꿔요.</p>
       <form className="finance-form" onSubmit={(event) => void archive(event)}><div className="form-field"><label htmlFor="asset-ended-on">종료일</label><input id="asset-ended-on" type="date" value={endedOn} onChange={(event) => setEndedOn(event.target.value)} min={asset.started_on} max="9999-12-31" required disabled={busy} /></div>
+        {asset.category === "financial" && <ClosureReview review={closure} disabled={busy} />}
         {formError && <p role="alert">{formError}</p>}<FinanceError error={error} />
         {error?.code === "VERSION_CONFLICT" && <button type="button" onClick={() => { setError(null); state.reload(); }}>최신 자산 정보 다시 확인</button>}
-        <div className="form-actions"><button type="submit" disabled={busy || error?.code === "VERSION_CONFLICT"}>{busy ? "종료 처리 중…" : "사용 종료 확인"}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => setClosing(false)}>종료 취소</button></div>
+        <div className="form-actions"><button type="submit" disabled={busy || error?.code === "VERSION_CONFLICT" || !closure.ready}>{busy ? "종료 처리 중…" : "사용 종료 확인"}</button><button type="button" className="secondary-button" disabled={busy} onClick={() => setClosing(false)}>종료 취소</button></div>
       </form>
     </section>}
   </>;
