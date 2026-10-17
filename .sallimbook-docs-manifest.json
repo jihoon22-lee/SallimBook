@@ -66,8 +66,8 @@
       "git_sha1": "dd55b455f4cb61bba9ee134656b9576cf6d6b6fd"
     },
     "docs/api-contract.md": {
-      "sha256": "2717dbc3e6177ac10f2bd9685366f8cee2a3fbab18661087b39d82c255c1e59a",
-      "git_sha1": "18bca56e40f9d113e6ed45e52e4787045a6fe375"
+      "sha256": "c2328fb686db6a3fe5a5a3c991bf4cd8a533b12f742d5862586984649cd725a3",
+      "git_sha1": "7dc97d971451b8fd9c0e12f671783ba566dce97e"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "e91924dc4d505aded865da4adeb7b6136c76ac4da1a821ce3439efbecb19552b",
-      "git_sha1": "04be1535d21091158302784452ef9ae12f55b175"
+      "sha256": "1f0c38cbca198299cb6bde64a6b999980a12dc564924e84c79b8ad0d77c9a7ce",
+      "git_sha1": "609dc08ad92d87428f1f0a26718d76983cf25460"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -222,8 +222,8 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "2db213d259c95f8db12ed3d935f48da3ccd30fbe00b26ffba8089576b19b6837",
-      "git_sha1": "98d49735f89f72af444b05ea0975cc818d9b013a"
+      "sha256": "5efc1a736ff69953af76ac6fc8c35b4e106a438781ba98cee390bbc5463f7f60",
+      "git_sha1": "b0ed93a731c3e8cc4b93a354ce1a608fd17b5bc3"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
@@ -250,8 +250,8 @@
       "git_sha1": "73af32efc4d7ea04e803febd8e7f8bcd2b027095"
     },
     "docs/testing/insurance-client.md": {
-      "sha256": "44cce844fc818029926db2478f105572403cee930b154112f1a6ccfd47d27096",
-      "git_sha1": "ed666a6c2af9fbb7564307f6ab3035e7003080f7"
+      "sha256": "652957297f615eb525fc5e876383205283706eccff8f493654347143f07efb98",
+      "git_sha1": "52c495ab7f14accdb6f3d02ced57b98ac1b96804"
     }
   }
 }

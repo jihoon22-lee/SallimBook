@@ -27,6 +27,7 @@ export function insuranceFixture() {
       state.writes.push({ method, path, body: Object.fromEntries(Object.entries(body).filter(([key]) => key !== "policy_number")), version: headers["if-match"] });
       if (state.failure) { state.failure = false; return error("REQUEST_FAILED", 503); }
     }
+    if (["claims", "payouts", "medical-expenses"].includes(collection!) && !id && method === "GET") return response({ items: [], next_cursor: null });
     if (collection === "policies") {
       if (!id && method === "GET") return response(page(state.policies.filter((p) => (!query.has("status") || p.status === query.get("status")) && (!query.has("insured_member_id") || p.insured_member_id === query.get("insured_member_id")) && (!query.has("policyholder_member_id") || p.policyholder_member_id === query.get("policyholder_member_id"))), query));
       if (!id && method === "POST") { const row = { ...policyRow(200 + state.policies.length), ...body, has_number: false, masked_number: null } as S["PolicyResponse"]; state.policies.push(row); return response(row, 201); }
@@ -41,7 +42,7 @@ export function insuranceFixture() {
       }
       if (child === "premium-links") {
         if (method === "GET") return response(page(state.premiums.filter((p) => p.policy_id === id), query));
-        if (method === "POST") { if (state.premiums.some((p) => p.rule_id === body.rule_id)) return error("PREMIUM_RULE_ALREADY_LINKED"); const added = { ...entity(400 + state.premiums.length), policy_id: id, rule_id: String(body.rule_id), active: true, ended_at: null, rule: ruleRow() }; state.premiums.push(added); return response(added, 201); }
+        if (method === "POST") { if (state.premiums.some((p) => p.rule_id === body.rule_id)) return error("PREMIUM_RULE_ALREADY_LINKED"); const added = { ...entity(400 + state.premiums.length), policy_id: id, rule_id: String(body.rule_id), active: true, ended_at: null, rule: ruleRow(Number(String(body.rule_id).slice(-12))) }; state.premiums.push(added); return response(added, 201); }
         const current = state.premiums.find((p) => p.id === childId); if (!current) return error("NOT_FOUND", 404); if (headers["if-match"] !== `"${current.version}"`) return error("VERSION_CONFLICT"); Object.assign(current, body, { version: current.version + 1 }); return response(current);
       }
       if (method === "GET") return response(row);
@@ -54,11 +55,13 @@ export function insuranceFixture() {
       if (!id && method === "GET") return response(page(state.cases.filter((c) => (!query.has("patient_member_id") || c.patient_member_id === query.get("patient_member_id")) && (!query.has("treatment_state") || c.treatment_state === query.get("treatment_state")) && (!query.has("financial_state") || c.financial_state === query.get("financial_state"))).map(({ diagnosis_note: _note, diagnosis_code: _code, ...c }) => c), query));
       if (!id && method === "POST") { const row = { ...caseRow(500 + state.cases.length), ...body } as S["CaseResponse"]; state.cases.push(row); state.histories.set(row.id, [{ ...row, case_id: row.id, changed_at: row.updated_at, changed_by_member_id: uid(2), reason: null }]); return response(row, 201); }
       const row = state.cases.find((c) => c.id === id); if (!row) return error("NOT_FOUND", 404);
+      if (child === "summary") return response({ case_id: id, medical_paid_krw: "0", medical_refunded_krw: "0", net_medical_krw: "0", insurance_received_krw: "0", insurance_returned_krw: "0", net_received_krw: "0", net_burden_krw: "0", benefits: [] });
       if (child === "history") { const all = [...state.histories.get(id!)!].reverse().filter((r) => !query.has("cursor") || r.version < Number(query.get("cursor"))); const items = all.slice(0, state.pageSize); return response({ items, next_cursor: items.length < all.length ? items.at(-1)!.version : null }); }
       if (child === "nodes") {
         if (method === "GET" && !childId) return response(page(state.nodes.filter((n) => n.case_id === id), query));
         if (method === "POST") { const added = { ...nodeRow(600 + state.nodes.length), ...body, case_id: id } as S["MedicalNodeResponse"]; state.nodes.push(added); return response(added, 201); }
         const current = state.nodes.find((n) => n.id === childId && n.case_id === id); if (!current) return error("NOT_FOUND", 404);
+        if (rest[4] === "summary") return response({ case_id: id, node_id: childId, subtree_node_count: 1, medical_paid_krw: "0", medical_refunded_krw: "0", net_medical_krw: "0" });
         if (method === "GET") return response(current);
         if (state.conflict === "node") { state.conflict = ""; current.version++; current.note = "합성 다른 진료 메모"; }
         if (headers["if-match"] !== `"${current.version}"`) return error("VERSION_CONFLICT");

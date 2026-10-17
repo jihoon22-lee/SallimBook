@@ -208,4 +208,12 @@ downgrade/upgrade 왕복도 확인했다. 기존 서버·데이터는 변경하�
 SB-019/SB-020 보험 서버의 합성 계약·암호화20개, API/권한/동시성23개, DB 보존4개 총47개가 통과했다.
 최초 실행의 fixture3건(종료 상태·적용일·기존400계약)을 수정한 뒤 47개 전체와 Alembic drift/왕복을 다시 통과했다.
 실제 잠금 대기 중 인증 만료, 기기 철회, 복호화/감사 후 만료, 다른 가계 참조와 깊은 진료 트리를 포함한다.
-웹/Android 보험 화면과 운영 키·실기기 검증은 후속 단계이며 이 결과로 완료 처리하지 않는다.
+이 서버 검사와 별도로 웹/Android 보험 화면을 연결했다. 운영 키·실기기 검증은 미완료다.
+
+### 보험 화면 검증
+
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.insurance.config.ts`는
+18753 포트에서 보험과 기존 UI 회귀를 실행한다. `uv run --project services/api python scripts/test_web_auth.py --insurance`는
+전용 일회용 DB·개인 임시 키링·임시 HTTPS 인증서로 실제 계약/사건/비용/청구/수령/반환을 검사한다.
+키링은 증권번호 서버 필드 보호 시험에만 사용하며 기존 키나 신뢰 저장소를 바꾸지 않는다.
+구체적인 범위와 결과는 [보험 UI 검증 기록](testing/insurance-client.md)을 따른다.

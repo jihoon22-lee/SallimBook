@@ -11,6 +11,7 @@ import { InsuranceError, InsurancePage, MemberSelect } from "../InsuranceSupport
 import { PolicyEditor, PolicySummary } from "./PolicyEditor";
 import { PolicyNumber } from "./PolicyNumber";
 import { Coverages } from "./Coverages";
+import { ClaimsList } from "../claims/ClaimPages";
 import { PremiumLinks } from "./PremiumLinks";
 function PolicyList() {
   const api = useInsuranceApi(); const { params, filter, reset } = useUrlFilters(); const status = params.get("status") ?? ""; const insured = params.get("insured") ?? ""; const holder = params.get("holder") ?? "";
@@ -19,7 +20,7 @@ function PolicyList() {
 }
 function PolicyDetail({ id, edit }: { id: string; edit: boolean }) {
   const api = useInsuranceApi(); const resource = useResource(useCallback(() => isUuid(id) ? api.policy(id) : Promise.reject(new ApiError(404, "NOT_FOUND")), [api, id])); const row = resource.data;
-  return <><InsuranceError error={resource.error} />{resource.error && <button onClick={() => void resource.reload()}>보험 계약 다시 확인</button>}{resource.loading && <p role="status">보험 계약을 확인하고 있어요.</p>}{row && !resource.loading && !resource.error && (edit ? <PolicyEditor initial={row} /> : <><section className="card"><h2>{row.product_name}</h2><PolicySummary row={row} /><Link to={`/insurance/policies/${id}/edit`}>보험 계약 수정</Link></section><PolicyNumber policy={row} refresh={() => void resource.reload()} /><Coverages policyId={id} /><PremiumLinks policy={row} /></>)}</>;
+  return <><InsuranceError error={resource.error} />{resource.error && <button onClick={() => void resource.reload()}>보험 계약 다시 확인</button>}{resource.loading && <p role="status">보험 계약을 확인하고 있어요.</p>}{row && !resource.loading && !resource.error && (edit ? <PolicyEditor initial={row} /> : <><section className="card"><h2>{row.product_name}</h2><PolicySummary row={row} /><Link to={`/insurance/policies/${id}/edit`}>보험 계약 수정</Link></section><PolicyNumber policy={row} refresh={() => void resource.reload()} /><Coverages policyId={id} /><PremiumLinks policy={row} /><ClaimsList policyId={id} /></>)}</>;
 }
 export function PolicyListPage() { return <InsurancePage title="보험 계약" description="계약·보장·납입 기간과 같은 보험료 규칙을 확인해요."><PolicyList /></InsurancePage>; }
 export function PolicyNewPage() { return <InsurancePage title="보험 계약 등록" description="수동으로 계약을 기록하고 필요한 보장을 이어서 추가해요."><PolicyEditor /></InsurancePage>; }
