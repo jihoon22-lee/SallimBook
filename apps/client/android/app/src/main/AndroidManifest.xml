@@ -51,6 +51,10 @@
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar" />
         <activity
+            android:name=".auth.NativeExportActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar" />
+        <activity
             android:name=".auth.NativeInsurancePolicyNumberActivity"
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar" />

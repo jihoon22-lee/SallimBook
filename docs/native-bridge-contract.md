@@ -570,3 +570,15 @@ CVC는 현재 카드 secret ID/revision에 묶고 서버/API/web/backup에 전�
 브라우저 브리지 모의시험 **52개**(vault 28개 + 문서 24개)가 통과했다. 서버 quota 후속 계약의
 `DOCUMENT_STORAGE_QUOTA_EXCEEDED` 413과 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE` 503도
 문서 native 고정 오류 문구로 보존한다. 이 검증은 실제 Keystore·생체인증·백업·캡처 실패 시험을 대신하지 않는다.
+
+## 21. SB-037 사용자 ZIP 내보내기
+
+`nativeExports.export({ input: ExportRequest })` / `exportArchiveUI`는 생성 스키마의 형식/문서 ID 선택만
+받고 `{ status: "exported" | "cancelled" }`만 반환한다. 네이티브 확인·로그인 암호 재인증·SAF 선택 뒤
+private 고정 POST를 수행하며 ZIP 원문·URI·path·토큰·header·다운로드 URL은 bridge에 나오지 않는다.
+전체 64MiB bound, Content-Length/MIME/ID/disposition/no-store/SHA-256 검증 이후에만 provider에 쓰고,
+기존 선택기 foreground/취소 세대와 별도 작업 제한을 적용한다. 실패 시 외부 부분 파일 삭제는 최선의 노력이다.
+
+JVM **308개**, debug APK·release Kotlin, 브라우저 **58개**(신규 export 34개 + 문서 24개)를 통과했다.
+실제 서버/Android 파일 제공자 권한·실기기 실패·운영 복원 성공을 뜻하지 않는다.
+세부 구현·검증 명령·남은 인수는 [native 사용자 내보내기](testing/native-exports.md)를 따른다.

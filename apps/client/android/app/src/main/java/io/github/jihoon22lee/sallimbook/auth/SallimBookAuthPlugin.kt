@@ -299,6 +299,12 @@ class SallimBookAuthPlugin : Plugin() {
             failure(call, AuthCode.INVALID_REQUEST)
         else launchForm(call, NativeDocumentActivity.DOWNLOAD, id)
     } }
+    @PluginMethod fun exportArchiveUI(call: PluginCall) { main.post {
+        try {
+            val input=NativeExportPolicy.arguments(NativeVaultJson.decode(call.data.toString()))
+            launchForm(call,NativeExportActivity.MODE,exportInput=org.json.JSONObject(input.body()).toString())
+        } catch(_:Exception) { failure(call,AuthCode.INVALID_REQUEST) }
+    } }
     @PluginMethod fun listDocuments(call: PluginCall) = finance(call, FinanceOperation.LIST_DOCUMENTS)
     @PluginMethod fun getDocument(call: PluginCall) = finance(call, FinanceOperation.GET_DOCUMENT)
     @PluginMethod fun deleteDocument(call: PluginCall) = finance(call, FinanceOperation.DELETE_DOCUMENT)
@@ -354,8 +360,8 @@ class SallimBookAuthPlugin : Plugin() {
         launchForm(call, mode, id, ifMatch)
     }
 
-    private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null, targetKind: String? = null, vaultAction: String? = null) {
-        if (mode != NativeVaultActivity.MODE && targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
+    private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null, targetKind: String? = null, vaultAction: String? = null, exportInput: String? = null) {
+        if (mode !in setOf(NativeVaultActivity.MODE,NativeExportActivity.MODE) && targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
         if (!trustedForeground() || !activity.hasWindowFocus()) { failure(call, AuthCode.ACCESS_DENIED); return }
         if (appLock.locked) { failure(call, AuthCode.APP_LOCKED); return }
         val now = SystemClock.elapsedRealtime()
@@ -367,11 +373,12 @@ class SallimBookAuthPlugin : Plugin() {
         lastUiLaunch = now
         uiCall = call
         uiMode = mode
-        documentUiRequest = if (mode in setOf(NativeDocumentActivity.UPLOAD, NativeDocumentActivity.DOWNLOAD, NativeVaultActivity.MODE)) ForegroundRequest() else null
+        documentUiRequest = if (mode in setOf(NativeDocumentActivity.UPLOAD, NativeDocumentActivity.DOWNLOAD, NativeVaultActivity.MODE,NativeExportActivity.MODE)) ForegroundRequest() else null
         try {
             val passkey = mode in setOf(NativePasskeyActivity.LOGIN, NativePasskeyActivity.REGISTER,
                 NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE, NativePasskeyActivity.INVITE, NativePasskeyActivity.ACCOUNT)
             val component = when {
+                mode == NativeExportActivity.MODE -> NativeExportActivity::class.java
                 mode == NativeVaultActivity.MODE -> NativeVaultActivity::class.java
                 passkey -> NativePasskeyActivity::class.java
                 mode in setOf(NativeAccountNumberActivity.EDIT, NativeAccountNumberActivity.SHOW) -> NativeAccountNumberActivity::class.java
@@ -382,6 +389,7 @@ class SallimBookAuthPlugin : Plugin() {
             val intent = Intent(activity, component)
                 .putExtra(NativeAuthActivity.EXTRA_MODE, mode)
             if (vaultAction != null) intent.putExtra(NativeVaultActivity.EXTRA_ACTION, vaultAction)
+            if (exportInput != null) intent.putExtra(NativeExportActivity.EXTRA_INPUT,exportInput)
             if (targetId != null) intent.putExtra(NativePasskeyActivity.EXTRA_ID, targetId)
             if (ifMatch != null) intent.putExtra(NativePasskeyActivity.EXTRA_VERSION, ifMatch)
             if (targetKind != null) intent.putExtra(NativeDocumentActivity.EXTRA_KIND, targetKind)
@@ -407,6 +415,7 @@ class SallimBookAuthPlugin : Plugin() {
             NativeVaultActivity.MODE -> "completed"
             NativeDocumentActivity.UPLOAD -> "uploaded"
             NativeDocumentActivity.DOWNLOAD -> "downloaded"
+            NativeExportActivity.MODE -> "exported"
             else -> "accepted"
         }
         val status = result.data?.getStringExtra(NativeAuthActivity.EXTRA_STATUS)

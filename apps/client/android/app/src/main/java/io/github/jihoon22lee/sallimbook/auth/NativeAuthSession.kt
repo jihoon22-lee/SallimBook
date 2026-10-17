@@ -49,6 +49,7 @@ internal class NativeAuthSession private constructor(context: Context) {
     private val vaultHttp by lazy { NativeVaultHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     private val vaultLocal by lazy { NativeVaultStore.get(app) }
     private val documentHttp by lazy { NativeDocumentHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val exportHttp by lazy { NativeExportHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     @Volatile private var accessToken: String? = null
     private var accessExpiresAt = 0L
 
@@ -369,6 +370,21 @@ internal class NativeAuthSession private constructor(context: Context) {
             catch (failure: VaultCryptoFailure) { callback(NativeVaultOutcome(code = failure.code.name)) }
             catch (_: Exception) { callback(NativeVaultOutcome(code = "ACCESS_DENIED")) }
             finally { result?.let(discard) }
+        }
+    }
+
+    /** Native export response ownership never passes through AuthOutcome or the plugin bridge. */
+    fun exportArchive(selection: NativeExportSelection, gate: ForegroundRequest, callback: (NativeExportResponse) -> Unit) {
+        executor.execute {
+            var response: NativeExportResponse? = null
+            try {
+                authorize(gate); requireAvailable(); gate.check()
+                response = exportHttp.create(selection,access(gate,NativeExportBytes.TRANSFER_MILLIS+5_000),gate)
+                if(response.code=="SESSION_EXPIRED") { clearLocal(); throw AuthFailure(AuthCode.SESSION_EXPIRED) }
+                gate.check(); callback(response); response=null
+            } catch(failure:AuthFailure) { callback(NativeExportResponse(code=failure.code.name)) }
+            catch(_:Exception) { callback(NativeExportResponse(code="ACCESS_DENIED")) }
+            finally { response?.archive?.close() }
         }
     }
 
