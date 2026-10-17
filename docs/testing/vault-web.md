@@ -81,3 +81,7 @@ python3 scripts/validate_docs.py
 경계를 확인했다. Android와 동일하게 최소 한 자리의 0이 아닌 숫자를 요구하며,
 13~19자리 각각의 입력·암호화·복호화 거절을 검증했다. 공개 교차 플랫폼 벡터를
 포함한 `vault-crypto.spec.ts` **10개**가 desktop/android-size에서 통과했다.
+
+기본 전체 브라우저 설정으로 실행할 때에도 비밀 작업의 trace·screenshot·video를 남기지 않도록
+암호 벡터·workflow·private UI 시험 파일에 비활성화를 명시했다. private UI와 workflow
+**30개**를 workers=2로 다시 통과했다. 합성 데이터 시험도 같은 기록 경계를 사용한다.

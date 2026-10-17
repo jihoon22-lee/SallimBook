@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { mockPrivateVault, vaultPassword } from "./support/vault-private";
 
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 test("protected view decrypts only transient DOM and blur clears all without persistence", async ({ page }) => {
   await mockPrivateVault(page); await page.getByRole("button", { name: "전체 번호·유효기간 열람", exact: true }).click();
   await page.getByLabel("현재 보관함 암호", { exact: true }).fill(vaultPassword); await page.getByRole("button", { name: "보관함 암호로 30초 보기", exact: true }).click();

@@ -314,8 +314,8 @@
       "git_sha1": "cee6563e6b1f449757cba5e178b742b8c4039964"
     },
     "docs/testing/vault-web.md": {
-      "sha256": "dc7a3ef127c12229005ca476e549c11337676bc408beb9f824aa96c5f572bb85",
-      "git_sha1": "af42d6e9bbaacaef3f5823e579ecc3e298808c25"
+      "sha256": "87d6339bf610d4e00bcc9384e634283d3d97a949ecdbf2b96a5583138ed227c9",
+      "git_sha1": "e1a35e12baaa033591b11dfb3fd73a7cec9eb20b"
     },
     "docs/testing/exports-server.md": {
       "sha256": "47335f81fdc13dd47c9e1174982a41cd8c7790c95282757996df29f0808f768e",

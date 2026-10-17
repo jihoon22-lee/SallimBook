@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/v1/**", (route) => route.fulfill({ status: 401, json: { error: { code: "UNAUTHENTICATED" } } }));
   await page.goto("/");
