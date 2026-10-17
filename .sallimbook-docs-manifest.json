@@ -278,8 +278,8 @@
       "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
     },
     "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "c2b156b565b0eb924891761a1c8ace1655e5fc703efd879afd8b9e7325d0a538",
-      "git_sha1": "fd3c7a9582c764480c3faa34d44d016b77ee9b2e"
+      "sha256": "c71c4699eb3ab00b200a627575047fdf1418db19a1562b8ce6e151873013bcb9",
+      "git_sha1": "c0650670ed9eeb16d573d48770849fa10b2f9907"
     },
     "docs/testing/insurance-client.md": {
       "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
