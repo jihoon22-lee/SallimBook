@@ -350,3 +350,27 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 환불과 반환은 원본을 참조하는 별도 실제 금전 기록이다. 환불은 원래 의료비 한도, 보험금 반환은 원래 배분 한도를 초과할 수 없다. 활성 환불/반환이 남아 있으면 원본 정정/무효를 거부한다. 정정/무효 이력은 삭제하지 않는다. 사건 순부담은 음수가 될 수 있으며 실손·정액·기타 실제 수령을 구분한다. 노드별 집계에 사건 보험금을 임의 배분하지 않는다.
 
 금전 생성·정정·무효·환불·반환·배분 연결 변경은 Idempotency-Key를 요구한다. 기존 대상에 적용하는 명령은 If-Match도 요구하며 환불/반환 생성에는 부모 의료비/지급의 버전을 사용한다. 결과는 변경 당시 `{id, version}` 참조이고 재전송해도 변하지 않는다. 최신 상태와 가능한 후속 동작은 GET으로 다시 조회한다. 청구 메타데이터 수정은 If-Match와 사유를 요구한다. 소득 화면은 실제 보험금 원본을 읽기 전용으로 투영하며 계좌 잔액이나 자산 스냅샷을 자동 변경하지 않는다.
+
+### SB-024~SB-027 가전·공용 재고·교체
+
+`/api/v1/appliances`와 `/consumables`는 POST/목록 GET, `/{id}`는 GET/PATCH를 제공한다.
+목록의 `status`는 active/ended/all이며 기본 active다. 가전 구매일·보증기한·구매액 미입력과 0원은 구분한다.
+금액은 십진 문자열, 수량은 0~1,000,000 범위의 엄격한 정수다. 가전 구매액과 재고 입고액은 자산·현금 기록을 자동 생성하지 않는다.
+수정은 `If-Match`, 상태 종료는 `ended_on` PATCH를 사용하며 이력을 실제 삭제하지 않는다.
+
+`/appliance-consumables`의 POST/GET와 `/{link_id}` GET/PATCH가 기기별 호환·주기·교체 수량·다음 확인일 override를 관리한다.
+동일 가계의 가전/소모품 조합은 하나이며 중지한 연결은 같은 행을 다시 활성화한다. 소모품 규격이 있으면 가계 안에서 유일하다.
+구매일·입고일을 교체일로 추정하지 않으며, 교체 이력이 없으면 다음 확인일은 unknown이다.
+
+`/consumables/{id}/stock-movements` POST/GET 및 `/{movement_id}` GET, `/{movement_id}/cancel` POST가
+입고(receipt), 반품 입고/출고(return_in/return_out), 사유 있는 조정(adjustment)과 원본의 완전 취소를 제공한다.
+`/appliance-consumables/{link_id}/replacements` POST/GET 및 `/{replacement_id}` GET, `/{replacement_id}/cancel` POST가 교체·취소를 제공한다.
+재고 쓰기는 `If-Match: "현재 소모품 version"`과 `Idempotency-Key`를 함께 요구한다. 교체에는 현재 `link_version`과
+`clear_next_check_override` 선택이 추가로 필요하다. 교체와 재고 감소는 같은 트랜잭션이며, 부족하면 409 `INSUFFICIENT_STOCK`이다.
+응답은 원본 실행 당시 `stock_version`, movement ID와 선택적 replacement ID의 불변 참조다. 재전송 뒤에는 현재 자원을 다시 조회한다.
+취소도 새 반대 동작을 기록하며, 당시 저장한 옛 날짜를 덮어쓰지 않고 취소되지 않은 가장 최근 교체를 다시 선택한다.
+
+`GET /api/v1/homecare/status`는 Asia/Seoul의 오늘(`as_of`) 기준으로 사용 중인 가전/소모품 연결을 반환한다.
+`replacement_due`는 날짜 미확인일 때 null, `purchase_needed`는 공용 재고가 기기별 교체 수량보다 적을 때 true이며
+`low_stock`은 별도의 재고 부족 임계와 비교한다. 자산의 선택 월은 입력으로 받지 않는다. 모든 목록은 UUID cursor와 최대 200개 limit로 나눈다.
+첨부파일의 연결·다운로드는 SB-023의 별도 typed 문서 계약을 사용한다.
