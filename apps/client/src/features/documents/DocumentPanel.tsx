@@ -17,5 +17,5 @@ function Documents({ target }: { target: Target }) {
 /** Mount only beneath an authorized parent record. Closing discards file bytes and requests. */
 export function DocumentPanel({ kind, id }: Target) {
   const { state } = useAuth(); const [open, setOpen] = useState(false);
-  return state.status === "authenticated" ? <section className="card" aria-label={`${targetLabels[kind]} 첨부 문서`}><h2>첨부 문서</h2><button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "첨부 문서 접기" : "첨부 문서 열기"}</button>{open && <Documents key={`${kind}:${id}`} target={{ kind, id }} />}</section> : null;
+  return state.status === "authenticated" ? <section className="card document-panel" aria-label={`${targetLabels[kind]} 첨부 문서`}><h2>첨부 문서</h2><button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "첨부 문서 접기" : "첨부 문서 열기"}</button>{open && <Documents key={`${kind}:${id}`} target={{ kind, id }} />}</section> : null;
 }

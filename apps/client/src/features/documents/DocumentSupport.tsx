@@ -4,6 +4,8 @@ import { FinanceError } from "../finance/FinanceSupport";
 import { useMounted } from "../auth/AuthFeedback";
 export function DocumentError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
+    DOCUMENT_STORAGE_QUOTA_EXCEEDED: "문서 보관 한도에 도달했어요. 필요 없는 문서를 정리한 뒤 공간이 확보되면 다시 시도해 주세요.",
+    DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE: "지금은 문서를 보관할 공간을 확보할 수 없어요. 잠시 후 같은 파일로 다시 시도해 주세요.",
     DOCUMENT_UPLOAD_BUSY: "다른 파일을 확인하고 있어요. 잠시 후 같은 파일로 다시 시도해 주세요.",
     DOCUMENT_UPLOAD_TIMEOUT: "파일 전송 시간이 초과됐어요. 현재 문서 상태를 확인한 뒤 다시 시도해 주세요.",
     DOCUMENT_CARD_DATA: "카드 사진이나 카드 비밀정보는 첨부할 수 없어요. 카드 정보가 없는 문서를 선택해 주세요.",
