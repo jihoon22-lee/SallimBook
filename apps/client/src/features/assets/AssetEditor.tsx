@@ -29,8 +29,9 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
     const input = assetInput(draft);
     if (!input) { setFormError("필수 항목과 0~100 사이의 가계 지분, 시작일·종료일을 확인해 주세요."); return; }
     const before = base ? assetInput(assetDraft(base))! : null;
-    const patch = before ? Object.fromEntries(Object.entries(input).filter(([key, value]) => value !== before[key as keyof typeof before])) as AssetPatch : null;
-    if (patch && Object.keys(patch).length === 0) { setFormError("변경한 내용이 없어요."); return; }
+    const changed = before ? Object.fromEntries(Object.entries(input).filter(([key, value]) => value !== before[key as keyof typeof before])) : null;
+    if (changed && Object.keys(changed).length === 0) { setFormError("변경한 내용이 없어요."); return; }
+    const patch = changed ? { ...changed, closure_ack: false } as AssetPatch : null;
     flight.current = true; setBusy(true); setError(null); setFormError("");
     try {
       const saved = base && patch ? await api.update(base.id, patch, base.version) : await api.create(input);

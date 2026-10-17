@@ -67,7 +67,7 @@ test("409 preserves draft, requires review and keeps unrelated server edits", as
   await page.getByRole("button", { name: "자산 수정 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "합성 내 수정 이름", exact: true })).toBeVisible();
   expect(state.patches.map((entry) => entry.version)).toEqual(['"1"', '"2"']);
-  expect(state.patches[1]?.body).toEqual({ name: "합성 내 수정 이름" });
+  expect(state.patches[1]?.body).toEqual({ name: "합성 내 수정 이름", closure_ack: false });
 });
 
 test("archive preserves the item and chosen date across a conflict", async ({ page }) => {

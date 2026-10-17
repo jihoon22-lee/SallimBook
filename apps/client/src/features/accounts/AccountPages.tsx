@@ -56,7 +56,7 @@ function AccountDetail({ id }: { id: string }) {
     event.preventDefault(); if (!state.account || busy) return;
     if (!isDateOnly(endedOn) || endedOn < state.account.asset.started_on || (state.account.opened_on && endedOn < state.account.opened_on)) { setFormError("종료일은 보유 시작일과 계좌 개설일 이후의 실제 날짜로 입력해 주세요."); return; }
     setBusy(true); setError(null); setFormError("");
-    try { await api.archive(state.account.asset_id, { ended_on: endedOn }, state.account.asset.version); if (mounted.current) { setClosing(false); state.reload(); } }
+    try { await api.archive(state.account.asset_id, { ended_on: endedOn, closure_ack: false }, state.account.asset.version); if (mounted.current) { setClosing(false); state.reload(); } }
     catch (failure) { if (mounted.current) setError(toApiError(failure)); }
     finally { if (mounted.current) setBusy(false); }
   }

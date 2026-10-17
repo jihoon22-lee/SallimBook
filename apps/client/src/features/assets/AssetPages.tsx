@@ -118,7 +118,7 @@ function AssetDetail({ id }: { id: string }) {
     if (!state.asset || busy) return;
     if (!isDateOnly(endedOn) || endedOn < state.asset.started_on) { setFormError("종료일은 보유 시작일 이후의 실제 날짜로 입력해 주세요."); return; }
     setBusy(true); setError(null); setFormError("");
-    try { const result = await api.archive(id, { ended_on: endedOn }, state.asset.version); if (mounted.current) { state.setAsset(result); setClosing(false); } }
+    try { const result = await api.archive(id, { ended_on: endedOn, closure_ack: false }, state.asset.version); if (mounted.current) { state.setAsset(result); setClosing(false); } }
     catch (failure) { if (mounted.current) setError(toApiError(failure)); }
     finally { if (mounted.current) setBusy(false); }
   }

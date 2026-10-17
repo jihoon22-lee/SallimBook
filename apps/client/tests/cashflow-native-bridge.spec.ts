@@ -10,14 +10,14 @@ const methods = ["getAssetMonth", "getAssetMonthRevision", "listAssetMonthRevisi
   "getIncome", "incomeHistory", "createIncome", "correctIncome", "voidIncome", "returnIncome", "convertIncomePrecision", "listCards", "getCard", "createCard", "updateCard", "archiveCard", "deleteCard", "getAssetComparison", "getAssetTrends",
   "listRecurringRules", "createRecurringRule", "getRecurringRule", "changeRecurringRule", "endRecurringRule", "generateObligations",
   "listObligations", "fixedCostSummary", "getObligation", "obligationHistory", "rescheduleObligation", "skipObligation", "unskipObligation",
-  "completeObligation", "reopenObligation", "settleObligation", "listObligationSettlements", "voidFixedSettlement"];
+  "completeObligation", "reopenObligation", "settleObligation", "listObligationSettlements", "voidFixedSettlement", "getCardPaymentLinks", "getAccountPaymentLinks"];
 
 async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "unavailable" = "success") {
   await page.route("**/__cashflow-bridge", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Synthetic bridge test</title>" }));
   await page.addInitScript(({ methods, scenario }) => {
     const state = { calls: [] as { method: string; args: unknown }[], http: 0 };
     Object.assign(window, { __cashflowBridge: state, CapacitorCustomPlatform: { name: "android" }, Capacitor: {
-      PluginHeaders: scenario === "unavailable" ? [] : [{ name: "SallimBookAuth", methods: methods.map((name) => ({ name, rtype: "promise" })) }],
+      PluginHeaders: scenario === "unavailable" ? [] : [{ name: "SallimBookAuth", methods: [...methods, "updateAsset", "archiveAsset"].map((name) => ({ name, rtype: "promise" })) }],
       nativePromise: async (_plugin: string, method: string, args: unknown) => {
         state.calls.push({ method, args });
         if (scenario === "locked") return { ok: false, code: "APP_LOCKED" };
@@ -36,7 +36,7 @@ async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "
   await page.goto("/__cashflow-bridge");
 }
 
-test("44 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
+test("46 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
   await setup(page);
   const result = await page.evaluate(async ({ id, valueId }) => {
     const source = "/src/platform/nativeFinance.ts";
@@ -90,6 +90,8 @@ test("44 named metadata commands retain DTO values and mutation keys without web
       ["settleObligation", { obligationId: id, input: { amount_krw: "1000000", principal_krw: "700000", interest_krw: "300000", occurred_on: "2026-01-31", card_id: valueId }, ...mutation }],
       ["listObligationSettlements", { obligationId: id, query: { limit: 200, cursor: valueId } }],
       ["voidFixedSettlement", { settlementId: id, input: { reason: "합성 납부 취소" }, ...mutation }],
+      ["getCardPaymentLinks", { resourceId: id, query: { as_of_date: "2026-01-31", rule_cursor: valueId, limit: 200 } }],
+      ["getAccountPaymentLinks", { resourceId: id, query: { as_of_date: "2026-01-31", card_cursor: valueId, obligation_cursor: valueId, limit: 200 } }],
     ];
     const values = [];
     for (const [method, args] of cases) values.push(await nativeFinance[method](args));
@@ -120,4 +122,27 @@ for (const scenario of ["locked", "conflict", "unavailable"] as const) test(`${s
   expect(result.error.message).toBe(result.error.code);
   expect(result.error.keys).not.toContain("body");
   expect(result.http).toBe(0); expect(result.calls).toBe(scenario === "unavailable" ? 0 : 1);
+});
+
+
+test("asset and card closure commands preserve explicit confirmation and digest", async ({ page }) => {
+  await setup(page);
+  const result = await page.evaluate(async ({ id }) => {
+    const source = "/src/platform/nativeFinance.ts";
+    const { nativeFinance } = await import(source);
+    const input = { ended_on: "2026-01-31", closure_ack: true, usage_digest: "b".repeat(64) };
+    await nativeFinance.updateAsset(id, input, '\"7\"');
+    await nativeFinance.archiveAsset(id, input, '\"7\"');
+    await nativeFinance.updateCard({ cardId: id, input, ifMatch: '\"7\"' });
+    await nativeFinance.archiveCard({ cardId: id, input, ifMatch: '\"7\"' });
+    const state = (window as unknown as { __cashflowBridge: { calls: { method: string; args: unknown }[]; http: number } }).__cashflowBridge;
+    return { ...state, input };
+  }, { id });
+  expect(result.calls).toEqual([
+    { method: "updateAsset", args: { assetId: id, input: result.input, ifMatch: '\"7\"' } },
+    { method: "archiveAsset", args: { assetId: id, input: result.input, ifMatch: '\"7\"' } },
+    { method: "updateCard", args: { cardId: id, input: result.input, ifMatch: '\"7\"' } },
+    { method: "archiveCard", args: { cardId: id, input: result.input, ifMatch: '\"7\"' } },
+  ]);
+  expect(result.http).toBe(0);
 });
