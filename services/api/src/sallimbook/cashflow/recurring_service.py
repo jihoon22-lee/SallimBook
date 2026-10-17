@@ -3,7 +3,7 @@
 import calendar
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import or_, select
 
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
@@ -85,12 +85,25 @@ def _audit(session, principal, row, entity, action, fields, before=None):
     )
 
 
-def _validate_method(session, principal, account_id, card_id):
+def _validate_method(session, principal, account_id, card_id, loan_asset_id=None):
+    account = None
+    asset_ids = set()
     if account_id is not None:
         account = scoped_entity(session, FinancialAccount, account_id, principal)
-        asset = scoped_entity(session, Asset, account.asset_id, principal, for_update=True)
+        asset_ids.add(account.asset_id)
+    if loan_asset_id is not None:
+        asset_ids.add(loan_asset_id)
+    assets = {
+        asset_id: scoped_entity(session, Asset, asset_id, principal, for_update=True)
+        for asset_id in sorted(asset_ids)
+    }
+    if loan_asset_id is not None:
+        loan = assets[loan_asset_id]
+        if loan.kind != "liability" or loan.ended_on is not None:
+            raise DomainError("LOAN_UNAVAILABLE", "사용 중인 부채를 선택해 주세요.", 422)
+    if account is not None:
         scoped_entity(session, FinancialAccount, account_id, principal, for_update=True)
-        if asset.ended_on is not None:
+        if assets[account.asset_id].ended_on is not None:
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 납부 계좌를 선택해 주세요.", 422)
     if card_id is not None:
         from sallimbook.cards.models import Card
@@ -155,7 +168,9 @@ def create_rule(session, principal, payload, key):
     cash.lock_cash_household(session, principal)
 
     def execute():
-        _validate_method(session, principal, payload.account_id, payload.card_id)
+        _validate_method(
+            session, principal, payload.account_id, payload.card_id, payload.loan_asset_id
+        )
         row = RecurringRule(
             household_id=principal.household_id, created_by_member_id=principal.member_id
         )
@@ -187,20 +202,36 @@ def create_rule(session, principal, payload, key):
 
 
 def _change_window(session, principal, rule, start):
-    end = session.scalar(
-        select(func.max(ScheduledObligation.nominal_date)).where(
-            ScheduledObligation.household_id == principal.household_id,
-            ScheduledObligation.rule_id == rule.id,
+    # Preserve the requested horizon, not just the date of its last occurrence.
+    # Otherwise moving a monthly anchor from the 15th to the 31st loses the final month.
+    windows = list(
+        session.execute(
+            select(ObligationGeneration.start_date, ObligationGeneration.end_date)
+            .where(
+                ObligationGeneration.household_id == principal.household_id,
+                or_(
+                    ObligationGeneration.rule_id == rule.id, ObligationGeneration.rule_id.is_(None)
+                ),
+                ObligationGeneration.end_date >= start,
+            )
+            .order_by(ObligationGeneration.start_date)
         )
     )
-    if end is None or end < start:
-        return
-    # Bound work without losing already-generated future coverage across multiple annual windows.
-    cursor = start
-    while cursor <= end:
-        window_end = min(end, cursor + timedelta(days=365))
-        _generate_rows(session, principal, cursor, window_end, [rule])
-        cursor = window_end + timedelta(days=1)
+    merged = []
+    for lower, upper in windows:
+        lower = max(start, lower)
+        if merged and lower <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], upper))
+        else:
+            merged.append((lower, upper))
+    for lower, upper in merged:
+        cursor = lower
+        while cursor <= upper:
+            window_end = cursor + timedelta(days=min(365, (upper - cursor).days))
+            _generate_rows(session, principal, cursor, window_end, [rule])
+            if window_end == date.max:
+                break
+            cursor = window_end + timedelta(days=1)
 
 
 def change_rule(session, principal, rule_id, payload, if_match, key):
@@ -217,7 +248,9 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
             )
         if payload.effective_from < today():
             raise DomainError("PAST_RULE_CHANGE", "지난 규칙은 변경할 수 없습니다.", 409)
-        _validate_method(session, principal, payload.account_id, payload.card_id)
+        _validate_method(
+            session, principal, payload.account_id, payload.card_id, payload.loan_asset_id
+        )
         last.effective_until = payload.effective_from
         session.flush()  # Close the old range before the exclusion constraint sees its successor.
         session.add(
@@ -466,6 +499,7 @@ def generate(session, principal, payload: GenerateObligations, key):
         batch = ObligationGeneration(
             household_id=principal.household_id,
             created_by_member_id=principal.member_id,
+            rule_id=payload.rule_id,
             start_date=payload.start_date,
             end_date=payload.end_date,
         )

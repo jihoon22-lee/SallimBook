@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
@@ -705,7 +705,7 @@ class TestRecurringDatabase:
                 client.post(
                     "/api/v1/recurring-rules", headers=actor.headers, json=rule_payload()
                 ).status_code
-                == 422
+                == 400
             )
             rule = post_rule(client, actor)
             generate(client, actor, rule["id"])
@@ -718,7 +718,7 @@ class TestRecurringDatabase:
                     headers=headers(actor),
                     json={"reason": "합성"},
                 ).status_code
-                == 422
+                == 400
             )
         with Session(db_engine) as session:
             for event in session.scalars(select(AuditEvent)):
@@ -727,3 +727,260 @@ class TestRecurringDatabase:
                     event.safe_diff
                 )
             assert session.scalar(select(func.count()).select_from(IdempotencyRecord)) == 3
+
+    def test_change_retains_requested_horizon_and_empty_windows(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor, anchor_date="2026-01-15")
+            generate(client, actor, rule["id"], end="2026-03-31")
+            result = client.patch(
+                f"/api/v1/recurring-rules/{rule['id']}",
+                headers=headers(actor, version=1),
+                json=rule_payload() | {"effective_from": "2026-02-01", "reason": "합성 월말 변경"},
+            )
+            assert result.status_code == 200
+            rows = client.get("/api/v1/obligations?month=2026-03", headers=actor.headers).json()[
+                "items"
+            ]
+            assert {(r["scheduled_date"], r["status"]) for r in rows} == {
+                ("2026-03-15", "superseded"),
+                ("2026-03-31", "unpaid"),
+            }
+            yearly = post_rule(client, actor, anchor_date="2026-12-01", frequency="annual")
+            assert (
+                generate(client, actor, yearly["id"], start="2026-03-01", end="2026-03-31")["items"]
+                == []
+            )
+            result = client.patch(
+                f"/api/v1/recurring-rules/{yearly['id']}",
+                headers=headers(actor, version=1),
+                json=rule_payload() | {"effective_from": "2026-03-01", "reason": "합성 월납 변경"},
+            )
+            assert result.status_code == 200
+            rows = client.get("/api/v1/obligations?month=2026-03", headers=actor.headers).json()[
+                "items"
+            ]
+            assert any(
+                r["rule_id"] == yearly["id"] and r["scheduled_date"] == "2026-03-31" for r in rows
+            )
+
+    def test_generation_failure_rolls_back_and_same_key_can_retry(
+        self, recurring_app, actors, db_engine, monkeypatch
+    ):
+        actor = actors[0]
+        original = service._remember
+        count = 0
+
+        def fail_second(*args, **kwargs):
+            nonlocal count
+            count += 1
+            original(*args, **kwargs)
+            if count == 2:
+                raise RuntimeError("Synthetic batch failure")
+
+        with TestClient(recurring_app, raise_server_exceptions=False) as client:
+            rule = post_rule(client, actor)
+            monkeypatch.setattr(service, "_remember", fail_second)
+            result = client.post(
+                "/api/v1/obligations/generate",
+                headers=headers(actor, "synthetic-retry"),
+                json={"start_date": "2026-01-01", "end_date": "2026-03-31", "rule_id": rule["id"]},
+            )
+            assert result.status_code == 500
+            with Session(db_engine) as session:
+                assert session.scalar(select(func.count()).select_from(ScheduledObligation)) == 0
+                assert session.scalar(select(func.count()).select_from(ObligationRevision)) == 0
+                assert session.scalar(select(func.count()).select_from(ObligationGeneration)) == 0
+            monkeypatch.setattr(service, "_remember", original)
+            assert len(generate(client, actor, rule["id"], "synthetic-retry")["items"]) == 3
+
+    def test_same_key_concurrent_settlement_has_one_cash_fact(
+        self, recurring_app, actors, db_engine
+    ):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            row = obligation_for(client, actor, "2026-01")
+        barrier = Barrier(2)
+
+        def submit():
+            with TestClient(recurring_app) as client:
+                barrier.wait(timeout=10)
+                return settle(client, actor, row, key="synthetic-concurrent-payment").json()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first, second = pool.submit(submit), pool.submit(submit)
+            assert first.result(timeout=15) == second.result(timeout=15)
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(FixedSettlement)) == 1
+            assert session.scalar(select(func.count()).select_from(CashRecord)) == 1
+            assert session.get(ScheduledObligation, UUID(row["id"])).version == 2
+
+    def test_actual_month_is_independent_of_scheduled_month(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            row = obligation_for(client, actor, "2026-01")
+            payment = settle(client, actor, row, occurred_on="2026-02-01").json()
+            assert payment["cash"]["period_month"] == "2026-02"
+            jan = client.get(
+                "/api/v1/obligations/summary?month=2026-01", headers=actor.headers
+            ).json()
+            feb = client.get(
+                "/api/v1/obligations/summary?month=2026-02", headers=actor.headers
+            ).json()
+            assert jan["expected_known_krw"] == "33000" and jan["actual_amount_krw"] == "0"
+            assert feb["expected_known_krw"] == "33000" and feb["actual_amount_krw"] == "35000"
+
+    def test_null_and_zero_expected_are_distinct_and_unpaid(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            unknown = post_rule(client, actor, amount_mode="variable", expected_amount_krw=None)
+            zero = post_rule(client, actor, expected_amount_krw="0")
+            generate(client, actor, unknown["id"])
+            generate(client, actor, zero["id"])
+            rows = client.get("/api/v1/obligations?month=2026-01", headers=actor.headers).json()[
+                "items"
+            ]
+            assert {r["expected_amount_krw"] for r in rows} == {None, "0"}
+            assert {r["status"] for r in rows} == {"unpaid"}
+            result = client.get(
+                "/api/v1/obligations/summary?month=2026-01", headers=actor.headers
+            ).json()
+            assert result["expected_known_krw"] == "0" and result["unknown_expected_count"] == 1
+
+    @pytest.mark.parametrize(
+        "economic,payment",
+        [
+            ("loan", {"amount_krw": "100", "principal_krw": "70"}),
+            ("loan", {"amount_krw": "100", "principal_krw": "70", "interest_krw": "31"}),
+            ("expense", {"amount_krw": "100", "principal_krw": "1"}),
+            ("asset_transfer", {"amount_krw": "100", "interest_krw": "0"}),
+            ("expense", {"amount_krw": "100", "occurred_on": "9999-01-01"}),
+        ],
+    )
+    def test_invalid_settlement_leaves_no_cash(
+        self, recurring_app, actors, db_engine, economic, payment
+    ):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor, economic_type=economic)
+            generate(client, actor, rule["id"])
+            row = obligation_for(client, actor, "2026-01")
+            result = client.post(
+                f"/api/v1/obligations/{row['id']}/settlements",
+                headers=headers(actor, version=1),
+                json={"occurred_on": "2026-01-31", **payment},
+            )
+            assert result.status_code == 422
+            assert obligation_for(client, actor, "2026-01")["version"] == 1
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(CashRecord)) == 0
+            assert session.scalar(select(func.count()).select_from(FixedSettlement)) == 0
+
+    def test_overflow_rolls_back_additional_payment(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            row = obligation_for(client, actor, "2026-01")
+            settle(client, actor, row, amount=str(MAX_KRW))
+            result = client.post(
+                f"/api/v1/obligations/{row['id']}/settlements",
+                headers=headers(actor, version=2),
+                json={"amount_krw": "1", "occurred_on": "2026-01-31"},
+            )
+            assert (
+                result.status_code == 422
+                and result.json()["error"]["code"] == "AMOUNT_OUT_OF_RANGE"
+            )
+            assert obligation_for(client, actor, "2026-01")["actual_amount_krw"] == str(MAX_KRW)
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(CashRecord)) == 1
+
+    def test_rule_terms_are_immutable_at_database(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            post_rule(client, actor)
+        with Session(db_engine) as session:
+            for statement in (
+                update(RecurringRuleVersion).values(expected_amount_krw=1),
+                delete(RecurringRuleVersion),
+            ):
+                with pytest.raises(DBAPIError) as rejected:
+                    session.execute(statement)
+                assert rejected.value.orig.sqlstate == "55000"
+                session.rollback()
+
+    def test_t09_actual_payment_preserves_real_liability_snapshot(
+        self, recurring_app, actors, db_engine
+    ):
+        from sallimbook.assets import month_service
+        from sallimbook.assets import service as asset_service
+        from sallimbook.assets.month_schemas import MonthDraft, MonthValueUpdate
+        from sallimbook.assets.schemas import AssetCreate
+
+        actor = actors[0]
+        with Session(db_engine) as session:
+            loan = asset_service.create_asset(
+                session,
+                actor.principal,
+                AssetCreate(
+                    name="합성 대출",
+                    kind="liability",
+                    category="loan",
+                    ownership_kind="joint",
+                    amount_basis="owned",
+                    started_on="2025-01-01",
+                ),
+                None,
+            )
+            draft = month_service.create_draft(
+                session,
+                actor.principal,
+                "2026-01",
+                MonthDraft(copy_previous=False),
+                "synthetic-debt-draft",
+            )
+            month = month_service.get_month(session, actor.principal, "2026-01")
+            value = month.values[0]
+            month_service.update_value(
+                session,
+                actor.principal,
+                "2026-01",
+                loan.id,
+                MonthValueUpdate(
+                    revision_id=draft.revision_id,
+                    value_id=value.id,
+                    input_amount_krw="50000000",
+                    as_of_date="2026-01-31",
+                ),
+                f'"{value.version}"',
+            )
+            before = month_service.get_month(session, actor.principal, "2026-01").model_dump(
+                mode="json"
+            )
+        with TestClient(recurring_app) as client:
+            rule = post_rule(
+                client,
+                actor,
+                economic_type="loan",
+                loan_asset_id=str(loan.id),
+                expected_amount_krw="1000000",
+            )
+            generate(client, actor, rule["id"])
+            settle(
+                client,
+                actor,
+                obligation_for(client, actor, "2026-01"),
+                amount="1000000",
+                principal_krw="700000",
+                interest_krw="300000",
+            )
+        with Session(db_engine) as session:
+            after = month_service.get_month(session, actor.principal, "2026-01").model_dump(
+                mode="json"
+            )
+            assert after == before and after["values"][0]["input_amount_krw"] == "50000000"

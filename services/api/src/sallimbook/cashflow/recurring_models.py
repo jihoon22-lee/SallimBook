@@ -37,6 +37,7 @@ class RecurringRule(EntityMixin, Base):
         UniqueConstraint("household_id", "id"),
         household_fk("recurring_rules", "created_by_member_id", "household_members"),
         CheckConstraint("version > 0", name="positive_version"),
+        CheckConstraint("(ended_on IS NULL) = (end_reason IS NULL)", name="end_reason"),
         Index("ix_recurring_rules_household_id", "household_id", "id"),
     )
     household_id: Mapped[UUID]
@@ -51,6 +52,7 @@ class ScheduleFields:
     amount_mode: Mapped[str] = mapped_column(String(8))
     expected_amount_krw: Mapped[Decimal | None] = mapped_column(KrwNumeric())
     economic_type: Mapped[str] = mapped_column(String(16))
+    loan_asset_id: Mapped[UUID | None]
     account_id: Mapped[UUID | None]
     card_id: Mapped[UUID | None]
     currency_reference: Mapped[str | None] = mapped_column(String(3))
@@ -61,6 +63,8 @@ class ScheduleFields:
 def schedule_constraints(table):
     return (
         household_fk(table, "account_id", "financial_accounts"),
+        household_fk(table, "loan_asset_id", "assets"),
+        CheckConstraint("loan_asset_id IS NULL OR economic_type = 'loan'", name="loan_reference"),
         household_fk(table, "card_id", "cards"),
         CheckConstraint("account_id IS NULL OR card_id IS NULL", name="one_payment_method"),
         CheckConstraint("amount_mode IN ('fixed', 'variable')", name="amount_mode"),
@@ -211,11 +215,13 @@ class ObligationGeneration(Base):
     __table_args__ = (
         UniqueConstraint("household_id", "id"),
         household_fk("obligation_generations", "created_by_member_id", "household_members"),
+        household_fk("obligation_generations", "rule_id", "recurring_rules"),
         CheckConstraint("end_date >= start_date", name="date_order"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     household_id: Mapped[UUID]
     created_by_member_id: Mapped[UUID]
+    rule_id: Mapped[UUID | None]
     start_date: Mapped[date]
     end_date: Mapped[date]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

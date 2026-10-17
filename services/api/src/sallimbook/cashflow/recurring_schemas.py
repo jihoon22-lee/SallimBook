@@ -27,6 +27,7 @@ class ScheduleTerms(InputModel):
     amount_mode: Literal["fixed", "variable"]
     expected_amount_krw: KrwString | None = Field(default=None, repr=False)
     economic_type: EconomicType
+    loan_asset_id: UUID | None = None
     account_id: UUID | None = None
     card_id: UUID | None = None
     currency_reference: Currency | None = None
@@ -38,6 +39,8 @@ class ScheduleTerms(InputModel):
 
     @model_validator(mode="after")
     def valid_terms(self) -> Self:
+        if self.loan_asset_id is not None and self.economic_type != "loan":
+            raise ValueError("Only a loan schedule may link a liability asset")
         if self.account_id and self.card_id:
             raise ValueError("Choose an account or a card, not both")
         if self.amount_mode == "fixed" and self.expected_amount_krw is None:
@@ -158,6 +161,7 @@ class ObligationResponse(BaseModel):
     amount_mode: Literal["fixed", "variable"]
     expected_amount_krw: KrwString | None
     economic_type: EconomicType
+    loan_asset_id: UUID | None = None
     account_id: UUID | None
     card_id: UUID | None
     currency_reference: str | None
