@@ -162,7 +162,7 @@ API 변경 후 `pnpm api:generate`와 `pnpm typecheck`로 OpenAPI·TS 계약을 
 ### 자산·계좌 화면 검증
 
 자산 목록·등록·상세·수정·사용 종료와 계좌 목록·등록·상세·수정·사용 종료를 실제 생성 API client에 연결했다.
-기본정보 목록은 아직 조회하지 않은 금액을 0원으로 채우지 않는다. 웹 월 입력·확정·정정은 별도 월 기록 화면에서 제공한다. 월간 비교 연결은 후속 작업이다.
+기본정보 목록은 아직 조회하지 않은 금액을 0원으로 채우지 않는다. 웹 월 입력·확정·정정은 별도 월 기록 화면에서 제공한다. 월간 비교·추이는 같은 월 기록을 조회한다.
 계좌는 하나의 금융 자산과 연결하고 평가액을 중복 합산하지 않는다.
 
 `pnpm --filter @sallimbook/client exec playwright test --config playwright.finance.config.ts`는 별도
@@ -182,4 +182,7 @@ Android 번호 입력·표시 실기기 시험은 빌드/JVM/브라우저 bridge
 `pnpm --filter @sallimbook/client exec playwright test --config playwright.months.config.ts`는 18749 포트를 사용한다.
 `uv run --project services/api python scripts/test_web_auth.py --months`는 실제 HTTPS·일회용 DB의 월 전체 흐름을 검증한다.
 [월 입력 검증 기록](testing/monthly-assets-client.md)에 재현 명령과 구현/검증 경계를 기록한다.
-Android 월 adapter는 별도 연결 중이며 JS fetch로 네이티브 인증 경계를 우회하지 않는다.
+Android 월 adapter도 연결되며 JS fetch로 네이티브 인증 경계를 우회하지 않는다.
+### 반복 규칙 DB 확장
+
+`0009_recurring`의 기간 배타 제약은 고정 PostgreSQL 이미지의 btree_gist 1.8을 사용한다. 마이그레이션 역할에 대상 DB의 CREATE 권한이 필요하고 런타임 API 역할에는 확장 설치 권한을 주지 않는다. public의 기존 확장 버전/위치가 다르면 자동 이동·업그레이드하지 않고 마이그레이션을 중단한다. [PostgreSQL btree_gist 문서](https://www.postgresql.org/docs/18/btree-gist.html), [CREATE EXTENSION 문서](https://www.postgresql.org/docs/18/sql-createextension.html)를 확인했다.

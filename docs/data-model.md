@@ -255,3 +255,8 @@ erDiagram
 ### SB-017 구현 상태
 
 `0008_cards`는 카드 metadata와 cash 원본/이력의 `card_id` 복합 FK를 추가한다. 상태는 ended_on에서 파생하며 소유자와 결제계좌도 같은 가계 FK로 묶는다. cash 계좌/카드 배타 선택과 수입·보험금의 카드 사용 금지를 DB CHECK로 검증한다. 기존 cash 행은 card_id가 null인 채로 유지된다. 카드 종료는 cash 이력이나 계좌 연결을 삭제하지 않고, 사용 중인 카드의 물리 삭제는 FK로 차단한다. 일반 카드 테이블에 PAN·유효기간·CVC가 없으며 보관함 암호문도 별도 테이블을 추가할 때 연결한다.
+
+### SB-015/016 구현 상태
+
+`0009_recurring`은 규칙·기간별 규칙 변경본·예상 회차·회차 이력·실제 납부·생성 묶음/참조의 7개 테이블을 추가한다. 기간 중복은 household/rule/daterange GiST exclusion으로 막는다. PostgreSQL 18.6 이미지에 포함된 btree_gist 1.8을 public에 설치하고 명시적 public UUID operator class를 사용하여 테스트 schema 격리를 유지한다. downgrade는 다른 schema도 쓰는 extension을 제거하지 않는다.
+규칙 조건·회차 이력·실납부 분해·생성 응답 참조는 불변이며 규칙의 열린 적용 종료일만 처음 한 번 닫을 수 있다. 실납부 insert trigger는 같은 가계의 fixed_payment cash 종류·방향·활성 상태·금액 합계와 회차 경제 유형을 확인한다. 금전 원본의 취소는 원본 cash 이력과 연결 회차 갱신을 한 트랜잭션으로 수행한다.
