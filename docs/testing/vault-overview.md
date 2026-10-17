@@ -38,9 +38,37 @@ PC 보호 화면의 암호 처리·출력 수명 검증과 실제 서버 통합 
 
 ## 실행 기록
 
-현재 추가 화면 시험은 보호 화면 구현 통합을 기다리고 있으며 아직 실행하지 않았다.
-중간 `pnpm typecheck`는 미도착 `WebVaultAction` import 1건으로 실패했다.
-다른 타입 오류는 출력되지 않았다. 통합 후 결과와 실행 명령을 갱신한다.
+`89db3de`의 보호 화면 본체를 통합한 뒤 다음 명령을 실행했다. API 오류 코드 병합에서는
+문서 저장 quota 코드와 보관함 코드를 모두 유지했다. 별도 API/DB migration 변경은 없다.
+
+```bash
+pnpm typecheck
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/vault-overview.spec.ts tests/vault-overview-native.spec.ts tests/cards.spec.ts tests/routing.spec.ts --workers=1
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/vault-overview-native.spec.ts --grep 'native busy action' --workers=1
+pnpm build
+python3 scripts/validate_docs.py
+git diff --check
+```
+
+- 타입 검사 통과. 본체 통합 전의 `WebVaultAction` import 오류는 해소됐다.
+- 새 보관함 화면 40개와 기존 카드 20개·경로 16개, 합계 **76개 통과**(PC/Android 크기, 약 1.7분).
+  네이티브 일반 진입 시험은 초기 설정·회전 재개/중단 외에도 카드/공유/복구/기기/CVC 삭제
+  13개 진입의 action과 ID만 확인했다. 네이티브 HTTP 호출과 JS 비밀 입력은 없었다.
+- 첫 실행의 늦은 응답 시험은 목적지인 기기 설정 화면에 잘못된 모의 응답 형식을 제공해
+  콘솔 오류가 있었지만 기존 assertion은 통과했다. 목적지를 실제 fixture가 지원하는 카드
+  상세로 수정하고 `pageerror`가 비어 있음을 검사하도록 보강했다. 이 시험을 두 화면 크기에서
+  재실행해 **2개 통과**, 콘솔 오류 없음. 추가 변경은 시험 파일에만 있으며 전체 76개를
+  다시 실행했다고 주장하지 않는다.
+- 배포용 빌드 통과(151개 모듈). 주 JS 파일 859.33 kB/gzip 221.22 kB이며 기존의
+  500 kB 초과 chunk 경고는 남는다. 이 빌드는 APK 실기기·정식 서명 인수가 아니다.
+- 문서 링크/manifest 검사와 `git diff --check` 통과.
+
+이 실행에서는 PC 보호 화면 내부의 실제 암호 입력·복호화·키 회전 요청을 별도로 시험하지
+않았다. 해당 workflow의 독립 시험과 실제 서버 통합은 담당 구현의 결과를 확인해야 한다.
+읽기 전용 소스 검토에서는 늦게 생성된 키/평문 소유권을 즉시 등록해 닫힌 수명에서 제거하고,
+카드 표시 전 권한·카드 버전을 다시 확인하며, 화면 이탈·30초 제한에 DOM 출력을 지우는
+경계를 확인했다. 대상 rotation ID 일치 검사와 부분 저장 재시도 후 완료 안내 보강점은
+담당 구현에 전달했다. 이 소스 검토를 실행 시험이나 실기기 보안 인증으로 간주하지 않는다.
 
 [보안 정책](../security-authentication.md) · [키 수명주기](../vault-key-lifecycle.md) ·
 [카드 보관함 포맷](../adr/vault-format-v1.md)
