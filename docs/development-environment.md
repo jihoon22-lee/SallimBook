@@ -186,3 +186,8 @@ Android 월 adapter도 연결되며 JS fetch로 네이티브 인증 경계를 �
 ### 반복 규칙 DB 확장
 
 `0009_recurring`의 기간 배타 제약은 고정 PostgreSQL 이미지의 btree_gist 1.8을 사용한다. 마이그레이션 역할에 대상 DB의 CREATE 권한이 필요하고 런타임 API 역할에는 확장 설치 권한을 주지 않는다. public의 기존 확장 버전/위치가 다르면 자동 이동·업그레이드하지 않고 마이그레이션을 중단한다. [PostgreSQL btree_gist 문서](https://www.postgresql.org/docs/18/btree-gist.html), [CREATE EXTENSION 문서](https://www.postgresql.org/docs/18/sql-createextension.html)를 확인했다.
+
+SB-018 결제수단 연결 조회·종료 확인은 새 migration 없이 `0009_recurring` 위에 연결했다.
+`test_payment_links.py`42개, 카드30개, 자산61개, 고정비69개, 계좌68개가 현재 코드에서 통과했다
+(총270개, 종료 확인이 필요한 기존 fixture 수정 후 분리 재검증 포함). Alembic drift 없음과
+downgrade/upgrade 왕복도 확인했다. 기존 서버·데이터는 변경하지 않고 일회용 시험 DB만 사용했다.
