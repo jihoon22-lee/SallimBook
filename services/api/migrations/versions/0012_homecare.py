@@ -396,8 +396,9 @@ def upgrade() -> None:
         CREATE FUNCTION protect_homecare_identity() RETURNS trigger
         LANGUAGE plpgsql AS $$ BEGIN
             IF TG_OP = 'DELETE' THEN
-                RAISE EXCEPTION 'Homecare records preserve their history'
-                    USING ERRCODE = '55000';
+                -- RESTRICT FKs preserve every reference, including cancelled history.
+                -- Unreferenced mistaken metadata may be deleted after confirmation.
+                RETURN OLD;
             END IF;
             IF (NEW.id, NEW.household_id, NEW.created_by_member_id, NEW.created_at)
                 IS DISTINCT FROM

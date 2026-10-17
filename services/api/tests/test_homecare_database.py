@@ -183,7 +183,7 @@ def test_appliance_purchase_warranty_end_and_price_do_not_create_assets(
             ]
             == appliance["id"]
         )
-        assert client.delete(path, headers=actor.headers).status_code == 405
+        assert client.delete(path, headers=actor.headers).status_code == 400
         assert client.get(path, headers=actor.headers).json()["note"] == "합성 수리 메모"
     with Session(db_engine) as session:
         assert session.scalar(select(func.count()).select_from(Asset)) == 0
@@ -1260,3 +1260,118 @@ def test_audit_records_fields_and_actor_without_copying_private_values(
         )
         movement = session.scalar(select(StockMovement))
         assert str(movement.unit_cost_krw) == "99999999999999999999"
+
+
+@pytest.mark.parametrize("kind", ["appliances", "consumables", "appliance-consumables"])
+def test_delete_unreferenced_metadata_requires_scope_and_current_version(
+    homecare_app, actors, db_engine, kind
+):
+    from sallimbook.core.audit import AuditEvent
+
+    actor, partner, foreign = actors
+    with TestClient(homecare_app) as client:
+        if kind == "appliances":
+            row = post_appliance(client, actor)
+        elif kind == "consumables":
+            row = post_consumable(client, actor)
+        else:
+            row = post_link(
+                client, actor, post_appliance(client, actor), post_consumable(client, actor)
+            )
+        path = f"/api/v1/{kind}/{row['id']}"
+        assert client.delete(path, headers=headers(foreign, version=1)).status_code == 404
+        assert client.delete(path, headers=actor.headers).status_code == 400
+        assert client.delete(path, headers=headers(actor, version=2)).status_code == 409
+        deleted = client.delete(path, headers=headers(partner, version=1))
+        assert deleted.status_code == 204, deleted.text
+        assert deleted.content == b""
+        assert client.get(path, headers=actor.headers).status_code == 404
+        assert client.delete(path, headers=headers(actor, version=1)).status_code == 404
+    with Session(db_engine) as session:
+        events = list(
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == UUID(row["id"]), AuditEvent.action == "delete"
+                )
+            )
+        )
+        assert len(events) == 1
+        assert events[0].actor_id == partner.principal.user_id
+        assert events[0].before_version == 1 and events[0].after_version is None
+
+
+@pytest.mark.parametrize("kind", ["appliances", "consumables", "appliance-consumables"])
+def test_delete_preserves_references_and_cancelled_history(homecare_app, actors, db_engine, kind):
+    from sallimbook.core.audit import AuditEvent
+
+    actor = actors[0]
+    with TestClient(homecare_app) as client:
+        stock = post_consumable(client, actor)
+        if kind == "consumables":
+            received = receipt(client, actor, stock, quantity=1)
+            cancelled = client.post(
+                f"/api/v1/consumables/{stock['id']}/stock-movements/{received['id']}/cancel",
+                headers=headers(actor, version=stock_at(client, actor, stock["id"])["version"]),
+                json={"occurred_on": TODAY, "reason": "합성 입고 취소"},
+            )
+            assert cancelled.status_code == 200, cancelled.text
+            row = stock_at(client, actor, stock["id"])
+            assert row["stock_quantity"] == 0
+        else:
+            appliance = post_appliance(client, actor)
+            link = post_link(client, actor, appliance, stock)
+            row = appliance
+            if kind == "appliance-consumables":
+                receipt(client, actor, stock)
+                replaced = replace(client, actor, link)
+                cancel_replacement(client, actor, link, replaced)
+                row = link_at(client, actor, link["id"])
+        path = f"/api/v1/{kind}/{row['id']}"
+        response = client.delete(path, headers=headers(actor, version=row["version"]))
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["code"].endswith("_IN_USE")
+        assert client.get(path, headers=actor.headers).status_code == 200
+    with Session(db_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.entity_id == UUID(row["id"]), AuditEvent.action == "delete")
+            )
+            == 0
+        )
+
+
+def test_concurrent_delete_and_new_reference_keep_one_consistent_outcome(homecare_app, actors):
+    actor = actors[0]
+    with TestClient(homecare_app) as client:
+        appliance = post_appliance(client, actor)
+        stock = post_consumable(client, actor)
+    barrier = Barrier(2)
+
+    def remove():
+        with TestClient(homecare_app) as client:
+            barrier.wait(timeout=10)
+            return client.delete(
+                f"/api/v1/appliances/{appliance['id']}", headers=headers(actor, version=1)
+            ).status_code
+
+    def connect():
+        with TestClient(homecare_app) as client:
+            barrier.wait(timeout=10)
+            return client.post(
+                "/api/v1/appliance-consumables",
+                headers=actor.headers,
+                json={
+                    "appliance_id": appliance["id"],
+                    "consumable_id": stock["id"],
+                },
+            ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        deletion = pool.submit(remove)
+        connection = pool.submit(connect)
+        assert (deletion.result(timeout=20), connection.result(timeout=20)) in {
+            (204, 404),
+            (409, 201),
+        }
