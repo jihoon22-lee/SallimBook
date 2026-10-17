@@ -382,3 +382,14 @@ TS 본문/응답/조회 조건은 생성 `components`와 `operations`를 참조�
 브라우저 모의시험 `insurance-events-native-bridge.spec.ts`는 34개 명령 전달과 잠금/재인증/
 사용 불가/도메인 충돌에서 웹 HTTP 우회·storage 저장이 없음을 검사한다.
 실제 Android 기기에서 잠금/백그라운드/늦은 응답을 검증한 결과로 대체하지 않는다.
+
+`pnpm api:generate`는 기존 결제수단/월 비교/보험 메타데이터와 `0011_insurance_events`의
+원천 라우터를 함께 사용했으며 수작업 API 계약이나 새 서버 필드를 추가하지 않았다.
+`pnpm typecheck`, `pnpm android:sync`가 통과했다.
+`JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=2 testDebugUnitTest compileReleaseKotlin`은
+신규 이벤트 14개를 포함한 JVM **188개**를 실패·오류·건너뜀 없이 통과했고 release Kotlin을 컴파일했다.
+`TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test insurance-events-native-bridge.spec.ts insurance-native-bridge.spec.ts cashflow-native-bridge.spec.ts accounts-native.spec.ts --config playwright.finance.config.ts --workers=2`는
+새 이벤트 12개와 기존 보험·금융·계좌 34개, 총 **46개**를 두 화면 크기에서 통과했다.
+브라우저 포트는 18748이며 해당 실행 중 Docker 서비스 상태는 변경하지 않았다.
+문서 manifest·로컬 링크 및 `git diff --check`도 통과했다. 이 변경의 APK 조립·서명·배포,
+실제 기기의 앱 잠금/백그라운드/화면 꺼짐/늦은 응답 시험은 실행하지 않았다.
