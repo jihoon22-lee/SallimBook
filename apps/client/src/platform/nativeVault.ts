@@ -1,6 +1,6 @@
 import type { components, operations } from "@sallimbook/api-client";
 import type { NativeAuthResult, NativeFinanceResponse, NativeVaultEntry } from "../../../../plugins/sallimbook-auth/src/definitions";
-import { ApiError, type ApiErrorCode } from "./api";
+import { ApiError, apiErrorCode, type ApiErrorCode } from "./api";
 import { hasNativeAuth, nativeAuthPlugin as plugin } from "./nativeAuth";
 
 export type { NativeVaultEntry };
@@ -33,7 +33,11 @@ async function invoke<T>(operation: () => Promise<NativeAuthResult<T>>): Promise
 }
 async function metadata<T>(operation: () => Promise<NativeAuthResult<NativeFinanceResponse<T>>>): Promise<T> {
   const result = await invoke(operation);
-  if (result.status !== 200 || result.body == null) throw new ApiError(result.status, "FORBIDDEN");
+  if (result.status !== 200) {
+    const error = result.body as components["schemas"]["ErrorResponse"] | null;
+    throw new ApiError(result.status, apiErrorCode(error?.error?.code, result.status));
+  }
+  if (result.body == null) throw new ApiError(result.status, "FORBIDDEN");
   return result.body as T;
 }
 /** This adapter exposes safe status and native screens only. No web HTTP or storage fallback. */

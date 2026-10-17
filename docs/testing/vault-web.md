@@ -70,3 +70,9 @@ python3 scripts/validate_docs.py
 전용 DB·서버·임시 인증서/설정/스키마는 정리했다. 빌드 151모듈/JS863.47KB 성공이며 단일 chunk 크기 경고는 남는다.
 모의 브라우저 크기 검증을 Android 네이티브/실기기 검증으로 표현하지 않는다.
 실제 Galaxy 인수와 운영 배포/복원·정식 APK 검증은 별도 수행한다.
+
+첫 PR 검토 뒤 Android 네이티브 구현과 화면 진입점이 함께 있는 `def1c228`을 통합했다.
+네이티브 메타데이터 오류는 생성 `ErrorResponse`의 허용된 코드와 HTTP 상태를 보존한다.
+누락/오래된 교체·최근 인증 필요·알 수 없는 오류의 세 reader 회귀를 추가했으며,
+`pnpm --filter @sallimbook/client exec playwright test tests/vault-native-bridge.spec.ts --workers=2`의
+**36개**와 typecheck·문서 검증을 통과했다. 오류 원문은 노출하지 않고 웹 요청이나 자동 재시도를 하지 않는다.

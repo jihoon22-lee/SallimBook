@@ -15,6 +15,14 @@ async function setup(page: Page, scenario = "success") {
         if (scenario === "throws") throw new Error("synthetic private native detail");
         const failures: Record<string, string> = { cancelled: "AUTH_CANCELLED", locked: "APP_LOCKED", expired: "SESSION_EXPIRED", network: "NETWORK_UNAVAILABLE", invalid: "INVALID_REQUEST", denied: "ACCESS_DENIED", key: "KEY_INVALIDATED" };
         if (failures[scenario]) return { ok: false, code: failures[scenario], message: "synthetic private native detail" };
+        const metadataFailures: Record<string, { status: number; code: string }> = {
+          "missing-rotation": { status: 404, code: "NOT_FOUND" },
+          "stale-rotation": { status: 409, code: "VAULT_ROTATION_UNAVAILABLE" },
+          "reauthentication": { status: 403, code: "REAUTHENTICATION_REQUIRED" },
+          "unknown-error": { status: 503, code: "synthetic private unknown code" },
+        };
+        const failure = metadataFailures[scenario];
+        if (failure) return { ok: true, value: { status: failure.status, body: { error: { code: failure.code, message: "synthetic private native detail" } } } };
         if (method === "openVaultUI") return { ok: true, value: scenario === "extra-result" ? { status: "completed", ciphertext: "synthetic opaque" } : { status: scenario === "ui-cancelled" ? "cancelled" : "completed" } };
         const body = method === "getVaultStatus" ? { household_id: id, initialized: false, id: null, version: null, current_key_version: null, own_membership: "not_enrolled", rotation_required: false, pending_rotation_id: null, members: [] }
           : method === "listVaultShares" ? { items: [], next_cursor: null } : { id, household_id: id, key_version: 2, source_key_version: 1, state: "staging", version: 1, key_check_prepared: false, recovery_prepared: false, cards: [], members: [{ member_id: id, source_membership_version: 1, prepared: false }] };
@@ -69,6 +77,35 @@ test("three metadata readers retain generated safe status and manifest values", 
   expect(result.calls).toEqual([{ method: "getVaultStatus" }, { method: "listVaultShares", args: { query: { cursor: null, limit: 200 } } }, { method: "getVaultRotation", args: { rotationId: id } }]);
   expect(result.http).toBe(0); expect(result.storage).toBe(0);
 });
+
+for (const [scenario, status, code] of [
+  ["missing-rotation", 404, "NOT_FOUND"],
+  ["stale-rotation", 409, "VAULT_ROTATION_UNAVAILABLE"],
+  ["reauthentication", 403, "REAUTHENTICATION_REQUIRED"],
+  ["unknown-error", 503, "REQUEST_FAILED"],
+] as const) {
+  test(`native metadata keeps safe error identity: ${scenario}`, async ({ page }) => {
+    await setup(page, scenario);
+    const result = await page.evaluate(async (id) => {
+      const source = "/src/platform/nativeVault.ts"; const { nativeVault } = await import(source);
+      const errors = [];
+      for (const operation of [() => nativeVault.getVaultStatus(), () => nativeVault.listVaultShares(), () => nativeVault.getVaultRotation({ rotationId: id })]) {
+        try { await operation(); } catch (error) {
+          const typed = error as { status: number; code: string };
+          errors.push({ status: typed.status, code: typed.code, message: String(error) });
+        }
+      }
+      const state = (window as unknown as { __vaultBridge: { calls: unknown[]; http: number } }).__vaultBridge;
+      return { errors, calls: state.calls.length, http: state.http, storage: localStorage.length + sessionStorage.length };
+    }, id);
+    expect(result.errors).toHaveLength(3);
+    for (const error of result.errors) {
+      expect(error).toMatchObject({ status, code });
+      expect(error.message).not.toContain("synthetic private");
+    }
+    expect(result.calls).toBe(3); expect(result.http).toBe(0); expect(result.storage).toBe(0);
+  });
+}
 
 test("plaintext opaque values flags URLs and extra arguments are rejected before bridge invocation", async ({ page }) => {
   await setup(page);
