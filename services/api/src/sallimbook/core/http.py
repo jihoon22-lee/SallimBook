@@ -50,6 +50,11 @@ def install_http_contract(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
+        if any(
+            item["type"] == "missing" and item["loc"] == ("header", "If-Match")
+            for item in exc.errors()
+        ):
+            return error_response(request, 400, "VERSION_REQUIRED", "수정할 버전을 지정해 주세요.")
         fields = [
             # Later loc segments can be submitted dict keys, extra field names,
             # or discriminator values. Return only the framework-owned source.
