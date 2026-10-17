@@ -44,6 +44,9 @@ Node 24.18.0, pnpm 9.15.9, 프로젝트 Python 3.14.7, uv 0.12.5, JDK 21을 사�
 시스템 Python 3.14.4와 프로젝트 uv Python은 별개다. `.python-version`은 프로젝트 버전을 고정한다.
 React 19.3.1, Vite 8.3.4, TypeScript 5.9.3, Capacitor 8.5.3,
 FastAPI 0.143.3을 lockfile에 고정했다. OpenAPI 생성기의 TypeScript 5 peer 범위를 따른다.
+Capacitor CLI의 `xcode@3.0.1` 하위 UUID는 CommonJS 지원 수정판 `uuid@11.1.1`로 좁게 고정한다.
+[버퍼 경계 검증 공지](https://github.com/uuidjs/uuid/security/advisories/GHSA-w5hq-g745-h8pq)를 반영했으며
+Xcode 도구의 UUID 생성과 Android sync 호환, `pnpm audit`를 확인한다. 앱에서 해당 UUID API로 비밀을 생성하지 않는다.
 Android는 compile/target SDK 36, 앱 Build Tools 36.0.0,
 AGP 8.13.0, Gradle 8.14.3(checksum 고정), Kotlin 2.2.20이다.
 CLI SDK 설치기는 공식 명령 도구 build 15859902의 SHA-256을 검증하며 기존 SDK 설치를 덮어쓰지 않는다.
