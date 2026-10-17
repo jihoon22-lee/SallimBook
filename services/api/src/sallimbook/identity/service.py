@@ -7,6 +7,7 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
+from uuid import UUID
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
@@ -432,14 +433,54 @@ def login(
     if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
         user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
+    result = issue_session(session, user, member, request.device_label, transport)
+    session.commit()
+    return result
+
+
+def issue_session(
+    session: Session,
+    user: User,
+    member: HouseholdMember,
+    device_label: str,
+    transport: Literal["web", "native"],
+    *,
+    device_id: UUID | None = None,
+) -> LoginResult:
+    """Issue credentials after server verification; caller owns the atomic commit.
+
+    This is an internal service, not an authentication bypass endpoint. The optional device
+    ID must come from server ceremony state, never from a client's device identifier.
+    """
+    if transport not in {"web", "native"}:
+        raise ValueError("Unsupported authentication transport")
+    active = session.execute(
+        select(User, HouseholdMember)
+        .select_from(User)
+        .join(HouseholdMember, HouseholdMember.user_id == User.id)
+        .where(
+            User.id == user.id,
+            User.disabled_at.is_(None),
+            HouseholdMember.id == member.id,
+            HouseholdMember.household_id == member.household_id,
+            HouseholdMember.status == "active",
+        )
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if active is None:
+        raise _unauthenticated()
+    user, member = active
+    now = utcnow()
     device = RegisteredDevice(
         household_id=member.household_id,
         user_id=user.id,
-        label=request.device_label,
+        label=device_label,
         platform="web" if transport == "web" else "android",
         status="active",
         last_seen_at=now,
     )
+    if device_id is not None:
+        device.id = device_id
     session.add(device)
     session.flush()
     token = secrets.token_urlsafe(32)
@@ -474,15 +515,14 @@ def login(
             refresh_token=refresh,
             refresh_expires_at=auth.expires_at,
         )
-    result = LoginResult(
+    session.flush()
+    return LoginResult(
         member=member_response(user, member),
         expires_at=auth.expires_at,
         token=token,
         csrf_token=csrf,
         native_tokens=native_tokens,
     )
-    session.commit()
-    return result
 
 
 def rotate_refresh(session: Session, token: str, source: str) -> NativeTokenResponse:

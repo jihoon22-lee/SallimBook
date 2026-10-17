@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from threading import Barrier, Event
 from unittest.mock import MagicMock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from argon2.low_level import Type
@@ -201,6 +201,42 @@ def test_bootstrap_cli_rejects_public_directory_and_symlink_destination(tmp_path
 
 @pytest.mark.database
 class TestIdentityDatabase:
+    def test_shared_session_issuance_keeps_commit_with_verified_caller(self, db_engine, account):
+        pending_device = uuid4()
+        with Session(db_engine) as session:
+            result = service.issue_session(
+                session,
+                session.get(User, account.user_id),
+                session.get(HouseholdMember, account.member_id),
+                "합성 인증 기기",
+                "native",
+                device_id=pending_device,
+            )
+            assert result.native_tokens is not None
+            assert session.get(RegisteredDevice, pending_device) is not None
+            assert session.scalar(select(func.count()).select_from(AuthSession)) == 1
+            assert session.scalar(select(func.count()).select_from(RefreshToken)) == 1
+            session.rollback()
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(RegisteredDevice)) == 0
+            assert session.scalar(select(func.count()).select_from(AuthSession)) == 0
+            assert session.scalar(select(func.count()).select_from(RefreshToken)) == 0
+
+    @pytest.mark.parametrize("disabled", ["user", "member"])
+    def test_shared_session_issuance_rechecks_active_account(self, db_engine, account, disabled):
+        with Session(db_engine) as session:
+            user = session.get(User, account.user_id)
+            member = session.get(HouseholdMember, account.member_id)
+            if disabled == "user":
+                user.disabled_at = service.utcnow()
+            else:
+                member.status = "revoked"
+            session.commit()
+            with pytest.raises(DomainError) as rejected:
+                service.issue_session(session, user, member, "합성 기기", "web")
+            assert rejected.value.status == 401
+            assert session.scalar(select(func.count()).select_from(AuthSession)) == 0
+
     def test_operator_renewal_replaces_expired_code_without_new_household(self, db_engine):
         password = secrets.token_urlsafe(24)
         with Session(db_engine) as session:
