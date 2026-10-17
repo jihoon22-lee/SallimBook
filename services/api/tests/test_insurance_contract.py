@@ -104,7 +104,9 @@ def test_case_states_are_independent_and_treatment_reopening_clears_end():
 
 def test_prescription_is_a_node_with_no_amount_or_cash_fields():
     prescription = MedicalNodeInput(kind="prescription", label="합성 처방")
-    assert not any("amount" in field or "cash" in field for field in type(prescription).model_fields)
+    assert not any(
+        "amount" in field or "cash" in field for field in type(prescription).model_fields
+    )
     with pytest.raises(ValidationError):
         MedicalNodeInput(kind="prescription", label="합성 처방", amount_krw="100")
 
