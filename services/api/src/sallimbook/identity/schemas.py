@@ -27,6 +27,10 @@ class LoginRequest(InputModel):
     device_label: DisplayName
 
 
+class ReauthenticationRequest(InputModel):
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+
 class InvitationRequest(InputModel):
     intended_login: LoginName
 

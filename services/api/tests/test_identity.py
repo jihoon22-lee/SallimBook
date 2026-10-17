@@ -202,6 +202,124 @@ def test_bootstrap_cli_rejects_public_directory_and_symlink_destination(tmp_path
 
 @pytest.mark.database
 class TestIdentityDatabase:
+    @pytest.mark.parametrize("transport", ["web", "native"])
+    def test_password_reauthentication_preserves_device_session_and_expiry(
+        self, identity_app, account, db_engine, transport
+    ):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            headers = (
+                csrf(web_login(client, account))
+                if transport == "web"
+                else {**NATIVE, **bearer(native_login(client, account))}
+            )
+            old_authentication = service.utcnow() - timedelta(minutes=6)
+            with Session(db_engine) as session:
+                auth = session.scalar(select(AuthSession))
+                identity, device_id, expires_at = auth.id, auth.device_id, auth.expires_at
+                old_session_hash = auth.session_hash
+                auth.authenticated_at = old_authentication
+                session.commit()
+            path = f"/api/v1/auth/{transport}/reauthenticate"
+            failed = client.post(
+                path, headers=headers, json={"password": secrets.token_urlsafe(24)}
+            )
+            assert failed.status_code == 403
+            assert failed.json()["error"]["code"] == "REAUTHENTICATION_FAILED"
+            assert client.get("/api/v1/me", headers=headers).status_code == 200
+            with Session(db_engine) as session:
+                assert session.get(AuthSession, identity).authenticated_at == old_authentication
+            accepted = client.post(path, headers=headers, json={"password": account.password})
+            assert accepted.status_code == 200
+            assert set(accepted.json()) == {
+                "user_id",
+                "member_id",
+                "household_id",
+                "display_name",
+                "role",
+            }
+            assert "set-cookie" not in accepted.headers
+            with Session(db_engine) as session:
+                auth = session.get(AuthSession, identity)
+                assert auth.authenticated_at > old_authentication
+                assert auth.expires_at == expires_at
+                assert auth.device_id == device_id and auth.session_hash == old_session_hash
+                assert session.scalar(select(func.count()).select_from(AuthSession)) == 1
+                assert session.scalar(select(func.count()).select_from(RegisteredDevice)) == 1
+                assert session.scalar(select(func.count()).select_from(RefreshToken)) == (
+                    1 if transport == "native" else 0
+                )
+
+    def test_web_reauthentication_requires_csrf_and_a_live_session(self, identity_app, account):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            login = web_login(client, account)
+            missing = client.post(
+                "/api/v1/auth/web/reauthenticate",
+                headers={"Origin": ORIGIN},
+                json={"password": account.password},
+            )
+            assert missing.status_code == 403
+            assert missing.json()["error"]["code"] == "CSRF_FAILED"
+            client.post("/api/v1/auth/web/logout", headers=csrf(login))
+            assert (
+                client.post(
+                    "/api/v1/auth/web/reauthenticate",
+                    headers=csrf(login),
+                    json={"password": account.password},
+                ).status_code
+                == 401
+            )
+
+    @pytest.mark.parametrize("changed", ["device", "session"])
+    def test_reauthentication_rechecks_revocation_after_admission_commit(
+        self, identity_app, account, db_engine, monkeypatch, changed
+    ):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            admission = service._admit_attempt
+
+            def revoke_after_admission(session, buckets, now):
+                admission(session, buckets, now)
+                with Session(db_engine) as other:
+                    if changed == "device":
+                        device = other.scalar(select(RegisteredDevice))
+                        device.status = "revoked"
+                        device.revoked_at = now
+                    else:
+                        other.scalar(select(AuthSession)).revoked_at = now
+                    other.commit()
+
+            monkeypatch.setattr(service, "_admit_attempt", revoke_after_admission)
+            result = client.post(
+                "/api/v1/auth/native/reauthenticate",
+                headers={**NATIVE, **bearer(tokens)},
+                json={"password": account.password},
+            )
+            assert result.status_code == 401
+            assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 401
+
+    def test_reauthentication_rate_limit_preserves_existing_session(self, identity_app, account):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            headers = {**NATIVE, **bearer(tokens)}
+            for _ in range(5):
+                assert (
+                    client.post(
+                        "/api/v1/auth/native/reauthenticate",
+                        headers=headers,
+                        json={"password": secrets.token_urlsafe(24)},
+                    ).status_code
+                    == 403
+                )
+            assert (
+                client.post(
+                    "/api/v1/auth/native/reauthenticate",
+                    headers=headers,
+                    json={"password": account.password},
+                ).status_code
+                == 429
+            )
+            assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 200
+
     def test_shared_session_issuance_keeps_commit_with_verified_caller(self, db_engine, account):
         pending_device = uuid4()
         with Session(db_engine) as session:

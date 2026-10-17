@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "3e7736516ecc56c251553a8b3f2fc13be0878dc44b4daf1a9a98dddf91ec06b4",
-      "git_sha1": "df19a45b1483dd65d8e6eef604b13571414593fe"
+      "sha256": "20ab0d83853e0e5abd87a80ed78dbd1fe019de27f4e34bbe5422292f91f43924",
+      "git_sha1": "152aba0228a10b38ccac6aa4b2c17be2e6d43fa5"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -66,16 +66,16 @@
       "git_sha1": "c7837503b0216889c4d98e58fa5cfc259ea3d366"
     },
     "docs/api-contract.md": {
-      "sha256": "13ee34d50f86765031f33e5f84d38b9ba7f631455be7696f6e21a5168119759b",
-      "git_sha1": "34f6d8e682f7cddeaa958aa510f5180710f46d76"
+      "sha256": "2fabc0fe7acea81ac799dd09bc240acdd524188f3a9bb742dd9ca26baf6c327c",
+      "git_sha1": "703506acb642d1045be947b7890e9b9fd4861c2d"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "26cb4605f5b44067de2f17709023e535e1b894d9e4a984eeb10cf257dc0b299e",
-      "git_sha1": "cd4e75e13c0ef84f6b7533bffa46eb9f520b9c18"
+      "sha256": "d5931a7858f859795e308cf33a7884b1f5c8bb9e105e91c95ab49d93a96d6375",
+      "git_sha1": "352c587d829ba29e3403cc46523901cddc44f0ef"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "4fda7d2fb36ddc154a3ad9a12f7c5f7a199e7895346f6061a0f318f2a0441c21",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "d1f765be3f4f9303707a93f142a0dbb5d3dba6490a3eeed7c18f770e246cef0d",
-      "git_sha1": "ceaf4a76c759232867e3adba9cd06c27ddeed5e9"
+      "sha256": "c4d4f33e53eb5893bf02d905c23e919db147eb1c817bb55bfd38bb0d78711f4e",
+      "git_sha1": "1317203bfc9390c1f564778fbd08eab99d6a564c"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -216,6 +216,18 @@
     "scripts/test_android_runtime_config.py": {
       "sha256": "dd8de566a7a18cf61bfe6cfad86e7c3cd02a556d189840120ae7e278f543606a",
       "git_sha1": "92f6d43b8f73f1a998304733736b8bf131e9562d"
+    },
+    "docs/testing/browser-authentication.md": {
+      "sha256": "a8b269278f808b5a5214281bd3f3dce71344272ca03e87d48dbb814c3b0171ac",
+      "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
+    },
+    "scripts/test_web_auth.py": {
+      "sha256": "5ce2cdc1621a3fbb1563f25be5f6c0c930ac2b80b0469052e6b74f7d4b502966",
+      "git_sha1": "017496e96ffea7a72ad4fdfc8cc4aacb1d38b4e7"
+    },
+    "docs/testing/native-security-proof.md": {
+      "sha256": "75e50c296b96865b339ad3604d9c2573b64df85fde44ea3312df6774d41c394f",
+      "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
     }
   }
 }

@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import func, select
 
-from sallimbook.core.authorization import require_recent_login, require_version, scoped_entity
+from sallimbook.core.authorization import require_recent_login, require_version
 from sallimbook.core.errors import DomainError
 from sallimbook.identity import service
 from sallimbook.identity.auth_models import AuthSession, HouseholdMember, RegisteredDevice, User
@@ -29,6 +29,7 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    ReauthenticationRequest,
     RefreshRequest,
     WebLoginResponse,
 )
@@ -67,6 +68,23 @@ def renew_web_csrf(principal: PrincipalDependency, session: SessionDependency) -
     return CsrfResponse(csrf_token=service.renew_csrf(session, principal))
 
 
+@router.post(
+    "/auth/web/reauthenticate",
+    response_model=MemberResponse,
+    dependencies=[Depends(require_web_transport)],
+    operation_id="reauthenticateWeb",
+)
+def reauthenticate_web(
+    payload: ReauthenticationRequest,
+    request: Request,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+) -> MemberResponse:
+    if principal.transport != "web":
+        raise DomainError("WRONG_AUTH_TRANSPORT", "인증 경로를 확인해 주세요.", 403)
+    return service.reauthenticate(session, principal, payload, request_source(request))
+
+
 @router.post("/auth/web/logout", status_code=204, operation_id="logoutWeb")
 def logout_web(principal: PrincipalDependency, session: SessionDependency) -> Response:
     if principal.transport != "web":
@@ -101,6 +119,23 @@ def refresh_native(
     return service.rotate_refresh(
         session, payload.refresh_token.get_secret_value(), request_source(request)
     )
+
+
+@router.post(
+    "/auth/native/reauthenticate",
+    response_model=MemberResponse,
+    dependencies=[Depends(require_native_transport)],
+    operation_id="reauthenticateNative",
+)
+def reauthenticate_native(
+    payload: ReauthenticationRequest,
+    request: Request,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+) -> MemberResponse:
+    if principal.transport != "native":
+        raise DomainError("WRONG_AUTH_TRANSPORT", "인증 경로를 확인해 주세요.", 403)
+    return service.reauthenticate(session, principal, payload, request_source(request))
 
 
 @router.post(
@@ -232,12 +267,15 @@ def revoke_device(
 ) -> Response:
     if step_up_token is None:
         require_recent_login(principal, now=service.utcnow())
-    device = scoped_entity(session, RegisteredDevice, device_id, principal, for_update=True)
-    if device.user_id != principal.user_id:
-        raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
+    auth, devices = service.lock_session_devices(
+        session, principal, additional_device_ids=(device_id,)
+    )
+    device = devices[device_id]
     require_version(device, if_match)
     if step_up_token is None:
-        require_recent_login(principal, now=service.utcnow())
+        service.validate_locked_session(
+            principal, auth, devices[principal.device_id], recent_login=True
+        )
     else:
         consume_step_up(session, principal, step_up_token, StepUpPurpose.DEVICE_REVOKE, device.id)
     service.revoke_device(session, principal, device)

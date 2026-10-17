@@ -2,10 +2,10 @@
 
 **부부가 함께 관리하는 자산과 생활의 기록. Android 앱을 중심으로, 같은 내용을 PC 웹에서도.**
 
-문서 기준일: **2026-10-17** · 목표 릴리스: **v1.0.0** · 현재 상태: **M0 기초 구현 진행**
+문서 기준일: **2026-10-17** · 목표 릴리스: **v1.0.0** · 현재 상태: **M1 공동 인증 구현 진행**
 
 > React 웹·Android 개발 빌드, FastAPI health/readiness API, PostgreSQL 기반과 생성 TS client가 추가되었습니다.
-> 26개 화면 경로와 모바일 탭·PC 사이드바를 탐색할 수 있습니다. 금융·보험·재고·인증·보관함의 업무 동작은 후속 Issue에서 구현합니다.
+> 26개 화면 경로와 모바일 탭·PC 사이드바, 부부 계정·초대·세션·기기 관리가 추가되었습니다. 금융·보험·재고·보관함의 업무 동작은 후속 Issue에서 구현합니다.
 > 개발 APK와 기본 빌드 성공은 v1 기능·보안·실기기 인수 완료를 뜻하지 않습니다.
 
 ## 무엇을 만드는가
@@ -89,6 +89,8 @@ API 설정은 명령을 실행한 디렉터리의 `.env`를 읽습니다. 위 �
 필요하면 `.env.example`을 참고해 `.env`를 만들되 기존 파일은 덮어쓰지 않습니다.
 설정 우선순위는 명시적 `Settings` 인자 → 프로세스 환경변수 → `.env` → 기본값입니다.
 staging·production의 CORS 허용 origin 기본값은 빈 목록이며, 필요한 origin을 명시적으로 지정합니다.
+웹 로그인은 HTTPS와 Secure 쿠키를 사용하므로 위 HTTP 개발 서버의 화면 탐색만으로 인증 동작을 검증하지 않습니다.
+실제 인증 검증은 HTTPS에서 진행하며 쿠키 보안 속성을 개발 편의상 낮추지 않습니다.
 
 ```bash
 pnpm api:generate
@@ -98,6 +100,7 @@ pnpm test:api
 pnpm test:database  # 일회용 *_test DB: 18745, 시험 후 이 컨테이너만 중지
 pnpm --filter @sallimbook/client exec playwright install chromium
 pnpm test:web  # 전용 시험 포트 18743, 다른 실행 중인 서버를 재사용하지 않음
+uv run --project services/api python scripts/test_web_auth.py  # 실제 HTTPS + 격리 PostgreSQL 인증
 ```
 
 Android는 WSL의 SDK와 JDK를 명시적으로 선택합니다.
@@ -116,7 +119,15 @@ SDK 설치기는 고정된 빌드 도구만 설치하며 `platform-tools`와 ADB
 최소 API 30, 개발 앱 ID `io.github.jihoon22lee.sallimbook.debug`입니다.
 운영 앱 ID는 접미사가 없는 `io.github.jihoon22lee.sallimbook`이며 정식 서명·배포는 SB-038에서 검증합니다.
 
+Android 인증 서버 주소는 빌드 시 Gradle 속성 `sallimbookApiOrigin`으로 지정한 HTTPS origin만 사용합니다.
+`ORG_GRADLE_PROJECT_sallimbookApiOrigin` 환경변수로 주입할 수 있으며 경로·쿼리·사용자정보가 없는 주소여야 합니다.
+미설정 빌드는 인증을 비활성화합니다. 운영 주소는 별도 Tailscale 노드를 마련한 뒤 확정합니다.
+앱의 로그인·초대 입력과 인증 토큰은 네이티브 모듈에서 처리하고 일반 웹 상태에 반환하지 않습니다.
+안전한 메시지 채널을 지원하지 않는 WebView에서는 업데이트 안내를 표시합니다.
+두 Galaxy의 실기기·백업/전송·잠금 실패 시나리오는 전체 기능 개발 뒤에 수행합니다.
+
 자세한 환경·검증 범위는 [개발 환경](docs/development-environment.md)을 참고합니다.
+[실제 브라우저 인증 검사](docs/testing/browser-authentication.md)는 임시 HTTPS 인증서와 합성 계정을 사용합니다.
 `pnpm db:stop`은 SallimBook 개발 DB만 중지하며 데이터 볼륨은 유지합니다.
 DB 시험은 개별 격리 schema에 실제 migration을 적용합니다. `pnpm test:api`만 실행하여
 DB 환경이 없을 때 표시되는 skip을 DB 검증 통과로 간주하지 않습니다.
