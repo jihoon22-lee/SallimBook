@@ -40,11 +40,12 @@ ADD --checksum=sha256:cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed
 RUN tar -xzf /opt/age.tar.gz -C /opt \
     && install -m 0755 /opt/age/age /usr/local/bin/age \
     && rm -rf /opt/age /opt/age.tar.gz
-COPY src /opt/sallimbook/src
+# Preserve repository-relative source depth used by the private-store boundary.
+COPY src /opt/sallimbook/services/api/src
 COPY migrations /opt/sallimbook/migrations
 COPY alembic.ini /opt/sallimbook/alembic.ini
 COPY ops /opt/sallimbook/ops
-ENV PYTHONPATH=/opt/sallimbook/src:/opt/sallimbook PYTHONDONTWRITEBYTECODE=1 TZ=Etc/UTC
+ENV PYTHONPATH=/opt/sallimbook/services/api/src:/opt/sallimbook PYTHONDONTWRITEBYTECODE=1 TZ=Etc/UTC
 WORKDIR /opt/sallimbook
 USER 10001:10001
 CMD ["uvicorn", "sallimbook.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log", "--no-proxy-headers"]
