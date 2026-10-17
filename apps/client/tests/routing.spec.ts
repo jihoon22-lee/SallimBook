@@ -33,7 +33,7 @@ test("all 26 specified routes support direct entry and reload without inventing 
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
       await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-      if (path !== "/login" && path !== "/onboarding") {
+      if (!["/login", "/onboarding", "/assets", "/assets/synthetic-asset", "/accounts", "/accounts/synthetic-account"].includes(path)) {
         await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

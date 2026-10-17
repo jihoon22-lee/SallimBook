@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createApiClient } from "@sallimbook/api-client";
 import type { components } from "@sallimbook/api-client";
+import type { AuthenticatedApi, WriteClient, ScopeProof } from "./AuthenticatedApi";
+import type { ApiResult } from "../../platform/api";
 import { ApiError, apiClient, isNativeAuthUnavailable, requestApi, requireWebAuth, toApiError } from "../../platform/api";
 import { isNativeAuth, nativeAuth, nativeRequest } from "../../platform/nativeAuth";
 import { createPasskey, getPasskey } from "../../platform/webauthn";
@@ -15,7 +18,7 @@ type DeviceList = components["schemas"]["DeviceListResponse"];
 export type Passkey = components["schemas"]["CredentialResponse"];
 type PasskeyList = components["schemas"]["CredentialListResponse"];
 type PasskeyLoginInput = components["schemas"]["LoginOptionsRequest"];
-type StepUpPurpose = "household.invite" | "device.revoke";
+type StepUpPurpose = ScopeProof["purpose"];
 export type OperationProof = { signal: AbortSignal; stepUp: boolean };
 
 export type AuthState =
@@ -27,6 +30,7 @@ export type AuthState =
 
 interface AuthContextValue {
   state: AuthState;
+  domainApi: AuthenticatedApi;
   reloadSession(): Promise<void>;
   login(input: LoginInput): Promise<void>;
   loginNative(passkey?: boolean): Promise<boolean>;
@@ -337,8 +341,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, [authenticatedRequest, clearSession, mutation, scopedOperation]);
 
-  const value = useMemo(() => ({ state, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
-    [state, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
+  const domainApi = useMemo<AuthenticatedApi>(() => ({
+    read: <T,>(web: ((client: Pick<typeof apiClient, "GET">) => Promise<ApiResult<T>>) | undefined, native?: () => Promise<T>) => authenticatedRequest(() => {
+      if (isNativeAuth()) {
+        if (!native) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
+        return native();
+      }
+      if (!web) throw new ApiError(0, "REQUEST_FAILED");
+      return requestApi(() => web({ GET: apiClient.GET }));
+    }),
+    write: <T,>(web: ((client: WriteClient) => Promise<ApiResult<T>>) | undefined, native?: () => Promise<T>, proof?: ScopeProof) => {
+      if (isNativeAuth()) return authenticatedRequest(() => {
+        if (!native) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
+        return native();
+      });
+      if (!web) return Promise.reject(new ApiError(0, "REQUEST_FAILED"));
+      const action = (token: string, grant?: string) => {
+        const client = createApiClient();
+        client.use({ onRequest({ request }) {
+          const url = new URL(request.url, window.location.origin);
+          if (url.origin !== window.location.origin || !url.pathname.startsWith("/api/v1/")) throw new ApiError(0, "ORIGIN_REJECTED");
+          request.headers.set("X-CSRF-Token", token);
+          if (grant) request.headers.set("X-Step-Up-Token", grant);
+          return request;
+        } });
+        // Middleware and its private proof values stay inside this one request attempt.
+        return requestApi(() => web({ POST: client.POST, PATCH: client.PATCH, PUT: client.PUT, DELETE: client.DELETE }));
+      };
+      return proof ? scopedOperation(proof.purpose, proof.targetId, proof.signal, action) : mutation((token) => action(token));
+    },
+  }), [authenticatedRequest, mutation, scopedOperation]);
+
+  const value = useMemo(() => ({ state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
+    [state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
