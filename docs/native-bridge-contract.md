@@ -267,3 +267,6 @@ Gradle `:app:testDebugUnitTest :app:compileReleaseKotlin --max-workers=2`는 **1
 포함한 JVM **145개**가 통과했고, `cashflow-native-bridge.spec.ts`는 **44개** 명령의 DTO·키·오류 전달을
 두 화면 크기에서 **8개** 시험으로 검증했다. 브라우저 실행은 Docker 상태 변경과 겹치지 않도록 조율했고
 임시 파일은 SSD 경로를 사용했다. 실제 Android 기기 시험은 아직 수행하지 않았다.
+
+공통 `ASSET_KIND_IN_USE` 오류 보완을 병합한 뒤 타입 검사와 위 Gradle 검사를 다시 실행해
+JVM **146개**(실패·오류·건너뜀 0)가 통과했다. 자산 종류 변경 제한을 일반 버전 충돌로 바꾸지 않는다.
