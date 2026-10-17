@@ -1,7 +1,7 @@
 """Synthetic recurrence, settlement, replay and household boundary regressions."""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier
 from uuid import UUID, uuid4
@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
@@ -1179,6 +1179,213 @@ class TestRecurringDatabase:
                     | {"economic_type": "loan", "loan_asset_id": str(identifier)},
                 )
                 assert result.status_code == expected
+
+    @pytest.mark.parametrize("end_source", ["initial", "end_api"])
+    def test_future_ended_rule_accepts_changes_inside_original_cutoff(
+        self,
+        recurring_app,
+        actors,
+        db_engine,
+        monkeypatch,
+        end_source,
+    ):
+        actor = actors[0]
+        with Session(db_engine) as session:
+            current = session.scalar(
+                text("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date")
+            )
+        monkeypatch.setattr(service, "today", lambda: current)
+        start = current - timedelta(days=2)
+        cutoff = current + timedelta(days=10)
+        first_day, second_day = current + timedelta(days=1), current + timedelta(days=3)
+        first_account, second_account = (
+            make_account(db_engine, actor),
+            make_account(db_engine, actor),
+        )
+        original = rule_payload() | {
+            "frequency": "days",
+            "interval_count": 1,
+            "anchor_date": start.isoformat(),
+            "effective_from": start.isoformat(),
+            "account_id": str(first_account.id),
+        }
+        with TestClient(recurring_app) as client:
+            rule = post_rule(
+                client,
+                actor,
+                **(
+                    original
+                    | (
+                        {"effective_until": cutoff.isoformat(), "end_reason": "합성 예정 종료"}
+                        if end_source == "initial"
+                        else {}
+                    )
+                ),
+            )
+            generate(
+                client,
+                actor,
+                rule["id"],
+                start=start.isoformat(),
+                end=(cutoff + timedelta(days=3)).isoformat(),
+            )
+            path = f"/api/v1/recurring-rules/{rule['id']}"
+            version = 1
+            if end_source == "end_api":
+                ended = client.post(
+                    path + "/end",
+                    headers=headers(actor, version=version),
+                    json={"effective_on": cutoff.isoformat(), "reason": "합성 예정 종료"},
+                )
+                assert ended.status_code == 200, ended.text
+                version = ended.json()["version"]
+            with Session(db_engine) as session:
+                occurrences = dict(
+                    session.execute(
+                        select(
+                            ScheduledObligation.nominal_date,
+                            ScheduledObligation.id,
+                        ).where(ScheduledObligation.rule_id == UUID(rule["id"]))
+                    ).all()
+                )
+
+            def obligation(day):
+                return client.get(
+                    f"/api/v1/obligations/{occurrences[day]}", headers=actor.headers
+                ).json()
+
+            past = obligation(current - timedelta(days=1))
+            future_paid = obligation(first_day)
+            settle(client, actor, future_paid, amount="100", occurred_on=current.isoformat())
+            future_paid = obligation(first_day)
+            first_body = original | {
+                "effective_from": first_day.isoformat(),
+                "anchor_date": first_day.isoformat(),
+                "interval_count": 2,
+                "expected_amount_krw": "44000",
+                "account_id": str(second_account.id),
+                "reason": "합성 기간 내 변경",
+            }
+            first_headers = headers(actor, "finite-first-change", version)
+            changed = client.patch(path, headers=first_headers, json=first_body)
+            assert changed.status_code == 200, changed.text
+            assert obligation(current - timedelta(days=1)) == past
+            assert obligation(first_day) == future_paid
+            updated = obligation(second_day)
+            assert updated["expected_amount_krw"] == "44000"
+            assert updated["account_id"] == str(second_account.id)
+            assert obligation(first_day + timedelta(days=1))["schedule_state"] == "superseded"
+            second_body = first_body | {
+                "effective_from": second_day.isoformat(),
+                "anchor_date": second_day.isoformat(),
+                "interval_count": 3,
+                "expected_amount_krw": "55000",
+                "reason": "합성 두 번째 변경",
+            }
+            second = client.patch(
+                path, headers=headers(actor, version=changed.json()["version"]), json=second_body
+            )
+            assert second.status_code == 200, second.text
+            replay = client.patch(path, headers=first_headers, json=first_body)
+            assert replay.status_code == 200 and replay.json() == changed.json()
+            for invalid_day in (
+                cutoff,
+                cutoff + timedelta(days=1),
+                start,
+                current - timedelta(days=1),
+            ):
+                rejected = client.patch(
+                    path,
+                    headers=headers(actor, version=second.json()["version"]),
+                    json=second_body | {"effective_from": invalid_day.isoformat()},
+                )
+                assert rejected.status_code == 409
+            stored = client.get(path, headers=actor.headers).json()
+            assert (
+                stored["ended_on"] == cutoff.isoformat()
+                and stored["end_reason"] == "합성 예정 종료"
+            )
+            assert [v["effective_until"] for v in stored["versions"]] == [
+                first_day.isoformat(),
+                second_day.isoformat(),
+                cutoff.isoformat(),
+            ]
+            assert [v["expected_amount_krw"] for v in stored["versions"]] == [
+                "33000",
+                "44000",
+                "55000",
+            ]
+            assert (
+                obligation(current - timedelta(days=1)) == past
+                and obligation(first_day) == future_paid
+            )
+        with Session(db_engine) as session:
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(RecurringRuleVersion)
+                    .where(RecurringRuleVersion.rule_id == UUID(rule["id"]))
+                )
+                == 3
+            )
+            active = list(
+                session.scalars(
+                    select(ScheduledObligation.nominal_date).where(
+                        ScheduledObligation.rule_id == UUID(rule["id"]),
+                        ScheduledObligation.schedule_state == "active",
+                    )
+                )
+            )
+            assert all(day < cutoff for day in active)
+            assert session.scalar(select(func.count()).select_from(CashRecord)) == 1
+
+    def test_finite_rule_db_end_can_only_shorten_without_changing_terms(
+        self,
+        recurring_app,
+        actors,
+        db_engine,
+    ):
+        actor = actors[0]
+        with Session(db_engine) as session:
+            current = session.scalar(
+                text("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date")
+            )
+        cutoff = current + timedelta(days=30)
+        with TestClient(recurring_app) as client:
+            rule = post_rule(
+                client,
+                actor,
+                effective_from=current.isoformat(),
+                effective_until=cutoff.isoformat(),
+                end_reason="합성 종료",
+            )
+        with Session(db_engine) as session:
+            query = update(RecurringRuleVersion).where(
+                RecurringRuleVersion.rule_id == UUID(rule["id"])
+            )
+            shortened = cutoff - timedelta(days=1)
+            session.execute(query.values(effective_until=shortened))
+            session.commit()
+            for values in (
+                {"effective_until": cutoff},
+                {"effective_until": None},
+                {"effective_until": shortened},
+                {"expected_amount_krw": 1},
+                {"effective_until": shortened - timedelta(days=1), "title": "합성 변조"},
+                {"effective_from": current - timedelta(days=1)},
+            ):
+                with pytest.raises(DBAPIError) as rejected:
+                    session.execute(query.values(**values))
+                assert rejected.value.orig.sqlstate == "55000"
+                session.rollback()
+            assert (
+                session.scalar(
+                    select(RecurringRuleVersion.effective_until).where(
+                        RecurringRuleVersion.rule_id == UUID(rule["id"])
+                    )
+                )
+                == shortened
+            )
 
     def test_initial_historical_ended_rule_keeps_its_original_period(self, recurring_app, actors):
         actor = actors[0]

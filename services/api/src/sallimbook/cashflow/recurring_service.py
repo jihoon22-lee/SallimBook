@@ -249,9 +249,13 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
         require_version(row, if_match)
         versions = _versions(session, principal, row.id)
         last = versions[-1]
-        if row.ended_on is not None or payload.effective_from <= last.effective_from:
+        if payload.effective_from <= last.effective_from or (
+            row.ended_on is not None and payload.effective_from >= row.ended_on
+        ):
             raise DomainError(
-                "RULE_PERIOD_OVERLAP", "기존 마지막 규칙 이후 적용일을 선택해 주세요.", 409
+                "RULE_PERIOD_OVERLAP",
+                "마지막 규칙 이후이면서 기존 종료일 전인 적용일을 선택해 주세요.",
+                409,
             )
         if payload.effective_from < today():
             raise DomainError("PAST_RULE_CHANGE", "지난 규칙은 변경할 수 없습니다.", 409)
@@ -266,6 +270,7 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
                 household_id=principal.household_id,
                 rule_id=row.id,
                 effective_from=payload.effective_from,
+                effective_until=row.ended_on,
                 reason=payload.reason,
             )
         )
