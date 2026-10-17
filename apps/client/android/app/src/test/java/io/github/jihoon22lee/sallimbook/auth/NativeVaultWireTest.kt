@@ -6,37 +6,10 @@ import org.junit.Test
 class NativeVaultWireTest {
     private val f=NativeVaultTestData
     private fun bad(action:()->Unit) { try { action(); fail("Unsafe synthetic vault contract accepted") } catch(e:NativeVaultFailure) { assertNull(e.message); assertNull(e.cause) } }
-    private fun commands():List<NativeVaultCommand> {
-        val key="synthetic:vault:1"; val id=f.resource; val empty=emptyMap<String,Any?>()
-        return listOf(
-            NativeVaultCommand(VaultOperation.STATUS),
-            NativeVaultCommand(VaultOperation.INITIALIZE,body=mapOf("key_check" to f.checkInput(1),"member_wrapping" to (f.memberInput(version=1)+mapOf("generation" to 1)),"recovery_wrapping" to (f.recoveryInput(1)+mapOf("generation" to 1))),idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.OWN_WRAP),
-            NativeVaultCommand(VaultOperation.REWRAP,body=mapOf("wrapping" to f.memberInput(),"key_check_confirmed" to true),version=4,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.RECOVERY_WRAP),
-            NativeVaultCommand(VaultOperation.RECOVER,body=mapOf("member_wrapping" to f.memberInput(),"recovery_wrapping" to f.recoveryInput(),"key_check_confirmed" to true),version=3,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.REVOKE,id=f.partner,body=empty,version=1,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.SHARES),
-            NativeVaultCommand(VaultOperation.SHARE_CREATE,body=mapOf("wrapping" to f.memberInput()),version=3,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.SHARE_WRAP,id=id),
-            NativeVaultCommand(VaultOperation.SHARE_ACCEPT,id=id,body=mapOf("key_version" to 7,"key_check_confirmed" to true),version=1,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.SHARE_CANCEL,id=id,body=empty,version=1,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.CARD_GET,id=f.cardId),
-            NativeVaultCommand(VaultOperation.CARD_WRITE,id=f.cardId,body=f.cardInput(),version=4,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.CARD_DELETE,id=f.cardId,version=4,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.ROTATION_START,body=mapOf("reason" to "routine"),version=3,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.ROTATION_GET,id=id),
-            NativeVaultCommand(VaultOperation.ROTATION_PREPARE,id=id,body=mapOf("key_check" to f.checkInput(8),"member_wrappings" to listOf(f.memberInput(version=8),f.memberInput(f.second,8)),"recovery_wrapping" to f.recoveryInput(8)),version=2,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.ROTATION_CARD_WRITE,id=id,childId=f.cardId,body=mapOf("source_envelope_id" to id,"source_revision" to 2,"envelope" to f.cardInput(8)),version=2,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.ROTATION_CARD_GET,id=id,childId=f.cardId),
-            NativeVaultCommand(VaultOperation.ROTATION_OWN_WRAP,id=id),
-            NativeVaultCommand(VaultOperation.ROTATION_FINALIZE,id=id,body=mapOf("key_version" to 8,"key_check_confirmed" to true),version=3,idempotencyKey=key),
-            NativeVaultCommand(VaultOperation.ROTATION_ABORT,id=id,body=empty,version=3,idempotencyKey=key))
-    }
     private fun copy(c:NativeVaultCommand,body:VaultRecord?=c.body,id:String?=c.id,version:Long?=c.version,key:String?=c.idempotencyKey,cursor:String?=c.cursor,child:String?=c.childId)=
         NativeVaultCommand(c.operation,id,child,body,version,key,cursor,c.limit)
     @Test fun allTwentyThreeOperationsHaveFixedMethodPathVersionAndIdempotencyContracts() {
-        val commands=commands(); assertEquals(VaultOperation.entries.toSet(),commands.map { it.operation }.toSet())
+        val commands=f.commands(); assertEquals(VaultOperation.entries.toSet(),commands.map { it.operation }.toSet())
         for(c in commands) {
             val r=NativeVaultWire.route(c); assertTrue(r.path.startsWith("/api/v1/")); assertFalse(r.path.contains("https:"))
             if(r.method=="GET") { assertNull(c.body); assertNull(c.version); assertNull(c.idempotencyKey); bad { NativeVaultWire.route(copy(c,key="unexpected")) } }
@@ -51,7 +24,7 @@ class NativeVaultWireTest {
         }
     }
     @Test fun allSuccessResponsesAreStrictAndNeverPermitArbitraryExtraFields() {
-        for(c in commands()) {
+        for(c in f.commands()) {
             val value=when(c.operation) {
                 VaultOperation.STATUS -> f.snapshot().status
                 VaultOperation.SHARES -> mapOf("items" to listOf(f.share()),"next_cursor" to null)
@@ -72,19 +45,19 @@ class NativeVaultWireTest {
         for(change in listOf(mapOf("iterations" to 599999),mapOf("iterations" to 2000001),mapOf("iterations" to 600000.0),mapOf("kdf" to "unknown"),
             mapOf("nonce" to "A".repeat(17)),mapOf("salt" to "A".repeat(21)+"B"),mapOf("wrapped_hvk" to "A".repeat(63)),mapOf("format_version" to 2),mapOf("key_version" to 0)))
             bad { NativeVaultWire.memberWrap(f.memberInput()+change,false) }
-        val original=commands().single { it.operation==VaultOperation.ROTATION_PREPARE }
+        val original=f.commands().single { it.operation==VaultOperation.ROTATION_PREPARE }
         bad { NativeVaultWire.route(copy(original,body=original.body!!+mapOf("member_wrappings" to listOf(f.memberInput(version=7))))) }
         bad { NativeVaultWire.route(copy(original,body=original.body!!+mapOf("member_wrappings" to listOf(f.memberInput(version=8),f.memberInput(version=8))))) }
         bad { NativeVaultWire.route(copy(original,body=original.body!!+mapOf("recovery_wrapping" to (f.recoveryInput(8)+mapOf("nonce" to f.checkInput(8)["nonce"]))))) }
     }
     @Test fun falseConfirmationAndWrongBodyPresenceCannotAuthorizeMutations() {
         for(op in listOf(VaultOperation.SHARE_ACCEPT,VaultOperation.ROTATION_FINALIZE)) {
-            val original=commands().single { it.operation==op }
+            val original=f.commands().single { it.operation==op }
             for(flag in listOf(false,1,"true",null)) bad { NativeVaultWire.route(copy(original,body=original.body!!+mapOf("key_check_confirmed" to flag))) }
         }
-        val delete=commands().single { it.operation==VaultOperation.CARD_DELETE }
+        val delete=f.commands().single { it.operation==VaultOperation.CARD_DELETE }
         bad { NativeVaultWire.route(copy(delete,body=emptyMap())) }
-        val abort=commands().single { it.operation==VaultOperation.ROTATION_ABORT }
+        val abort=f.commands().single { it.operation==VaultOperation.ROTATION_ABORT }
         bad { NativeVaultWire.route(copy(abort,body=null)) }
     }
     @Test fun responseCrossScopeAndDifferentRequestedIdsAreRejected() {
