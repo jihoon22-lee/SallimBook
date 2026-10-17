@@ -289,6 +289,7 @@ class ReleaseTests(unittest.TestCase):
                     + config()["fqdn"]
                     + ":8443 "
                     + config()["certificate_sha256"]
+                    + " NativeVaultAcceptanceGate"
                 ).encode(),
             )
 
@@ -326,11 +327,31 @@ class ReleaseTests(unittest.TestCase):
                 self.assertTrue(
                     release.inspect_apk(apk, config(), tmp, signed=True)["signed"]
                 )
+                with zipfile.ZipFile(apk) as archive:
+                    valid_identity = archive.read("classes.dex")
+                for marker in (
+                    b"debugproof",
+                    b"SecurityProofActivity",
+                    b"CvcAcceptanceActivity",
+                    b"CvcAcceptanceFixtures",
+                    b"NativeVaultAcceptanceGate$Owner",
+                    b"SALLIMBOOK DEBUG CVC ACCEPTANCE V1",
+                    b"beginSyntheticCvcAcceptance",
+                    b"armSyntheticCvcWriteFailure",
+                    b"NativeVaultCvcAcceptanceTest",
+                ):
+                    with self.subTest(proof_marker=marker):
+                        self.make_apk(apk, dex=valid_identity)
+                        with zipfile.ZipFile(apk, "a") as archive:
+                            archive.writestr("classes2.dex", marker)
+                        with self.assertRaisesRegex(
+                            backup.OperationError, "proof-class exclusion"
+                        ):
+                            release.inspect_apk(apk, config(), tmp, signed=True)
                 for capacitor, dex in (
                     ({"server": {"url": "https://remote.invalid"}}, None),
                     ({"server": {"allowNavigation": ["*"]}}, None),
                     ({"android": {"allowMixedContent": True}}, None),
-                    ({}, b"SecurityProofActivity"),
                 ):
                     self.make_apk(apk, capacitor, dex)
                     with self.assertRaises(backup.OperationError):

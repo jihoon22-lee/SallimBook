@@ -208,7 +208,8 @@ def run_synthetic(admin_url, temporary):
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:
                 waiting = writer.execute(
-                    "SELECT count(*) FROM pg_stat_activity WHERE application_name='sallimbook-backup' "
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE application_name='sallimbook-backup' "
                     "AND pid<>pg_backend_pid() AND wait_event='advisory'"
                 ).fetchone()[0]
                 if waiting:
@@ -337,7 +338,9 @@ def run_synthetic(admin_url, temporary):
         except backup.OperationError:
             assert not (temporary / "wrong").exists()
         print(
-            "PASS: encrypted backup/restore, lock-before-snapshot, table counts, document+account AEAD, auth reset, pending abort/new rotation gate; synthetic metadata vault fixtures only."
+            "PASS: encrypted backup/restore, lock-before-snapshot, table counts, "
+            "document+account AEAD, auth reset, pending abort/new rotation gate; "
+            "synthetic metadata vault fixtures only."
         )
     finally:
         for engine in engines:

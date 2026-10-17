@@ -8,9 +8,18 @@ import re
 from pathlib import Path
 
 APP_ID = "io.github.jihoon22lee.sallimbook"
-CADDY = "caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f"
-TAILSCALE = "tailscale/tailscale:v1.104.1@sha256:87c55d6be56ad85b3d8bceca5f87f73de288c609131460dd1be1874c250cc41d"
-POSTGRES = "postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c"
+CADDY = (
+    "caddy:2.11.7-alpine@sha256:"
+    "d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f"
+)
+TAILSCALE = (
+    "tailscale/tailscale:v1.104.1@sha256:"
+    "87c55d6be56ad85b3d8bceca5f87f73de288c609131460dd1be1874c250cc41d"
+)
+POSTGRES = (
+    "postgres:18.6-bookworm@sha256:"
+    "afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c"
+)
 IMAGE = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}")
 REQUIRED = {
     "format",
@@ -249,7 +258,9 @@ http://:8080 {{
                     "CMD",
                     "python",
                     "-c",
-                    "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=2).close()",
+                    "import urllib.request; "
+                    "urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', "
+                    "timeout=2).close()",
                 ],
                 "interval": "30s",
                 "timeout": "3s",

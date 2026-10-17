@@ -187,7 +187,7 @@ uv run --project services/api python -m ops.recovery verify \
 
 ## 7. 서명 APK와 업데이트
 
-서명키·키 비밀번호 파일은 저장소 밖의 owner-only 파일로 보관한다. 도구는 기존 키만 사용하며 개인키나 비밀번호를 Gradle property/environment/명령행 값에 넣지 않는다. apksigner에는 private 파일 경로만 전달한다. manifest의 인증서 SHA-256은 공개 정보다.
+서명키·키 비밀번호 파일은 저장소 밖의 owner-only 파일로 보관한다. 도구는 기존 키만 사용하며 개인키나 비밀번호를 Gradle property/environment/명령행 값에 넣지 않는다. apksigner에는 private 파일 경로만 전달한다. store/key 비밀번호가 같더라도 apksigner가 각 입력을 순서대로 소비하므로 서로 다른 두 파일을 사용한다. manifest의 인증서 SHA-256은 공개 정보다.
 
 ```bash
 python3 -m ops.release \

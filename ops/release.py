@@ -15,6 +15,17 @@ from ops.build_context import build_environment, source_snapshot
 from ops.deploy import APP_ID, validate
 
 ROOT = Path(__file__).resolve().parents[1]
+DEBUG_PROOF_MARKERS = (
+    b"debugproof",
+    b"SecurityProofActivity",
+    b"CvcAcceptanceActivity",
+    b"CvcAcceptanceFixtures",
+    b"NativeVaultAcceptanceGate$Owner",
+    b"SALLIMBOOK DEBUG CVC ACCEPTANCE V1",
+    b"beginSyntheticCvcAcceptance",
+    b"armSyntheticCvcWriteFailure",
+    b"NativeVaultCvcAcceptanceTest",
+)
 
 
 def run(command, **kwargs):
@@ -90,8 +101,7 @@ def inspect_apk(apk, config, sdk, *, signed):
         ]
         if (
             any(value.encode() not in dex for value in expected)
-            or b"debugproof" in dex
-            or b"SecurityProofActivity" in dex
+            or any(marker in dex for marker in DEBUG_PROOF_MARKERS)
         ):
             raise OperationError(
                 "Native release identity or proof-class exclusion failed"

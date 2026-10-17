@@ -106,8 +106,10 @@ for name in ['/run/secrets','/srv/documents','/run/scanner','/run/operator']:
 p=pathlib.Path('/run/secrets/field-keyring.json')
 p.write_text(json.dumps({'schema_version':1,'active_key_version':1,'keys':{'1':base64.b64encode(bytes(range(32))).decode()}}))
 p.chmod(0o600); os.chown(p,10001,10001)
-p=pathlib.Path('/run/secrets/db-admin-password'); p.write_text(os.environ['OPS_ADMIN_DB_PASSWORD']); p.chmod(0o600)
-p=pathlib.Path('/run/operator/app-db-password'); p.write_text(os.environ['OPS_DB_PASSWORD']); p.chmod(0o600); os.chown(p,10001,10001)
+p=pathlib.Path('/run/secrets/db-admin-password')
+p.write_text(os.environ['OPS_ADMIN_DB_PASSWORD']); p.chmod(0o600)
+p=pathlib.Path('/run/operator/app-db-password')
+p.write_text(os.environ['OPS_DB_PASSWORD']); p.chmod(0o600); os.chown(p,10001,10001)
 p=pathlib.Path('/run/operator/admin-service.conf')
 p.write_text('[sallimbook]\\nhost=db\\nport=5432\\nuser=sallimbook_admin\\nsslmode=disable\\ndbname='+os.environ['OPS_DATABASE']+'\\npassword='+os.environ['OPS_ADMIN_DB_PASSWORD']+'\\n')
 p.chmod(0o600); os.chown(p,10001,10001)
@@ -211,7 +213,8 @@ p.chmod(0o600); os.chown(p,10001,10001)
                 )
                 assert not state["HostConfig"]["PortBindings"]
             print(
-                "PASS: image startup/migration/readiness and production UID/mount/memory settings; no published ports, node, real account, or real key"
+        "PASS: image startup/migration/readiness and production UID/mount/memory settings; "
+        "no published ports, node, real account, or real key"
             )
         finally:
             # Only this unique project and its newly created synthetic volumes.

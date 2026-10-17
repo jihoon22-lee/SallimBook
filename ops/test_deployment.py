@@ -99,7 +99,9 @@ caddy run --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy.log 2>&1
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true' EXIT
 for i in 1 2 3 4 5 6 7 8 9 10; do
-    if wget -q -O /tmp/body http://127.0.0.1:8081/.well-known/assetlinks.json 2>/dev/null; then break; fi
+    if wget -q -O /tmp/body http://127.0.0.1:8081/.well-known/assetlinks.json 2>/dev/null; then
+        break
+    fi
     sleep 0.1
 done
 grep -q io.github.jihoon22lee.sallimbook /tmp/body
@@ -132,7 +134,8 @@ done
         serve = json.loads((output / "node/serve.json").read_text())
         assert set(serve["AllowFunnel"]) == {manifest["fqdn"] + ":443"}
     print(
-        "PASS: pinned Caddy/Tailscale versions, Compose/Caddy validation, isolated public JSON/404 routing. No tailnet node or real HTTPS tested."
+        "PASS: pinned Caddy/Tailscale versions, Compose/Caddy validation, "
+        "isolated public JSON/404 routing. No tailnet node or real HTTPS tested."
     )
 
 

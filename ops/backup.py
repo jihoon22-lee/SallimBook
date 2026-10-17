@@ -318,7 +318,8 @@ def backup(
                 versions = {
                     str(row[0]): row[1]
                     for row in conn.execute(
-                        "SELECT household_id, max(key_version) FROM vault_versions GROUP BY household_id"
+                        "SELECT household_id, max(key_version) "
+                        "FROM vault_versions GROUP BY household_id"
                     )
                 }
                 encrypt_stream(
