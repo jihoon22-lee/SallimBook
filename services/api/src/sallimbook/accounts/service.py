@@ -23,15 +23,14 @@ from sallimbook.assets.service import asset_response, prepare_asset
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import (
     Principal,
-    require_recent_login,
     require_version,
     scoped_entity,
 )
 from sallimbook.core.errors import DomainError
+from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.passkeys.models import StepUpPurpose
 from sallimbook.identity.passkeys.service import consume_step_up
-from sallimbook.identity.service import utcnow
 
 
 def account_response(account: FinancialAccount, asset: Asset) -> AccountResponse:
@@ -270,13 +269,28 @@ def reveal_number(
     step_up_token: str | None = None,
     request_id: str | None = None,
 ) -> AccountRevealResponse:
+    # Hold the source identity before domain rows; grant verification locks follow them.
+    auth, devices = identity.lock_session_devices(session, principal)
     account, _ = _account_and_asset(session, principal, account_id, lock=True)
+    identity.validate_locked_session(
+        principal, auth, devices[principal.device_id], recent_login=step_up_token is None
+    )
     if account.account_number_ciphertext is None:
         raise DomainError("ACCOUNT_NUMBER_NOT_SET", "등록된 계좌번호가 없습니다.", 409)
-    if step_up_token is None:
-        require_recent_login(principal, now=utcnow())
-    else:
-        consume_step_up(session, principal, step_up_token, StepUpPurpose.ACCOUNT_REVEAL, account.id)
+    grant = None
+    if step_up_token is not None:
+        grant = consume_step_up(
+            session, principal, step_up_token, StepUpPurpose.ACCOUNT_REVEAL, account.id
+        )
+
+    def validate_reveal() -> None:
+        now = identity.validate_locked_session(
+            principal, auth, devices[principal.device_id], recent_login=step_up_token is None
+        )
+        if grant is not None and grant.expires_at <= now:
+            raise DomainError("STEP_UP_REQUIRED", "이 작업을 다시 인증해 주세요.", 403)
+
+    validate_reveal()
     number = decrypt_number(
         KeyRing.load(key_file),
         account.household_id,
@@ -285,6 +299,7 @@ def reveal_number(
             account.number_key_version, account.number_nonce, account.account_number_ciphertext
         ),
     )
+    validate_reveal()
     record_event(
         session,
         principal,
@@ -295,5 +310,8 @@ def reveal_number(
         after_version=account.version,
         request_id=request_id,
     )
+    # Flush audit persistence while still holding every barrier, then check time again.
+    session.flush()
+    validate_reveal()
     session.commit()
     return AccountRevealResponse(id=account_id, account_number=number)
