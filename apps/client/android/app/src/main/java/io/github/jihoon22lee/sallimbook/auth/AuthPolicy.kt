@@ -194,6 +194,9 @@ internal object AuthPolicy {
     fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
         if (requestId == null || !uuid.matches(requestId)) return null
         val messages = mapOf(
+            "INVALID_CURSOR" to (400 to "페이지 기준을 다시 확인해 주세요."),
+            "INVALID_AUDIT_FILTER" to (422 to "감사 조회 조건과 기간을 확인해 주세요."),
+            "AUDIT_METADATA_INVALID" to (503 to "감사 기록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."),
             "INVALID_HOMECARE_DATE" to (422 to "실제 기록 날짜와 취소 날짜를 확인해 주세요."),
             "APPLIANCE_IN_USE" to (409 to "연결 또는 사용 이력이 있는 가전입니다. 사용 종료로 보관해 주세요."),
             "CONSUMABLE_IN_USE" to (409 to "연결 또는 재고 이력이 있는 소모품입니다. 사용 종료로 보관해 주세요."),

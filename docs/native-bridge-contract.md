@@ -586,3 +586,18 @@ private 고정 POST를 수행하며 ZIP 원문·URI·path·토큰·header·다�
 JVM **308개**, debug APK·release Kotlin, 브라우저 **58개**(신규 export 34개 + 문서 24개)를 통과했다.
 실제 서버/Android 파일 제공자 권한·실기기 실패·운영 복원 성공을 뜻하지 않는다.
 세부 구현·검증 명령·남은 인수는 [native 사용자 내보내기](testing/native-exports.md)를 따른다.
+
+## 22. Android 감사 이력 메타데이터 (SB-034/040)
+
+`nativeAudit.list({query})`는 생성 `listAuditEvents` query/`AuditListResponse`를 사용하며 전용
+`listAuditEvents` plugin이 고정 GET만 보낸다. URL·헤더·body·가계 ID·인증 bool은 입력이 아니다.
+현재 세션과 전후 `/me` identity를 확인하고 서버가 현재 가계 권한을 검사한다. 이 조회에는 최근
+계정 재인증을 추가로 요구하지 않는다. 과거 비활성 구성원의 감사 기록도 반환할 수 있다.
+
+정확한 감사 메타데이터 10개 필드와 서버에 알려진 변경 **필드 이름**만 투영한다. 원본 `safe_diff`나
+전후 값은 bridge에 없다. UUID·UTC 시각·version·필터·페이지 한도·정렬·cursor를 엄격히 검사한다.
+전용 HTTP는 HTTPS/15초/strict UTF-8 JSON 1MiB/무쿠키·redirect·cache·자동 재전송을 유지한다.
+기존 일반 `request` allowlist를 확장하지 않으며 잠금·취소·늦은 응답은 전달하지 않는다.
+
+검증은 JVM **322개**, debug APK·release Kotlin, 브리지 모의시험 **38개**, 서버 순수 계약 **44개**다.
+세부 명령과 실제 Galaxy 미실행 범위는 [native 감사 검증](testing/native-audit.md)을 따른다.
