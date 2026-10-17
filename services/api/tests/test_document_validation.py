@@ -7,6 +7,7 @@ import os
 import socket
 import struct
 import sys
+import tempfile
 import threading
 import zlib
 from contextlib import contextmanager
@@ -84,6 +85,15 @@ def receive(connection, count):
 
 @contextmanager
 def scanner(tmp_path, responses=None, *, stream_reply=b"stream: OK\0", slow=False):
+    # AF_UNIX has a fixed path limit; pytest's configured TMPDIR/test names may exceed it.
+    # This directory contains a synthetic socket only, never document bytes.
+    with tempfile.TemporaryDirectory(prefix="sbd-", dir="/tmp") as directory:
+        with _scanner(Path(directory), responses, stream_reply=stream_reply, slow=slow) as result:
+            yield result
+
+
+@contextmanager
+def _scanner(tmp_path, responses=None, *, stream_reply=b"stream: OK\0", slow=False):
     """Private synthetic Unix daemon; it never represents actual malware scanning."""
     path = tmp_path / "scanner.sock"
     received = []
@@ -224,7 +234,7 @@ def test_scanner_refuses_regular_files_symlinks_and_world_writable_socket(tmp_pa
         "DOCUMENT_SCAN_UNAVAILABLE", lambda: validation.check_scanner_availability(str(file))
     )
     with scanner(tmp_path) as (path, _):
-        alias = tmp_path / "alias"
+        alias = Path(path).parent / "alias"
         alias.symlink_to(path)
         assert_domain(
             "DOCUMENT_SCAN_UNAVAILABLE", lambda: validation.check_scanner_availability(str(alias))
