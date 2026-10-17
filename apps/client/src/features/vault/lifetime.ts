@@ -54,6 +54,9 @@ export class VaultLifetime {
     this.clearDom();
   }
   clearDom() {
+    if (this.#display) clearTimeout(this.#display);
+    if (this.#poll) clearInterval(this.#poll);
+    this.#display = undefined; this.#poll = undefined; this.#displayExpiresAt = null;
     for (const field of this.root.querySelectorAll<HTMLInputElement>("input[data-vault-secret]")) field.value = "";
     for (const output of this.root.querySelectorAll<HTMLElement>("[data-vault-output]")) output.textContent = "";
   }

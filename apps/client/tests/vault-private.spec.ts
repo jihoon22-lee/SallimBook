@@ -64,3 +64,13 @@ test("live membership revocation clears a displayed card at the next permission 
   state.status.own_membership = "revoked"; state.status.members[0]!.status = "revoked"; state.status.version!++;
   await page.clock.fastForward(5_001); await expect(page.getByLabel("일시적으로 표시하는 카드 번호와 유효기간")).toHaveText("");
 });
+
+
+test("recovery code has an absolute 30-second display bound even after confirmation input", async ({ page }) => {
+  const { extra, state } = await mockPrivateVault(page); Object.assign(state.status, { initialized: false, id: null, version: null, current_key_version: null, own_membership: "not_enrolled" });
+  await page.clock.install(); await page.getByRole("button", { name: "보관함 상태 다시 확인", exact: true }).click(); await page.getByRole("button", { name: "보관함 처음 설정", exact: true }).click();
+  await page.getByLabel("합성 구성원 하나의 새 보관함 암호", { exact: true }).fill(vaultPassword); await page.getByLabel("합성 구성원 하나의 새 보관함 암호 확인", { exact: true }).fill(vaultPassword); await page.getByRole("button", { name: "보호 작업 진행", exact: true }).click();
+  await expect(page.getByLabel("새 보관함 복구코드", { exact: true })).toHaveText(/^[A-Za-z0-9_-]{43}$/);
+  await page.clock.fastForward(29_000); await page.getByLabel("새 복구코드를 오프라인으로 보관했어요").check(); await page.clock.fastForward(1_001);
+  await expect(page.getByLabel("새 보관함 복구코드", { exact: true })).toHaveText(""); await expect(page.getByRole("button", { name: "보관 확인·설정 완료" })).toHaveCount(0); expect(extra.writes).toHaveLength(0);
+});

@@ -172,7 +172,8 @@ export class VaultWorkflow {
   }
   private showRecovery(code: Bytes, operation: () => Promise<void>): WorkflowResult {
     this.life.assert(); this.recoveryOutput(encode64(code)); this.life.forgetBytes(code);
-    this.life.waitForInput(); this.#prepared = operation; return "confirm-recovery";
+    this.life.waitForInput(); this.life.showFor30Seconds(async () => { await this.fresh(); });
+    this.#prepared = operation; return "confirm-recovery";
   }
   private async checkedCard() {
     const initial = this.current().card; check(initial);

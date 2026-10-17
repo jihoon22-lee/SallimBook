@@ -27,3 +27,17 @@ test("foreground lifetime wipes inputs/keys and rejects exact deadlines plus lat
   });
   expect(result).toEqual({ locked: 1, rejected: 5, wiped: true, dom: "" });
 });
+
+
+test("confirmed recovery presentation ends before the subsequent bounded work step", async ({ page }) => {
+  expect(await page.evaluate(async () => {
+    const { VaultLifetime } = await import("/src/features/vault/lifetime.ts");
+    const root = document.createElement("section"); document.body.append(root);
+    const original = performance.now.bind(performance); let now = original(); Object.defineProperty(performance, "now", { configurable: true, value: () => now });
+    const life = new VaultLifetime(root, () => {});
+    try {
+      life.showFor30Seconds(async () => {}); now += 29_000; life.beginStep(); life.clearDom(); now += 31_000;
+      life.assert(); return !life.signal.aborted;
+    } finally { life.close(); Object.defineProperty(performance, "now", { configurable: true, value: original }); root.remove(); }
+  })).toBe(true);
+});
