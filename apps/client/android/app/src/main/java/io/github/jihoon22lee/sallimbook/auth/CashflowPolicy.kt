@@ -267,12 +267,22 @@ internal object CashflowPolicy {
         return row
     }
 
-    private fun cashFields() = cashInputFields() + mapOf("id" to id, "household_id" to id, "kind" to projectedIncomeKind, "card_id" to nullable(id),
+    private fun cashFields(kindRule: FieldRule = projectedIncomeKind) = cashInputFields() + mapOf("id" to id, "household_id" to id, "kind" to kindRule, "card_id" to nullable(id),
         "flow" to choice("in", "out"), "reverses_id" to nullable(id), "state" to choice("active", "void"),
         "created_by_member_id" to id, "updated_by_member_id" to id, "created_at" to timestamp, "updated_at" to timestamp,
         "version" to positive, "action" to choice("create", "correct", "void", "convert_source", "convert_result"),
         "reason" to nullable(text(500)), "conversion_id" to nullable(id), "editable" to bool, "voidable" to bool)
     private val cash: FieldRule = { val row = shape(it, cashFields()); precision(row) }
+    fun fixedPayment(value: Any?): Map<String, Any?> {
+        val row = shape(value, cashFields(choice("fixed_payment")))
+        precision(row)
+        if (row["flow"] != "out" || row["date_precision"] != "day" || row["reverses_id"] != null ||
+            row["editable"] != false || row["voidable"] != false || row["conversion_id"] != null ||
+            row["account_id"] != null && row["card_id"] != null) invalid()
+        if (row["action"] != if (row["state"] == "active") "create" else "void") invalid()
+        if (row["period_month"] != (row["occurred_on"] as String).take(7)) invalid()
+        return row
+    }
     private fun incomeTotalsFields() = mapOf("salary_krw" to money, "bonus_krw" to money, "other_income_krw" to money,
         "income_returns_krw" to money, "insurance_receipts_krw" to money, "insurance_returns_krw" to money,
         "earned_net_krw" to signedMoney, "insurance_net_krw" to signedMoney, "net_inflow_krw" to signedMoney, "record_count" to count)

@@ -7,7 +7,10 @@ const id = "00000000-0000-4000-8000-000000000001";
 const valueId = "00000000-0000-4000-8000-000000000002";
 const methods = ["getAssetMonth", "getAssetMonthRevision", "listAssetMonthRevisions", "createAssetMonthDraft", "updateAssetMonthValue",
   "synchronizeAssetMonthScope", "confirmAssetMonth", "reopenAssetMonth", "listIncome", "incomeSummary", "incomeDuplicateCandidates",
-  "getIncome", "incomeHistory", "createIncome", "correctIncome", "voidIncome", "returnIncome", "convertIncomePrecision", "listCards", "getCard", "createCard", "updateCard", "archiveCard", "deleteCard", "getAssetComparison", "getAssetTrends"];
+  "getIncome", "incomeHistory", "createIncome", "correctIncome", "voidIncome", "returnIncome", "convertIncomePrecision", "listCards", "getCard", "createCard", "updateCard", "archiveCard", "deleteCard", "getAssetComparison", "getAssetTrends",
+  "listRecurringRules", "createRecurringRule", "getRecurringRule", "changeRecurringRule", "endRecurringRule", "generateObligations",
+  "listObligations", "fixedCostSummary", "getObligation", "obligationHistory", "rescheduleObligation", "skipObligation", "unskipObligation",
+  "completeObligation", "reopenObligation", "settleObligation", "listObligationSettlements", "voidFixedSettlement"];
 
 async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "unavailable" = "success") {
   await page.route("**/__cashflow-bridge", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Synthetic bridge test</title>" }));
@@ -33,13 +36,15 @@ async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "
   await page.goto("/__cashflow-bridge");
 }
 
-test("26 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
+test("44 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
   await setup(page);
   const result = await page.evaluate(async ({ id, valueId }) => {
     const source = "/src/platform/nativeFinance.ts";
     const { nativeFinance } = await import(source);
     const income = { kind: "salary", amount_krw: "99999999999999999999", period_month: "2026-01", date_precision: "month", member_id: id, occurred_on: null };
     const mutation = { ifMatch: '"7"', idempotencyKey: "synthetic.stable:retry-1" };
+    const terms = { title: "합성 납부", category: "합성 분류", amount_mode: "fixed", expected_amount_krw: "0", economic_type: "expense",
+      anchor_date: "2026-01-31", frequency: "monthly", currency_reference: "USD", foreign_amount_reference: "12345678901234567890.12345678" };
     const cases: [string, Record<string, unknown>][] = [
       ["getAssetMonth", { month: "2026-01", query: { cursor: null, limit: 200 } }],
       ["getAssetMonthRevision", { month: "2026-01", revisionNo: 3 }],
@@ -67,6 +72,24 @@ test("26 named metadata commands retain DTO values and mutation keys without web
       ["deleteCard", { cardId: id, ifMatch: mutation.ifMatch }],
       ["getAssetComparison", { query: { to: "2026-01", from: null, asset_id: id, limit: 200 } }],
       ["getAssetTrends", { query: { from: "2016-02", to: "2026-01", asset_id: id } }],
+      ["listRecurringRules", { query: { limit: 200, cursor: null } }],
+      ["createRecurringRule", { input: { ...terms, effective_from: "2026-01-01", effective_until: "2027-01-01", end_reason: "합성 초기 종료" }, idempotencyKey: mutation.idempotencyKey }],
+      ["getRecurringRule", { ruleId: id }],
+      ["changeRecurringRule", { ruleId: id, input: { ...terms, amount_mode: "variable", expected_amount_krw: null, effective_from: "2026-02-01", reason: "합성 조건 변경" }, ...mutation }],
+      ["endRecurringRule", { ruleId: id, input: { effective_on: "2027-01-01", reason: "합성 종료" }, ...mutation }],
+      ["generateObligations", { input: { rule_id: id, start_date: "2026-01-01", end_date: "2026-12-31" }, idempotencyKey: mutation.idempotencyKey }],
+      ["listObligations", { query: { month: "2026-01", limit: 200 } }],
+      ["fixedCostSummary", { query: { month: "2026-01" } }],
+      ["getObligation", { obligationId: id }],
+      ["obligationHistory", { obligationId: id, query: { cursor: 4, limit: 200 } }],
+      ["rescheduleObligation", { obligationId: id, input: { scheduled_date: "2026-01-30", reason: "합성 이동" }, ...mutation }],
+      ["skipObligation", { obligationId: id, input: { reason: "합성 건너뜀" }, ...mutation }],
+      ["unskipObligation", { obligationId: id, input: { reason: "합성 복원" }, ...mutation }],
+      ["completeObligation", { obligationId: id, input: { reason: "합성 완료" }, ...mutation }],
+      ["reopenObligation", { obligationId: id, input: { reason: "합성 재개" }, ...mutation }],
+      ["settleObligation", { obligationId: id, input: { amount_krw: "1000000", principal_krw: "700000", interest_krw: "300000", occurred_on: "2026-01-31", card_id: valueId }, ...mutation }],
+      ["listObligationSettlements", { obligationId: id, query: { limit: 200, cursor: valueId } }],
+      ["voidFixedSettlement", { settlementId: id, input: { reason: "합성 납부 취소" }, ...mutation }],
     ];
     const values = [];
     for (const [method, args] of cases) values.push(await nativeFinance[method](args));
