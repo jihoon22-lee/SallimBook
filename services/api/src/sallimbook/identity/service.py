@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import re
 import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -218,6 +219,93 @@ def authenticate(
     )
 
 
+def validate_locked_session(
+    principal: Principal,
+    auth: AuthSession,
+    source_device: RegisteredDevice,
+    *,
+    recent_login: bool = False,
+) -> datetime:
+    """Recheck state/time after waits while the caller still holds both barrier rows."""
+    now = utcnow()
+    if (
+        auth.id != principal.session_id
+        or auth.user_id != principal.user_id
+        or auth.household_id != principal.household_id
+        or auth.device_id != principal.device_id
+        or auth.kind != principal.transport
+        or auth.revoked_at is not None
+        or auth.expires_at <= now
+        or source_device.id != principal.device_id
+        or source_device.user_id != principal.user_id
+        or source_device.household_id != principal.household_id
+        or source_device.status != "active"
+        or source_device.revoked_at is not None
+        or (auth.kind == "web" and auth.last_seen_at <= now - WEB_IDLE)
+        or (
+            auth.kind == "native"
+            and (auth.access_expires_at is None or auth.access_expires_at <= now)
+        )
+    ):
+        raise _unauthenticated()
+    if recent_login:
+        age = now - auth.authenticated_at
+        if age < timedelta(0) or age > timedelta(minutes=5):
+            raise DomainError("REAUTHENTICATION_REQUIRED", "다시 로그인한 후 진행해 주세요.", 403)
+    return now
+
+
+def lock_session_devices(
+    session: Session,
+    principal: Principal,
+    *,
+    additional_device_ids: Iterable[UUID] = (),
+) -> tuple[AuthSession, dict[UUID, RegisteredDevice]]:
+    """Acquire Session -> complete Device set sorted by immutable UUID, without committing.
+
+    Protected operations call this BEFORE household, credential, grant or domain locks.
+    Device revocation must include its target in the first call; never lock its source
+    separately first. Ordinary authenticate/read requests intentionally keep no device lock.
+    """
+    auth = session.scalar(
+        select(AuthSession)
+        .where(
+            AuthSession.id == principal.session_id,
+            AuthSession.user_id == principal.user_id,
+            AuthSession.household_id == principal.household_id,
+            AuthSession.device_id == principal.device_id,
+            AuthSession.kind == principal.transport,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if auth is None:
+        raise _unauthenticated()
+    required = {principal.device_id, *additional_device_ids}
+    devices = {
+        device.id: device
+        for device in session.scalars(
+            select(RegisteredDevice)
+            .where(
+                RegisteredDevice.id.in_(required),
+                RegisteredDevice.household_id == principal.household_id,
+                RegisteredDevice.user_id == principal.user_id,
+            )
+            .order_by(RegisteredDevice.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    }
+    source = devices.get(principal.device_id)
+    if source is None:
+        raise _unauthenticated()
+    validate_locked_session(principal, auth, source)
+    _active_identity(session, auth)
+    if required != devices.keys():
+        raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
+    return auth, devices
+
+
 def create_bootstrap_invitation(
     session: Session, household_name: str, intended_login: str
 ) -> InvitationResponse:
@@ -257,12 +345,13 @@ def create_partner_invitation(
     if step_up_token is None:
         require_recent_login(principal, now=now)
     require_owner(principal)
+    auth, devices = lock_session_devices(session, principal)
     session.execute(
         select(Household).where(Household.id == principal.household_id).with_for_update()
     ).scalar_one()
-    now = utcnow()
-    if step_up_token is None:
-        require_recent_login(principal, now=now)
+    validate_locked_session(
+        principal, auth, devices[principal.device_id], recent_login=step_up_token is None
+    )
     count = session.scalar(
         select(func.count())
         .select_from(HouseholdMember)
@@ -287,6 +376,9 @@ def create_partner_invitation(
             StepUpPurpose.HOUSEHOLD_INVITE,
             principal.household_id,
         )
+    now = validate_locked_session(
+        principal, auth, devices[principal.device_id], recent_login=step_up_token is None
+    )
     # Reissuing an invite invalidates all unconsumed codes for this household.
     session.execute(
         update(Invitation)
@@ -632,6 +724,10 @@ def renew_csrf(session: Session, principal: Principal) -> str:
 
 
 def revoke_device(session: Session, principal: Principal, device: RegisteredDevice) -> None:
+    """Mutate after the route's sorted source/target barrier and operation authorization.
+
+    Do not acquire target session locks: ordinary reads can already hold those sessions.
+    """
     if device.household_id != principal.household_id or device.user_id != principal.user_id:
         raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
     now = utcnow()
