@@ -270,3 +270,35 @@ Gradle `:app:testDebugUnitTest :app:compileReleaseKotlin --max-workers=2`는 **1
 
 공통 `ASSET_KIND_IN_USE` 오류 보완을 병합한 뒤 타입 검사와 위 Gradle 검사를 다시 실행해
 JVM **146개**(실패·오류·건너뜀 0)가 통과했다. 자산 종류 변경 제한을 일반 버전 충돌로 바꾸지 않는다.
+
+
+## 15. 결제 연결 조회와 종료 확인 (SB-018)
+
+`getCardPaymentLinks({resourceId, query})`와 `getAccountPaymentLinks({resourceId, query})`는
+생성된 `PaymentLinksResponse`를 반환한다. 선택 종료일 `as_of_date`, 규칙·미납 회차·카드의 개별
+cursor와 최대 200개 limit만 받는다. 네이티브는 고정 GET 경로를 만들고 대상 종류·ID·버전,
+계좌의 연결 자산 ID, 선택 날짜, 64자리 소문자 hex digest와 세 페이지의 필드·순서·cursor를 검증한다.
+계좌에 연결된 카드가 다른 페이지에 있어도 해당 카드의 납부 규칙은 누락시키지 않는다.
+
+조회 범위는 `registered_recurring_only`, 전체 계좌 출금 합계 제공 여부는 false로 제한한다.
+카드 승인 계획과 계좌 납부 계획을 구분하고 마지막 네 자리만 전달한다. 미입력 예상값 null·0원·
+실제 납부 문자열과 선택 종료일 당일의 카드 활성 상태를 그대로 보존한다. 계좌번호·PAN·CVC·
+암호문이나 임의 추가 필드는 반환하지 않는다.
+
+기존 `updateAsset`, `archiveAsset`, `updateCard`, `archiveCard`의 생성 입력 DTO에는
+`closure_ack`와 `usage_digest`를 허용한다. true 확인에는 digest와 명시한 종료일이 모두 필요하고,
+false/생략 확인에는 non-null digest를 허용하지 않는다. 확인 명령 필드만 있는 PATCH도 거부한다.
+생성 입력·일반 자산/카드 응답·계좌 기본정보 PATCH의 허용 필드는 확장하지 않는다.
+`PAYMENT_LINKS_CHANGED`와 `PAYMENT_LINK_CONFIRMATION_REQUIRED`는 별도 오류로 보존한다.
+Digest는 연결 변경 확인 값이며 인증 수단이 아니고, 실제 종료 권한·최종 digest 대조는 서버가 수행한다.
+
+생성 TS의 필수 기본값과 맞추기 위해 기존 AssetEditor·AssetPages·AccountPages 호출은
+`closure_ack:false`를 명시한다. 변경 없는 수정 거부는 유지하며 사용자 확인을 자동 승인하지 않는다.
+종료 영향 확인 UI는 별도 화면 변경과 함께 연결한다.
+
+공식 계약 병합·재생성(`0009_recurring`) 뒤 `pnpm android:sync` 및 Gradle
+`:app:testDebugUnitTest :app:compileReleaseKotlin --max-workers=2`가 통과했다. 신규 경계 시험
+12개를 포함한 JVM **158개**가 실패·오류·건너뜀 없이 통과했고 독립 코드 검토도 완료했다.
+`TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test cashflow-native-bridge.spec.ts assets.spec.ts accounts.spec.ts accounts-native.spec.ts --config playwright.finance.config.ts --workers=2`는
+46개 명령 전달·4개 종료 명령 확인값·기존 자산/계좌 흐름을 포함해 **54개**를 통과했다.
+브라우저는 DB 시험 컨테이너 정지 확인 후 실행했고 실제 Android 기기 시험은 미실행이다.

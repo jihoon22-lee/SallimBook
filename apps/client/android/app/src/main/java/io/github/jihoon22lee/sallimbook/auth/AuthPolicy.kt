@@ -257,6 +257,8 @@ internal object AuthPolicy {
             "ACTUAL_PAYMENT_REQUIRED" to (409 to "실제 납부를 기록한 뒤 완료해 주세요."),
             "OBLIGATION_CLOSED" to (409 to "납부 가능한 회차를 선택해 주세요."),
             "INVALID_PAYMENT_SPLIT" to (422 to "원금·이자 합계와 실제 납부액을 확인해 주세요."),
+            "PAYMENT_LINKS_CHANGED" to (409 to "연결 내역이 바뀌었습니다. 다시 확인해 주세요."),
+            "PAYMENT_LINK_CONFIRMATION_REQUIRED" to (409 to "연결된 납부 내역을 확인한 뒤 종료해 주세요."),
             "INVALID_ASSET" to (422 to "자산 입력 항목을 확인해 주세요."),
             "OWNER_UNAVAILABLE" to (422 to "소유자를 확인해 주세요."),
             "ASSET_KIND_IN_USE" to (409 to "월별 금액 기록이 있어 자산·부채 구분을 바꿀 수 없습니다."),

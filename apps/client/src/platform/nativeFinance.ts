@@ -100,6 +100,8 @@ export const nativeFinance = {
   changeRecurringRule: (options: Parameters<SallimBookAuth["changeRecurringRule"]>[0]) => metadata(() => plugin.changeRecurringRule(options)),
   endRecurringRule: (options: Parameters<SallimBookAuth["endRecurringRule"]>[0]) => metadata(() => plugin.endRecurringRule(options)),
   voidFixedSettlement: (options: Parameters<SallimBookAuth["voidFixedSettlement"]>[0]) => metadata(() => plugin.voidFixedSettlement(options)),
+  getCardPaymentLinks: (options: Parameters<SallimBookAuth["getCardPaymentLinks"]>[0]) => metadata(() => plugin.getCardPaymentLinks(options)),
+  getAccountPaymentLinks: (options: Parameters<SallimBookAuth["getAccountPaymentLinks"]>[0]) => metadata(() => plugin.getAccountPaymentLinks(options)),
   editAccountNumber: (options: { accountId: string; ifMatch: string }) => invoke(() => plugin.editAccountNumberUI(options)),
   showAccountNumber: (options: { accountId: string }) => invoke(() => plugin.showAccountNumberUI(options)),
   showAccountNumberWithPasskey: (options: { accountId: string }) => invoke(() => plugin.showAccountNumberWithPasskeyUI(options)),

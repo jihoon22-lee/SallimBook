@@ -17,6 +17,7 @@ internal enum class FinanceOperation {
     GENERATE_OBLIGATIONS, LIST_OBLIGATIONS, FIXED_COST_SUMMARY, GET_OBLIGATION, OBLIGATION_HISTORY,
     RESCHEDULE_OBLIGATION, SKIP_OBLIGATION, UNSKIP_OBLIGATION, COMPLETE_OBLIGATION, REOPEN_OBLIGATION,
     SETTLE_OBLIGATION, LIST_OBLIGATION_SETTLEMENTS, VOID_FIXED_SETTLEMENT,
+    GET_CARD_PAYMENT_LINKS, GET_ACCOUNT_PAYMENT_LINKS,
 }
 
 /** Constructed from named metadata commands, never from a JS URL, headers or encoded body. */
@@ -87,7 +88,8 @@ internal object FinancePolicy {
 
     fun assetInput(value: Any?, patch: Boolean): Map<String, Any?> {
         val row = objectValue(value)
-        if (row.isEmpty() || !assetFields.containsAll(row.keys) || !patch && !row.keys.containsAll(assetRequired)) invalid()
+        val allowed = assetFields + if (patch) PaymentLinksPolicy.closureFields else emptySet()
+        if ((row.keys - PaymentLinksPolicy.closureFields).isEmpty() || !allowed.containsAll(row.keys) || !patch && !row.keys.containsAll(assetRequired)) invalid()
         for ((key, item) in row) when (key) {
             "name" -> text(item, 120)
             "kind" -> choice(item, assetKinds)
@@ -103,6 +105,7 @@ internal object FinancePolicy {
         }
         if (!patch && ((row["ownership_kind"] == "individual") != (row["owner_member_id"] != null))) invalid()
         if (row["started_on"] != null && row["ended_on"] != null && (row["ended_on"] as String) < (row["started_on"] as String)) invalid()
+        if (patch) PaymentLinksPolicy.closure(row)
         return row
     }
 
@@ -151,6 +154,7 @@ internal object FinancePolicy {
         if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.prepare(operation, value)
         if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
         if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.prepare(operation, value)
+        if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.prepare(operation, value)
         val args = objectValue(value)
         val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
         val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
@@ -175,8 +179,9 @@ internal object FinancePolicy {
             FinanceOperation.ARCHIVE_ASSET -> {
                 if (args.keys != setOf(idKey, "input", "ifMatch")) invalid()
                 val input = objectValue(args["input"])
-                if (input.keys != setOf("ended_on")) invalid()
+                if ("ended_on" !in input || !(setOf("ended_on") + PaymentLinksPolicy.closureFields).containsAll(input.keys)) invalid()
                 date(input["ended_on"])
+                PaymentLinksPolicy.closure(input)
                 FinanceRequest("POST", "$base/${id(args[idKey])}/archive", input, tag(args["ifMatch"]))
             }
             FinanceOperation.DELETE_ASSET -> {
@@ -193,6 +198,7 @@ internal object FinancePolicy {
         if (idempotencyKey != null) return false
         if (CardMetadataPolicy.httpAllowed(method, path, body, ifMatch)) return true
         if (ComparisonPolicy.httpAllowed(method, path, body, ifMatch)) return true
+        if (PaymentLinksPolicy.httpAllowed(method, path, body, ifMatch)) return true
         val uri = URI(path)
         if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path ||
             path.any { it.isWhitespace() || it.code < 32 }) false
@@ -297,6 +303,7 @@ internal object FinancePolicy {
             if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.response(operation, request, status, value)
             if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
             if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.response(operation, request, status, value)
+            if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.response(operation, request, status, value)
             if (operation == FinanceOperation.DELETE_ASSET) {
                 if (status != 204 || value != null) invalid()
                 return null

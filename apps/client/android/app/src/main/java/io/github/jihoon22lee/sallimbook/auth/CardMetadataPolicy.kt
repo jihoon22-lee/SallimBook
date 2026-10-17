@@ -41,7 +41,8 @@ internal object CardMetadataPolicy {
     fun supports(operation: FinanceOperation) = operation in operations
     private fun input(value: Any?, patch: Boolean): Map<String, Any?> {
         val row = obj(value)
-        if (row.isEmpty() || !fields.containsAll(row.keys) || !patch && !row.keys.containsAll(required)) invalid()
+        val allowed = fields + if (patch) PaymentLinksPolicy.closureFields else emptySet()
+        if ((row.keys - PaymentLinksPolicy.closureFields).isEmpty() || !allowed.containsAll(row.keys) || !patch && !row.keys.containsAll(required)) invalid()
         for ((key, item) in row) when (key) {
             "owner_member_id" -> FinancePolicy.id(item)
             "issuer_name", "product_name" -> text(item, 120)
@@ -54,6 +55,7 @@ internal object CardMetadataPolicy {
             "note" -> if (item != null) text(item, 500, true)
         }
         if (row["started_on"] != null && row["ended_on"] != null && (row["started_on"] as String) > (row["ended_on"] as String)) invalid()
+        if (patch) PaymentLinksPolicy.closure(row)
         return row
     }
     private fun query(value: Any?): String {
@@ -91,8 +93,9 @@ internal object CardMetadataPolicy {
             FinanceOperation.ARCHIVE_CARD -> {
                 if (args.keys != setOf("cardId", "input", "ifMatch")) invalid()
                 val body = obj(args["input"])
-                if (body.keys != setOf("ended_on")) invalid()
+                if ("ended_on" !in body || !(setOf("ended_on") + PaymentLinksPolicy.closureFields).containsAll(body.keys)) invalid()
                 date(body["ended_on"])
+                PaymentLinksPolicy.closure(body)
                 FinanceRequest("POST", "$BASE/${FinancePolicy.id(args["cardId"])}/archive", body, tag(args["ifMatch"]))
             }
             FinanceOperation.DELETE_CARD -> {

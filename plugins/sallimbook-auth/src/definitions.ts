@@ -106,6 +106,8 @@ export interface SallimBookAuth {
   changeRecurringRule(options: { ruleId: string; input: components["schemas"]["RuleChange"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
   endRecurringRule(options: { ruleId: string; input: components["schemas"]["RuleEnd"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
   voidFixedSettlement(options: { settlementId: string; input: components["schemas"]["ObligationAction"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["SettlementResponse"]>>>;
+  getCardPaymentLinks(options: { resourceId: operations["getCardPaymentLinks"]["parameters"]["path"]["resource_id"]; query?: NonNullable<operations["getCardPaymentLinks"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["PaymentLinksResponse"]>>>;
+  getAccountPaymentLinks(options: { resourceId: operations["getAccountPaymentLinks"]["parameters"]["path"]["resource_id"]; query?: NonNullable<operations["getAccountPaymentLinks"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["PaymentLinksResponse"]>>>;
   /** Number plaintext and ciphertext never appear in arguments or return values. */
   editAccountNumberUI(options: { accountId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "saved" | "deleted" | "cancelled" }>>;
   showAccountNumberUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;

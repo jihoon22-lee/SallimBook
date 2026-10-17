@@ -183,6 +183,9 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun endRecurringRule(call: PluginCall) = finance(call, FinanceOperation.END_RECURRING_RULE)
     @PluginMethod fun voidFixedSettlement(call: PluginCall) = finance(call, FinanceOperation.VOID_FIXED_SETTLEMENT)
 
+    @PluginMethod fun getCardPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_CARD_PAYMENT_LINKS)
+    @PluginMethod fun getAccountPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_ACCOUNT_PAYMENT_LINKS)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
