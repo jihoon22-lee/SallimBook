@@ -10,7 +10,7 @@ from uuid import UUID
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text
+from sqlalchemy import event, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
@@ -195,6 +195,49 @@ def card_detail(client, actor, card_id):
     response = client.get(f"/api/v1/cards/{card_id}", headers=actor.headers)
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_card_list_batches_current_secret_presence_without_loading_ciphertexts(vault_app, actors):
+    actor, partner, foreign = actors
+    with TestClient(vault_app) as client:
+        initialize(client, actor)
+        rows = [card(client, actor, archived=index == 5) for index in range(6)]
+        for index in range(3):
+            assert (
+                write_secret(
+                    client, actor, rows[index], payload=card_secret(seed=20 + index)
+                ).status_code
+                == 200
+            )
+        old = card_detail(client, actor, rows[1]["id"])
+        assert write_secret(client, actor, old, payload=card_secret(seed=30)).status_code == 200
+        deleted = card_detail(client, actor, rows[2]["id"])
+        assert (
+            client.delete(
+                f"/api/v1/cards/{deleted['id']}/secret-envelope",
+                headers=headers(actor, version=deleted["version"]),
+            ).status_code
+            == 200
+        )
+        initialize(client, foreign)
+        other = card(client, foreign)
+        assert write_secret(client, foreign, other).status_code == 200
+        queries = []
+
+        def observe(connection, cursor, statement, parameters, context, executemany):
+            if statement.startswith("SELECT") and "card_secret_envelopes" in statement:
+                queries.append(statement)
+
+        event.listen(vault_app.state.engine, "before_cursor_execute", observe)
+        try:
+            response = client.get("/api/v1/cards?limit=200&status=all", headers=partner.headers)
+        finally:
+            event.remove(vault_app.state.engine, "before_cursor_execute", observe)
+        assert response.status_code == 200
+        assert len(queries) == 1
+        assert queries[0].split("FROM", 1)[0].strip() == "SELECT card_secret_envelopes.card_id"
+        actual = {row["id"]: row["has_secret"] for row in response.json()["items"]}
+        assert actual == {row["id"]: index < 2 for index, row in enumerate(rows)}
 
 
 def write_secret(client, actor, row, *, payload=None, key=None, version=None):
