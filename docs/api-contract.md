@@ -407,6 +407,10 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 목록의 `status`는 active/ended/all이며 기본 active다. 가전 구매일·보증기한·구매액 미입력과 0원은 구분한다.
 금액은 십진 문자열, 수량은 0~1,000,000 범위의 엄격한 정수다. 가전 구매액과 재고 입고액은 자산·현금 기록을 자동 생성하지 않는다.
 수정은 `If-Match`, 상태 종료는 `ended_on` PATCH를 사용하며 이력을 실제 삭제하지 않는다.
+참조 없는 오등록은 DELETE /appliances/{id}, /consumables/{id}, /appliance-consumables/{id}로
+삭제한다. 해당 metadata If-Match가 필요하고 성공은 204다. 연결·재고·취소된 교체 이력이나 문서
+참조가 있으면 409 `APPLIANCE_IN_USE`/`CONSUMABLE_IN_USE`/`APPLIANCE_CONSUMABLE_IN_USE`이며
+사용 종료 또는 연결 비활성화를 사용한다. 다른 가계 ID는 404다.
 
 `/appliance-consumables`의 POST/GET와 `/{link_id}` GET/PATCH가 기기별 호환·주기·교체 수량·다음 확인일 override를 관리한다.
 동일 가계의 가전/소모품 조합은 하나이며 중지한 연결은 같은 행을 다시 활성화한다. 소모품 규격이 있으면 가계 안에서 유일하다.
