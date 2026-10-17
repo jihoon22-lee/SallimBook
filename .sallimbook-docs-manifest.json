@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "20ab0d83853e0e5abd87a80ed78dbd1fe019de27f4e34bbe5422292f91f43924",
-      "git_sha1": "152aba0228a10b38ccac6aa4b2c17be2e6d43fa5"
+      "sha256": "9f1e82b2765e4057abc5a03a72bdc8fb4f4673aa4fec16a4649064c5311e1fe6",
+      "git_sha1": "e6fa739cd09378b92bbe42720b39443479cc9eca"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -74,8 +74,8 @@
       "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
-      "sha256": "c1a41abca9ae760087fc7f843ee89483a10d5b0d43d5055df8273867a4a290e1",
-      "git_sha1": "17c1f35e3b38e63fbc1f94f77d500b378cc0c510"
+      "sha256": "d1f80b403e7c2456da9e5d7949b9904ba1498ac0764f5c81c0f4a6e8a122451b",
+      "git_sha1": "a5e5d00ab05c9d4e9a2de1506b498f832034e209"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "4fda7d2fb36ddc154a3ad9a12f7c5f7a199e7895346f6061a0f318f2a0441c21",
@@ -122,8 +122,8 @@
       "git_sha1": "34cb6de1be33e6f786516c326ef84fd6f722d021"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "0a8c6d28fed1b4e350d0f8e3c281ba70002983988faf2d29d3fa13dc486e3e98",
-      "git_sha1": "e6c3c9a426bb928fe7be07d84cd6fab8e6889f94"
+      "sha256": "bfd1e965373c883c488aac21cc62c58991ffbaf08d335a36319856027e15c850",
+      "git_sha1": "c852b1c24e22d5a48026739db0c9c400720b3ffa"
     },
     "docs/README.md": {
       "sha256": "c2828fd2b463946f56952fe422b1845afb72e713fbfd3927bc26f3d0553b1b78",
@@ -226,12 +226,12 @@
       "git_sha1": "05095fa6358915dcd93ec86267885a56087ed409"
     },
     "docs/testing/passkeys-web.md": {
-      "sha256": "0efece15a939fbda00d9cf96fa8c42a63aa4d40e9ec25874cb49a81cad436e60",
-      "git_sha1": "cfde913f5abf050ad7a28ba4ff90f59953aeb4b4"
+      "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
+      "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
     },
     "docs/testing/native-security-proof.md": {
-      "sha256": "75e50c296b96865b339ad3604d9c2573b64df85fde44ea3312df6774d41c394f",
-      "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
+      "sha256": "cde2b5e698e1f839263ce052822827eccc50fb21ed0359a6e527e3b94896cf2e",
+      "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
     },
     "docs/testing/assets-accounts-client.md": {
       "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",
