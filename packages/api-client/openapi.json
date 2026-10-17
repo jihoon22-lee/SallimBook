@@ -1723,6 +1723,7 @@
             "$ref": "#/components/schemas/Precision"
           },
           "editable": {
+            "description": "Current detail/list/duplicate reads only: active manual income without active returns. Historical and immutable command receipts are false; fetch current detail before acting.",
             "title": "Editable",
             "type": "boolean"
           },
@@ -1833,6 +1834,7 @@
             "type": "integer"
           },
           "voidable": {
+            "description": "Current detail/list/duplicate reads only: active manual income or return without active returns. Historical and immutable command receipts are false; fetch current detail before acting.",
             "title": "Voidable",
             "type": "boolean"
           }
