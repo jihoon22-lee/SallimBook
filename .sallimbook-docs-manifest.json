@@ -66,8 +66,8 @@
       "git_sha1": "a54962840468add4c16bb829ddd7f4186bb84bc3"
     },
     "docs/api-contract.md": {
-      "sha256": "3612545ceca90d2e69041c87b9afc2fb5510053bdc75c4e20e75b3cced2a0088",
-      "git_sha1": "e4c9e80572e22ce7fbdabb6666d64daf8be2e48c"
+      "sha256": "a1fab76a5f1137afca5fc76238fd3b0d04992b25f1b1124627f216d5ddfcd5e1",
+      "git_sha1": "6d1e3ec86ae53675485a4f090a5275c8dfa5a69a"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "4b8fdb032320f693b6cb1eb50b2d84fc4428d936495928bb8efe1e76ac1ba84b",
-      "git_sha1": "2fed88d4fee62de024184a00b29664eb351c8276"
+      "sha256": "0eb8db0d541c9b0e3ce35c64caaf8af47a65e1a38060c480dfd16cd693411941",
+      "git_sha1": "450634ae837630e1039aa2c8e97fe270356d806c"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -126,8 +126,8 @@
       "git_sha1": "e6c3c9a426bb928fe7be07d84cd6fab8e6889f94"
     },
     "docs/README.md": {
-      "sha256": "c2828fd2b463946f56952fe422b1845afb72e713fbfd3927bc26f3d0553b1b78",
-      "git_sha1": "1554a74c315c5381b799b6ac35b0e016c5496ecd"
+      "sha256": "6cb1d0332275d9bc158d2e855ddc40e645800c7f6932bcd8443b28e13089c414",
+      "git_sha1": "d00d77b6a5d651cd6c3909f32507e00d6f623873"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -222,8 +222,8 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "dd28cce0aff336dfa1e8ff719d307233c2171d74a40fc62ab15ba7f3e60dbde7",
-      "git_sha1": "05095fa6358915dcd93ec86267885a56087ed409"
+      "sha256": "97f9c27ceecf9f97fe3fbab555fe541e5d6fac50ddf073f150aa455c04c55aeb",
+      "git_sha1": "616137f1bb35641f263dc625744b8f2a857be681"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "cf830c8b8af6c26e3ab07d7fe4c9843ea602cf2afba217e50e9407dfdf26c9a3",
@@ -236,6 +236,10 @@
     "docs/testing/assets-accounts-client.md": {
       "sha256": "719325e09cd72867a9a2610e4d5682eca24fbf3f4b48f93e607a9bf78b792fc7",
       "git_sha1": "cc99d9219cc23eb80159791a85e3edf58b91d2ef"
+    },
+    "docs/testing/monthly-assets-client.md": {
+      "sha256": "cb3488f308d1533e0fccfb97e36977139bb1fe4e1dbb571321ac5a854d944b80",
+      "git_sha1": "b0f9aed1882627b68a5c4703e3dcd6c55a4edaf0"
     }
   }
 }

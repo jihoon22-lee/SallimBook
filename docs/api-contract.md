@@ -132,7 +132,7 @@ draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `
 `REVISION_CONFLICT`, 범위 재생성으로 행 UUID가 바뀌면 `VALUE_CONFLICT`, 기존 행 버전 충돌이면 `VERSION_CONFLICT`로 409를 반환한다.
 포함된 항목이 미입력이면 해당 합계는 null이다. 전월 복사값은 숫자를 보여도 `provisional=true`이고 확정할 수 없다.
 확정할 때 `acknowledge_non_month_end_dates`, `acknowledge_scope_change`로 표시된 차이를 명시 확인한다.
-Android/웹 월 입력·비교·홈 화면 연결은 후속 client 변경에서 진행한다.
+웹 월 입력·확정·정정·과거 조회 화면을 연결했다. Android 월 adapter와 비교·추이·홈 연결은 후속 변경에서 진행한다.
 
 ## 1. 공통 규약
 
