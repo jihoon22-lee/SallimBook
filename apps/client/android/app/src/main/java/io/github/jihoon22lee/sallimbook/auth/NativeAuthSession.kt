@@ -9,6 +9,7 @@ import org.json.JSONTokener
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.Base64
+import java.util.UUID
 import java.util.concurrent.Executors
 
 /** This value is delivered exclusively to NativeAuthActivity, never an AuthOutcome or Intent. */
@@ -45,6 +46,7 @@ internal class NativeAuthSession private constructor(context: Context) {
 
     private val store by lazy { RefreshStore(app, origin.orEmpty()) }
     private val http by lazy { NativeAuthHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val documentHttp by lazy { NativeDocumentHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     @Volatile private var accessToken: String? = null
     private var accessExpiresAt = 0L
 
@@ -316,6 +318,72 @@ internal class NativeAuthSession private constructor(context: Context) {
             else AuthPolicy.safeError(response.status, response.body, response.requestId)
                 ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         AuthOutcome.success(mapOf("status" to response.status, "body" to safe))
+    }
+
+    /** Native Activity alone supplies the confirmed file; never serialized into an AuthOutcome. */
+    fun uploadDocument(name: String, mime: String, target: Map<String, Any?>, confirmed: Boolean,
+        content: NativeDocumentBytes, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) {
+        executor.execute {
+            val outcome = try {
+                authorize(gate); requireAvailable(); gate.check()
+                val create = NativeDocumentPolicy.create(mapOf("original_name" to name, "mime_type" to mime,
+                    "size_bytes" to content.size, "checksum_sha256" to content.checksum, "target" to target,
+                    "contains_no_card_data" to confirmed), UUID.randomUUID().toString())
+                val created = http.send(create.method, create.path, gate, body = JSONObject(create.body!!), accessToken = access(gate),
+                    idempotencyKey = create.idempotencyKey, nativeDocumentCreate = true)
+                if (created.status != 201) documentFailure(created)
+                else {
+                    val reference = NativeDocumentPolicy.reference(created.body)
+                    val documentId = reference["id"] as String
+                    val uploaded = documentHttp.upload(documentId, "\"${reference["version"]}\"", UUID.randomUUID().toString(), content, access(gate), gate)
+                    if (uploaded.status != 200) documentFailure(uploaded)
+                    else {
+                        NativeDocumentPolicy.reference(uploaded.body, documentId)
+                        gate.check()
+                        AuthOutcome.success(mapOf("status" to "uploaded"))
+                    }
+                }
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.NETWORK_UNAVAILABLE) }
+            finally { content.close() }
+            callback(outcome)
+        }
+    }
+
+    /** Revalidates current metadata before authenticated download; content goes only to native UI. */
+    fun downloadDocument(expected: NativeDocumentInfo, gate: ForegroundRequest, callback: (AuthOutcome, NativeDocumentBytes?) -> Unit) {
+        executor.execute {
+            var content: NativeDocumentBytes? = null
+            val outcome = try {
+                authorize(gate); requireAvailable(); gate.check()
+                val documentId = expected.id
+                val request = FinancePolicy.prepare(FinanceOperation.GET_DOCUMENT, mapOf("documentId" to documentId))
+                val metadata = http.send(request.method, request.path, gate, accessToken = access(gate))
+                if (metadata.status != 200) documentFailure(metadata)
+                else {
+                    val info = NativeDocumentPolicy.info(FinancePolicy.response(FinanceOperation.GET_DOCUMENT, request, 200, metadata.body), documentId)
+                    if (info.name != expected.name || info.mime != expected.mime || info.size != expected.size || info.checksum != expected.checksum)
+                        throw AuthFailure(AuthCode.VERSION_CONFLICT)
+                    val result = documentHttp.download(info, access(gate), gate)
+                    if (result.response.status != 200) documentFailure(result.response)
+                    else {
+                        content = result.content ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+                        gate.check()
+                        AuthOutcome.success(mapOf("status" to "downloaded"))
+                    }
+                }
+            } catch (failure: AuthFailure) { content?.close(); content = null; AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { content?.close(); content = null; AuthOutcome.failure(AuthCode.NETWORK_UNAVAILABLE) }
+            try { callback(outcome, content) } catch (_: Exception) { content?.close() }
+        }
+    }
+
+    private fun documentFailure(response: NativeHttpResponse): AuthOutcome {
+        if (response.status == 401) clearLocal()
+        val safe = AuthPolicy.safeError(response.status, response.body, response.requestId)
+            ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+        val error = safe["error"] as Map<*, *>
+        return AuthOutcome.success(mapOf("status" to "failed", "error_code" to error["code"]))
     }
 
     private fun accountNumberFailure(response: NativeHttpResponse): Nothing {

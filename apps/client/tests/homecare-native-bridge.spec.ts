@@ -10,7 +10,8 @@ const replacementId = "00000000-0000-4000-8000-000000000050";
 const methods = ["listAppliances", "createAppliance", "getAppliance", "updateAppliance", "listConsumables", "createConsumable",
   "getConsumable", "updateConsumable", "listApplianceConsumables", "createApplianceConsumable", "getApplianceConsumable",
   "updateApplianceConsumable", "listStockMovements", "createStockMovement", "getStockMovement", "cancelStockMovement",
-  "listConsumableReplacements", "createConsumableReplacement", "getConsumableReplacement", "cancelConsumableReplacement", "getHomecareStatus"];
+  "listConsumableReplacements", "createConsumableReplacement", "getConsumableReplacement", "cancelConsumableReplacement", "getHomecareStatus",
+  "deleteAppliance", "deleteConsumable", "deleteApplianceConsumable"];
 
 async function setup(page: Page, scenario = "success") {
   await page.route("**/__homecare-bridge", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Synthetic homecare bridge test</title>" }));
@@ -24,6 +25,7 @@ async function setup(page: Page, scenario = "success") {
         const failures: Record<string, string> = { cancelled: "AUTH_CANCELLED", locked: "APP_LOCKED", expired: "SESSION_EXPIRED", network: "NETWORK_UNAVAILABLE", invalid: "INVALID_REQUEST", denied: "ACCESS_DENIED" };
         if (failures[scenario]) return { ok: false, code: failures[scenario] };
         if (scenario === "conflict") return { ok: true, value: { status: 409, body: { error: { code: "INSUFFICIENT_STOCK", message: "synthetic private detail", note: "synthetic private detail" } } } };
+        if (method.startsWith("delete")) return { ok: true, value: { status: 204, body: null } };
         const stockMutation = ["createStockMovement", "cancelStockMovement", "createConsumableReplacement", "cancelConsumableReplacement"].includes(method);
         const body = stockMutation ? { id: movementId, consumable_id: consumableId, stock_version: 2,
           replacement_id: method === "createConsumableReplacement" ? replacementId : null } : {
@@ -42,7 +44,7 @@ async function setup(page: Page, scenario = "success") {
   await page.goto("/__homecare-bridge");
 }
 
-test("21 homecare commands preserve typed values and independent stock and link versions", async ({ page }) => {
+test("24 homecare commands preserve typed values and independent stock and link versions", async ({ page }) => {
   await setup(page);
   const result = await page.evaluate(async ({ applianceId, consumableId, linkId, movementId, replacementId }) => {
     const source = "/src/platform/nativeFinance.ts";
@@ -71,6 +73,9 @@ test("21 homecare commands preserve typed values and independent stock and link 
       ["getConsumableReplacement", { linkId, replacementId }],
       ["cancelConsumableReplacement", { linkId, replacementId, input: cancel, ...stock }],
       ["getHomecareStatus", { query: { appliance_id: applianceId, consumable_id: consumableId, limit: 200 } }],
+      ["deleteAppliance", { applianceId, ifMatch: '"3"' }],
+      ["deleteConsumable", { consumableId, ifMatch: '"7"' }],
+      ["deleteApplianceConsumable", { linkId, ifMatch: '"3"' }],
     ];
     const values: unknown[] = [];
     for (const [method, args] of cases) values.push(await nativeFinance[method](args));
@@ -79,10 +84,11 @@ test("21 homecare commands preserve typed values and independent stock and link 
       http: state.http, storage: localStorage.length + sessionStorage.length };
   }, { applianceId, consumableId, linkId, movementId, replacementId });
   expect(result.calls).toEqual(result.expected);
-  expect(result.calls).toHaveLength(21);
+  expect(result.calls).toHaveLength(24);
   expect(result.values[0]).toMatchObject({ quantity: 1_000_000, purchase_price_krw: "99999999999999999999", missing: null, zero: "0" });
   expect(result.values[13]).toEqual({ id: movementId, consumable_id: consumableId, stock_version: 2, replacement_id: null });
   expect(result.values[17]).toEqual({ id: movementId, consumable_id: consumableId, stock_version: 2, replacement_id: replacementId });
+  expect(result.values.slice(21)).toEqual([null, null, null]);
   expect(result.http).toBe(0); expect(result.storage).toBe(0);
 });
 
