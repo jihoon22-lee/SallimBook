@@ -115,7 +115,7 @@ internal object CashflowPolicy {
         }
         FinanceOperation.VOID_INCOME -> shape(value, mapOf("reason" to text(500)))
         FinanceOperation.RETURN_INCOME -> {
-            val row = shape(value, cashInputFields() + mapOf("reason" to text(500), "member_id" to { if (it != null) invalid() }),
+            val row = shape(value, cashInputFields() + mapOf("reason" to text(500), "member_id" to { if (it != null) invalid() }, "card_id" to { if (it != null) invalid() }),
                 setOf("amount_krw", "period_month", "date_precision", "reason"))
             precision(row)
             row
@@ -139,7 +139,7 @@ internal object CashflowPolicy {
         if ((row["date_precision"] == "day") != (row["occurred_on"] != null)) invalid()
     }
     private fun incomeInput(value: Any?, create: Boolean = false): Map<String, Any?> {
-        val row = shape(value, cashInputFields() + mapOf("kind" to incomeKind, "member_id" to id) +
+        val row = shape(value, cashInputFields() + mapOf("kind" to incomeKind, "member_id" to id, "card_id" to { if (it != null) invalid() }) +
             if (create) mapOf("duplicate_acknowledged" to bool) else emptyMap(),
             setOf("amount_krw", "period_month", "date_precision", "kind", "member_id"))
         precision(row)
@@ -262,7 +262,7 @@ internal object CashflowPolicy {
         return row
     }
 
-    private fun cashFields() = cashInputFields() + mapOf("id" to id, "household_id" to id, "kind" to projectedIncomeKind,
+    private fun cashFields() = cashInputFields() + mapOf("id" to id, "household_id" to id, "kind" to projectedIncomeKind, "card_id" to nullable(id),
         "flow" to choice("in", "out"), "reverses_id" to nullable(id), "state" to choice("active", "void"),
         "created_by_member_id" to id, "updated_by_member_id" to id, "created_at" to timestamp, "updated_at" to timestamp,
         "version" to positive, "action" to choice("create", "correct", "void", "convert_source", "convert_result"),

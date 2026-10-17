@@ -13,7 +13,7 @@ class IncomePolicyTest {
     }
     private fun input() = mapOf<String, Any?>("kind" to "salary", "amount_krw" to "99999999999999999999", "period_month" to "2026-01",
         "date_precision" to "month", "occurred_on" to null, "member_id" to id, "account_id" to null, "note" to null)
-    private fun cash() = input() + mapOf("id" to id, "household_id" to other, "flow" to "in", "reverses_id" to null, "state" to "active",
+    private fun cash() = input() + mapOf("id" to id, "household_id" to other, "card_id" to null, "flow" to "in", "reverses_id" to null, "state" to "active",
         "created_by_member_id" to id, "updated_by_member_id" to id, "created_at" to "2026-01-31T00:00:00Z", "updated_at" to "2026-01-31T00:00:00Z",
         "version" to 1, "action" to "create", "reason" to null, "conversion_id" to null, "editable" to true, "voidable" to true)
     private fun totals() = mapOf("salary_krw" to "99999999999999999999", "bonus_krw" to "0", "other_income_krw" to "0",
@@ -137,5 +137,23 @@ class IncomePolicyTest {
         val error = AuthPolicy.safeError(409, mapOf("error" to mapOf("code" to "INCOME_DUPLICATE_SUSPECTED", "message" to "synthetic secret")), id)!!
         assertEquals("INCOME_DUPLICATE_SUSPECTED", (error["error"] as Map<*, *>)["code"])
         assertFalse(error.toString().contains("synthetic"))
+    }
+    @Test fun cashResponseAcceptsOnlyNullableCardIdWhileIncomeInputsNeverAcceptACard() {
+        val get = request(FinanceOperation.GET_INCOME, mapOf("recordId" to id))
+        for (card in listOf(null, other)) {
+            val row = cash() + mapOf("card_id" to card)
+            assertEquals(row, FinancePolicy.response(FinanceOperation.GET_INCOME, get, 200, row))
+        }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_INCOME, get, 200, cash() - "card_id") }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_INCOME, get, 200, cash() + mapOf("card_id" to "synthetic invalid")) }
+        request(FinanceOperation.CREATE_INCOME, mapOf("input" to input() + mapOf("card_id" to null), "idempotencyKey" to "synthetic"))
+        request(FinanceOperation.RETURN_INCOME, mutation(input() - setOf("kind", "member_id") + mapOf("reason" to "합성", "card_id" to null)))
+        for (card in listOf(other, "synthetic", 0)) {
+            bad { request(FinanceOperation.CREATE_INCOME, mapOf("input" to input() + mapOf("card_id" to card), "idempotencyKey" to "synthetic")) }
+            bad { request(FinanceOperation.RETURN_INCOME, mutation(input() - setOf("kind", "member_id") + mapOf("reason" to "합성", "card_id" to card))) }
+            bad { request(FinanceOperation.CONVERT_INCOME_PRECISION, mapOf("input" to conversion() + mapOf("replacements" to listOf(input() + mapOf("card_id" to card))), "idempotencyKey" to "synthetic")) }
+        }
+        // IncomePatch has no card field, including an explicit null.
+        bad { request(FinanceOperation.CORRECT_INCOME, mutation(mapOf("reason" to "합성", "card_id" to null))) }
     }
 }

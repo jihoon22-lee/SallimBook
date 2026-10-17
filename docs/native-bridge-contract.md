@@ -175,3 +175,27 @@ step-up grant를 JS로 전달하지 않는다. 입력 화면은 번호를 미리
 `pnpm --filter @sallimbook/client exec playwright test cashflow-native-bridge.spec.ts --config playwright.finance.config.ts --workers=2`는
 18개 명령의 DTO·헤더 값 전달, 웹 HTTP 미사용, 잠금·중복 충돌·미지원 오류 경계를 두 화면 크기에서
 8개 시험으로 확인했다. 이 시뮬레이션은 실제 Android 기기 보안을 검증하지 않으며 실기기 시험은 미실행이다.
+
+
+## 12. 카드 일반정보 (SB-017)
+
+`listCards`, `getCard`, `createCard`, `updateCard`, `archiveCard`, `deleteCard`는 생성 API DTO에
+대응하는 이름 있는 명령이다. 목록은 소유자·종류·결제계좌·상태·cursor·limit, 단건은 `cardId`,
+수정·종료·삭제는 강한 버전 문자열 `ifMatch`만 추가로 받는다. 서버 경로와 HTTP 헤더는 네이티브가
+고정하며 이 명령으로 PAN·유효기간·CVC·암호문·보관함 API를 호출할 수 없다.
+
+입력 필드를 정확히 제한하고 마지막 네 자리는 ASCII 숫자 네 자리만 허용한다. 응답도 정확한 필드·
+식별자·페이지 크기와 `masked_number`의 마지막 네 자리 일치를 검증한다. 결제계좌의 종료 상태를
+보존하며 계좌를 자동 교체하거나 연결을 지우지 않는다. 카드 전체 비밀 보관함과 로컬 CVC 구현은
+이 메타데이터 작업의 범위에 포함되지 않는다.
+
+공통 `CashResponse.card_id`는 UUID 또는 null로 검증한다. 수입 생성·반환·정밀도 전환 입력의
+`card_id`는 생략 또는 null만 허용하고, 수입 정정 입력에는 해당 필드 자체를 허용하지 않는다.
+따라서 공통 cash 응답 확장이 수입의 카드 결제 입력 경로를 만들지 않는다.
+
+카드 명령 8개 경계 시험과 cash 계약 회귀 시험 1개를 추가해 JVM **106개**가 통과했다.
+`pnpm android:sync`, Gradle `:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin`이
+통과했고 개발 APK가 생성됐다. `cashflow-native-bridge.spec.ts`는 앞 절의 같은 명령으로
+24개 명령의 전달과 오류 경계를 두 화면 크기에서 **8개** 시험으로 검증한다.
+finance Playwright 설정은 전용 18748 포트만 시작해 다른 작업의 18743 서버와 분리한다.
+독립 코드 검토를 마쳤으며 실제 Android 기기 실행은 아직 수행하지 않았다.

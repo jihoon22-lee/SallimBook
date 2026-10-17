@@ -7,7 +7,7 @@ const id = "00000000-0000-4000-8000-000000000001";
 const valueId = "00000000-0000-4000-8000-000000000002";
 const methods = ["getAssetMonth", "getAssetMonthRevision", "listAssetMonthRevisions", "createAssetMonthDraft", "updateAssetMonthValue",
   "synchronizeAssetMonthScope", "confirmAssetMonth", "reopenAssetMonth", "listIncome", "incomeSummary", "incomeDuplicateCandidates",
-  "getIncome", "incomeHistory", "createIncome", "correctIncome", "voidIncome", "returnIncome", "convertIncomePrecision"];
+  "getIncome", "incomeHistory", "createIncome", "correctIncome", "voidIncome", "returnIncome", "convertIncomePrecision", "listCards", "getCard", "createCard", "updateCard", "archiveCard", "deleteCard"];
 
 async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "unavailable" = "success") {
   await page.route("**/__cashflow-bridge", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Synthetic bridge test</title>" }));
@@ -19,6 +19,7 @@ async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "
         state.calls.push({ method, args });
         if (scenario === "locked") return { ok: false, code: "APP_LOCKED" };
         if (scenario === "conflict") return { ok: true, value: { status: 409, body: { error: { code: "INCOME_DUPLICATE_SUSPECTED", message: "synthetic private detail" } } } };
+        if (method === "deleteCard") return { ok: true, value: { status: 204, body: null } };
         return { ok: true, value: { status: 200, body: { marker: method, amount_krw: "99999999999999999999", missing: null, zero: "0" } } };
       },
     } });
@@ -32,7 +33,7 @@ async function setup(page: Page, scenario: "success" | "locked" | "conflict" | "
   await page.goto("/__cashflow-bridge");
 }
 
-test("18 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
+test("24 named metadata commands retain DTO values and mutation keys without web HTTP", async ({ page }) => {
   await setup(page);
   const result = await page.evaluate(async ({ id, valueId }) => {
     const source = "/src/platform/nativeFinance.ts";
@@ -58,6 +59,12 @@ test("18 named metadata commands retain DTO values and mutation keys without web
       ["voidIncome", { recordId: id, input: { reason: "합성 무효" }, ...mutation }],
       ["returnIncome", { recordId: id, input: { amount_krw: "1", period_month: "2026-01", date_precision: "month", reason: "합성 반환" }, ...mutation }],
       ["convertIncomePrecision", { input: { sources: [{ id, version: 7 }], replacements: [income], reason: "합성 전환" }, idempotencyKey: mutation.idempotencyKey }],
+      ["listCards", { query: { owner_member_id: id, status: "all", limit: 200 } }],
+      ["getCard", { cardId: id }],
+      ["createCard", { input: { owner_member_id: id, issuer_name: "합성 카드사", product_name: "합성 카드", card_type: "credit", last_four: "1234", settlement_day: 31 } }],
+      ["updateCard", { cardId: id, input: { settlement_account_id: null, alias: "합성 변경" }, ifMatch: mutation.ifMatch }],
+      ["archiveCard", { cardId: id, input: { ended_on: "2026-01-31" }, ifMatch: mutation.ifMatch }],
+      ["deleteCard", { cardId: id, ifMatch: mutation.ifMatch }],
     ];
     const values = [];
     for (const [method, args] of cases) values.push(await nativeFinance[method](args));
@@ -65,7 +72,7 @@ test("18 named metadata commands retain DTO values and mutation keys without web
     return { values, calls: state.calls, expected: cases.map(([method, args]) => ({ method, args })), http: state.http, storage: localStorage.length + sessionStorage.length };
   }, { id, valueId });
   expect(result.calls).toEqual(result.expected);
-  expect(result.values).toEqual(methods.map((marker) => ({ marker, amount_krw: "99999999999999999999", missing: null, zero: "0" })));
+  expect(result.values).toEqual(methods.map((marker) => marker === "deleteCard" ? null : ({ marker, amount_krw: "99999999999999999999", missing: null, zero: "0" })));
   expect(result.http).toBe(0); expect(result.storage).toBe(0);
 });
 
