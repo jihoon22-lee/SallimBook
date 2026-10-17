@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "bd989d11287a3f7c1a3b3ab929db9910246287380d5959e3fdc1cc4a4a6d0e00",
-      "git_sha1": "43d039840d91eef254bd13add72a3c98c431057b"
+      "sha256": "3e7736516ecc56c251553a8b3f2fc13be0878dc44b4daf1a9a98dddf91ec06b4",
+      "git_sha1": "df19a45b1483dd65d8e6eef604b13571414593fe"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -70,8 +70,8 @@
       "git_sha1": "75b87c4ace856a79b0aaa2ae5ec0eb0838bcc9e4"
     },
     "docs/screen-specifications.md": {
-      "sha256": "59077e081e1df8ea015932e8c5563bce89f52b1ead217f86d1d20abd02084e4f",
-      "git_sha1": "3fec16f0626778538ba301346e97239b214b2d8d"
+      "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
+      "git_sha1": "39256e2dbacc717390042678fe806cf27948bd27"
     },
     "docs/security-authentication.md": {
       "sha256": "0767cd912c07d796ac70303b81c334f9582136f4582adfcb3696caaae2b7ab2e",
@@ -122,8 +122,8 @@
       "git_sha1": "34cb6de1be33e6f786516c326ef84fd6f722d021"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "122b43674ad75ab0684bf8b0957be55c55ab61c82834180d4de12bb65bd6f5f3",
-      "git_sha1": "3bfb4eecd49cf9ea9e094c5f37eed84bfdbdaa2c"
+      "sha256": "063c57761dc9811ae1641ef50030e07671dca8eb1323ba3fa8e982c418710d58",
+      "git_sha1": "3c6fed8dfa1cd89eb090c0d9469d85db06fbffab"
     },
     "docs/README.md": {
       "sha256": "b13e6961bd239149808d4258cd53648fa754625177d04c521931576f6ec8aec1",
@@ -208,6 +208,10 @@
     "scripts/test_database.py": {
       "sha256": "429775febbbca7beeb2aa6251e19c544dcda25b4d69d420288e22b7f32af8253",
       "git_sha1": "8accf5f4e9f214fff7ec99bd87c472cc16629c9f"
+    },
+    "scripts/test_android_runtime_config.py": {
+      "sha256": "dd8de566a7a18cf61bfe6cfad86e7c3cd02a556d189840120ae7e278f543606a",
+      "git_sha1": "92f6d43b8f73f1a998304733736b8bf131e9562d"
     }
   }
 }

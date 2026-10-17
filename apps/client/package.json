@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.5.3",
     "@sallimbook/api-client": "workspace:*",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "react-router": "7.18.4"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3",
