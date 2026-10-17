@@ -3,6 +3,10 @@ import { Link, matchRoutes, NavLink, Route, Routes, useLocation, useNavigate } f
 import { accountScreens } from "../features/accounts/screens";
 import { assetScreens } from "../features/assets/screens";
 import { authScreens } from "../features/auth/screens";
+import { AuthProvider } from "../features/auth/AuthProvider";
+import { InvitationAcceptPage } from "../features/auth/InvitationAcceptPage";
+import { LoginPage } from "../features/auth/LoginPage";
+import { SessionSettings } from "../features/auth/SessionSettings";
 import { cardScreens } from "../features/cards/screens";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { householdScreens } from "../features/household/screens";
@@ -14,10 +18,12 @@ import { MonthProvider } from "../shared/MonthContext";
 import { PlannedPage } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
-const plannedScreens = [...assetScreens, ...accountScreens, ...authScreens, ...cardScreens, ...householdScreens, ...insuranceScreens, ...livingScreens];
+const plannedScreens = [...assetScreens, ...accountScreens, ...cardScreens, ...householdScreens, ...insuranceScreens, ...livingScreens];
 const screens = [
   { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, element: <Dashboard /> },
   { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, element: <VaultPage /> },
+  ...authScreens.map((screen) => ({ ...screen, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
+  { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, element: <SessionSettings /> },
   ...plannedScreens.map((screen) => ({ ...screen, element: <PlannedPage screen={screen} /> })),
 ];
 
@@ -95,7 +101,7 @@ function AppShell() {
           <Link className="topbar-link" to="/settings">설정</Link>
         </header>
         <div className="page">
-          <p className="preview-notice">기능 준비 중 · 현재는 화면 탐색만 가능해요.</p>
+          {!["/login", "/onboarding", "/settings/auth"].includes(location.pathname) && <p className="preview-notice">기능 준비 중 · 현재는 화면 탐색만 가능해요.</p>}
           {location.pathname !== "/" && <div className="back-row"><button className="back-button" onClick={goBack}><span aria-hidden="true">← </span>뒤로</button><span className="muted">{current?.parent.label ?? "홈"}</span></div>}
           <main id="main-content" ref={mainRef} tabIndex={-1}>
             <Routes>{screens.map((screen) => <Route key={screen.path} path={screen.path} element={screen.element} />)}<Route path="*" element={<NotFound />} /></Routes>
@@ -108,4 +114,4 @@ function AppShell() {
   );
 }
 
-export function App() { return <MonthProvider><AppShell /></MonthProvider>; }
+export function App() { return <AuthProvider><MonthProvider><AppShell /></MonthProvider></AuthProvider>; }

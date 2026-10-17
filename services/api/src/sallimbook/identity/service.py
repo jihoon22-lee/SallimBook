@@ -37,6 +37,7 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    ReauthenticationRequest,
 )
 
 WEB_IDLE = timedelta(minutes=30)
@@ -561,6 +562,32 @@ def login(
         user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
     result = issue_session(session, user, member, request.device_label, transport)
+    session.commit()
+    return result
+
+
+def reauthenticate(
+    session: Session, principal: Principal, request: ReauthenticationRequest, source: str
+) -> MemberResponse:
+    """Verify the current account again without creating a device or extending session expiry."""
+    _admit_attempt(
+        session,
+        [(f"reauth-account:{principal.user_id}", 5), (f"reauth-source:{source}", 30)],
+        utcnow(),
+    )
+    # Admission intentionally commits failures. Reacquire session -> device in this
+    # order and recheck live state before elevating the existing session's recency.
+    auth, devices = lock_session_devices(session, principal)
+    user, member, _ = _active_identity(session, auth)
+    if not _verify_password(user.password_hash, request.password.get_secret_value()):
+        raise DomainError("REAUTHENTICATION_FAILED", "비밀번호를 확인해 주세요.", 403)
+    # Password verification can take time; no previously expired access/session is revived.
+    now = validate_locked_session(principal, auth, devices[principal.device_id])
+    auth.authenticated_at = now
+    auth.last_seen_at = now
+    if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
+        user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
+    result = member_response(user, member)
     session.commit()
     return result
 
