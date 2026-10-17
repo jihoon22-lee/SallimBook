@@ -279,6 +279,125 @@ def test_failed_inspection_never_stores_or_changes_pending(document_app, actors,
     assert not document_app.state.settings.document_storage_directory.exists()
 
 
+@pytest.mark.parametrize("first_result", ["success", "invalid", "cancelled"])
+def test_upload_slot_precedes_body_buffer_and_releases_on_every_exit(
+    document_app, actors, first_result
+):
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        first = pending(client, actor)
+        second = pending(client, actor)
+
+    async def scenario():
+        started, continue_body = asyncio.Event(), asyncio.Event()
+        rejected_body_reads = 0
+
+        async def slow_body():
+            yield CONTENT[:8]
+            started.set()
+            await continue_body.wait()
+            yield CONTENT[8:] if first_result == "success" else b"INVALID"
+
+        async def rejected_body():
+            nonlocal rejected_body_reads
+            rejected_body_reads += 1
+            yield CONTENT
+
+        transport = httpx.ASGITransport(app=document_app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="https://synthetic.test"
+        ) as client:
+            first_request = asyncio.create_task(
+                client.put(
+                    f"/api/v1/documents/{first['id']}/content",
+                    content=slow_body(),
+                    headers=headers(actor, version=1)
+                    | {"Content-Type": "application/octet-stream"},
+                )
+            )
+            await asyncio.wait_for(started.wait(), timeout=5)
+            response = await client.put(
+                f"/api/v1/documents/{second['id']}/content",
+                content=rejected_body(),
+                headers=headers(actor, version=1) | {"Content-Type": "application/octet-stream"},
+            )
+            assert response.status_code == 503
+            assert response.json()["error"]["code"] == "DOCUMENT_UPLOAD_BUSY"
+            assert rejected_body_reads == 0
+            if first_result == "cancelled":
+                first_request.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await first_request
+            else:
+                continue_body.set()
+                result = await asyncio.wait_for(first_request, timeout=5)
+                assert result.status_code == (200 if first_result == "success" else 422)
+            retry = await client.put(
+                f"/api/v1/documents/{second['id']}/content",
+                content=CONTENT,
+                headers=headers(actor, version=1) | {"Content-Type": "application/octet-stream"},
+            )
+            assert retry.status_code == 200, retry.text
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_http_upload_keeps_slot_until_worker_releases_owned_session(
+    document_app, actors, monkeypatch
+):
+    from sallimbook.documents.router import _UPLOAD_TASKS
+
+    actor = actors[0]
+    started, finish = Event(), Event()
+
+    def inspect(*args, **kwargs):
+        started.set()
+        assert finish.wait(timeout=10)
+
+    monkeypatch.setattr(service, "validate_document", inspect)
+    with TestClient(document_app) as client:
+        first, second = pending(client, actor), pending(client, actor)
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=document_app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="https://synthetic.test"
+        ) as client:
+            first_request = asyncio.create_task(
+                client.put(
+                    f"/api/v1/documents/{first['id']}/content",
+                    content=CONTENT,
+                    headers=headers(actor, version=1)
+                    | {"Content-Type": "application/octet-stream"},
+                )
+            )
+            assert await asyncio.to_thread(started.wait, 5)
+            first_request.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first_request
+            try:
+                response = await client.put(
+                    f"/api/v1/documents/{second['id']}/content",
+                    content=CONTENT,
+                    headers=headers(actor, version=1)
+                    | {"Content-Type": "application/octet-stream"},
+                )
+                assert response.status_code == 503
+            finally:
+                finish.set()
+            await asyncio.wait_for(asyncio.gather(*tuple(_UPLOAD_TASKS)), timeout=5)
+            current = await client.get(f"/api/v1/documents/{first['id']}", headers=actor.headers)
+            assert current.json()["state"] == "ready"
+            retried = await client.put(
+                f"/api/v1/documents/{second['id']}/content",
+                content=CONTENT,
+                headers=headers(actor, version=1) | {"Content-Type": "application/octet-stream"},
+            )
+            assert retried.status_code == 200, retried.text
+
+    asyncio.run(scenario())
+
+
 def test_revocation_during_inspection_rechecked_before_storage(document_app, actors, monkeypatch):
     actor = actors[0]
 

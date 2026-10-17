@@ -14,7 +14,7 @@ uv run --project services/api ruff check services/api/src services/api/tests ser
 python3 scripts/validate_docs.py
 ```
 
-API·실제 PostgreSQL 24개, 암호화·파일 저장소 30개, 검사 계약 81개로 **135개 통과**했다.
+API·실제 PostgreSQL 28개, 암호화·파일 저장소 30개, 검사 계약 81개로 **139개 통과**했다.
 Alembic `upgrade head`, drift 검사, 전체 downgrade/upgrade도 통과했으며 전용 DB를 정지했다.
 초기 실패는 링크 종료 중 autoflush로 문서 버전을 두 번 올린 문제와 긴 임시 Unix socket 경로였다.
 버전 갱신 전 링크 수를 조회하고 합성 socket 경로를 짧게 고친 뒤 관련 검사와 135개 전체를 다시 통과했다.
@@ -52,3 +52,9 @@ uv run --project services/api python scripts/cleanup_documents.py --apply
 이 PR은 서버와 검사 도구 범위다. 웹·Android 파일 선택/저장·연결 화면과 실제 HTTPS 흐름은
 클라이언트 변경에서 검증한다. 실제 Galaxy 실패 시나리오와 운영 scanner 배포·백업 복원은
 전체 기능 구현 뒤에 수행하며 서버 시험이나 debug 빌드를 실기기 보안 인수로 간주하지 않는다.
+
+PR 리뷰 보완: 본문을 읽기 전에 API 프로세스당 업로드 한 개로 제한하며 초과는 503이다.
+본문 취소·검증 실패 때 슬롯을 반환하고, 검사 중 HTTP 취소는 worker가 끝날 때까지 슬롯을 유지한다.
+worker는 요청 dependency와 별도 DB session을 소유해 취소된 요청의 session 종료와 겹치지 않는다.
+실제 비동기 ASGI 수신으로 선행 제한·본문 미수신·취소/실패 후 재사용·worker 완료를 4개 추가 검증했다.
+새 서명 갱신 날짜 build 인자를 포함한 도구 이미지의 build-only도 통과했다.
