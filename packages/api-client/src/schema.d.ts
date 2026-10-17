@@ -2152,6 +2152,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted value or revision version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2244,9 +2246,9 @@ export interface operations {
     confirmAssetMonth: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
-                "Idempotency-Key"?: string | null;
+            header: {
+                "If-Match": string;
+                "Idempotency-Key": string;
             };
             path: {
                 month: string;
@@ -2262,6 +2264,10 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted value or revision version for If-Match. */
+                    ETag?: string;
+                    /** @description Referenced month revision path. */
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2354,8 +2360,8 @@ export interface operations {
     createAssetMonthDraft: {
         parameters: {
             query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
+            header: {
+                "Idempotency-Key": string;
             };
             path: {
                 month: string;
@@ -2371,6 +2377,10 @@ export interface operations {
             /** @description Successful Response */
             201: {
                 headers: {
+                    /** @description Quoted value or revision version for If-Match. */
+                    ETag?: string;
+                    /** @description Referenced month revision path. */
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2463,9 +2473,9 @@ export interface operations {
     reopenAssetMonth: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
-                "Idempotency-Key"?: string | null;
+            header: {
+                "If-Match": string;
+                "Idempotency-Key": string;
             };
             path: {
                 month: string;
@@ -2481,6 +2491,10 @@ export interface operations {
             /** @description Successful Response */
             201: {
                 headers: {
+                    /** @description Quoted value or revision version for If-Match. */
+                    ETag?: string;
+                    /** @description Referenced month revision path. */
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2694,6 +2708,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted value or revision version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2786,8 +2802,8 @@ export interface operations {
     synchronizeAssetMonthScope: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 month: string;
@@ -2803,6 +2819,10 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted value or revision version for If-Match. */
+                    ETag?: string;
+                    /** @description Referenced month revision path. */
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2895,8 +2915,8 @@ export interface operations {
     updateAssetMonthValue: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 month: string;
@@ -2913,6 +2933,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted value or revision version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
