@@ -137,6 +137,25 @@ def test_shared_fixture_references_resolve():
                 assert resolved, (vector["id"], field)
 
 
+def test_concurrent_replacements_contend_for_one_household_consumable():
+    inputs, expected = parts(21)
+    resources = {row["id"]: row for row in IDENTITIES["resources"]}
+    assert resources[inputs["consumable_id"]]["kind"] == "consumable"
+    assert resources[inputs["consumable_id"]]["household_id"] == inputs["household_id"]
+    links = {row["id"]: row for row in inputs["appliance_consumables"]}
+    assert len(links) == 2
+    assert len({row["appliance_id"] for row in links.values()}) == 2
+    assert {row["consumable_id"] for row in links.values()} == {inputs["consumable_id"]}
+    assert {row["household_id"] for row in links.values()} == {inputs["household_id"]}
+    for request in inputs["requests"]:
+        link = links[request["appliance_consumable_id"]]
+        assert link["appliance_id"] == request["appliance_id"]
+        assert resources[link["appliance_id"]]["household_id"] == inputs["household_id"]
+        actor = next(row for row in IDENTITIES["members"] if row["id"] == request["actor_member_id"])
+        assert actor["household_id"] == inputs["household_id"]
+    assert inputs["initial_stock"] == 1 and expected["final_stock"] == 0
+
+
 def test_net_assets_ownership_and_reference_holdings_examples():
     inputs, expected = parts(1)
     assert int(inputs["assets_krw"]) - int(inputs["liabilities_krw"]) == int(

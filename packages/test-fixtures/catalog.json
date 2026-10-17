@@ -805,14 +805,34 @@
         "requests": [
           {
             "appliance_id": "b5e3f971-5bab-59fe-b8b1-849eb3917564",
-            "quantity": 1
+            "quantity": 1,
+            "appliance_consumable_id": "4aa215f2-0555-5584-9364-ac24758356ad",
+            "actor_member_id": "42046756-3340-568c-9b5b-4e6db748ac1b"
           },
           {
             "appliance_id": "c4f04164-12e1-55b5-a64f-33797023ecbb",
-            "quantity": 1
+            "quantity": 1,
+            "appliance_consumable_id": "c5633615-aa9b-5077-aad7-e679afc17951",
+            "actor_member_id": "f23bf323-e15d-5347-8bab-1b50c53e2b31"
           }
         ],
-        "execution": "concurrent"
+        "execution": "concurrent",
+        "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+        "consumable_id": "485ea5d7-66b6-5ec9-84a5-431bb8f6f3e7",
+        "appliance_consumables": [
+          {
+            "id": "4aa215f2-0555-5584-9364-ac24758356ad",
+            "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+            "appliance_id": "b5e3f971-5bab-59fe-b8b1-849eb3917564",
+            "consumable_id": "485ea5d7-66b6-5ec9-84a5-431bb8f6f3e7"
+          },
+          {
+            "id": "c5633615-aa9b-5077-aad7-e679afc17951",
+            "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+            "appliance_id": "c4f04164-12e1-55b5-a64f-33797023ecbb",
+            "consumable_id": "485ea5d7-66b6-5ec9-84a5-431bb8f6f3e7"
+          }
+        ]
       },
       "expected": {
         "success_count": 1,

@@ -90,8 +90,8 @@
       "git_sha1": "42ce0c53d8174abc20b12b4cb913336cc3ad4311"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "d0734f39da733c4b7f3c7bd0ccd1600f3c6acf1c00a627af620ac202067c48ec",
-      "git_sha1": "e35e5675bc1ce0e08852a29489ceea412e5ecc58"
+      "sha256": "32e8b18daccd8778c420ef9efe6b6fd4001cbcc13cda5f147131b8444926ea31",
+      "git_sha1": "adf751d4f7ad6b1b2ae567c476ad03413e7ec499"
     },
     "docs/deployment-backup-operations.md": {
       "sha256": "2df325fa1228bd019d5c95b9a7e59481b02cc64fb23317d37528afd896a723e6",
@@ -210,8 +210,8 @@
       "git_sha1": "9ec9349b820b073112d6beafae9118f5405d6d0d"
     },
     "packages/test-fixtures/README.md": {
-      "sha256": "31615721cdf00323743ee191245f7e643e28e8cedf15e32006a478cb49a88958",
-      "git_sha1": "b1b1dc5de1b9a4d0123b0ce1013991511582446b"
+      "sha256": "5864b90d1a56bbc02aa47937c576073d65093ec40b45233452e7ed56e0a63e6f",
+      "git_sha1": "69ed9222ed3245867e43ff5bc75d7e01d2ed64b7"
     }
   }
 }

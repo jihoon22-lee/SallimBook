@@ -114,6 +114,30 @@
       "household_id": "6d4342ad-b07b-5845-bd52-8a57d7a4ee16",
       "kind": "document",
       "label": "합성 H2 document"
+    },
+    {
+      "id": "485ea5d7-66b6-5ec9-84a5-431bb8f6f3e7",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "consumable",
+      "label": "합성 H1 공용 필터 consumable"
+    },
+    {
+      "id": "c4f04164-12e1-55b5-a64f-33797023ecbb",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "appliance",
+      "label": "합성 H1 공용 필터 appliance"
+    },
+    {
+      "id": "4aa215f2-0555-5584-9364-ac24758356ad",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "appliance_consumable",
+      "label": "합성 H1 공용 필터 appliance_consumable"
+    },
+    {
+      "id": "c5633615-aa9b-5077-aad7-e679afc17951",
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "kind": "appliance_consumable",
+      "label": "합성 H1 공용 필터 appliance_consumable"
     }
   ]
 }
