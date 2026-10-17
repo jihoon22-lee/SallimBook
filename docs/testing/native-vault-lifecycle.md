@@ -175,6 +175,10 @@ JVM **280개**(실패·오류·건너뜀 0), debug APK, release Kotlin을 통과
 완료 전 finalize 거절, 중복/과다 카드와 폐기된 cursor 거절을 검사한다. 실제 지연 네트워크나
 Android Activity instrumentation을 실행했다는 뜻은 아니다.
 
+worker 결과의 마지막 소비에서도 완료 시한·foreground를 확인하고 실패하면 callback 전에 결과를
+폐기한다. 앞선 유효성 검사와 마지막 완료 사이 정확히 60초 경계를 넘는 fake-clock 및 최종 화면
+상태 변경 회귀를 추가해 JVM **289개**, debug APK, release Kotlin을 통과했다(실패·오류·건너뜀 0).
+
 실기기 미실행 항목: 최초 등록/암호화/별도 열람, 지문 추가·삭제·잠금 방식 제거·키 무효화,
 기존 등록/CVC가 있는 재저장 prompt 취소·오류 뒤 원래 값의 열람, 저장 실패 뒤 기존 암호문의 복원,
 정상/일시 오류 키의 재설정 거절과 영구 무효화 확인·명시 삭제·재등록,

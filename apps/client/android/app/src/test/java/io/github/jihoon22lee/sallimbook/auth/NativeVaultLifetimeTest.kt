@@ -79,4 +79,17 @@ class NativeVaultLifetimeTest {
         policy.presentation(true,true,true,true); val id=policy.beginPrompt()!!; assertTrue(policy.promptSucceeded(id))
         time += 999; assertFalse(policy.claimCipher(id)); assertEquals(0L,policy.focusRemaining(id)); assertTrue(policy.canBegin())
     }
+    @Test fun deadlineBetweenWorkerPredicateAndFinalConsumptionCannotDeliverASecret() {
+        foreground(); val id=life.beginWork()!!; clock+=59_999; assertTrue(life.workActive(id))
+        clock++; var deliveries=0
+        assertFalse(life.consumeWork(id,true,{ true }) { deliveries++ })
+        assertEquals(0,deliveries); assertEquals(0L,life.displayRemaining())
+    }
+    @Test fun finalPresentationFailureCannotConsumeAndSuccessfulConsumptionIsSingleUse() {
+        foreground(); var deliveries=0; val canceled=life.beginWork()!!
+        assertFalse(life.consumeWork(canceled,true,{ false }) { deliveries++ }); assertEquals(0,deliveries); assertEquals(0L,life.displayRemaining())
+        val current=life.beginWork()!!
+        assertTrue(life.consumeWork(current,true,{ true }) { deliveries++ })
+        assertFalse(life.consumeWork(current,true,{ true }) { deliveries++ }); assertEquals(1,deliveries)
+    }
 }

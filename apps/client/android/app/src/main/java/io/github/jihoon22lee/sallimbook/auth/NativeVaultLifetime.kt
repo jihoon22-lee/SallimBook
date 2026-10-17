@@ -53,6 +53,13 @@ internal class NativeVaultLifetime(private val now: () -> Long) {
         if (displayAfterVerifiedDecryption) displayed = now()
         return true
     }
+    /** The final completion check must succeed before a worker value reaches a native UI callback. */
+    fun consumeWork(id: Long, displayAfterVerifiedDecryption: Boolean, presented: () -> Boolean, consume: () -> Unit): Boolean {
+        if (!finishWork(id, displayAfterVerifiedDecryption)) return false
+        if (!presented()) { lock(); return false }
+        consume()
+        return true
+    }
     /** Call only for the same Cipher returned by this request's CryptoObject, on its terminal callback. */
     fun promptSucceeded(id: Long): Boolean {
         checkExpiry()

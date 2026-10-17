@@ -145,9 +145,11 @@ class NativeVaultActivity : AppCompatActivity() {
             runOnUiThread {
                 val value=result.value
                 if(work!==gate || !gate.isActive() || !ready() || !life.workActive(id)) { value?.let(discard); gate.cancel(); if(work===gate) { work=null; activeWorkId=null }; return@runOnUiThread }
-                work=null; activeWorkId=null; gate.cancel(); life.finishWork(id,display && result.code==null); busy(false)
-                if(result.code!=null || value==null) { value?.let(discard); failure(result.code ?: "ACCESS_DENIED") }
-                else try { done(value) } catch(_:Exception) { discard(value); failure("ACCESS_DENIED") }
+                work=null; activeWorkId=null; gate.cancel(); busy(false)
+                if(!life.consumeWork(id,display && result.code==null,::ready) {
+                    if(result.code!=null || value==null) { value?.let(discard); failure(result.code ?: "ACCESS_DENIED") }
+                    else try { done(value) } catch(_:Exception) { discard(value); failure("ACCESS_DENIED") }
+                }) { value?.let(discard); close() }
             }
         }
     }
