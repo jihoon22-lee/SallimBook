@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.md text
+*.py text
+*.json text
+*.yml text
+*.mmd text

@@ -1,0 +1,1325 @@
+{
+  "schema_version": 1,
+  "project": "SallimBook",
+  "target_release": "v1.0.0",
+  "as_of": "2026-10-17",
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "v1.0 / M0 — 기반·개발 품질",
+      "description": "반복 가능한 개발 환경, 공통 API/화면 골격과 합성 테스트 기반을 마련한다.\n\n완료 조건: 문서의 목표 구조를 실제 실행 가능한 골격으로 만들고 양 플랫폼 기본 빌드 및 DB migration을 검증한다.",
+      "exit_criteria": "문서의 목표 구조를 실제 실행 가능한 골격으로 만들고 양 플랫폼 기본 빌드 및 DB migration을 검증한다."
+    },
+    {
+      "id": "M1",
+      "title": "v1.0 / M1 — 공동 인증·보안 선행 검증",
+      "description": "부부 계정·세션·가계 권한과 네이티브 보안 경계의 가능성을 먼저 검증한다.\n\n완료 조건: 타가계 접근 차단과 실기기 지문/Keystore proof가 통과하며 복구 설계의 미검증 가정을 기록한다.",
+      "exit_criteria": "타가계 접근 차단과 실기기 지문/Keystore proof가 통과하며 복구 설계의 미검증 가정을 기록한다."
+    },
+    {
+      "id": "M2",
+      "title": "v1.0 / M2 — 자산·금융계좌·월 기록",
+      "description": "은행·증권·연금·IRP를 포함한 계좌와 월별 자산 기록을 완성한다.\n\n완료 조건: 두 달의 실제 확인치와 비교범위·정정 이력을 정확히 관리하고 중복 합산이 없다.",
+      "exit_criteria": "두 달의 실제 확인치와 비교범위·정정 이력을 정확히 관리하고 중복 합산이 없다."
+    },
+    {
+      "id": "M3",
+      "title": "v1.0 / M3 — 수입·고정 납부·카드 연결",
+      "description": "월 수입, 정기 납부 규칙/회차/실제 금액, 카드 메타데이터를 연결한다.\n\n완료 조건: 예상/실제·원금/이자·카드승인/출금 구분과 카드 종료 영향 안내를 검증한다.",
+      "exit_criteria": "예상/실제·원금/이자·카드승인/출금 구분과 카드 종료 영향 안내를 검증한다."
+    },
+    {
+      "id": "M4",
+      "title": "v1.0 / M4 — 보험계약·의료 사건·지급",
+      "description": "계약, 사건 트리, 실제 비용, 다중 청구와 지급 배분 및 증빙을 완성한다.\n\n완료 조건: 960,000원 의료비와 800,000원 보험금 예시, 환불/반환·분할 지급·청구 없는 지급을 통과한다.",
+      "exit_criteria": "960,000원 의료비와 800,000원 보험금 예시, 환불/반환·분할 지급·청구 없는 지급을 통과한다."
+    },
+    {
+      "id": "M5",
+      "title": "v1.0 / M5 — 가전·소모품·재고",
+      "description": "제품과 공용 소모품 재고, 기기별 교체 주기와 이력을 구현한다.\n\n완료 조건: 입고와 교체가 구분되며 중복·동시 요청에서도 재고가 정확하다.",
+      "exit_criteria": "입고와 교체가 구분되며 중복·동시 요청에서도 재고가 정확하다."
+    },
+    {
+      "id": "M6",
+      "title": "v1.0 / M6 — 보관함·기기별 보안 완성",
+      "description": "암호문 공유, Android 비밀 화면과 로컬 CVC, PC vault, 복구·회전을 완성한다.\n\n완료 조건: 비밀 평문이 일반 API/bridge/백업에 없고 두 구성원·새 기기·복구 시나리오가 검증된다.",
+      "exit_criteria": "비밀 평문이 일반 API/bridge/백업에 없고 두 구성원·새 기기·복구 시나리오가 검증된다."
+    },
+    {
+      "id": "M7",
+      "title": "v1.0 / M7 — 통합 홈·양 플랫폼 사용성",
+      "description": "월 자산과 오늘 소모품 홈, 모든 기능 연결과 오류·충돌 경험을 다듬는다.\n\n완료 조건: Android/PC에서 7개 영역이 연결되어 사용 가능하며 홈 우선순위가 유지된다.",
+      "exit_criteria": "Android/PC에서 7개 영역이 연결되어 사용 가능하며 홈 우선순위가 유지된다."
+    },
+    {
+      "id": "M8",
+      "title": "v1.0 / M8 — 운영·복구·v1 출시 검증",
+      "description": "상시 서버, 정식 APK, 백업 복원, 보안 검증과 전체 인수를 수행한다.\n\n완료 조건: R-01~R-22, 모든 보안 게이트, 두 실기기와 PC의 사용자 여정이 통과한 뒤 v1.0.0을 출시한다.",
+      "exit_criteria": "R-01~R-22, 모든 보안 게이트, 두 실기기와 PC의 사용자 여정이 통과한 뒤 v1.0.0을 출시한다."
+    }
+  ],
+  "labels": [
+    {
+      "name": "type:feature",
+      "color": "a2eeef",
+      "description": "v1 구현 작업"
+    },
+    {
+      "name": "priority:P0",
+      "color": "b60205",
+      "description": "v1 필수 인수 범위"
+    },
+    {
+      "name": "area:foundation",
+      "color": "5319e7",
+      "description": "SallimBook foundation 작업"
+    },
+    {
+      "name": "area:frontend",
+      "color": "1d76db",
+      "description": "SallimBook frontend 작업"
+    },
+    {
+      "name": "area:backend",
+      "color": "0052cc",
+      "description": "SallimBook backend 작업"
+    },
+    {
+      "name": "area:identity",
+      "color": "7057ff",
+      "description": "SallimBook identity 작업"
+    },
+    {
+      "name": "area:security",
+      "color": "b60205",
+      "description": "SallimBook security 작업"
+    },
+    {
+      "name": "area:assets",
+      "color": "0e8a16",
+      "description": "SallimBook assets 작업"
+    },
+    {
+      "name": "area:cashflow",
+      "color": "006b75",
+      "description": "SallimBook cashflow 작업"
+    },
+    {
+      "name": "area:cards",
+      "color": "0366d6",
+      "description": "SallimBook cards 작업"
+    },
+    {
+      "name": "area:insurance",
+      "color": "c2e0c6",
+      "description": "SallimBook insurance 작업"
+    },
+    {
+      "name": "area:documents",
+      "color": "bfd4f2",
+      "description": "SallimBook documents 작업"
+    },
+    {
+      "name": "area:homecare",
+      "color": "fbca04",
+      "description": "SallimBook homecare 작업"
+    },
+    {
+      "name": "area:quality",
+      "color": "d4c5f9",
+      "description": "SallimBook quality 작업"
+    },
+    {
+      "name": "area:operations",
+      "color": "d93f0b",
+      "description": "SallimBook operations 작업"
+    }
+  ],
+  "issues": [
+    {
+      "id": "SB-001",
+      "milestone": "M0",
+      "title": "공통 저장소 구조와 WSL 개발 환경 고정",
+      "area": "foundation",
+      "priority": "P0",
+      "requirements": [
+        "R-02",
+        "R-21"
+      ],
+      "depends_on": [],
+      "description": "React/Vite/Capacitor 및 FastAPI 프로젝트를 같은 저장소에 생성하고 실제 호환 도구 버전과 lockfile을 고정한다.",
+      "acceptance": [
+        "apps/client와 services/api가 실제로 실행된다.",
+        "선정 Node/Python/JDK/SDK 버전을 기록한다.",
+        "실제 비밀 없이 .env.example과 실행 명령을 제공한다."
+      ],
+      "tests": [
+        "깨끗한 WSL checkout에서 설치·기본 빌드 재현"
+      ],
+      "docs": [
+        "docs/architecture.md",
+        "docs/development-environment.md"
+      ]
+    },
+    {
+      "id": "SB-002",
+      "milestone": "M0",
+      "title": "API·PostgreSQL·마이그레이션 기본 구조",
+      "area": "foundation",
+      "priority": "P0",
+      "requirements": [
+        "R-19",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-001"
+      ],
+      "description": "FastAPI 도메인 경계, SQLAlchemy/Alembic, 공통 오류·금액·날짜 타입을 만든다.",
+      "acceptance": [
+        "원화 API는 정수 문자열이다.",
+        "테스트 DB에 초기 migration을 적용/검증한다.",
+        "health endpoint에 개인정보가 없다."
+      ],
+      "tests": [
+        "migration 새 DB 재현",
+        "금액/날짜 타입·에러 schema 시험"
+      ],
+      "docs": [
+        "docs/data-model.md",
+        "docs/api-contract.md"
+      ]
+    },
+    {
+      "id": "SB-003",
+      "milestone": "M0",
+      "title": "공통 UI·라우팅·플랫폼 어댑터",
+      "area": "frontend",
+      "priority": "P0",
+      "requirements": [
+        "R-02",
+        "R-03"
+      ],
+      "depends_on": [
+        "SB-001"
+      ],
+      "description": "5개 모바일 탭과 PC 사이드바, Android/Web platform interface를 마련한다.",
+      "acceptance": [
+        "같은 경로가 Android와 PC에서 동작한다.",
+        "production의 원격 WebView URL 설정을 금지한다.",
+        "민감 메서드가 평문을 반환하지 않는 타입을 정의한다."
+      ],
+      "tests": [
+        "웹 routing smoke",
+        "Android debug build",
+        "비지원 플랫폼 오류 처리"
+      ],
+      "docs": [
+        "docs/screen-specifications.md",
+        "docs/native-bridge-contract.md"
+      ]
+    },
+    {
+      "id": "SB-004",
+      "milestone": "M0",
+      "title": "합성 테스트 벡터와 CI 골격",
+      "area": "quality",
+      "priority": "P0",
+      "requirements": [
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-002",
+        "SB-003"
+      ],
+      "description": "도메인 계산 fixture, 문서 검증, 코드가 실제 존재하는 단계에 맞춘 CI를 추가한다.",
+      "acceptance": [
+        "실제 개인정보 없는 H1/H2 가계 fixture를 만든다.",
+        "문서·타입·단위·migration 검증이 CI에서 실행된다.",
+        "미실행/실패 결과를 성공으로 보고하지 않는다."
+      ],
+      "tests": [
+        "T-01~T-24 fixture 정의",
+        "CI 실패가 PR에 드러나는지 확인"
+      ],
+      "docs": [
+        "docs/testing-and-acceptance.md",
+        "AGENTS.md"
+      ]
+    },
+    {
+      "id": "SB-005",
+      "milestone": "M1",
+      "title": "부부 계정·초대·세션·기기 관리",
+      "area": "identity",
+      "priority": "P0",
+      "requirements": [
+        "R-01",
+        "R-19"
+      ],
+      "depends_on": [
+        "SB-002",
+        "SB-003"
+      ],
+      "description": "공개 가입 없는 2계정 공동 가계와 웹/Android 세션을 구현한다.",
+      "acceptance": [
+        "최대 두 활성 구성원을 동시성 안전하게 제한한다.",
+        "초대 토큰은 일회성·만료·해시 저장이다.",
+        "기기/세션 폐기와 로그아웃이 동작한다."
+      ],
+      "tests": [
+        "초대 재사용/동시가입",
+        "만료/폐기 세션",
+        "refresh 재사용 탐지"
+      ],
+      "docs": [
+        "docs/security-authentication.md",
+        "docs/data-model.md"
+      ]
+    },
+    {
+      "id": "SB-006",
+      "milestone": "M1",
+      "title": "패스키와 계정 재인증 계약",
+      "area": "identity",
+      "priority": "P0",
+      "requirements": [
+        "R-01",
+        "R-11"
+      ],
+      "depends_on": [
+        "SB-005"
+      ],
+      "description": "WebAuthn과 Android Credential Manager의 서버 challenge 검증·등록·step-up을 연결한다.",
+      "acceptance": [
+        "RP ID/origin/challenge/UV를 검증한다.",
+        "기존 계정 인증 없이 패스키를 추가하지 못한다.",
+        "Digital Asset Links와 실제 서명 설정 절차를 문서화한다."
+      ],
+      "tests": [
+        "challenge 재사용/변조",
+        "잘못된 origin/RP",
+        "PC와 Android 계정 인증"
+      ],
+      "docs": [
+        "docs/security-authentication.md"
+      ]
+    },
+    {
+      "id": "SB-007",
+      "milestone": "M1",
+      "title": "가계 권한·공통 충돌·멱등성",
+      "area": "backend",
+      "priority": "P0",
+      "requirements": [
+        "R-01",
+        "R-19",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-005"
+      ],
+      "description": "자원별 가계 검증, version 충돌, idempotency key 저장을 공통 정책으로 구현한다.",
+      "acceptance": [
+        "H1 사용자로 H2 자원에 접근할 수 없다.",
+        "오래된 version 수정은409다.",
+        "동일key 다른payload는409다."
+      ],
+      "tests": [
+        "T-22/T-23",
+        "타가계 CRUD",
+        "동시 요청 transaction"
+      ],
+      "docs": [
+        "docs/data-model.md",
+        "docs/api-contract.md"
+      ]
+    },
+    {
+      "id": "SB-008",
+      "milestone": "M1",
+      "title": "실기기 지문·Keystore·네이티브 보안 화면 POC",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-10",
+        "R-11",
+        "R-12"
+      ],
+      "depends_on": [
+        "SB-003",
+        "SB-005"
+      ],
+      "description": "합성 비밀로 인증과 실제 키 사용 결합을 먼저 검증한다. 이 단계는 최종 보관함 구현이 아니다.",
+      "acceptance": [
+        "CryptoObject 기반 키 사용이 실기기에서 확인된다.",
+        "JS bridge에 평문이 반환되지 않는다.",
+        "취소/백그라운드/키무효화가 fail-closed다."
+      ],
+      "tests": [
+        "실기기 지문 변경/잠금",
+        "FLAG_SECURE",
+        "bridge 반환/로그 검사"
+      ],
+      "docs": [
+        "docs/security-authentication.md",
+        "docs/native-bridge-contract.md"
+      ]
+    },
+    {
+      "id": "SB-009",
+      "milestone": "M1",
+      "title": "위협모델·인증과 복구 설계 리뷰",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-10",
+        "R-11",
+        "R-12",
+        "R-20"
+      ],
+      "depends_on": [
+        "SB-006",
+        "SB-008"
+      ],
+      "description": "공유 vault, 서버 신뢰 범위, 로컬 CVC, 새 기기·복구·키회전 설계를 검토한다.",
+      "acceptance": [
+        "계정복구와 vault복구가 분리된다.",
+        "CVC 서버경로와 일반 백업경로가 설계에 없다.",
+        "미검증 암호/기기 가정을 추적하고 보안 게이트를 정의한다."
+      ],
+      "tests": [
+        "설계 threat review",
+        "키 흐름·인증 우회 검토"
+      ],
+      "docs": [
+        "docs/vault-key-lifecycle.md",
+        "docs/decisions-risks-open-items.md"
+      ]
+    },
+    {
+      "id": "SB-010",
+      "milestone": "M2",
+      "title": "자산·부채·공동 소유 모델과 화면",
+      "area": "assets",
+      "priority": "P0",
+      "requirements": [
+        "R-04",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-002",
+        "SB-003",
+        "SB-007"
+      ],
+      "description": "부동산·보증금·금융자산·대출 항목과 소유/지분/종료 처리를 구현한다.",
+      "acceptance": [
+        "총액/보유분 금액 입력 방식이 구분된다.",
+        "공동 주택이 두 번 합산되지 않는다.",
+        "가전 가격과 미래 연금액이 자동 합산되지 않는다."
+      ],
+      "tests": [
+        "T-01/T-03",
+        "자산 종료 및 과거 보존"
+      ],
+      "docs": [
+        "docs/domain-and-calculation-rules.md",
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-011",
+      "milestone": "M2",
+      "title": "은행·증권·연금저축·IRP 통합 계좌",
+      "area": "assets",
+      "priority": "P0",
+      "requirements": [
+        "R-06",
+        "R-18"
+      ],
+      "depends_on": [
+        "SB-010"
+      ],
+      "description": "금융계좌와 asset 1:1, 계좌번호 보호, 유형별 목록/상세를 구현한다.",
+      "acceptance": [
+        "연금저축/IRP/DC/ISA 선택과 입력이 가능하다.",
+        "계좌와 자산 금액 원본이 하나다.",
+        "번호는 기본 마스킹이며 전체 보기에 재인증한다."
+      ],
+      "tests": [
+        "T-02/T-04",
+        "계좌번호 로그/응답 검사"
+      ],
+      "docs": [
+        "docs/data-model.md",
+        "docs/security-authentication.md"
+      ]
+    },
+    {
+      "id": "SB-012",
+      "milestone": "M2",
+      "title": "월간 스냅샷·확정·정정 revision",
+      "area": "assets",
+      "priority": "P0",
+      "requirements": [
+        "R-05",
+        "R-19"
+      ],
+      "depends_on": [
+        "SB-010",
+        "SB-011"
+      ],
+      "description": "전월복사·미확인·변동없음·기준일·월확정·정정을 구현한다.",
+      "acceptance": [
+        "null/0/carried를 구분한다.",
+        "미확인 월을 확정할 수 없다.",
+        "정정 전 확정값과 사유를 보존한다."
+      ],
+      "tests": [
+        "T-05/T-06/T-23",
+        "확정중 동시편집"
+      ],
+      "docs": [
+        "docs/domain-and-calculation-rules.md",
+        "docs/data-model.md"
+      ]
+    },
+    {
+      "id": "SB-013",
+      "milestone": "M2",
+      "title": "월별 자산 비교·범위 변화·추이",
+      "area": "assets",
+      "priority": "P0",
+      "requirements": [
+        "R-03",
+        "R-05",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-012"
+      ],
+      "description": "전체 변화와 동일 범위 변화를 분리하고 늦은 등록/종료의 영향을 표시한다.",
+      "acceptance": [
+        "첫 달 비교없음이 명확하다.",
+        "등록범위 변화 경고와 항목별 차이를 보여준다.",
+        "자산변화를 저축액/수익률로 표현하지 않는다."
+      ],
+      "tests": [
+        "T-06/T-07",
+        "지분 변경/해지 비교"
+      ],
+      "docs": [
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-014",
+      "milestone": "M3",
+      "title": "수동 수입과 공통 금전 이벤트",
+      "area": "cashflow",
+      "priority": "P0",
+      "requirements": [
+        "R-07",
+        "R-18",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-007",
+        "SB-011"
+      ],
+      "description": "수입의 월귀속/입금일·구성원·계좌와 제한된 cash_records를 구현한다.",
+      "acceptance": [
+        "수입 등록으로 계좌 snapshot을 바꾸지 않는다.",
+        "월합계/일별 날짜 정밀도를 표시한다.",
+        "보험금 유입 projection을 별도 분류할 수 있다."
+      ],
+      "tests": [
+        "T-08",
+        "월합계와 일별 중복의심 안내"
+      ],
+      "docs": [
+        "docs/domain-and-calculation-rules.md",
+        "docs/data-model.md"
+      ]
+    },
+    {
+      "id": "SB-015",
+      "milestone": "M3",
+      "title": "고정비 규칙·적용기간·원리금 구분",
+      "area": "cashflow",
+      "priority": "P0",
+      "requirements": [
+        "R-08",
+        "R-18"
+      ],
+      "depends_on": [
+        "SB-014"
+      ],
+      "description": "구독/통신비/대출 등의 recurring rule version과 납부 구조를 만든다.",
+      "acceptance": [
+        "월/연/사용자주기를 지원한다.",
+        "원금·이자·자산이동 구분이 가능하다.",
+        "금액 변경이 과거 규칙/납부를 덮어쓰지 않는다."
+      ],
+      "tests": [
+        "T-09/T-10",
+        "규칙 기간 겹침 거부"
+      ],
+      "docs": [
+        "docs/domain-and-calculation-rules.md"
+      ]
+    },
+    {
+      "id": "SB-016",
+      "milestone": "M3",
+      "title": "회차 생성·실제 납부·분할 납부",
+      "area": "cashflow",
+      "priority": "P0",
+      "requirements": [
+        "R-08",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-015"
+      ],
+      "description": "고정 예정 회차와 실제 지불을 연결하고 달력·목록을 구현한다.",
+      "acceptance": [
+        "회차 생성 재실행에 중복이 없다.",
+        "예상/실제 금액을 더하지 않는다.",
+        "일부납부/건너뜀/금액차이를 표시한다."
+      ],
+      "tests": [
+        "T-10/T-11/T-22",
+        "스케줄러 실패 후 보충"
+      ],
+      "docs": [
+        "docs/api-contract.md",
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-017",
+      "milestone": "M3",
+      "title": "카드 메타데이터·결제계좌·종료",
+      "area": "cards",
+      "priority": "P0",
+      "requirements": [
+        "R-09",
+        "R-18",
+        "R-19"
+      ],
+      "depends_on": [
+        "SB-003",
+        "SB-007",
+        "SB-011"
+      ],
+      "description": "부부 카드 목록/상세/등록·변경·종료와 계좌 연결을 구현한다. 비밀 UI는 M6에서 완성한다.",
+      "acceptance": [
+        "일반 응답에는 비밀이 없다.",
+        "카드 소유자와 가계 접근을 구분한다.",
+        "참조 없는 오등록 삭제와 사용종료를 구분한다."
+      ],
+      "tests": [
+        "카드 목록 response contract",
+        "종료 후 과거 참조"
+      ],
+      "docs": [
+        "docs/screen-specifications.md",
+        "docs/security-authentication.md"
+      ]
+    },
+    {
+      "id": "SB-018",
+      "milestone": "M3",
+      "title": "카드·계좌·고정 납부 연결과 영향 안내",
+      "area": "cashflow",
+      "priority": "P0",
+      "requirements": [
+        "R-08",
+        "R-09",
+        "R-18"
+      ],
+      "depends_on": [
+        "SB-016",
+        "SB-017"
+      ],
+      "description": "카드변경/해지와 계좌종료 시 연결된 정기납부를 보여주고 변경 흐름을 제공한다.",
+      "acceptance": [
+        "사용종료 수단에 새 규칙을 연결하지 않는다.",
+        "카드승인 예정과 실제 계좌출금을 구분한다.",
+        "전체 카드명세를 안다고 표현하지 않는다."
+      ],
+      "tests": [
+        "수단 교체·미변경 경고",
+        "연간/월간 혼합 표시"
+      ],
+      "docs": [
+        "docs/domain-and-calculation-rules.md"
+      ]
+    },
+    {
+      "id": "SB-019",
+      "milestone": "M4",
+      "title": "보험계약·보장·보험료 단일 연결",
+      "area": "insurance",
+      "priority": "P0",
+      "requirements": [
+        "R-13",
+        "R-18"
+      ],
+      "depends_on": [
+        "SB-011",
+        "SB-015",
+        "SB-017"
+      ],
+      "description": "보험계약과 보장 목록, 피보험자, 문서 연결점 및 recurring premium을 구현한다.",
+      "acceptance": [
+        "보험료 변경은 같은 recurring rule 서비스를 사용한다.",
+        "계약/보장/납입기간을 구분한다.",
+        "납입누계를 자산으로 자동 계산하지 않는다."
+      ],
+      "tests": [
+        "계약화면-고정비 금액 일치",
+        "과거보험료 보존"
+      ],
+      "docs": [
+        "docs/data-model.md",
+        "docs/insurance-workflows.md"
+      ]
+    },
+    {
+      "id": "SB-020",
+      "milestone": "M4",
+      "title": "보험 사건·진료·처방·약국 트리",
+      "area": "insurance",
+      "priority": "P0",
+      "requirements": [
+        "R-14"
+      ],
+      "depends_on": [
+        "SB-019"
+      ],
+      "description": "사건과 계층 진료 노드, 환자·상태·날짜·기관 입력 및 모바일 탐색을 구현한다.",
+      "acceptance": [
+        "한 사건을 단일 보험계약에 종속시키지 않는다.",
+        "외래/입원/수술/처방/약국을 연결한다.",
+        "순환·타사건 부모 이동을 막는다."
+      ],
+      "tests": [
+        "무금액 처방",
+        "부모/자손 이동 실패",
+        "깊은 트리"
+      ],
+      "docs": [
+        "docs/insurance-workflows.md",
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-021",
+      "milestone": "M4",
+      "title": "의료비·명세 분해·환불",
+      "area": "insurance",
+      "priority": "P0",
+      "requirements": [
+        "R-15",
+        "R-18",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-014",
+        "SB-020"
+      ],
+      "description": "실제 지불 원본과 설명용 상세명세, 결제수단·환불을 구현한다.",
+      "acceptance": [
+        "입원합계와 수술내역을 중복 비용으로 세지 않는다.",
+        "환불은 원본을 보존하며 별도 기록한다.",
+        "실제 본인지불과 병원 총진료비를 구분한다."
+      ],
+      "tests": [
+        "T-12/T-13/T-15",
+        "부분환불 누적검사"
+      ],
+      "docs": [
+        "docs/domain-and-calculation-rules.md",
+        "docs/insurance-workflows.md"
+      ]
+    },
+    {
+      "id": "SB-022",
+      "milestone": "M4",
+      "title": "청구·직접 지급·분할 및 사건별 배분",
+      "area": "insurance",
+      "priority": "P0",
+      "requirements": [
+        "R-07",
+        "R-15",
+        "R-18",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-021"
+      ],
+      "description": "복수계약 청구, 청구ID 없는 지급, 분할입금·여러 사건 배분·반환과 월 수입 projection을 구현한다.",
+      "acceptance": [
+        "실제 수령만 보험금 유입에 집계한다.",
+        "배분 합계와 실제입금이 정확히 일치한다.",
+        "순부담 음수를 허용하고 정액 지급을 분리한다."
+      ],
+      "tests": [
+        "T-14~T-19/T-22",
+        "다중JOIN 중복 회귀"
+      ],
+      "docs": [
+        "docs/data-model.md",
+        "docs/insurance-workflows.md"
+      ]
+    },
+    {
+      "id": "SB-023",
+      "milestone": "M4",
+      "title": "의료·보험 첨부와 인증 다운로드",
+      "area": "documents",
+      "priority": "P0",
+      "requirements": [
+        "R-13",
+        "R-15",
+        "R-20"
+      ],
+      "depends_on": [
+        "SB-007",
+        "SB-020"
+      ],
+      "description": "비공개 파일 저장/검사/암호화/typed link/다운로드를 구현한다.",
+      "acceptance": [
+        "가계와 자원 연결 권한을 검증한다.",
+        "pending/orphan 파일 처리 기준이 있다.",
+        "카드앞뒷면·실행가능한 파일의 우회 저장을 허용하지 않는다."
+      ],
+      "tests": [
+        "타가계 다운로드",
+        "MIME/크기/경로조작",
+        "파일복원 checksum"
+      ],
+      "docs": [
+        "docs/api-contract.md",
+        "docs/security-authentication.md"
+      ]
+    },
+    {
+      "id": "SB-024",
+      "milestone": "M5",
+      "title": "가전 기본정보·구매·보증·문서",
+      "area": "homecare",
+      "priority": "P0",
+      "requirements": [
+        "R-16"
+      ],
+      "depends_on": [
+        "SB-003",
+        "SB-007",
+        "SB-023"
+      ],
+      "description": "가전 모델·장소·구매 정보·보증·문서와 목록/상세를 구현한다.",
+      "acceptance": [
+        "제품금액을 순자산에 자동 합산하지 않는다.",
+        "보증기한·구매문서를 조회한다.",
+        "사용종료 시 과거 기록을 보존한다."
+      ],
+      "tests": [
+        "제품 CRUD",
+        "문서권한 및 종료"
+      ],
+      "docs": [
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-025",
+      "milestone": "M5",
+      "title": "소모품 규격·공용 재고·기기 호환",
+      "area": "homecare",
+      "priority": "P0",
+      "requirements": [
+        "R-17"
+      ],
+      "depends_on": [
+        "SB-024"
+      ],
+      "description": "소모품 SKU/단위와 여러 가전의 호환·기기별 교체 기준을 만든다.",
+      "acceptance": [
+        "동일필터 재고를 두 기기에서 공유한다.",
+        "교체 주기는 기기별이다.",
+        "재고부족 임계와 사용자 규격을 입력한다."
+      ],
+      "tests": [
+        "동일SKU 중복연결",
+        "서로 다른 기기 주기"
+      ],
+      "docs": [
+        "docs/data-model.md"
+      ]
+    },
+    {
+      "id": "SB-026",
+      "milestone": "M5",
+      "title": "입고·교체·재고조정 원장",
+      "area": "homecare",
+      "priority": "P0",
+      "requirements": [
+        "R-17",
+        "R-19",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-025"
+      ],
+      "description": "입고와 교체, 취소·조정의 원장과 동시성 처리를 구현한다.",
+      "acceptance": [
+        "입고로 교체일이 바뀌지 않는다.",
+        "교체와 재고감소가 원자적이다.",
+        "취소는 이력을 삭제하지 않고 보정한다."
+      ],
+      "tests": [
+        "T-20/T-21/T-22",
+        "재고원장합계 대조"
+      ],
+      "docs": [
+        "docs/domain-and-calculation-rules.md"
+      ]
+    },
+    {
+      "id": "SB-027",
+      "milestone": "M5",
+      "title": "오늘 기준 소모품 관리 상태",
+      "area": "homecare",
+      "priority": "P0",
+      "requirements": [
+        "R-03",
+        "R-17"
+      ],
+      "depends_on": [
+        "SB-026"
+      ],
+      "description": "기기별 다음 확인일과 교체/구매 필요 목록을 만들고 홈 조회 계약을 제공한다.",
+      "acceptance": [
+        "재고있는 교체필요와 품절 구매필요를 구분한다.",
+        "과거 자산월 선택에도 오늘 기준이다.",
+        "푸시 없이 인앱 관리가 완성된다."
+      ],
+      "tests": [
+        "T-24",
+        "날짜 경계·교체일 수정"
+      ],
+      "docs": [
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-028",
+      "milestone": "M6",
+      "title": "공유 보관함 암호화·키 wrapping",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-10",
+        "R-18"
+      ],
+      "depends_on": [
+        "SB-009",
+        "SB-017"
+      ],
+      "description": "클라이언트 카드 envelope, 구성원/복구 wrapping과 암호 호환 포맷을 구현한다.",
+      "acceptance": [
+        "서버에는 PAN/유효기간 암호문만 있다.",
+        "AAD/nonce/keyversion/KDF 검증을 수행한다.",
+        "Android와 Web이 동일 테스트벡터로 상호 복호화한다."
+      ],
+      "tests": [
+        "암호호환·변조거부",
+        "DB/log 평문검사"
+      ],
+      "docs": [
+        "docs/vault-key-lifecycle.md"
+      ]
+    },
+    {
+      "id": "SB-029",
+      "milestone": "M6",
+      "title": "Android 카드 비밀 입력·표시",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-09",
+        "R-10",
+        "R-11"
+      ],
+      "depends_on": [
+        "SB-008",
+        "SB-028"
+      ],
+      "description": "네이티브 카드 editor/viewer와 시간제한·잠금·세션검증을 완성한다.",
+      "acceptance": [
+        "전체 번호·유효기간이 JS bridge로 전달되지 않는다.",
+        "인증 후 최대30초, 이탈즉시 가린다.",
+        "앱잠금과 비밀재인증을 구분한다."
+      ],
+      "tests": [
+        "실기기 취소/회전/백그라운드",
+        "bridge/스크린샷/로그 검사"
+      ],
+      "docs": [
+        "docs/native-bridge-contract.md"
+      ]
+    },
+    {
+      "id": "SB-030",
+      "milestone": "M6",
+      "title": "Android 로컬 CVC와 백업·전송 차단",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-12"
+      ],
+      "depends_on": [
+        "SB-029"
+      ],
+      "description": "개인 기기 직접입력 CVC를 native 로컬 암호화하고 모든 외부경로를 제거한다.",
+      "acceptance": [
+        "서버/API/Web schema에 CVC가 없다.",
+        "cloud/device transfer/app export에서 제외된다.",
+        "재설치후 재입력 필요를 안내하고 보안검증 전 기본비활성이다."
+      ],
+      "tests": [
+        "network proxy/backup/DB 검사",
+        "기기이전·재설치",
+        "실제개인정보 없는 보안리뷰"
+      ],
+      "docs": [
+        "docs/security-authentication.md",
+        "docs/vault-key-lifecycle.md"
+      ]
+    },
+    {
+      "id": "SB-031",
+      "milestone": "M6",
+      "title": "PC 웹 카드 보관함·자동 마스킹",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-02",
+        "R-10"
+      ],
+      "depends_on": [
+        "SB-028"
+      ],
+      "description": "PC vault 암호 입력과 메모리 한정 PAN/유효기간 표시를 구현한다.",
+      "acceptance": [
+        "패스키와 암호키 파생을 혼동하지 않는다.",
+        "로컬영구저장/일반cache에 비밀이 없다.",
+        "CVC 비지원과 캡처제한 한계를 표시한다."
+      ],
+      "tests": [
+        "타임아웃/화면이탈",
+        "XSS 경계/캐시 검사",
+        "잘못된암호"
+      ],
+      "docs": [
+        "docs/security-authentication.md"
+      ]
+    },
+    {
+      "id": "SB-032",
+      "milestone": "M6",
+      "title": "부부 공유·새 기기·복구·키 회전",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-01",
+        "R-10",
+        "R-11",
+        "R-20"
+      ],
+      "depends_on": [
+        "SB-028",
+        "SB-029",
+        "SB-030",
+        "SB-031"
+      ],
+      "description": "구성원별 암호, 새 기기 등록, 기기 폐기, 복구키 및 vault 회전을 완성한다.",
+      "acceptance": [
+        "계정복구만으로 vault가 해제되지 않는다.",
+        "기기 키 원문을 복사하지 않는다.",
+        "키회전 중 장애에서 일관된 복구가 가능하다."
+      ],
+      "tests": [
+        "두구성원 독립암호",
+        "지문변경/분실",
+        "전체복구와 불능안내"
+      ],
+      "docs": [
+        "docs/vault-key-lifecycle.md"
+      ]
+    },
+    {
+      "id": "SB-033",
+      "milestone": "M7",
+      "title": "월 자산·오늘 소모품 통합 홈",
+      "area": "frontend",
+      "priority": "P0",
+      "requirements": [
+        "R-03",
+        "R-18"
+      ],
+      "depends_on": [
+        "SB-013",
+        "SB-018",
+        "SB-022",
+        "SB-027"
+      ],
+      "description": "두 핵심 영역과 보조 수입/고정비/보험 상태를 한 홈에 통합한다.",
+      "acceptance": [
+        "주요두영역이 작은 화면에서 명확하다.",
+        "임시합계·확인건수·비교범위·오늘기준이 표시된다.",
+        "원본데이터로 이동하며 기록을 복제하지 않는다."
+      ],
+      "tests": [
+        "T-24",
+        "숫자대조",
+        "모바일/PC 레이아웃"
+      ],
+      "docs": [
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-034",
+      "milestone": "M7",
+      "title": "전체 화면·접근성·오류·충돌 경험",
+      "area": "frontend",
+      "priority": "P0",
+      "requirements": [
+        "R-02",
+        "R-19"
+      ],
+      "depends_on": [
+        "SB-033",
+        "SB-032"
+      ],
+      "description": "모든 경로의 사용성과 loading/empty/error/stale/conflict 상태를 다듬는다.",
+      "acceptance": [
+        "TalkBack/키보드/글꼴확대를 지원한다.",
+        "트리는 드래그 없이도 이동한다.",
+        "네트워크실패를 저장성공으로 표시하지 않는다."
+      ],
+      "tests": [
+        "26개 화면 smoke",
+        "긴한국어/작은화면",
+        "오프라인과 동시편집"
+      ],
+      "docs": [
+        "docs/design-system.md",
+        "docs/screen-specifications.md"
+      ]
+    },
+    {
+      "id": "SB-035",
+      "milestone": "M7",
+      "title": "도메인 간 연결 E2E·중복 방지",
+      "area": "quality",
+      "priority": "P0",
+      "requirements": [
+        "R-18",
+        "R-19",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-034"
+      ],
+      "description": "양쪽 계정·Android/PC의 연결흐름과 집계불변식을 end-to-end 검증한다.",
+      "acceptance": [
+        "보험료-고정비, 계좌-자산, 지급-수입이 단일원본이다.",
+        "모든 계산 벡터가 통과한다.",
+        "수정이력·참조종료·재전송을 검증한다."
+      ],
+      "tests": [
+        "T-01~T-24",
+        "부부교차편집",
+        "플랫폼교차조회"
+      ],
+      "docs": [
+        "docs/testing-and-acceptance.md"
+      ]
+    },
+    {
+      "id": "SB-036",
+      "milestone": "M8",
+      "title": "상시 서버·HTTPS·배포 구성",
+      "area": "operations",
+      "priority": "P0",
+      "requirements": [
+        "R-21"
+      ],
+      "depends_on": [
+        "SB-035"
+      ],
+      "description": "실제 운영호스트·도메인·Compose·Caddy·비밀주입·관측을 구성한다.",
+      "acceptance": [
+        "개발PC 종료와 무관한 접근을 검증한다.",
+        "DB/파일저장소가 외부공개되지 않는다.",
+        "하위호환 배포와 rollback 절차가 있다."
+      ],
+      "tests": [
+        "외부네트워크 접근",
+        "health/접근제어",
+        "이전앱-새API"
+      ],
+      "docs": [
+        "docs/deployment-backup-operations.md"
+      ]
+    },
+    {
+      "id": "SB-037",
+      "milestone": "M8",
+      "title": "백업·내보내기·새 서버 복원",
+      "area": "operations",
+      "priority": "P0",
+      "requirements": [
+        "R-20"
+      ],
+      "depends_on": [
+        "SB-023",
+        "SB-032",
+        "SB-036"
+      ],
+      "description": "운영백업과 사용자export를 분리하고 새 환경에서 복원을 실증한다.",
+      "acceptance": [
+        "DB/문서/checksum/키복구를 대조한다.",
+        "사용자export에 카드비밀/CVC/인증비밀이 없다.",
+        "백업키·서명키·vault복구코드를 분리한다."
+      ],
+      "tests": [
+        "빈서버복원",
+        "첨부무결성",
+        "민감필드배제"
+      ],
+      "docs": [
+        "docs/deployment-backup-operations.md"
+      ]
+    },
+    {
+      "id": "SB-038",
+      "milestone": "M8",
+      "title": "서명 APK·두 기기 업데이트",
+      "area": "operations",
+      "priority": "P0",
+      "requirements": [
+        "R-02",
+        "R-21"
+      ],
+      "depends_on": [
+        "SB-032",
+        "SB-036"
+      ],
+      "description": "release 서명·versionCode·배포경로·설치정책을 확인하고 업그레이드를 검증한다.",
+      "acceptance": [
+        "서명키가 저장소/일반artifact에 없다.",
+        "debug/원격bridge 설정이 release에 없다.",
+        "두 기기에서 데이터보존 업데이트가 된다."
+      ],
+      "tests": [
+        "서명검증",
+        "업그레이드설치",
+        "기기배포정책확인"
+      ],
+      "docs": [
+        "docs/deployment-backup-operations.md"
+      ]
+    },
+    {
+      "id": "SB-039",
+      "milestone": "M8",
+      "title": "최종 보안 게이트·복구 실패 시나리오",
+      "area": "security",
+      "priority": "P0",
+      "requirements": [
+        "R-10",
+        "R-11",
+        "R-12",
+        "R-20"
+      ],
+      "depends_on": [
+        "SB-035",
+        "SB-037",
+        "SB-038"
+      ],
+      "description": "G1~G6의 보안 인수와 실제기기 유출/분실/키무효화/백업 시나리오를 수행한다.",
+      "acceptance": [
+        "발견된결함과 미검증항목을 공개적으로 기록한다(비밀제외).",
+        "보안기능을 숨긴채 완료처리하지 않는다.",
+        "CVC기능은 검증완료 후 사용자선택으로 활성화한다."
+      ],
+      "tests": [
+        "G1~G6",
+        "native/web 데이터경계",
+        "실기기 전체 수명주기"
+      ],
+      "docs": [
+        "docs/security-authentication.md",
+        "docs/testing-and-acceptance.md"
+      ]
+    },
+    {
+      "id": "SB-040",
+      "milestone": "M8",
+      "title": "v1 전체 인수·운영 문서·출시",
+      "area": "quality",
+      "priority": "P0",
+      "requirements": [
+        "R-01",
+        "R-02",
+        "R-03",
+        "R-04",
+        "R-05",
+        "R-06",
+        "R-07",
+        "R-08",
+        "R-09",
+        "R-10",
+        "R-11",
+        "R-12",
+        "R-13",
+        "R-14",
+        "R-15",
+        "R-16",
+        "R-17",
+        "R-18",
+        "R-19",
+        "R-20",
+        "R-21",
+        "R-22"
+      ],
+      "depends_on": [
+        "SB-035",
+        "SB-037",
+        "SB-038",
+        "SB-039"
+      ],
+      "description": "7개 필수 영역과 22개 요구사항을 두 실기기·PC에서 인수하고 근거 있는 v1.0.0 출시를 수행한다.",
+      "acceptance": [
+        "요구사항 추적표에 테스트 증거가 연결된다.",
+        "README의 실제명령과 운영문서가 최신이다.",
+        "알려진제약·지원버전·복구정책을 릴리스노트에 기재한다."
+      ],
+      "tests": [
+        "전체 사용자여정",
+        "문서실행명령 재현",
+        "v1 게이트 검토"
+      ],
+      "docs": [
+        "docs/testing-and-acceptance.md",
+        "docs/requirements-traceability.md"
+      ]
+    }
+  ]
+}

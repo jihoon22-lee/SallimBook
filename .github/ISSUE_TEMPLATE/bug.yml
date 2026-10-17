@@ -1,0 +1,22 @@
+name: 오류 보고
+description: 실제 개인정보를 제외한 재현 가능한 오류
+body:
+  - type: markdown
+    attributes:
+      value: "실제 카드번호, CVC, 계좌번호, 진료서류 및 토큰은 첨부하지 마세요."
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 합성 데이터로 재현하는 방법
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 예상 결과와 실제 결과
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 앱·API 버전 / 기기·브라우저

@@ -1,0 +1,25 @@
+name: 기능 개발
+description: SallimBook 요구사항과 인수 조건이 있는 작업
+body:
+  - type: input
+    id: requirement
+    attributes:
+      label: 요구사항 / 계획 ID
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 사용자 동작과 작업 범위
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 검증 가능한 완료 조건
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: 데이터·보안·플랫폼 영향
