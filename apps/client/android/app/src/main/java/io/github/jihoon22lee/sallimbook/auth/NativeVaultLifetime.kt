@@ -85,10 +85,15 @@ internal class NativeVaultLifetime(private val now: () -> Long) {
         if (request != id || phase != Phase.READY || !presented() || !live(focusBegan, FOCUS_MILLIS)) { checkExpiry(); return false }
         phase = Phase.CRYPTO; return true
     }
+    /** Recheck after blocking crypto and immediately before a durable commit. Does not consume
+     * a live request: completion still needs its own final presentation/deadline check. */
+    fun cipherActive(id: Long): Boolean {
+        checkExpiry()
+        return request == id && phase == Phase.CRYPTO && presented()
+    }
     /** Call after actual authenticated doFinal and payload/key-check validation, never on prompt success. */
     fun finishCipher(id: Long, displayAfterVerifiedDecryption: Boolean): Boolean {
-        checkExpiry()
-        if (request != id || phase != Phase.CRYPTO || !presented()) return false
+        if (!cipherActive(id)) return false
         retire()
         if (displayAfterVerifiedDecryption) displayed = now()
         return true

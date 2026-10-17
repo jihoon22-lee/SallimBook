@@ -1,6 +1,7 @@
 # 테스트 전략·출시 인수 기준
 
-이 문서의 테스트는 **개발해야 할 기준**이다. 초기 문서 패키지에서 앱 테스트가 이미 수행되었다는 뜻이 아니다.
+이 문서는 제품 인수 기준이다. 실제 실행 근거는 [요구사항 추적표](requirements-traceability.md)의
+도메인별 기록에 연결하며, 자동 테스트 통과와 실제 기기·운영·출시 인수를 구분한다.
 
 ## 구현된 검사 기반
 
@@ -8,8 +9,8 @@ SB-004의 [공유 합성 fixture](../packages/test-fixtures/README.md)는 H1/H2�
 입력·기대 결과를 JSON으로 제공한다. fixture 구조·금액·관계 검사 47개는 예제 자체의 일관성 검사이며,
 아래 제품 인수 완료를 뜻하지 않는다. 각 vector의 제품 인수 상태는 현재 `pending`이다.
 
-GitHub Actions는 문서·도구, API lint/단위, 타입·OpenAPI 생성 drift, PostgreSQL migration/API,
-PC·모바일 viewport 웹 동작, Android 개발 빌드의 6개 job을 실행한다.
+GitHub Actions는 문서·도구, API lint/단위, 격리 문서 검사 도구, 타입·OpenAPI 생성 drift,
+PostgreSQL migration/API, PC·모바일 viewport 웹 동작·실제 HTTPS, Android 개발 빌드의 7개 job을 정의한다.
 동일 PostgreSQL 이미지 digest와 frozen 의존성을 사용하며 저장소 비밀·서명키·실데이터를 주입하지 않는다.
 DB 테스트 미설정 skip, Android `NO-SOURCE`, 모바일 viewport는 각각 실제 DB·단위·실기기 통과와 구분한다.
 실기기 실패 시나리오와 독립 보안 리뷰, 운영 복구 검증은 아래 별도 게이트로 유지한다.
@@ -86,7 +87,8 @@ DB 테스트 미설정 skip, Android `NO-SOURCE`, 모바일 viewport는 각각 �
 현재 [.github/workflows/ci.yml](../.github/workflows/ci.yml)은 문서·도구, API lint/unit, 격리 문서 검사 도구,
 타입·생성 계약, PostgreSQL API/migration, 웹 UI·실제 HTTPS, Android compile/unit job을 정의한다.
 실기기 보안 테스트와 운영 복구는 별도 릴리스 게이트다.
-의존성/비밀 검사, Action 버전 고정, 최소 token 권한, 외부 PR의 secret 접근 차단을 포함한다.
+lockfile 고정 설치, Action commit 고정, 최소 token 권한을 사용하고 외부 PR에 저장소 비밀을
+주입하지 않는다. 이를 별도 의존성 취약점 검사나 전용 비밀 탐지 도구의 실행 결과로 표시하지 않는다.
 로컬의 동일 명령 통과와 GitHub Actions 실행 결과는 별도로 기록한다. 실행기가 시작되지 않거나
 로그/step이 없는 실패를 코드 검증 통과로 바꾸어 적지 않는다. 비밀 작업 브라우저 시험은
 trace·screenshot·video를 끄며 실제 사용자 데이터는 사용하지 않는다.

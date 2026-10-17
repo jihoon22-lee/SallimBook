@@ -1,6 +1,7 @@
 # 보안·인증 정책
 
-정책 버전 0.1. 구현·검증 전 설계이며 보안 인증 취득을 의미하지 않는다.
+정책 버전 0.1. 설계와 현재 구현 경계를 기록하며 보안 인증 취득을 의미하지 않는다.
+실행한 검사와 미실행 실기기 게이트는 [통합 검증 기록](testing/final-integration.md)에서 구분한다.
 기술적 사실의 출처는 [참고 자료](references.md)에 모았다. 숫자로 정한 잠금 시간 등은 이 프로젝트의 설계 정책이다.
 
 SB-005/007에서 비밀번호·초대·웹/native 서버 세션과 가계 권한·멱등성 기반을 구현했다.
@@ -11,6 +12,22 @@ native 자격증명 보관은 아래 경계로 구현하며, PC/Android 패스�
 초기 등록 CLI는 비밀번호를 인자로 받거나 토큰을 stdout에 출력하지 않는다. 운영자 소유 0700 디렉터리의
 새 0600 파일에 15분 등록 코드를 쓰며 Git 작업 디렉터리와 symlink 경로·기존 파일 덮어쓰기를 거부한다.
 구성원이 없는 단일 가계의 만료 코드는 `renew-bootstrap`으로 교체하며 이전 초대를 모두 폐기한다.
+운영의 migration·runtime 역할 준비 후, 전용 DB 환경을 주입한 비공개 운영 도구 container에서
+다음 CLI를 실행한다. 출력 디렉터리는 실행 UID 소유 0700으로 별도 mount하고 기존 파일은 재사용하지 않는다.
+
+```bash
+python -m sallimbook.identity.cli bootstrap \
+  --household-name HOUSEHOLD_NAME --login-name FIRST_LOGIN_NAME \
+  --token-file /PRIVATE_ENROLLMENT/NEW_INVITATION.json
+# 구성원이 없는 가계의 등록 코드가 만료된 경우에만:
+python -m sallimbook.identity.cli renew-bootstrap \
+  --login-name FIRST_LOGIN_NAME --token-file /PRIVATE_ENROLLMENT/NEW_REPLACEMENT.json
+```
+
+등록 코드는 첫 사용자가 기기의 초대 등록 화면에 직접 입력하고 비밀번호를 설정한다.
+두 번째 사용자는 인증된 첫 구성원이 앱에서 만든 초대로 등록한다. 코드 파일의 원문을
+로그·채팅·Issue에 붙여 넣지 않는다. 실제 계정 생성은 합성 검증과 별도 운영 단계다.
+
 활성 구성원 제한은 가계 행 잠금과 slot 1/2 CHECK·partial UNIQUE를 함께 사용한다.
 로그인 제한 기록은 15분 창이 만료되면 다음 인증 시도에서 최대 64개씩 정리한다.
 만료 시각 인덱스를 사용하고 정리 잠금과 카운터 잠금을 분리하며, 진행 중인 제한은 유지한다.

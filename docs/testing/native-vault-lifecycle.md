@@ -225,3 +225,10 @@ initialize/recover/change-password/share/revoke/rotation-start/prepare의 5분 �
 프로세스 종료 중 initialize/recover/prepare/stage/finalize 재개, 두 구성원 공유와 철회,
 CVC 입력·저장·수정·purge·키 변경·로그아웃·재설치/기기 이전, 프록시·로그·backup·bridge 무유출,
 FLAG_SECURE의 스크린샷/녹화/최근 앱/외부 디스플레이 보호다. 실제 개인 정보 대신 합성 데이터로 검증한다.
+
+SB-039의 [합성 CVC 인수 화면](native-security-proof.md#sb-039-실제-저장-경로를-사용하는-합성-cvc-인수-화면)은
+debug 빌드에서 실제 `NativeVaultStore`의 강한 인증별 Keystore 키, AAD, `AtomicFile` 저장/실패 복원 경로를
+전용 합성 namespace로 실행하도록 추가했다. 일반 CVC gate는 계속 닫혀 있고 release의 대응 gate에는
+활성화 상태나 실패 주입이 없다. 기본 저장 디렉터리·키 별칭·API·JS 계약·서버 스키마·백업 정책은 변경하지 않았다.
+기기 instrumentation APK에는 gate/격리/미인증 키 사용 거절 7개와 기존 WebView 4개를 포함한다.
+실제 두 Galaxy에서 인증/저장/취소/실패/키 무효화와 기기 이전을 실행한 결과는 아직 없다.

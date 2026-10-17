@@ -37,11 +37,11 @@ UI-16 보관함, UI-17~21 보험, UI-22~25 가전·재고는 각 feature 화면�
   `user_export/export`는 서버 파일 발급이며 기기 저장 성공이 아님을 설명한다.
 - 오류·권한 거절 뒤에는 이전 목록을 숨기고 명시적 새로고침을 제공한다. 401·잠금은 기존 인증
   계층에서 처리하고 늦은 이전 조건 응답은 현재 목록에 반영하지 않는다.
-- 조건/결과를 URL query, localStorage, sessionStorage, Cache API에 저장하지 않는다.
+- 조건/결과를 페이지 주소의 query, localStorage, sessionStorage, Cache API에 저장하지 않는다.
 
 Android는 생성 query/응답 타입을 참조하는 `nativeAudit.list({query})` 경계로만 호출한다.
 네이티브가 bearer·고정 경로·메타데이터 투영을 담당한다. 기능 미지원·실패에 웹 HTTP로
-우회하지 않는다. 앱 잠금과 실제 기기 결과는 Android 담당 검증 기록과 구분한다.
+우회하지 않는다. 앱 잠금과 실제 기기 결과는 [Android 담당 검증 기록](native-audit.md)과 구분한다.
 
 ## 검증 명령과 결과
 
@@ -58,7 +58,7 @@ python3 scripts/validate_docs.py
 git diff --check
 ```
 
-타입 검사와 Ruff, 배포용 빌드가 통과했다(165 modules, JS 893.99kB/gzip 231.11kB).
+타입 검사와 Ruff, 배포용 빌드가 통과했다(165 modules, JS 894.13kB/gzip 231.15kB).
 기존 500kB chunk 경고는 남는다. 전용 18756 포트에서 기존 경로 시험 16개가 통과했다.
 첫 실행의 신규 시험 12개 실패는 select의 암시적 label 범위와 개발 StrictMode의 2회 초기 읽기를
 고려하지 않은 assertion이었다. 필터를 명시적인 label/id로 연결하고 초기 읽기 횟수 대신
@@ -67,8 +67,20 @@ git diff --check
 설정의 긴 구성원 이름을 320px·200% 글꼴에서 확인한 추가 2개도 통과했다(3.8초).
 따라서 신규 고유 44개(웹 30·native UI 14)와 기존 경로 16개가 검증됐다.
 
-실제 HTTPS 시험은 공용 테스트 DB 큐가 반환되면 실행한다. 합성 가계·일회용 schema와 임시
-TLS만 사용하며 실제 사용자 자료를 읽지 않는다. 이 기록에는 실행 전 시험을 통과로 기재하지 않는다.
+최신 통합 코드 `ba4d0ac`의 실제 HTTPS 시험도 통과했다. HTTP route mock 없이 실제 API와
+PostgreSQL에 합성 가전 51개와 정정 1건을 기록하고 다음을 검증했다.
+
+- 52개 감사 기록을 첫 50개와 추가 2개로 조회하며 cursor를 사용한다.
+- 작업 구성원·대상 ID·종류·작업 필터로 정정 1건을 찾고 변경 필드 이름과 버전 1→2를 표시한다.
+- 변경 전후 원문 값·safe_diff는 응답/화면에 없으며 다른 가계의 대상도 포함하지 않는다.
+  다른 가계 구성원 ID로 강제 조회하면 404이며 기록 목록을 받지 못한다.
+- 5분 최근 인증이 지난 뒤에도 현재 유효한 세션의 메타데이터 조회는 허용한다.
+  서버에서 로그아웃한 뒤 다시 읽으면 401로 목록을 닫고 로그인 안내로 전환한다.
+- 감사 요청은 모두 GET이며 no-store 응답을 확인했다. localStorage/sessionStorage/Cache API는 비어 있다.
+
+합성 가계·일회용 schema·임시 TLS만 사용하며 실제 사용자 자료를 읽지 않았다. 시험 후 schema,
+private fixture와 브라우저 산출물은 제거했고 전용 db-test를 중지하여 공유 검증 큐를 반환했다.
+실제 Android 기기/SAF/생체인증과 TalkBack은 이 HTTPS 브라우저 시험의 범위가 아니다.
 
 현재 API/DDL/lockfile 변경은 없다. 서명 APK·실기기 잠금·TalkBack·운영 접근 및 v1 최종
 출시는 이 UI 변경의 완료 주장에 포함하지 않는다.
