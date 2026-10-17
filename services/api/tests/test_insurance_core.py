@@ -684,6 +684,85 @@ class TestInsuranceCase:
                 == 204
             )
 
+    @pytest.mark.parametrize("limit", [1, 2, 3])
+    def test_node_pages_follow_tree_order_with_uuid_ties(self, app, actors, limit):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = create(client, actor, "/cases", case_payload(actor))
+            path = f"/cases/{case['id']}/nodes"
+
+            def node(order, parent=None):
+                return create(
+                    client,
+                    actor,
+                    path,
+                    {
+                        "kind": "group",
+                        "label": "합성 정렬 항목",
+                        "sort_order": order,
+                        "parent_id": parent,
+                    },
+                )
+
+            last = node(1000000)
+            first = node(0)
+            child_last = node(100, first["id"])
+            ties = sorted([node(2, first["id"]), node(2, first["id"])], key=lambda r: r["id"])
+            deep = node(1000000, ties[0]["id"])
+            expected = [first, ties[0], deep, ties[1], child_last, last]
+            actual, cursor = [], None
+            for _ in range(len(expected) + 1):
+                query = {"limit": limit, **({"cursor": cursor} if cursor else {})}
+                response = client.get(BASE + path, params=query, headers=actor.headers)
+                assert response.status_code == 200, response.text
+                page = response.json()
+                assert [r["id"] for r in page["items"]] == [
+                    r["id"] for r in expected[len(actual) : len(actual) + limit]
+                ]
+                actual.extend(page["items"])
+                cursor = page["next_cursor"]
+                if cursor is None:
+                    break
+                assert cursor == actual[-1]["id"]
+            assert [r["id"] for r in actual] == [r["id"] for r in expected]
+            assert cursor is None
+            assert client.get(
+                BASE + path, params={"cursor": last["id"]}, headers=actor.headers
+            ).json() == {"items": [], "next_cursor": None}
+
+    def test_node_cursor_is_scoped_and_order_changes_on_reload(self, app, actors):
+        actor, _, foreign = actors
+        with TestClient(app) as client:
+            case = create(client, actor, "/cases", case_payload(actor))
+            path = f"/cases/{case['id']}/nodes"
+            first = create(client, actor, path, {"kind": "group", "label": "첫 항목"})
+            last = create(
+                client, actor, path, {"kind": "group", "label": "끝 항목", "sort_order": 10}
+            )
+            for owner in (actor, foreign):
+                other = create(client, owner, "/cases", case_payload(owner))
+                wrong = create(
+                    client,
+                    owner,
+                    f"/cases/{other['id']}/nodes",
+                    {"kind": "group", "label": "다른 사건"},
+                )
+                assert (
+                    client.get(
+                        BASE + path, params={"cursor": wrong["id"]}, headers=actor.headers
+                    ).status_code
+                    == 404
+                )
+            changed = client.patch(
+                BASE + path + "/" + first["id"],
+                headers=vheaders(actor),
+                json={"parent_id": last["id"]},
+            )
+            assert changed.status_code == 200
+            page = client.get(BASE + path, params={"limit": 1}, headers=actor.headers).json()
+            assert page["items"][0]["id"] == last["id"]
+            assert page["next_cursor"] == last["id"]
+
     def test_deep_tree_single_topology_read_and_concurrent_cross_move(self, actors, db_engine):
         actor = actors[0]
         with Session(db_engine) as session:
