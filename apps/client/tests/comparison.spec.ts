@@ -36,3 +36,20 @@ test("chart leaves absent months blank and offers exact accessible values", asyn
 test("comparison and trend revision disagreement requires a joint refresh", async ({ page }) => { const state = await mockComparison(page); state.trendRace = true; await page.goto(path); await expect(page.getByRole("alert")).toContainText(" 조회 도중".trim()); await expect(page.getByRole("region", { name: "월별 추이 금액 표" })).toHaveCount(0); const reads = state.queries.length; state.trendRace = false; await page.getByRole("button", { name: "비교와 추이 함께 다시 확인", exact: true }).click(); await expect(page.getByRole("region", { name: "월별 추이 금액 표" })).toBeVisible(); expect(state.queries.length).toBeGreaterThan(reads); });
 test("asset and account details use the same asset monthly record", async ({ page }) => { const state = await mockComparison(page); await page.clock.setFixedTime(new Date("2025-02-20T00:00:00Z")); for (const url of [`/assets/${uid(11)}`, `/accounts/${uid(30)}`]) { await page.goto(url); const section = page.getByRole("region", { name: "이 자산의 월 기록", exact: true }); await expect(section).toContainText("항목 보유금액 변화: +20원"); await expect(section).toContainText("100원"); await expect(section).toContainText("120원"); await expect.poll(() => state.trendQueries.at(-1)?.get("asset_id")).toBe(uid(11)); expect(state.queries.at(-1)?.get("asset_id")).toBe(uid(11)); } });
 test("home shows full totals before today's consumables even when requesting only one item", async ({ page }) => { const state = await mockComparison(page); await page.clock.setFixedTime(new Date("2025-02-20T00:00:00Z")); await page.goto("/"); const summary = page.getByRole("region", { name: "자산의 변화", exact: true }); await expect(summary).toContainText("+1,340원"); expect(state.queries.at(-1)?.get("limit")).toBe("1"); const headings = await page.getByRole("heading", { level: 2 }).allTextContents(); expect(headings[0]).toBe("자산의 변화"); expect(headings[1]).toContain("소모품"); });
+
+for (const mode of ["available", "unconfirmed"] as const) test(`selected excluded observation keeps date warnings in comparison and asset details (${mode})`, async ({ page }) => {
+  const state = await mockComparison(page); state.mode = mode;
+  await page.clock.setFixedTime(new Date("2025-02-20T00:00:00Z"));
+  await page.route("**/api/v1/asset-comparison?*", async (route) => {
+    const data = state.response(new URL(route.request().url()).searchParams);
+    for (const period of [data.previous!, data.current]) period.totals = { assets_krw: "0", liabilities_krw: "0", net_assets_krw: "0", item_count: 0, verified_count: 0, missing_count: 0, carried_count: 0, provisional: false };
+    data.previous!.dates = { non_month_end_asset_ids: [], missing_date_asset_ids: [uid(11)], mixed_dates: false };
+    data.current.dates = { non_month_end_asset_ids: [uid(11)], missing_date_asset_ids: [], mixed_dates: false };
+    data.total_delta_krw = data.common_scope_delta_krw = mode === "available" ? "0" : null; data.change_percent = null; data.change_percent_unavailable_reason = mode === "available" ? "zero_previous_total" : "unconfirmed";
+    data.items = data.items.map((item) => ({ ...item, before: { ...item.before!, inclusion_status: "excluded", as_of_date: null, input_amount_krw: null, owned_amount_krw: null, verification_state: "missing" }, after: { ...item.after!, inclusion_status: "excluded", as_of_date: "2025-02-20" }, before_in_scope: false, after_in_scope: false, membership: "excluded", same_scope: false, scope_reason: "excluded_from_total", amount_delta_krw: null, net_assets_effect_krw: mode === "available" ? "0" : null }));
+    await route.fulfill({ json: data });
+  });
+  for (const url of [`${path}&asset_id=${uid(11)}`, `/assets/${uid(11)}`, `/accounts/${uid(30)}`]) {
+    await page.goto(url); const warning = page.locator(".date-warning"); await expect(warning).toContainText("2025년 1월: 월말이 아닌 항목 0개 · 기준일 미입력 1개"); await expect(warning).toContainText("2025년 2월: 월말이 아닌 항목 1개 · 기준일 미입력 0개"); await expect(warning).not.toContainText("서로 다른 기준일이 섞여 있어요"); await expect(page.getByText("합계 제외", { exact: true }).first()).toBeVisible();
+  }
+});

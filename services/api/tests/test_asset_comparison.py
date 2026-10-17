@@ -212,6 +212,97 @@ def test_excluded_asset_detail_retains_observation_but_never_enters_household_to
     assert point.confirmed_amount_krw == "20" and point.included_in_total is False
 
 
+@pytest.mark.parametrize("state", ["draft", "confirmed", "reopened"])
+@pytest.mark.parametrize("observed_on", [None, "2026-02-20", "2026-02-28"])
+def test_selected_excluded_dates_follow_observation_not_total_or_confirmation(state, observed_on):
+    excluded = row(
+        None if observed_on is None else "20",
+        included=False,
+        state="missing" if observed_on is None else "verified",
+        as_of_date=observed_on,
+    )
+    included = row("100", as_of_date="2026-02-28")
+    current = snapshot("2026-02", [excluded, included], state)
+    previous = snapshot(
+        "2026-01", [row("10", asset_id=excluded.asset_id, included=False, as_of_date="2026-01-15")]
+    )
+    selected = comparison(previous, current, ComparisonFilters(asset_id=excluded.asset_id))
+    assert selected.current.state == state
+    assert selected.current.totals.net_assets_krw == "0"
+    assert selected.current.totals.item_count == 0
+    assert selected.previous.dates.non_month_end_asset_ids == [excluded.asset_id]
+    assert selected.current.dates.missing_date_asset_ids == (
+        [excluded.asset_id] if observed_on is None else []
+    )
+    assert selected.current.dates.non_month_end_asset_ids == (
+        [excluded.asset_id] if observed_on == "2026-02-20" else []
+    )
+    # Another asset's different date and the previous month's date are not mixed into this period.
+    assert selected.current.dates.mixed_dates is False
+    assert selected.items[0].after == excluded
+    assert selected.total_delta_krw == ("0" if state == "confirmed" else None)
+    assert selected.items[0].net_assets_effect_krw == ("0" if state == "confirmed" else None)
+    general = comparison(previous, current)
+    assert general.current.totals.net_assets_krw == "100"
+    assert general.current.dates.model_dump() == {
+        "non_month_end_asset_ids": [],
+        "missing_date_asset_ids": [],
+        "mixed_dates": False,
+    }
+    point = trend_point("2026-02", current, ComparisonFilters(asset_id=excluded.asset_id))
+    assert point.dates == selected.current.dates
+    assert point.confirmed_amount_krw == (
+        "20" if state == "confirmed" and observed_on is not None else None
+    )
+
+
+@pytest.mark.parametrize(
+    "scope", ["other_asset", "kind", "category", "ownership_kind", "owner_member_id"]
+)
+def test_selected_excluded_date_diagnostics_still_require_every_historical_filter(scope):
+    owner = uuid4()
+    excluded = row(
+        "20",
+        included=False,
+        as_of_date="2026-02-20",
+        ownership_kind="individual",
+        owner_member_id=owner,
+    )
+    filters = {"asset_id": excluded.asset_id}
+    filters.update(
+        {
+            "other_asset": {"asset_id": uuid4()},
+            "kind": {"kind": "liability"},
+            "category": {"category": "real_estate"},
+            "ownership_kind": {"ownership_kind": "joint"},
+            "owner_member_id": {"owner_member_id": uuid4()},
+        }[scope]
+    )
+    result = comparison(None, snapshot("2026-02", [excluded]), ComparisonFilters(**filters))
+    assert result.item_count == result.current.totals.item_count == 0
+    assert result.current.dates.model_dump() == {
+        "non_month_end_asset_ids": [],
+        "missing_date_asset_ids": [],
+        "mixed_dates": False,
+    }
+
+
+def test_general_mixed_dates_include_only_matching_included_observations():
+    current = snapshot(
+        "2026-02",
+        [
+            row("10", as_of_date="2026-02-20"),
+            row("20", as_of_date="2026-02-28"),
+            row(None, included=False, state="missing"),
+        ],
+    )
+    result = comparison(None, current)
+    assert result.current.dates.mixed_dates is True
+    assert result.current.dates.missing_date_asset_ids == []
+    assert result.current.dates.non_month_end_asset_ids == [current.values[0].asset_id]
+    assert result.current.totals.net_assets_krw == "30"
+
+
 def test_missing_month_reopened_and_filtered_out_are_distinct_gaps():
     source = uuid4()
     filters = ComparisonFilters(asset_id=source)
@@ -316,6 +407,49 @@ class TestComparisonDatabase:
                 None,
             ]
             assert points[0]["totals"] is None
+
+    def test_selected_excluded_dates_survive_draft_and_confirmation_without_changing_totals(
+        self, comparison_app, actor
+    ):
+        with TestClient(comparison_app) as client:
+            excluded = add_asset(client, actor, inclusion_status="excluded")
+            included = add_asset(client, actor, name="합성 포함 자산")
+            draft(client, actor, "2026-01")
+            observe(client, actor, "2026-01", included["id"], "100", "2026-01-31")
+            assert confirm(client, actor, "2026-01").status_code == 200
+            draft(client, actor, "2026-02")
+            observe(client, actor, "2026-02", included["id"], "120", "2026-02-28")
+            selected = api_compare(client, actor, asset_id=excluded["id"]).json()
+            assert selected["state"] == "unconfirmed"
+            assert selected["previous"]["dates"]["missing_date_asset_ids"] == [excluded["id"]]
+            assert selected["current"]["dates"]["missing_date_asset_ids"] == [excluded["id"]]
+            observe(client, actor, "2026-02", excluded["id"], "999", "2026-02-20")
+            for confirmed in (False, True):
+                if confirmed:
+                    assert confirm(client, actor, "2026-02").status_code == 200
+                selected = api_compare(client, actor, asset_id=excluded["id"]).json()
+                assert selected["current"]["state"] == ("confirmed" if confirmed else "draft")
+                assert selected["current"]["dates"] == {
+                    "non_month_end_asset_ids": [excluded["id"]],
+                    "missing_date_asset_ids": [],
+                    "mixed_dates": False,
+                }
+                assert selected["current"]["totals"]["net_assets_krw"] == "0"
+                assert selected["items"][0]["after"]["owned_amount_krw"] == "999"
+                assert selected["items"][0]["after_in_scope"] is False
+                general = api_compare(client, actor).json()
+                assert general["current"]["totals"]["net_assets_krw"] == "120"
+                assert general["current"]["dates"] == {
+                    "non_month_end_asset_ids": [],
+                    "missing_date_asset_ids": [],
+                    "mixed_dates": False,
+                }
+                mismatch = api_compare(
+                    client, actor, asset_id=excluded["id"], kind="liability"
+                ).json()
+                assert mismatch["items"] == []
+                assert mismatch["current"]["dates"]["non_month_end_asset_ids"] == []
+            assert general["total_delta_krw"] == "20"
 
     def test_foreign_assets_owners_and_anonymous_access_fail_closed(
         self, comparison_app, actor, db_engine

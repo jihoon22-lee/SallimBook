@@ -126,7 +126,17 @@ def _period(month: str, snapshot: Snapshot | None, filters: ComparisonFilters) -
         revision=snapshot.reference(),
         confirmed_at=snapshot.confirmed_at,
         totals=_totals(snapshot, filters),
-        dates=_dates(month, [row for row in snapshot.values if _included(row, filters)]),
+        # Explicit details display matching excluded observations as reference values too.
+        # Their dates need diagnostics without adding their amounts to household totals.
+        dates=_dates(
+            month,
+            [
+                row
+                for row in snapshot.values
+                if _matches(row, filters)
+                and (filters.asset_id is not None or row.inclusion_status == "included")
+            ],
+        ),
     )
 
 

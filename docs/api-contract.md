@@ -136,7 +136,7 @@ draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `
 `REVISION_CONFLICT`, 범위 재생성으로 행 UUID가 바뀌면 `VALUE_CONFLICT`, 기존 행 버전 충돌이면 `VERSION_CONFLICT`로 409를 반환한다.
 포함된 항목이 미입력이면 해당 합계는 null이다. 전월 복사값은 숫자를 보여도 `provisional=true`이고 확정할 수 없다.
 확정할 때 `acknowledge_non_month_end_dates`, `acknowledge_scope_change`로 표시된 차이를 명시 확인한다.
-웹 월 입력·확정·정정·과거 조회 화면을 연결했다. Android 월 adapter와 비교·추이·홈 연결은 후속 변경에서 진행한다.
+웹과 Android의 월 입력·확정·정정·과거 조회 화면, 비교·추이·홈 요약을 같은 월 기록에 연결했다. Android는 네이티브 인증 adapter를 사용한다.
 
 ### 9) 자산 비교·추이 (SB-013)
 
@@ -164,6 +164,9 @@ draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `
 문자열로 반환한다. 0원/음수 기준은 null과 zero_previous_total/negative_previous_total 사유를 반환한다.
 원 단위 증감은 유지한다. 증감률은 투자 수익률이나 저축률이 아니다.
 각 월의 월말 아닌 기준일·미입력 기준일 ID와 혼합 날짜 여부도 반환한다.
+일반 조회의 날짜 진단은 필터에 맞는 합계 포함 항목만 대상으로 한다. `asset_id`를 명시하면
+모든 필터에 맞는 해당 항목의 합계 제외 관측값도 날짜 진단에 포함한다. 금액 합계에는 계속 제외한다.
+날짜 진단은 작성/정정/확정 상태와 무관하게 제공하며, 서로 다른 월의 기준일을 한 달의 혼합 날짜로 묶지 않는다.
 
 추이는 missing/draft/reopened/confirmed 기록 상태와 missing_month/missing_item/outside_filter/
 missing_value/unconfirmed/verified 금액 상태를 구분한다. `observed_amount_krw`는 현재 관찰값,
