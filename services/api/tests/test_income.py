@@ -12,7 +12,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, event, func, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
@@ -942,3 +942,114 @@ class TestIncomeDatabase:
                 == 400
             )
             assert client.get("/api/v1/income?month=2026-01").status_code == 401
+
+    def test_current_capabilities_follow_returns_while_receipts_and_history_stay_immutable(
+        self, income_app, income_actors
+    ):
+        actor = income_actors[0]
+        with TestClient(income_app) as client:
+            original = post_income(
+                client, actor, key="synthetic-capability", amount_krw="1000"
+            ).json()
+            path = f"/api/v1/income/{original['id']}"
+            duplicate_path = (
+                "/api/v1/income/duplicates?month=2026-01&kind=salary&date_precision=day"
+                f"&member_id={actor.member_id}"
+            )
+
+            def capabilities(expected):
+                detail = client.get(path, headers=actor.headers).json()
+                listed = client.get("/api/v1/income?month=2026-01", headers=actor.headers).json()
+                duplicates = client.get(duplicate_path, headers=actor.headers).json()
+                for row in [detail, listed["items"][0], duplicates["items"][0]]:
+                    assert row["id"] == original["id"]
+                    assert row["editable"] is expected and row["voidable"] is expected
+
+            assert original["editable"] is False and original["voidable"] is False
+            capabilities(True)
+            old_history = client.get(path + "/history", headers=actor.headers).json()
+            returned = client.post(
+                path + "/returns",
+                headers=headers(actor, version=1),
+                json={
+                    "amount_krw": "400",
+                    "period_month": "2026-02",
+                    "date_precision": "month",
+                    "reason": "합성 실제 반환",
+                },
+            )
+            assert returned.status_code == 201
+            capabilities(False)
+            assert (
+                post_income(client, actor, key="synthetic-capability", amount_krw="1000").json()
+                == original
+            )
+            assert client.get(path + "/history", headers=actor.headers).json() == old_history
+            return_path = f"/api/v1/income/{returned.json()['id']}"
+            return_current = client.get(return_path, headers=actor.headers).json()
+            assert return_current["editable"] is False and return_current["voidable"] is True
+            assert (
+                client.post(
+                    return_path + "/void",
+                    headers=headers(actor, version=1),
+                    json={"reason": "합성 반환 무효"},
+                ).status_code
+                == 200
+            )
+            capabilities(True)
+            assert (
+                client.post(
+                    path + "/void", headers=headers(actor, version=1), json={"reason": "합성 무효"}
+                ).status_code
+                == 200
+            )
+            detail = client.get(path, headers=actor.headers).json()
+            assert detail["editable"] is False and detail["voidable"] is False
+
+    @pytest.mark.parametrize("read", ["list", "duplicates"])
+    def test_capability_reads_use_constant_queries(
+        self, income_app, income_actors, db_engine, read
+    ):
+        actor = income_actors[0]
+        with TestClient(income_app) as client:
+            post_income(client, actor)
+            counts = []
+            for size in (1, 8):
+                if size > 1:
+                    for _ in range(size - 1):
+                        post_income(client, actor)
+                statements = []
+
+                def capture(
+                    connection,
+                    cursor,
+                    statement,
+                    parameters,
+                    context,
+                    executemany,
+                    captured=statements,
+                ):
+                    if statement.lstrip().upper().startswith("SELECT"):
+                        captured.append(statement)
+
+                event.listen(db_engine, "before_cursor_execute", capture)
+                try:
+                    with Session(db_engine) as session:
+                        if read == "list":
+                            result = service.list_income(session, actor.principal, "2026-01")
+                        else:
+                            result = service.duplicates(
+                                session,
+                                actor.principal,
+                                month="2026-01",
+                                kind="salary",
+                                member_id=actor.member_id,
+                                date_precision="day",
+                            )
+                        assert len(result.items) == size
+                        assert all(row.editable and row.voidable for row in result.items)
+                finally:
+                    event.remove(db_engine, "before_cursor_execute", capture)
+                counts.append(len(statements))
+            assert counts[0] == counts[1]
+            assert counts[1] <= 5

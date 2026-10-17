@@ -18,6 +18,16 @@ android {
         buildConfigField "String", "SALLIMBOOK_API_ORIGIN", groovy.json.JsonOutput.toJson(
             providers.gradleProperty("sallimbookApiOrigin").getOrElse("")
         )
+        buildConfigField "String", "SALLIMBOOK_PASSKEY_RP_ID", groovy.json.JsonOutput.toJson(
+            providers.gradleProperty("sallimbookPasskeyRpId").getOrElse("")
+        )
+        buildConfigField "String", "SALLIMBOOK_PASSKEY_CERT_SHA256", groovy.json.JsonOutput.toJson(
+            providers.gradleProperty("sallimbookPasskeyCertSha256").getOrElse("")
+        )
+        def passkeyRp = providers.gradleProperty("sallimbookPasskeyRpId").getOrElse("")
+        def passkeyStatements = passkeyRp ==~ /[a-z0-9.-]+/ ?
+            [[include: "https://${passkeyRp}/.well-known/assetlinks.json"]] : []
+        resValue "string", "asset_statements", groovy.json.JsonOutput.toJson(passkeyStatements).replace('"', '\\"')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -49,6 +59,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.webkit:webkit:1.14.0"
+    implementation "androidx.credentials:credentials:1.6.0"
+    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
     debugImplementation "androidx.biometric:biometric:1.1.0"
     implementation project(':capacitor-android')
     implementation "com.squareup.okhttp3:okhttp:5.4.0"
