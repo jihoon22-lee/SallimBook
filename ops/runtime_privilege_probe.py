@@ -31,6 +31,18 @@ def main(service_file):
             "REVOKE TRUNCATE ON audit_events FROM sallimbook_app",
         ),
         (
+            "GRANT UPDATE ON audit_events TO sallimbook_app",
+            "REVOKE UPDATE ON audit_events FROM sallimbook_app",
+        ),
+        (
+            "GRANT DELETE ON audit_events TO sallimbook_app",
+            "REVOKE DELETE ON audit_events FROM sallimbook_app",
+        ),
+        (
+            "GRANT UPDATE(action) ON audit_events TO sallimbook_app",
+            "REVOKE UPDATE(action) ON audit_events FROM sallimbook_app",
+        ),
+        (
             "ALTER FUNCTION public.protect_document() OWNER TO sallimbook_app",
             "ALTER FUNCTION public.protect_document() OWNER TO sallimbook_admin",
         ),
@@ -68,7 +80,7 @@ def main(service_file):
                 conn.execute(undo)
             assert verify_runtime()["status"] == "runtime-role-verified"
     print(
-        "PASS: runtime verifier rejects Alembic INSERT/DELETE, audit TRUNCATE, "
+        "PASS: runtime verifier rejects Alembic INSERT/DELETE, audit UPDATE/DELETE/TRUNCATE, "
         "immutable guard-function ownership, missing document/new-table/new-sequence grants"
     )
 

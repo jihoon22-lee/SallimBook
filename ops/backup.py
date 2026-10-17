@@ -325,9 +325,9 @@ def backup(
     if deployment["source_commit"] != source_commit:
         raise OperationError("Backup source/deployment commit mismatch")
     verify_tools("age", "pg_dump")
-    destination = private_directory(destination)
-    documents = private_directory(documents)
-    if destination == documents or destination.is_relative_to(documents):
+    destination = private_directory(destination).resolve()
+    documents = private_directory(documents).resolve()
+    if destination.is_relative_to(documents) or documents.is_relative_to(destination):
         raise OperationError(
             "Backup destination must be separate from document storage"
         )

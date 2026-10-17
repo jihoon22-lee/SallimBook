@@ -65,6 +65,8 @@ def main():
             "CREATE TABLE public.ops_forbidden(id integer)",
             "ALTER TABLE documents DISABLE TRIGGER ALL",
             "TRUNCATE users CASCADE",
+            "UPDATE audit_events SET action=action WHERE false",
+            "DELETE FROM audit_events WHERE false",
         ):
             transaction = connection.begin_nested()
             try:
@@ -206,7 +208,8 @@ def main():
         and stat.S_IMODE(objects[0].stat().st_mode) == 0o600
     )
     print(
-        "PASS: API UID10001, DDL/trigger-disable/TRUNCATE denied, private socket, tmpfs, "
+        "PASS: API UID10001, DDL/trigger-disable/TRUNCATE/audit-UPDATE-DELETE denied, "
+        "private socket, tmpfs, "
         "native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial"
     )
 
