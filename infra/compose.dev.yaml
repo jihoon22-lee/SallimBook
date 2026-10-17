@@ -23,6 +23,8 @@ services:
     volumes: ["db_data:/var/lib/postgresql"]
   db-test:
     <<: *database
+    # Test migrations and immutable histories live on tmpfs, which counts toward this limit.
+    mem_limit: 1g
     profiles: [test]
     environment:
       POSTGRES_USER: sallimbook

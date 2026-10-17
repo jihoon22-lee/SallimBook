@@ -64,6 +64,7 @@ def record_event(
         "recurring_rule",
         "obligation",
         "fixed_settlement",
+        "card",
     ],
     entity_id: UUID,
     action: Literal[
@@ -106,6 +107,7 @@ def record_event(
         "recurring_rule",
         "obligation",
         "fixed_settlement",
+        "card",
     } or action not in {
         "create",
         "update",

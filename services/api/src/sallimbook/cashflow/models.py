@@ -65,6 +65,12 @@ def _cash_constraints(table: str):
             name=f"fk_{table}_household_account",
         ),
         ForeignKeyConstraint(
+            ["household_id", "card_id"],
+            ["cards.household_id", "cards.id"],
+            ondelete="RESTRICT",
+            name=f"fk_{table}_household_card",
+        ),
+        ForeignKeyConstraint(
             ["household_id", "reverses_id"],
             ["cash_records.household_id", "cash_records.id"],
             ondelete="RESTRICT",
@@ -83,6 +89,12 @@ def _cash_constraints(table: str):
             name=f"fk_{table}_household_updated_by",
         ),
         CheckConstraint("amount_krw > 0", name="positive_amount"),
+        CheckConstraint("account_id IS NULL OR card_id IS NULL", name="one_payment_method"),
+        CheckConstraint(
+            "kind NOT IN ('salary', 'bonus', 'other_income', 'income_return', "
+            "'insurance_receipt', 'insurance_return') OR card_id IS NULL",
+            name="income_not_card",
+        ),
         CheckConstraint("EXTRACT(DAY FROM period_month) = 1", name="month_start"),
         CheckConstraint(
             "(date_precision = 'month' AND occurred_on IS NULL) OR "
@@ -119,6 +131,7 @@ class CashFields:
     date_precision: Mapped[str] = mapped_column(String(5))
     member_id: Mapped[UUID | None]
     account_id: Mapped[UUID | None]
+    card_id: Mapped[UUID | None]
     reverses_id: Mapped[UUID | None]
     state: Mapped[str] = mapped_column(String(8), default="active")
     note: Mapped[str | None] = mapped_column(String(2000))
