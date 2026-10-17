@@ -49,7 +49,7 @@ Chromium 가상 인증기가 실제 서명을 만들고 API가 실제 PostgreSQL
 | `uv run --project services/api python scripts/test_web_auth.py` | 실제 HTTPS 쿠키·CSRF·동일 세션 비밀번호 재인증 **2개 통과** |
 | `uv run --project services/api python scripts/test_database.py services/api/tests/test_identity.py services/api/tests/test_passkeys.py` | API·권한·검증 **100개 통과**, Alembic drift 없음, downgrade/upgrade 성공 |
 | `pnpm api:generate`, `pnpm typecheck` | 통합 서버에서 API 계약 재생성·타입 검사 통과 |
-| `pnpm android:build` 및 `:app:compileReleaseKotlin` | PR60 후속 수정 브랜치에서 JVM **48개 통과**(인증 29·기존 debug POC 19), 개발 APK·release Kotlin 컴파일 성공 |
+| `pnpm android:build` 및 `:app:compileReleaseKotlin` | PR60 후속 수정 브랜치에서 JVM **51개 통과**(인증 32·기존 debug POC 19), 개발 APK·release Kotlin 컴파일 성공 |
 
 최종 병합 후 HTTPS 두 명령도 각각 2개씩 다시 통과했다. 초기 병행 UI 실행은 라우팅 reload 1건에서
 5초 timeout이 있었고, 같은 코드의 해당 테스트 단독 실행과 최종 2-worker 전체 실행은 통과했다.
@@ -71,3 +71,5 @@ grant를 실제로 소비한 뒤에도 패스키 등록·폐기에 필요한 계
 - [브라우저 인증 옵션 JSON 변환](https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseRequestOptionsFromJSON_static)
 
 Android는 `401 PASSKEY_VERIFICATION_FAILED` 시 기존 로그인 세션을 유지하고 패스키 실패를 알린다. 실제 세션 만료 401은 로컬 세션을 제거한다. 두 경로를 같은 native 실패 처리 helper로 회귀 검증했다.
+
+Android 기기·패스키 삭제 대상 확인은 `next_cursor`를 따라 마지막 페이지까지 조회한다. 200개 뒤 대상, 목록 종료·버전 충돌·반복/잘못된 cursor를 native 단위 검사로 확인했다. 화면 이탈/잠금으로 취소된 조회는 다음 페이지 요청이나 해제 버튼 활성화로 이어지지 않는다.
