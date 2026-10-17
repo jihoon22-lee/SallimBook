@@ -166,5 +166,5 @@ class LoginThrottle(Base):
     __table_args__ = (CheckConstraint("attempts >= 0", name="nonnegative_attempts"),)
 
     key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
-    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     attempts: Mapped[int] = mapped_column(Integer)

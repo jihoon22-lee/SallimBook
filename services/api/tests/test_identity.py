@@ -27,6 +27,7 @@ from sallimbook.identity.auth_models import (
     AuthSession,
     HouseholdMember,
     Invitation,
+    LoginThrottle,
     RefreshToken,
     RegisteredDevice,
     User,
@@ -606,6 +607,61 @@ class TestIdentityDatabase:
             )
             assert limited.status_code == 429
         assert all(value not in caplog.text for value in (wrong, account.password))
+
+    def test_expired_throttle_buckets_are_reclaimed_without_resetting_active_limits(
+        self, db_engine
+    ):
+        now = service.utcnow()
+        active_key = service.token_hash("throttle", "active")
+        with Session(db_engine) as session:
+            session.add_all(
+                [
+                    LoginThrottle(
+                        key_hash=service.token_hash("throttle", f"expired-{index}"),
+                        window_started_at=now - service.THROTTLE_WINDOW,
+                        attempts=30,
+                    )
+                    for index in range(service.THROTTLE_CLEANUP_BATCH * 2)
+                ]
+            )
+            session.add(LoginThrottle(key_hash=active_key, window_started_at=now, attempts=1))
+            session.commit()
+            for remaining in (service.THROTTLE_CLEANUP_BATCH + 1, 1):
+                with pytest.raises(DomainError) as failure:
+                    service._admit_attempt(session, [("active", 1)], now)
+                assert failure.value.code == "RATE_LIMITED"
+                assert session.scalar(select(func.count()).select_from(LoginThrottle)) == remaining
+                assert session.get(LoginThrottle, active_key).attempts == 1
+
+    def test_concurrent_expiry_cleanup_keeps_one_shared_admission_limit(self, db_engine):
+        now = service.utcnow()
+        key = "shared-expiring-key"
+        digest = service.token_hash("throttle", key)
+        with Session(db_engine) as session:
+            session.add(
+                LoginThrottle(
+                    key_hash=digest, window_started_at=now - service.THROTTLE_WINDOW, attempts=8
+                )
+            )
+            session.commit()
+        start = Barrier(8)
+
+        def attempt():
+            start.wait(timeout=10)
+            with Session(db_engine) as session:
+                try:
+                    service._admit_attempt(session, [(key, 4)], now)
+                    return True
+                except DomainError as failure:
+                    assert failure.code == "RATE_LIMITED"
+                    return False
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(attempt) for _ in range(8)]
+            admitted = [future.result(timeout=15) for future in futures]
+        assert admitted.count(True) == 4
+        with Session(db_engine) as session:
+            assert session.get(LoginThrottle, digest).attempts == 4
 
     def test_invite_reissue_expiry_reuse_and_two_member_limit(
         self, identity_app, account, monkeypatch

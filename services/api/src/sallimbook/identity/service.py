@@ -12,7 +12,7 @@ from uuid import UUID
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from argon2.low_level import Type
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -44,6 +44,7 @@ ACCESS_LIFETIME = timedelta(minutes=10)
 REFRESH_LIFETIME = timedelta(days=30)
 INVITATION_LIFETIME = timedelta(minutes=15)
 THROTTLE_WINDOW = timedelta(minutes=15)
+THROTTLE_CLEANUP_BATCH = 64
 PASSWORD_HASHER = PasswordHasher(
     time_cost=3,
     memory_cost=65536,
@@ -74,6 +75,20 @@ def _unauthenticated() -> DomainError:
 
 def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: datetime) -> None:
     """Commit admission counters before credential work so failed requests cannot roll them back."""
+    # Expired windows carry no remaining restriction. Reclaim a bounded batch on every
+    # admission, including rejected attempts, so arbitrary names/peers do not persist forever.
+    # Release cleanup locks before touching admission keys: disjoint cleanup batches must
+    # not deadlock when their following requests contend for each other's expired keys.
+    expired = session.scalars(
+        select(LoginThrottle.key_hash)
+        .where(LoginThrottle.window_started_at <= now - THROTTLE_WINDOW)
+        .order_by(LoginThrottle.window_started_at, LoginThrottle.key_hash)
+        .limit(THROTTLE_CLEANUP_BATCH)
+        .with_for_update(skip_locked=True)
+    ).all()
+    if expired:
+        session.execute(delete(LoginThrottle).where(LoginThrottle.key_hash.in_(expired)))
+    session.commit()
     blocked = False
     for key, limit in sorted(buckets):
         digest = token_hash("throttle", key)
@@ -84,7 +99,9 @@ def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: dateti
                 window_started_at=now,
                 attempts=0,
             )
-            .on_conflict_do_nothing(index_elements=["key_hash"])
+            # Acquire the existing row lock during upsert, before concurrent cleanup can
+            # delete an expired row between the insert and the locked read below.
+            .on_conflict_do_update(index_elements=["key_hash"], set_={"key_hash": digest})
         )
         counter = session.scalar(
             select(LoginThrottle)
