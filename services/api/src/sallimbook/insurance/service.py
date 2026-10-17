@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from sallimbook.accounts.crypto import KeyRing, SealedNumber
@@ -20,6 +20,7 @@ from sallimbook.core.types import SEOUL
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.insurance.crypto import decrypt_number, encrypt_number
+from sallimbook.insurance.event_models import MedicalExpense
 from sallimbook.insurance.models import (
     InsuranceCase,
     InsuranceCaseRevision,
@@ -608,21 +609,47 @@ def get_node(session, principal, case_id, node_id):
 
 
 def list_nodes(session, principal, case_id, *, cursor=None, limit=50):
+    lock_asset_scope(session, principal)
     scoped_entity(session, InsuranceCase, case_id, principal)
-    rows, next_cursor = _page_rows(
-        session,
-        select(MedicalNode).where(
-            MedicalNode.household_id == principal.household_id,
-            MedicalNode.case_id == case_id,
-        ),
-        MedicalNode,
-        cursor,
-        limit,
+    if cursor is not None:
+        _child(session, principal, MedicalNode, cursor, "case_id", case_id)
+    # UUID remains the opaque cursor, but its current tree path determines page
+    # membership. PostgreSQL orders parents before descendants and siblings by
+    # (sort_order, id), without fetching every clinical row into Python.
+    rows = list(
+        session.scalars(
+            select(MedicalNode).from_statement(
+                text("""
+                    WITH RECURSIVE tree(id, parent_id, sort_order) AS (
+                        SELECT id, parent_id, sort_order FROM medical_nodes
+                        WHERE household_id = :household_id AND case_id = :case_id
+                          AND parent_id IS NULL
+                        UNION ALL
+                        SELECT n.id, n.parent_id, n.sort_order FROM medical_nodes n
+                        JOIN tree t ON n.parent_id = t.id
+                        WHERE n.household_id = :household_id AND n.case_id = :case_id
+                    ) SEARCH DEPTH FIRST BY sort_order, id SET tree_path
+                    SELECT n.* FROM tree t JOIN medical_nodes n ON n.id = t.id
+                    WHERE CAST(:cursor AS uuid) IS NULL OR t.tree_path > (
+                        SELECT tree_path FROM tree WHERE id = CAST(:cursor AS uuid)
+                    )
+                    ORDER BY t.tree_path LIMIT :page_size
+                """)
+            ),
+            {
+                "household_id": principal.household_id,
+                "case_id": case_id,
+                "cursor": cursor,
+                "page_size": limit + 1,
+            },
+        )
     )
+    next_cursor = rows[limit - 1].id if len(rows) > limit else None
     return _finish(
         session,
         MedicalNodeListResponse(
-            items=[_response(r, MedicalNodeResponse) for r in rows], next_cursor=next_cursor
+            items=[_response(r, MedicalNodeResponse) for r in rows[:limit]],
+            next_cursor=next_cursor,
         ),
     )
 
@@ -633,6 +660,21 @@ def update_node(session, principal, case_id, node_id, payload, if_match):
     row = _child(session, principal, MedicalNode, node_id, "case_id", case_id, lock=True)
     require_version(row, if_match)
     candidate = _candidate(row, MedicalNodeInput, payload)
+    if (
+        candidate.kind == "prescription"
+        and session.scalar(
+            select(MedicalExpense.id)
+            .where(
+                MedicalExpense.household_id == principal.household_id,
+                MedicalExpense.node_id == row.id,
+            )
+            .limit(1)
+        )
+        is not None
+    ):
+        raise DomainError(
+            "MEDICAL_NODE_IN_USE", "비용 이력이 있는 항목은 처방으로 바꿀 수 없습니다.", 409
+        )
     _actual_dates(candidate.start_on, candidate.end_on)
     _parent(session, principal, case_id, candidate.parent_id, node_id)
     before = _touch(row, principal)

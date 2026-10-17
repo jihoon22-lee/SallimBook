@@ -2,7 +2,8 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import type { NativeAuthResult, NativeMetadataRequest, SallimBookAuth } from "../../../../plugins/sallimbook-auth/src/definitions";
 import { ApiError, apiErrorCode } from "./api";
 
-const plugin = registerPlugin<SallimBookAuth>("SallimBookAuth");
+export const nativeAuthPlugin = registerPlugin<SallimBookAuth>("SallimBookAuth");
+const plugin = nativeAuthPlugin;
 export const isNativeAuth = () => Capacitor.isNativePlatform();
 export const hasNativeAuth = () => Capacitor.getPlatform() === "android" && Capacitor.isPluginAvailable("SallimBookAuth");
 
@@ -13,6 +14,7 @@ async function invoke<T>(action: () => Promise<NativeAuthResult<T>>): Promise<T>
   catch { throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE"); }
   if (result.ok) return result.value;
   switch (result.code) {
+    case "APP_LOCKED": throw new ApiError(0, "APP_LOCKED");
     case "SESSION_EXPIRED": throw new ApiError(401, "UNAUTHENTICATED");
     case "NETWORK_UNAVAILABLE": throw new ApiError(0, "NETWORK_UNAVAILABLE");
     case "AUTH_CANCELLED": throw new ApiError(0, "REQUEST_CANCELLED");
@@ -38,6 +40,9 @@ export async function nativeRequest<T>(options: NativeMetadataRequest): Promise<
 }
 
 export const nativeAuth = {
+  lock: () => invoke(() => plugin.lockApp()),
+  getAppLock: () => invoke(() => plugin.getAppLock()),
+  onAppLock: (listener: (state: { locked: boolean }) => void) => plugin.addListener("appLockChanged", listener),
   getSession: () => invoke(() => plugin.getSession()),
   login: () => invoke(() => plugin.loginUI()),
   loginPasskey: () => invoke(() => plugin.passkeyLoginUI()),

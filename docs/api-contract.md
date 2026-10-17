@@ -112,7 +112,7 @@ OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다
 전체 보기는 서버 재인증 또는 해당 계좌 UUID에 바인딩한 `account.reveal` 증명을 요구하며, 감사 commit 후 원문과 `display_for_seconds=30`을 반환한다.
 계좌 PATCH에는 계좌 version의 `If-Match`를 사용한다. 자산 소유·종료 변경은 자산 API와 자산 version을 사용한다.
 목록은 유형·소유자·active/closed/all 및 UUID cursor를 지원한다. 개설일과 자산 종료일을 양쪽 수정 경로에서 검증한다.
-금액·잔액은 받지 않으며 계좌의 종료일과 상태는 자산에서 파생한다. Android 번호 입력/전체 보기 화면 연결과 실기기 검증은 후속 client 변경에서 완료한다.
+금액·잔액은 받지 않으며 계좌의 종료일과 상태는 자산에서 파생한다. 웹 전용 번호 컴포넌트와 Android 네이티브 입력/전체 보기 화면을 연결했다. Android 실기기 보안 검증은 별도 출시 조건이다.
 
 ### 8) 월간 자산 확인·정정 (SB-012)
 
@@ -173,7 +173,7 @@ PAN·유효기간·CVC·암호문 필드는 일반 입력에서 거부한다. �
 규칙·회차 변경 응답은 최초 `id`/`version`의 불변 참조다. 납부 응답은 해당 cash 변경본을 포함하여 재전송으로 최신 상태가 섞이지 않는다.
 월/연/N일 주기는 원래 anchor에서 계산하고 짧은 달은 그 달만 말일로 보정한다. 주말·공휴일을 자동 이동하지 않는다.
 생성 기간은 명시적으로 최대 366일이며 같은 규칙/명목일은 중복 생성하지 않는다. 실패한 생성은 rollback하고 같은 키로 재시도할 수 있다.
-규칙 변경은 새 적용일의 기간 이력을 만들고 이미 요청한 생성 기간의 미래 미납 회차를 갱신한다. 과거·실납부·수동 예외 회차를 보존한다.
+규칙 변경은 새 적용일의 기간 이력을 만들고 이미 요청한 생성 기간의 미래 미납 회차를 갱신한다. 과거·실납부·수동 예외 회차를 보존한다. 최초 등록 또는 종료 API로 미래 종료일을 정한 규칙도 마지막 적용 시작일 이후·오늘 이후(오늘 포함)·원래 종료일 이전에는 금액·결제수단·주기를 변경할 수 있다. 새 변경본은 기존 종료일을 유지하며 종료 사유도 보존한다. 종료일 연장이나 재개방은 지원하지 않는다.
 최초 등록에는 종료일/사유 한 쌍으로 과거 종료 계약도 기록할 수 있다. 기존 과거 규칙을 뒤늦게 덮어쓰지는 않는다.
 실제 납부액은 분할 기록을 합산하며 예정액과 더하지 않는다. 미확인 예정액 null과 명시적 0은 다르며 0원 cash 이벤트는 만들지 않는다.
 대출은 실제 원금+이자 합계를 검사하고 이자만 소비로, 연금 등 자산 이동은 소비 0으로 구분한다. 수동 납부·취소로 자산 스냅샷을 바꾸지 않는다.
@@ -240,7 +240,7 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 키 관리 | POST /vault/enroll-member, /vault/rotate, /vault/recovery-wrap | 계정 step-up, 원자적 버전 전환 |
 | 계약 | GET/POST /insurance/policies, GET/PATCH /insurance/policies/{id} | 보험료는 연결 규칙 참조 |
 | 사건 | GET/POST /insurance/cases, GET/PATCH /insurance/cases/{id} | 치료·정산 상태 분리 |
-| 진료 노드 | POST /insurance/cases/{id}/nodes, GET/PATCH/DELETE /insurance/cases/{case_id}/nodes/{node_id} | 트리 순환·동일 사건 검사 |
+| 진료 노드 | POST /insurance/cases/{id}/nodes, PATCH/DELETE /insurance/nodes/{id} | 트리 순환·동일 사건 검사 |
 | 의료비 | POST /insurance/cases/{id}/expenses, POST /insurance/expenses/{id}/refunds | 실제 지불 원본 1건 |
 | 청구 | POST /insurance/cases/{id}/claims, PATCH /insurance/claims/{id} | 비용 N개 연결 |
 | 지급 | POST /insurance/payouts, POST /insurance/payouts/{id}/returns | 현금 원본+배분; 청구ID 선택 |
@@ -307,6 +307,9 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 치료명이나 실제 이름을 object storage key에 포함하지 않는다.
 카드 앞뒷면 이미지 첨부는 secret 경계를 우회하므로 지원하지 않는다.
 
+
+기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
+
 ### SB-019/SB-020 보험계약·독립 사건·진료 트리
 
 보험계약은 `/api/v1/insurance/policies`의 생성/목록과 `/{policy_id}`의 상세/PATCH로 관리한다. 계약·보장·납입 시작/종료일을 각각 저장하고, 보장은 `/{policy_id}/coverages` 목록/생성 및 `/{coverage_id}` PATCH로 관리한다. 금액 미입력과 0원을 구분한다. 정책 상태는 active/ended/lapsed이며 과거 계약은 보존한다.
@@ -317,12 +320,33 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 
 사건 `/insurance/cases`와 `/{case_id}`는 계약에 종속되지 않는다. 환자·실제 날짜·치료 상태(ongoing/ended)와 정산 상태(open/settled)를 독립 관리한다. PATCH에는 If-Match와 사유가 필요하며 변경 전후 내용은 삭제 불가능한 typed 이력으로 보존한다. `/{case_id}/history`는 version cursor를 제공한다. 목록에는 진단명/코드를 포함하지 않는다. 치료 종료에는 종료일이 필요하며 재개방 시 종료일을 비운다.
 
-진료 노드의 목록/생성은 `/{case_id}/nodes`, 상세/수정/삭제는 `/{case_id}/nodes/{node_id}`다. 외래·입원·수술·처방·약국·재진·그룹을 표현하고 노드 자체에 금액을 저장하지 않는다. 동일 사건 부모만 허용하며 가계 잠금 안에서 전체 부모 관계를 검사해 순환과 동시 교차 이동을 막는다. 자식/비용/문서가 연결된 노드 삭제는 409다. 상세 갱신·삭제에는 해당 자원의 If-Match가 필요하다.
+진료 노드의 목록/생성은 `/{case_id}/nodes`, 상세/수정/삭제는 `/{case_id}/nodes/{node_id}`다. 외래·입원·수술·처방·약국·재진·그룹을 표현하고 노드 자체에 금액을 저장하지 않는다. 동일 사건 부모만 허용하며 가계 잠금 안에서 전체 부모 관계를 검사해 순환과 동시 교차 이동을 막는다. 자식/비용/문서가 연결된 노드 삭제는 409다. 상세 갱신·삭제에는 해당 자원의 If-Match가 필요하다. 목록은 부모부터 하위 항목 순서로 읽고 같은 부모의 항목은 sort_order·UUID 오름차순으로 정렬한다. UUID cursor는 해당 사건 노드의 현재 트리 위치를 가리키며 다른 사건/가계의 cursor는 404다. 트리 수정 후에는 첫 페이지부터 다시 읽는다.
 
-### SB-018 결제수단 연결 조회와 종료 확인
+### SB-021/SB-022 의료비·청구·실제 보험금
 
-`GET /api/v1/cards/{resource_id}/payment-links`와 `GET /api/v1/accounts/{resource_id}/payment-links`는 현재·미래 규칙 버전, 미납/부분 납부 회차와 연결 카드를 각각 count/cursor 페이지로 반환한다. `as_of_date`는 기본 서울 오늘이며 종료 화면에서는 선택한 종료일을 전달한다. 카드 승인 계획과 계좌 직접 납부 계획을 구분하고, 응답은 `registered_recurring_only` 및 `account_withdrawal_total_available=false`로 전체 카드대금 출금액을 알 수 없음을 명시한다.
+다음 경로는 `/api/v1/insurance` 아래에 있으며 생성 OpenAPI가 요청·응답의 기준이다.
 
-카드 PATCH/archive 및 계좌에 연결된 자산 PATCH/archive에서 새 종료일을 저장할 때 서버는 가계 잠금 안에서 연결을 다시 읽는다. 영향이 있으면 `closure_ack=true`와 조회에서 받은 `usage_digest`가 필요하며, 누락은 409 `PAYMENT_LINK_CONFIRMATION_REQUIRED`, 조회 이후 내용·버전·종료일 변경은 409 `PAYMENT_LINKS_CHANGED`다. digest는 페이지 밖의 연결까지 포함하며 권한 증명이 아니다. 종료일을 바꾸면 다시 조회한다. 확인 필드만 보낸 PATCH는 거부한다. 확인 필드는 DB·감사 변경 필드 목록에 저장하지 않는다.
+| 경로 | 동작 |
+|---|---|
+| `/medical-expenses` | GET 목록, POST 실제 의료비 등록 |
+| `/medical-expenses/{id}` | GET 상세; `/correct`, `/void` POST; `/history` GET |
+| `/medical-expenses/{id}/refunds` | GET 환불 목록, POST 실제 환불 |
+| `/medical-refunds/{id}` | GET 상세; `/correct`, `/void` POST; `/history` GET |
+| `/claims` 및 `/claims/{id}` | GET/POST 목록·등록, GET/PATCH 상세·사유 있는 정정 |
+| `/claims/{id}/history` | GET 당시 비용 연결까지 포함한 청구 이력 |
+| `/payouts` 및 `/payouts/{id}` | GET/POST 목록·실제 수령, GET 상세; `/correct`, `/void` POST; `/history` GET |
+| `/payouts/{id}/returns` | GET 반환 목록, POST 실제 반환 |
+| `/returns/{id}` | GET 상세; `/correct`, `/void` POST; `/history` GET |
+| `/payout-allocations/{id}` | GET 상세, PATCH 사유 있는 청구·계약 연결 변경; `/history` GET |
+| `/cases/{id}/summary` | GET 원본 기준 사건 의료비·실제 수령/반환·순부담 |
+| `/cases/{case_id}/nodes/{node_id}/summary` | GET 하위 노드를 포함한 의료비·환불 합계 |
 
-기존에 종료된 항목의 일반 메타데이터 수정에는 다시 확인을 요구하지 않는다. 종료일을 다른 날짜로 바꾸면 다시 확인한다. 과거 규칙·회차·현금 기록은 자동 이동하거나 삭제하지 않으며, 결제수단 교체는 사용자가 규칙 변경 또는 카드 납부계좌 수정으로 명시한다.
+의료비는 같은 사건의 진료/약국 노드에 실제 지출 하나를 연결한다. 처방 노드에는 비용을 입력할 수 없고 비용 이력이 있는 노드를 처방으로 바꾸는 것도 거부한다. 영수증 상세를 입력하면 상세 합계와 실제 지출이 같아야 한다. 총진료비·공적 부담 참고액은 실제 지출과 구별하며 상세 행을 별도 지출로 합산하지 않는다.
+
+청구는 사건 하나·계약 하나와 같은 사건의 비용 여러 개를 연결한다. 같은 비용을 여러 계약에 청구해도 의료비 원본은 하나다. 요청액·결정액·접수/심사 상태는 실제 수령이 아니다. 청구에 연결된 비용의 정정/무효는 현재 청구 근거를 사유와 함께 먼저 정정한 뒤 수행하며 과거 청구 근거는 보존한다.
+
+실제 보험금은 cash 원본 하나와 사건별 배분 여러 개를 같은 트랜잭션으로 저장한다. 배분 합계는 원본 수령액과 정확히 같아야 한다. 청구 없이 직접 수령을 등록할 수 있으며 나중에 청구를 연결해도 새 입금이 생기지 않는다. 기존 청구에는 계약 종료 뒤 늦게 받은 보험금도 기록할 수 있다. 사건·배분 금액·보장 성격을 잘못 입력했다면 원본 지급의 무효와 대체 지급 생성을 원자적으로 수행한다. 배분 PATCH는 계약·청구 연결만 바꾸며 typed 이력을 남긴다.
+
+환불과 반환은 원본을 참조하는 별도 실제 금전 기록이다. 환불은 원래 의료비 한도, 보험금 반환은 원래 배분 한도를 초과할 수 없다. 활성 환불/반환이 남아 있으면 원본 정정/무효를 거부한다. 정정/무효 이력은 삭제하지 않는다. 사건 순부담은 음수가 될 수 있으며 실손·정액·기타 실제 수령을 구분한다. 노드별 집계에 사건 보험금을 임의 배분하지 않는다.
+
+금전 생성·정정·무효·환불·반환·배분 연결 변경은 Idempotency-Key를 요구한다. 기존 대상에 적용하는 명령은 If-Match도 요구하며 환불/반환 생성에는 부모 의료비/지급의 버전을 사용한다. 결과는 변경 당시 `{id, version}` 참조이고 재전송해도 변하지 않는다. 최신 상태와 가능한 후속 동작은 GET으로 다시 조회한다. 청구 메타데이터 수정은 If-Match와 사유를 요구한다. 소득 화면은 실제 보험금 원본을 읽기 전용으로 투영하며 계좌 잔액이나 자산 스냅샷을 자동 변경하지 않는다.

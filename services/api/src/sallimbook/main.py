@@ -18,8 +18,10 @@ from sallimbook.config import Settings
 from sallimbook.core.database import REQUIRED_SCHEMA_REVISION, make_engine
 from sallimbook.core.errors import DomainError, ErrorResponse
 from sallimbook.core.http import install_http_contract
+from sallimbook.homecare.router import router as homecare_router
 from sallimbook.identity.passkeys.router import router as passkey_router
 from sallimbook.identity.router import router as identity_router
+from sallimbook.insurance.event_router import router as insurance_events_router
 from sallimbook.insurance.router import router as insurance_router
 
 
@@ -107,6 +109,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(recurring_router)
     app.include_router(cards_router)
     app.include_router(insurance_router)
+    app.include_router(insurance_events_router)
+    app.include_router(homecare_router)
 
     app.include_router(payment_links_router)
     return app

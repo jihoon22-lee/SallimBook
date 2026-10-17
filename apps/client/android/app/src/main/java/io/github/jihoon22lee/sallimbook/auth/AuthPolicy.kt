@@ -207,6 +207,17 @@ internal object AuthPolicy {
             "INTERNAL_ERROR" to (500 to "요청을 처리하지 못했습니다."),
             "DATABASE_UNAVAILABLE" to (503 to "데이터 저장소를 준비하고 있습니다."),
             "SCHEMA_UNAVAILABLE" to (503 to "데이터 저장소를 준비하고 있습니다."),
+            "INVALID_ASSET" to (422 to "자산 입력 항목을 확인해 주세요."),
+            "OWNER_UNAVAILABLE" to (422 to "소유자를 확인해 주세요."),
+            "ASSET_KIND_IN_USE" to (409 to "월별 금액 기록이 있어 자산·부채 구분을 바꿀 수 없습니다."),
+            "ASSET_UNAVAILABLE" to (422 to "사용 중인 금융 자산을 선택해 주세요."),
+            "ASSET_IN_USE" to (409 to "연결된 기록이 있는 자산입니다."),
+            "ASSET_ALREADY_LINKED" to (409 to "이미 계좌와 연결된 자산입니다."),
+            "FINANCIAL_ASSET_REQUIRED" to (422 to "금융 자산을 선택해 주세요."),
+            "INVALID_ACCOUNT_DATES" to (422 to "개설일과 종료일을 확인해 주세요."),
+            "ACCOUNT_NUMBER_NOT_SET" to (409 to "등록된 계좌번호가 없습니다."),
+            "FIELD_ENCRYPTION_UNAVAILABLE" to (503 to "계좌번호 보호 설정을 확인해 주세요."),
+            "ACCOUNT_NUMBER_UNAVAILABLE" to (503 to "계좌번호를 열 수 없습니다."),
         )
         val serverError = (body as? Map<*, *>)?.get("error") as? Map<*, *>
         val suppliedCode = serverError?.get("code") as? String
@@ -238,6 +249,36 @@ internal object AuthPolicy {
 internal class ForegroundRequest {
     private var active = true
     private var cancelNetwork: (() -> Unit)? = null
+    private var lockPolicy: AppLockPolicy? = null
+    private var lockTicket: AppLockTicket? = null
+    private var deviceUnlocked: (() -> Boolean)? = null
+    private var lockBound = false
+
+    init { AppLockRequests.register?.invoke(this) }
+
+    @Synchronized fun captureAppLock(policy: AppLockPolicy, ticket: AppLockTicket, unlocked: () -> Boolean) {
+        lockPolicy = policy; lockTicket = ticket; deviceUnlocked = unlocked
+    }
+
+    @Synchronized fun bindAppLock(policy: AppLockPolicy, ticket: AppLockTicket, unlocked: () -> Boolean) {
+        if (lockPolicy != null) {
+            if (lockPolicy !== policy || lockTicket?.generation != ticket.generation ||
+                lockBound && lockTicket?.kind != ticket.kind) throw AuthFailure(AuthCode.APP_LOCKED)
+            if (lockBound) return
+        }
+        lockPolicy = policy; lockTicket = ticket; deviceUnlocked = unlocked
+        lockBound = true
+    }
+    @Synchronized fun appLockTicket(): AppLockTicket? = lockTicket
+    @Synchronized private fun checkLock() {
+        val ticket = lockTicket ?: return
+        if (lockPolicy?.allowed(ticket) != true || deviceUnlocked?.invoke() != true) throw AuthFailure(AuthCode.APP_LOCKED)
+    }
+    @Synchronized fun checkHttp(method: String, path: String) {
+        check()
+        val ticket = lockTicket ?: throw AuthFailure(AuthCode.APP_LOCKED)
+        if (lockPolicy?.httpAllowed(ticket, method, path) != true) throw AuthFailure(AuthCode.APP_LOCKED)
+    }
 
     @Synchronized fun cancel() {
         active = false
@@ -252,11 +293,13 @@ internal class ForegroundRequest {
 
     @Synchronized fun <T> whileActive(action: () -> T): T {
         if (!active) throw AuthFailure(AuthCode.AUTH_CANCELLED)
+        checkLock()
         return action()
     }
 
     fun check() {
         if (!isActive()) throw AuthFailure(AuthCode.AUTH_CANCELLED)
+        checkLock()
     }
 }
 
@@ -264,6 +307,7 @@ internal enum class AuthCode {
     AUTH_UNAVAILABLE, AUTH_CANCELLED, ACCESS_DENIED, SESSION_EXPIRED, KEY_INVALIDATED,
     NETWORK_UNAVAILABLE, INVALID_REQUEST, AUTH_FAILED, REGISTRATION_FAILED,
     PASSKEYS_DISABLED, PASSKEY_REQUIRED, PASSKEY_CANCELLED, PASSKEY_FAILED, REAUTHENTICATION_REQUIRED,
+    VERSION_CONFLICT, APP_LOCKED,
 }
 
 /** Exception messages and causes deliberately contain no request, response, or credential. */

@@ -115,3 +115,36 @@ footer { font-size: .75rem; color: var(--muted); padding-top: 32px; }
   :root { --background: #151e19; --surface: #1e2c23; --foreground: #e4ede5; --muted: #b0c2b5; --border: #405445; --accent: #bad6c1; --accent-text: #173f35; --selected: #334a3b; --focus: #f2c17b; color-scheme: dark; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+.finance-list { display: grid; gap: 18px; list-style: none; padding: 0; margin-block: 22px; }
+.finance-filters { margin-block: 22px; }
+.finance-form, .finance-fields { display: grid; gap: 20px; min-width: 0; }
+.finance-form { margin-top: 22px; }
+.finance-fields { border: 0; padding: 0; margin: 0; }
+.finance-fields legend { font-size: 1.15rem; font-weight: 700; margin-bottom: 18px; }
+.form-pair, .filter-grid { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+.item-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
+.item-heading .status-chip { margin: 0; }
+.metadata-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-block: 24px; }
+.metadata-grid > div { display: grid; grid-template-columns: minmax(5rem, .7fr) minmax(0, 1.3fr); gap: 16px; }
+.metadata-grid dt { color: var(--muted); }
+.metadata-grid dd { margin: 0; overflow-wrap: anywhere; }
+.secondary-button { background: transparent; color: var(--foreground); border-color: var(--border); }
+.amount-unavailable { padding: 14px 18px; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); }
+.amount-unavailable p { margin-block: 0 8px; }
+.plain-note p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.conflict-panel { padding: 18px; border: 2px solid var(--focus); border-radius: 14px; min-width: 0; }
+.table-scroll { max-width: 100%; overflow: auto; margin-block: 16px; }
+.table-scroll table { border-collapse: collapse; width: 100%; min-width: 30rem; }
+.table-scroll th, .table-scroll td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; }
+.table-scroll caption { text-align: left; font-weight: 700; margin-bottom: 12px; }
+.secret-panel { margin-top: 20px; }
+.secret-panel output { display: block; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; font-size: 1.25rem; margin-block: 16px; }
+.secret-panel output[hidden] { display: none; }
+@media (min-width: 760px) {
+  .form-pair, .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.revealed-number { display: block; overflow-wrap: anywhere; font-size: 1.2rem; padding: 1rem; border: 1px solid var(--border); border-radius: 0.7rem; margin: 0.8rem 0; }
+.revealed-number[hidden] { display: none; }

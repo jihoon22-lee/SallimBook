@@ -1,4 +1,6 @@
-/** Account-auth bridge only. Native UI owns all password/invitation input and tokens.
+import type { components, operations } from "../../../packages/api-client/src/schema";
+
+/** Native UI owns all password/invitation/account-number input and tokens.
  * API origin is signed into the Android build; no host, credentials or auth URLs are arguments.
  * Business response types continue to come from the generated API client, not this contract.
  */
@@ -6,7 +8,7 @@ export type NativeAuthErrorCode =
   | "AUTH_UNAVAILABLE" | "AUTH_CANCELLED" | "ACCESS_DENIED" | "SESSION_EXPIRED"
   | "KEY_INVALIDATED" | "NETWORK_UNAVAILABLE" | "INVALID_REQUEST"
   | "AUTH_FAILED" | "REGISTRATION_FAILED" | "PASSKEYS_DISABLED" | "PASSKEY_REQUIRED"
-  | "PASSKEY_CANCELLED" | "PASSKEY_FAILED" | "REAUTHENTICATION_REQUIRED";
+  | "PASSKEY_CANCELLED" | "PASSKEY_FAILED" | "REAUTHENTICATION_REQUIRED" | "VERSION_CONFLICT" | "APP_LOCKED";
 
 export type NativeAuthResult<T> = { ok: true; value: T } | { ok: false; code: NativeAuthErrorCode };
 export type NativeJson = null | boolean | number | string | NativeJson[] | { [key: string]: NativeJson };
@@ -24,7 +26,17 @@ export interface NativeMetadataRequest {
   ifMatch?: string;
 }
 
+export type NativeAssetQuery = NonNullable<operations["listAssets"]["parameters"]["query"]>;
+export type NativeAccountQuery = NonNullable<operations["listAccounts"]["parameters"]["query"]>;
+export type NativeAccountCreate = Omit<components["schemas"]["AccountCreate"], "account_number">;
+export type NativeAccountPatch = Omit<components["schemas"]["AccountPatch"], "account_number">;
+export type NativeFinanceResponse<T> = { status: number; body: T | components["schemas"]["ErrorResponse"] | null };
+
 export interface SallimBookAuth {
+  /** Safe status only. Unlock is controlled exclusively by the native screen. */
+  getAppLock(): Promise<NativeAuthResult<{ locked: boolean }>>;
+  lockApp(): Promise<NativeAuthResult<{ locked: true }>>;
+  addListener(event: "appLockChanged", listener: (state: { locked: boolean }) => void): Promise<{ remove(): Promise<void> }>;
   getSession(): Promise<NativeAuthResult<NativeSessionState>>;
   loginUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
   /** Confirms the current account password without creating another device or session. */
@@ -40,6 +52,20 @@ export interface SallimBookAuth {
   /** Scope and target are fixed internally; no reusable step-up grant crosses the bridge. */
   revokeDeviceUI(options: { deviceId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "revoked" | "cancelled" }>>;
   createInvitationWithPasskeyUI(): Promise<NativeAuthResult<{ status: "created" | "cancelled" }>>;
+  listAssets(options: { query?: NativeAssetQuery }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetListResponse"]>>>;
+  getAsset(options: { assetId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetResponse"]>>>;
+  createAsset(options: { input: components["schemas"]["AssetCreate"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetResponse"]>>>;
+  updateAsset(options: { assetId: string; input: components["schemas"]["AssetPatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetResponse"]>>>;
+  archiveAsset(options: { assetId: string; input: components["schemas"]["AssetArchive"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetResponse"]>>>;
+  deleteAsset(options: { assetId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  listAccounts(options: { query?: NativeAccountQuery }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountListResponse"]>>>;
+  getAccount(options: { accountId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
+  createAccount(options: { input: NativeAccountCreate }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
+  updateAccount(options: { accountId: string; input: NativeAccountPatch; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
+  /** Number plaintext and ciphertext never appear in arguments or return values. */
+  editAccountNumberUI(options: { accountId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "saved" | "deleted" | "cancelled" }>>;
+  showAccountNumberUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
+  showAccountNumberWithPasskeyUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
   logout(): Promise<NativeAuthResult<{ status: "signedOut"; serverRevoked: boolean }>>;
   request(options: NativeMetadataRequest): Promise<NativeAuthResult<{ status: number; body: NativeJson }>>;
 }

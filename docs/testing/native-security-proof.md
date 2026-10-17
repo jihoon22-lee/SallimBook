@@ -89,6 +89,10 @@ cd apps/client/android
 릴리스 검사는 `SecurityProofActivity`·`ProofDisplayPolicy`가 릴리스 클래스와 병합 manifest에 없고,
 `androidx.biometric:biometric`이 릴리스 runtime classpath에 없는지 확인한다. 서명·릴리스 배포는 수행하지 않는다.
 
+후속 앱 잠금(Refs #18, #38)은 플랫폼 BiometricPrompt를 사용하므로 production manifest에 `USE_BIOMETRIC`을 선언한다.
+아래 2026-10-17 검증의 권한 미포함 결과는 당시 빌드에 대한 기록이다. 앱 잠금 도입 후에도 디버그 검증 Activity/정책과 AndroidX Biometric 의존성은 릴리스에 포함하지 않는다.
+디버그 합성 검증 Activity는 앱 잠금 화면의 별도 예외이며 일반 계정·금융 API 잠금을 해제하지 않는다.
+
 2026-10-17 WSL의 분리된 `feat/SB-008-keystore-proof` 작업 트리에서 다시 확인한 결과는 다음과 같다.
 JDK 21·compile SDK 36을 사용했으며, 이는 아래 실기기 검증표와 별개의 결과다.
 
