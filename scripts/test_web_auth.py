@@ -30,7 +30,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sallimbook.config import Settings
 from sallimbook.core.database import make_engine
 from sallimbook.identity import service
-from sallimbook.identity.auth_models import AuthSession
+from sallimbook.identity.auth_models import AuthSession, HouseholdMember, User
+from sallimbook.identity.models import Household
 from sallimbook.identity.schemas import InvitationAcceptance
 from sallimbook.main import create_app
 from sqlalchemy import text, update
@@ -49,6 +50,7 @@ def execute(
     insurance: bool = False,
     homecare: bool = False,
     documents: bool = False,
+    exports: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -79,6 +81,7 @@ def execute(
             insurance=insurance,
             homecare=homecare,
             documents=documents,
+            exports=exports,
         )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
@@ -95,6 +98,7 @@ def run_browser(
     insurance: bool = False,
     homecare: bool = False,
     documents: bool = False,
+    exports: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -123,12 +127,30 @@ def run_browser(
                 ),
                 "synthetic-browser-harness",
             )
+        foreign_login = "synthetic_export_foreign"
+        foreign_password = secrets.token_urlsafe(32) if exports else None
+        if exports:
+            # Synthetic adversarial household exists only in this disposable test schema.
+            with Session(engine) as session:
+                foreign_household = Household(name="합성 내보내기 격리 가계")
+                foreign_user = User(
+                    login_name=foreign_login,
+                    display_name="합성 내보내기 격리 사용자",
+                    password_hash=service.PASSWORD_HASHER.hash(foreign_password),
+                )
+                session.add_all([foreign_household, foreign_user])
+                session.flush()
+                session.add(HouseholdMember(
+                    household_id=foreign_household.id, user_id=foreign_user.id,
+                    slot=1, role="owner", status="active",
+                ))
+                session.commit()
         with tempfile.TemporaryDirectory(prefix="sallimbook-https-") as directory, (
-            document_runtime() if documents else nullcontext({})
+            document_runtime() if documents or exports else nullcontext({})
         ) as document_settings:
             private = Path(directory)
             field_keys = private / "field-keys.json"
-            if finance or insurance or documents:
+            if finance or insurance or documents or exports:
                 field_keys.touch(mode=0o600)
                 field_keys.write_text(
                     json.dumps(
@@ -187,8 +209,8 @@ def run_browser(
                     webauthn_rp_id=host if passkeys else None,
                     webauthn_web_origins=[origin] if passkeys else [],
                     webauthn_native_origins=[],
-                    field_encryption_key_file=field_keys if finance or insurance or documents else None,
-                    document_storage_directory=private / "document-storage" if documents else None,
+                    field_encryption_key_file=field_keys if finance or insurance or documents or exports else None,
+                    document_storage_directory=private / "document-storage" if documents or exports else None,
                     **document_settings,
                 )
                 app = create_app(settings)
@@ -202,7 +224,7 @@ def run_browser(
                 app.router.lifespan_context = lifespan
                 dist = (ROOT / "apps/client/dist").resolve()
                 control = secrets.token_urlsafe(32)
-                if passkeys:
+                if passkeys or exports:
 
                     @app.post("/__test/expire-freshness", include_in_schema=False)
                     def expire_freshness(
@@ -267,6 +289,7 @@ def run_browser(
                             "password": password,
                             "login": "synthetic_https_owner",
                             "control": control,
+                            **({"foreign_login": foreign_login, "foreign_password": foreign_password} if exports else {}),
                         }
                     )
                 )
@@ -296,6 +319,7 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_INSURANCE": "1" if insurance else "0",
                         "SALLIMBOOK_HTTPS_HOMECARE": "1" if homecare else "0",
                         "SALLIMBOOK_HTTPS_DOCUMENTS": "1" if documents else "0",
+                        "SALLIMBOOK_HTTPS_EXPORTS": "1" if exports else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -306,13 +330,13 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents|exports)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
                     )
                     print("Failed test source locations: " + ", ".join(locations))
-                    phases = re.findall(r"SAFE_PHASE=([A-Z_]+)", result.stdout)
+                    phases = re.findall(r"^SAFE_PHASE=([A-Z_]+)\s*$", result.stdout, re.MULTILINE)
                     print("Observed synthetic markers: " + ", ".join(phases))
                     raise SystemExit(
                         "HTTPS browser checks failed; private artifacts discarded."
@@ -377,6 +401,7 @@ if __name__ == "__main__":
         help="Verify appliances, shared stock, replacement and dashboard with real HTTPS.",
     )
     parser.add_argument("--documents", action="store_true", help="Verify attachments with the real pinned scanner/OCR tool container and HTTPS API.")
+    parser.add_argument("--exports", action="store_true", help="Verify private ZIP exports and selected originals with real HTTPS and PostgreSQL.")
     args = parser.parse_args()
     with test_service_lock():
         execute(
@@ -388,4 +413,5 @@ if __name__ == "__main__":
             insurance=args.insurance,
             homecare=args.homecare,
             documents=args.documents,
+            exports=args.exports,
         )

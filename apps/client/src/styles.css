@@ -223,3 +223,9 @@ footer { font-size: .75rem; color: var(--muted); padding-top: 32px; }
 .document-panel { min-width: 0; overflow-wrap: anywhere; }
 .document-panel button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .document-upload input[type="file"] { display: block; width: 100%; min-width: 0; max-width: 100%; }
+
+.export-documents { min-width: 0; overflow-wrap: anywhere; }
+.export-documents input[type="search"] { width: 100%; min-width: 0; max-width: 100%; }
+.export-documents .checkbox-field { min-width: 0; }
+.export-page { min-width: 0; overflow-wrap: anywhere; }
+.export-page button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
