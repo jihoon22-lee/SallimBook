@@ -62,12 +62,12 @@
       "git_sha1": "8b1efc9af0109b44edebba0787076a0962c6dfd9"
     },
     "docs/data-model.md": {
-      "sha256": "b4301c6c5d8578b4216c3da6bcc6deb0102d2b542e7aeadeaca8d1ab651ab08d",
-      "git_sha1": "d450ebc5051ed5396ee8c075eccb522538b0195c"
+      "sha256": "fe8c9a61c961f14ec63f33e631450fc68207225bd0e68d9417e4eb899b9e9047",
+      "git_sha1": "568d04ddc7a822009129111ccdb87ca9455cf3ab"
     },
     "docs/api-contract.md": {
-      "sha256": "c6fb35c99009f672bfa0e99e5fc0d8738362d1575f1b1919961c2535dfc9e492",
-      "git_sha1": "03fc23f95f971cf97e4dc63aa7605f011c4527a5"
+      "sha256": "953b880ae6ae8fdc109037df880c2357517277398e29d9b93b6ad950ca720ac7",
+      "git_sha1": "bb0dac72b14c06587e63b52c4d648959307a6132"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "680af9204c3cb575df10c15cee658067d919a68f1b43f102d8c17c4b746787ff",
-      "git_sha1": "64f9cad39a023ac5233d74e0515e7964fff42388"
+      "sha256": "a8dbb29aa138468f563637b15df4bb7cfd19518a8736d18f5650b011fb8f082e",
+      "git_sha1": "2d4f56285c302e48fed5a666c78229a166257842"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "1aa56e347fa7b7843a6555b1597f8cb38025fa776cabe882d5cefa59dffb0261",
@@ -122,8 +122,8 @@
       "git_sha1": "34cb6de1be33e6f786516c326ef84fd6f722d021"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "063c57761dc9811ae1641ef50030e07671dca8eb1323ba3fa8e982c418710d58",
-      "git_sha1": "3c6fed8dfa1cd89eb090c0d9469d85db06fbffab"
+      "sha256": "5e4b7ffcdccc3547598b5eda46a14e3293141985579792b66aefebc20c9cdd32",
+      "git_sha1": "d6d7d1cbf7c87ff276e1817bb932787d76a706f6"
     },
     "docs/README.md": {
       "sha256": "b13e6961bd239149808d4258cd53648fa754625177d04c521931576f6ec8aec1",
@@ -222,12 +222,16 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "5ce2cdc1621a3fbb1563f25be5f6c0c930ac2b80b0469052e6b74f7d4b502966",
-      "git_sha1": "017496e96ffea7a72ad4fdfc8cc4aacb1d38b4e7"
+      "sha256": "a89da28144101a0a19364d8b787737ff4e5c328b76b45d7b3aa751c651693226",
+      "git_sha1": "044a75fda09a9bf7470c814ad334190cb9883ef8"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "75e50c296b96865b339ad3604d9c2573b64df85fde44ea3312df6774d41c394f",
       "git_sha1": "de0a878da8f7278de4bd9eec2b4f262f072b6291"
+    },
+    "docs/testing/passkeys-web.md": {
+      "sha256": "0efece15a939fbda00d9cf96fa8c42a63aa4d40e9ec25874cb49a81cad436e60",
+      "git_sha1": "cfde913f5abf050ad7a28ba4ff90f59953aeb4b4"
     }
   }
 }

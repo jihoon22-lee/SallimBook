@@ -24,6 +24,8 @@ from sallimbook.assets.schemas import (
     InclusionStatus,
     OwnershipKind,
 )
+from sallimbook.cashflow.payment_link_schemas import CLOSURE_FIELDS
+from sallimbook.cashflow.payment_links import require_closure
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
@@ -90,7 +92,7 @@ def prepare_asset(session: Session, principal: Principal, payload: AssetCreate) 
         action="create",
         before_version=None,
         after_version=asset.version,
-        changed_fields=payload.model_fields_set,
+        changed_fields=payload.model_fields_set - CLOSURE_FIELDS,
     )
     return asset
 
@@ -165,7 +167,9 @@ def update_asset(
     asset = scoped_entity(session, Asset, asset_id, principal, for_update=True)
     require_version(asset, if_match)
     previous_version = asset.version
-    merged = _editable_values(asset) | payload.model_dump(exclude_unset=True)
+    merged = _editable_values(asset) | payload.model_dump(
+        exclude_unset=True, exclude=CLOSURE_FIELDS
+    )
     try:
         candidate = AssetCreate.model_validate(merged)
     except ValidationError:
@@ -221,6 +225,12 @@ def update_asset(
             raise DomainError(
                 "INVALID_ACCOUNT_DATES", "계좌 개설일 이후의 종료일을 선택해 주세요.", 422
             )
+    if (
+        account is not None
+        and candidate.ended_on is not None
+        and candidate.ended_on != asset.ended_on
+    ):
+        require_closure(session, principal, "account", account.id, payload, candidate.ended_on)
     if candidate.owner_member_id != asset.owner_member_id:
         _validate_owner(session, principal, candidate.owner_member_id)
     for field, value in candidate.model_dump().items():
@@ -239,7 +249,7 @@ def update_asset(
         action=action,
         before_version=previous_version,
         after_version=asset.version,
-        changed_fields=payload.model_fields_set,
+        changed_fields=payload.model_fields_set - CLOSURE_FIELDS,
     )
     return _save(session, asset)
 
@@ -256,7 +266,7 @@ def archive_asset(
         session,
         principal,
         asset_id,
-        AssetPatch(ended_on=payload.ended_on),
+        AssetPatch(**payload.model_dump(exclude_unset=True)),
         if_match,
         action="archive",
     )

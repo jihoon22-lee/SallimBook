@@ -20,6 +20,7 @@ from sallimbook.cards.models import Card
 from sallimbook.cards.router import router
 from sallimbook.cards.schemas import CardCreate, CardPatch
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision
+from sallimbook.cashflow.payment_link_router import router as payment_link_router
 from sallimbook.cashflow.router import router as income_router
 from sallimbook.cashflow.schemas import CashInput, IncomeInput, IncomeReturn
 from sallimbook.cashflow.service import prepare_cash_record
@@ -83,7 +84,7 @@ def test_card_openapi_nullability_headers_and_secret_free_response():
     app.include_router(router)
     schema = app.openapi()
     patch = schema["components"]["schemas"]["CardPatch"]
-    required = {"owner_member_id", "issuer_name", "product_name", "card_type"}
+    required = {"owner_member_id", "issuer_name", "product_name", "card_type", "closure_ack"}
     for name, item in patch["properties"].items():
         assert name not in patch.get("required", [])
         assert any(t.get("type") == "null" for t in item.get("anyOf", [])) == (name not in required)
@@ -135,7 +136,14 @@ def app(db_engine):
     application.state.engine = db_engine
     application.state.settings = Settings(environment="test", _env_file=None)
     install_http_contract(application)
-    for r in (identity_router, asset_router, account_router, income_router, router):
+    for r in (
+        identity_router,
+        asset_router,
+        account_router,
+        income_router,
+        router,
+        payment_link_router,
+    ):
         application.include_router(r)
     return application
 
@@ -245,10 +253,14 @@ def test_filters_pagination_missing_version_and_input_rejections(client, actor):
 def test_closed_accounts_are_visible_but_cannot_be_new_active_card_links(client, actor):
     account = create_account(client, actor, account_number=None)
     card = create_card(client, actor, settlement_account_id=account["id"])
+    usage = client.get(
+        f"/api/v1/accounts/{account['id']}/payment-links?as_of_date=2026-01-31",
+        headers=actor.headers,
+    ).json()
     close = client.post(
         "/api/v1/assets/" + account["asset_id"] + "/archive",
         headers=version(actor),
-        json={"ended_on": "2026-01-31"},
+        json={"ended_on": "2026-01-31", "closure_ack": True, "usage_digest": usage["usage_digest"]},
     )
     assert close.status_code == 200
     got = client.get("/api/v1/cards/" + card["id"], headers=actor.headers).json()
@@ -407,11 +419,16 @@ def test_card_page_loads_account_statuses_in_one_batch(client, actor, db_engine)
     accounts = [create_account(client, actor, account_number=None) for _ in range(2)]
     for index in range(6):
         create_card(client, actor, settlement_account_id=accounts[index % 2]["id"])
-    client.post(
+    usage = client.get(
+        f"/api/v1/accounts/{accounts[0]['id']}/payment-links?as_of_date=2026-01-31",
+        headers=actor.headers,
+    ).json()
+    closed = client.post(
         "/api/v1/assets/" + accounts[0]["asset_id"] + "/archive",
         headers=version(actor),
-        json={"ended_on": "2026-01-31"},
+        json={"ended_on": "2026-01-31", "closure_ack": True, "usage_digest": usage["usage_digest"]},
     )
+    assert closed.status_code == 200
     queries = []
 
     def count_account_queries(connection, cursor, statement, parameters, context, executemany):

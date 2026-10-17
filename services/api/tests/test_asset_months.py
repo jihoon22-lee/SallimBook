@@ -1,6 +1,7 @@
 """Synthetic monthly observations, exact money and immutable historical revisions."""
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier
 from uuid import UUID, uuid4
@@ -204,6 +205,56 @@ def confirm(client, actor, month, *, key=None, **acknowledgments):
 
 @pytest.mark.database
 class TestAssetMonthsDatabase:
+    @pytest.mark.parametrize("during_confirmation", [False, True])
+    def test_revision_origin_cannot_be_rewritten_before_or_during_confirmation(
+        self, months_app, account_actor, db_engine, during_confirmation
+    ):
+        spouse = make_actor(db_engine, account_actor.household_id)
+        with TestClient(months_app) as client:
+            asset = add_asset(client, account_actor)
+            draft(client, account_actor, "2026-01")
+            observe(client, account_actor, "2026-01", asset["id"], "100", "2026-01-31")
+            assert confirm(client, account_actor, "2026-01").status_code == 200
+            first = read_month(client, account_actor, "2026-01")
+            current = first
+            for number in (2, 3):
+                response = client.post(
+                    "/api/v1/asset-months/2026-01/reopen",
+                    json={"revision_id": current["revision_id"], "reason": f"합성 정정 {number}"},
+                    headers={
+                        **account_actor.headers,
+                        "If-Match": f'"{current["version"]}"',
+                        "Idempotency-Key": uuid4().hex,
+                    },
+                )
+                assert response.status_code == 201
+                current = read_month(client, account_actor, "2026-01")
+                if number == 2:
+                    assert confirm(client, account_actor, "2026-01").status_code == 200
+                    current = read_month(client, account_actor, "2026-01")
+            for change in (
+                {"previous_revision_id": UUID(first["revision_id"])},
+                {"reopened_reason": "합성 위조 사유"},
+                {"created_by_member_id": spouse.member_id},
+                {"created_at": datetime.now(UTC) - timedelta(days=1)},
+            ):
+                if during_confirmation:
+                    change.update(
+                        state="confirmed",
+                        confirmed_at=datetime.now(UTC),
+                        confirmed_by_member_id=account_actor.member_id,
+                    )
+                with Session(db_engine) as session, pytest.raises(DBAPIError) as caught:
+                    session.execute(
+                        update(AssetMonthRevision)
+                        .where(AssetMonthRevision.id == UUID(current["revision_id"]))
+                        .values(**change)
+                    )
+                    session.commit()
+                assert caught.value.orig.sqlstate == "55000"
+            assert confirm(client, account_actor, "2026-01").status_code == 200
+            assert read_month(client, account_actor, "2026-01")["reopened_reason"] == "합성 정정 3"
+
     def test_scope_recreation_does_not_reuse_a_stale_value_identity(
         self, months_app, account_actor
     ):

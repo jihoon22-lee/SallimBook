@@ -57,6 +57,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/{resource_id}/payment-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Handler */
+        get: operations["getAccountPaymentLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset-months/{month}": {
         parameters: {
             query?: never;
@@ -618,6 +635,23 @@ export interface paths {
         put?: never;
         /** Archive */
         post: operations["archiveCard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cards/{resource_id}/payment-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Handler */
+        get: operations["getCardPaymentLinks"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1481,10 +1515,17 @@ export interface components {
         /** AssetArchive */
         AssetArchive: {
             /**
+             * Closure Ack
+             * @default false
+             */
+            closure_ack: boolean;
+            /**
              * Ended On
              * Format: date
              */
             ended_on: string;
+            /** Usage Digest */
+            usage_digest?: string | null;
         };
         /** @enum {string} */
         AssetCategory: "real_estate" | "deposit" | "financial" | "loan" | "other";
@@ -1530,6 +1571,11 @@ export interface components {
             amount_basis?: components["schemas"]["AmountBasis"];
             /** Category */
             category?: components["schemas"]["AssetCategory"];
+            /**
+             * Closure Ack
+             * @default false
+             */
+            closure_ack: boolean;
             /** Ended On */
             ended_on?: string | null;
             /** Household Share */
@@ -1551,6 +1597,8 @@ export interface components {
              * Format: date
              */
             started_on?: string;
+            /** Usage Digest */
+            usage_digest?: string | null;
         };
         /** AssetResponse */
         AssetResponse: {
@@ -1637,10 +1685,17 @@ export interface components {
         /** CardArchive */
         CardArchive: {
             /**
+             * Closure Ack
+             * @default false
+             */
+            closure_ack: boolean;
+            /**
              * Ended On
              * Format: date
              */
             ended_on: string;
+            /** Usage Digest */
+            usage_digest?: string | null;
         };
         /** CardCreate */
         CardCreate: {
@@ -1682,6 +1737,11 @@ export interface components {
             alias?: string | null;
             /** Card Type */
             card_type?: components["schemas"]["CardType"];
+            /**
+             * Closure Ack
+             * @default false
+             */
+            closure_ack: boolean;
             /** Ended On */
             ended_on?: string | null;
             /** Issuer Name */
@@ -1703,6 +1763,8 @@ export interface components {
             settlement_day?: number | null;
             /** Started On */
             started_on?: string | null;
+            /** Usage Digest */
+            usage_digest?: string | null;
         };
         /** CardResponse */
         CardResponse: {
@@ -2020,7 +2082,10 @@ export interface components {
              */
             created_by_member_id: string;
             date_precision: components["schemas"]["Precision"];
-            /** Editable */
+            /**
+             * Editable
+             * @description Current detail/list/duplicate reads only: active manual income without active returns. Historical and immutable command receipts are false; fetch current detail before acting.
+             */
             editable: boolean;
             /**
              * Flow
@@ -2067,7 +2132,10 @@ export interface components {
             updated_by_member_id: string;
             /** Version */
             version: number;
-            /** Voidable */
+            /**
+             * Voidable
+             * @description Current detail/list/duplicate reads only: active manual income or return without active returns. Historical and immutable command receipts are false; fetch current detail before acting.
+             */
             voidable: boolean;
         };
         /** ClientExtensions */
@@ -2574,6 +2642,158 @@ export interface components {
             id: string;
             /** Token */
             token: string;
+        };
+        /** LinkedCard */
+        LinkedCard: {
+            /** Active For Closure */
+            active_for_closure: boolean;
+            /** Alias */
+            alias: string | null;
+            /** Ended On */
+            ended_on: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Issuer Name */
+            issuer_name: string;
+            /** Last Four */
+            last_four: string | null;
+            /** Product Name */
+            product_name: string;
+            /** Version */
+            version: number;
+        };
+        /** LinkedCardPage */
+        LinkedCardPage: {
+            /** Items */
+            items: components["schemas"]["LinkedCard"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Total Count */
+            total_count: number;
+        };
+        /** LinkedObligation */
+        LinkedObligation: {
+            /** Account Id */
+            account_id: string | null;
+            /** Actual Paid Krw */
+            actual_paid_krw: string;
+            /** Card Id */
+            card_id: string | null;
+            /** Category */
+            category: string;
+            /** Expected Amount Krw */
+            expected_amount_krw: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            payment_basis: components["schemas"]["PaymentBasis"];
+            /**
+             * Rule Id
+             * Format: uuid
+             */
+            rule_id: string;
+            /**
+             * Rule Version Id
+             * Format: uuid
+             */
+            rule_version_id: string;
+            /**
+             * Scheduled Date
+             * Format: date
+             */
+            scheduled_date: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unpaid" | "partial";
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /** LinkedObligationPage */
+        LinkedObligationPage: {
+            /** Items */
+            items: components["schemas"]["LinkedObligation"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Total Count */
+            total_count: number;
+        };
+        /** LinkedRule */
+        LinkedRule: {
+            /** Account Id */
+            account_id: string | null;
+            /**
+             * Amount Mode
+             * @enum {string}
+             */
+            amount_mode: "fixed" | "variable";
+            /**
+             * Anchor Date
+             * Format: date
+             */
+            anchor_date: string;
+            /** Card Id */
+            card_id: string | null;
+            /** Category */
+            category: string;
+            /**
+             * Economic Type
+             * @enum {string}
+             */
+            economic_type: "expense" | "loan" | "asset_transfer";
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective Until */
+            effective_until: string | null;
+            /** Expected Amount Krw */
+            expected_amount_krw: string | null;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency: "monthly" | "annual" | "days";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Interval Count */
+            interval_count: number;
+            payment_basis: components["schemas"]["PaymentBasis"];
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "current" | "future";
+            /**
+             * Rule Id
+             * Format: uuid
+             */
+            rule_id: string;
+            /** Rule Version */
+            rule_version: number;
+            /** Title */
+            title: string;
+        };
+        /** LinkedRulePage */
+        LinkedRulePage: {
+            /** Items */
+            items: components["schemas"]["LinkedRule"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Total Count */
+            total_count: number;
         };
         /** LoginOptionsRequest */
         LoginOptionsRequest: {
@@ -3217,6 +3437,49 @@ export interface components {
         };
         /** @enum {string} */
         OwnershipKind: "individual" | "joint";
+        /** @enum {string} */
+        PaymentBasis: "account_payment_plan" | "card_approval_plan";
+        /** PaymentLinksResponse */
+        PaymentLinksResponse: {
+            /**
+             * Account Withdrawal Total Available
+             * @default false
+             * @constant
+             */
+            account_withdrawal_total_available: false;
+            /**
+             * As Of Date
+             * Format: date
+             */
+            as_of_date: string;
+            /** Asset Id */
+            asset_id: string | null;
+            cards: components["schemas"]["LinkedCardPage"];
+            /**
+             * Coverage
+             * @default registered_recurring_only
+             * @constant
+             */
+            coverage: "registered_recurring_only";
+            obligations: components["schemas"]["LinkedObligationPage"];
+            /** Requires Confirmation */
+            requires_confirmation: boolean;
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /**
+             * Resource Kind
+             * @enum {string}
+             */
+            resource_kind: "card" | "account";
+            /** Resource Version */
+            resource_version: number;
+            rules: components["schemas"]["LinkedRulePage"];
+            /** Usage Digest */
+            usage_digest: string;
+        };
         /** PolicyCreate */
         PolicyCreate: {
             /** Beneficiary Note */
@@ -4275,6 +4538,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountRevealResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getAccountPaymentLinks: {
+        parameters: {
+            query?: {
+                as_of_date?: string | null;
+                rule_cursor?: string | null;
+                obligation_cursor?: string | null;
+                card_cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentLinksResponse"];
                 };
             };
             /** @description Bad Request */
@@ -8436,6 +8808,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CardResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getCardPaymentLinks: {
+        parameters: {
+            query?: {
+                as_of_date?: string | null;
+                rule_cursor?: string | null;
+                obligation_cursor?: string | null;
+                card_cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentLinksResponse"];
                 };
             };
             /** @description Bad Request */

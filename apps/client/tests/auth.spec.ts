@@ -80,6 +80,7 @@ async function mockIdentity(page: Page, loggedIn = false) {
       if (state.meOffline) return route.abort("failed");
       return state.loggedIn ? route.fulfill({ json: member }) : failure(route, 401, "UNAUTHENTICATED");
     }
+    if (path === "/api/v1/auth/passkeys") return route.fulfill({ json: { items: [], next_cursor: null } });
     if (path === "/api/v1/auth/web/csrf") {
       if (!state.loggedIn) return failure(route, 401, "UNAUTHENTICATED");
       state.csrfRenewals += 1;
@@ -161,6 +162,7 @@ test("current web account reauthenticates without another login or changing devi
   const api = await mockIdentity(page, true);
   api.rejectReauth = true;
   await page.goto("/login");
+  await expect(page.getByRole("button", { name: "패스키로 로그인", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("로그인 이름", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("이 기기 이름", { exact: true })).toHaveCount(0);
   await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
@@ -259,7 +261,7 @@ test("device version conflict preserves the row and requires an explicit refetch
   await page.goto("/settings/auth");
   await page.getByRole("button", { name: "합성 다른 기기 연결 해제", exact: true }).click();
   await page.getByRole("button", { name: "연결 해제 확인", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("기기 정보가 다른 곳에서 변경");
+  await expect(page.getByRole("alert")).toContainText("정보가 다른 곳에서 변경");
   expect(api.revokeVersions).toEqual(['"1"']);
   await expect(page.getByRole("button", { name: "합성 다른 기기 연결 해제", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "기기 목록 다시 불러오기" }).click();
@@ -310,7 +312,7 @@ test("partner invitation asks for recent login when the server requires it", asy
   await page.goto("/settings/auth");
   await page.getByLabel("초대할 로그인 이름", { exact: true }).fill("synthetic.partner");
   await page.getByRole("button", { name: "초대 만들기", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("최근 로그인이 필요");
+  await expect(page.getByRole("alert")).toContainText("5분 이내 로그인");
   await expect(page.getByRole("link", { name: "다시 로그인", exact: true })).toHaveAttribute("href", "/login");
   await expect(page.getByLabel("생성된 초대 코드", { exact: true })).toHaveCount(0);
   expect(api.invitationAttempts).toBe(1);

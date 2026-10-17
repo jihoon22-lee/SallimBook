@@ -4,6 +4,7 @@ Run: uv run --project services/api python scripts/test_web_auth.py
 No existing server, system trust store, or production configuration is changed.
 """
 
+import argparse
 import base64
 import hashlib
 import json
@@ -16,6 +17,7 @@ import tempfile
 import threading
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,18 +25,20 @@ import uvicorn
 from alembic import command
 from alembic.config import Config
 from dotenv import dotenv_values
+from fastapi import Header, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from sallimbook.config import Settings
 from sallimbook.core.database import make_engine
 from sallimbook.identity import service
+from sallimbook.identity.auth_models import AuthSession
 from sallimbook.identity.schemas import InvitationAcceptance
 from sallimbook.main import create_app
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 from test_database import COMPOSE, ROOT, test_service_lock, validate_test_url
 
 
-def execute() -> None:
+def execute(*, passkeys: bool = False) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
     }
@@ -54,12 +58,12 @@ def execute() -> None:
         subprocess.run(
             COMPOSE + ["up", "-d", "--wait", "db-test"], env=environment, check=True
         )
-        run_browser(url)
+        run_browser(url, passkeys=passkeys)
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
 
 
-def run_browser(url: str) -> None:
+def run_browser(url: str, *, passkeys: bool = False) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
     engine = make_engine(url, schema=schema)
@@ -107,7 +111,7 @@ def run_browser(url: str) -> None:
                     "-subj",
                     "/CN=localhost",
                     "-addext",
-                    "subjectAltName=DNS:localhost,IP:127.0.0.1",
+                    "subjectAltName=DNS:localhost,DNS:sallimbook-passkey.test,IP:127.0.0.1",
                 ],
                 check=True,
                 stdout=subprocess.DEVNULL,
@@ -124,23 +128,47 @@ def run_browser(url: str) -> None:
             listener = socket.socket()
             try:
                 listener.bind(("127.0.0.1", 0))
-                origin = f"https://127.0.0.1:{listener.getsockname()[1]}"
-                app = create_app(
-                    Settings(
-                        environment="test", database_url=None, allowed_origins=[origin]
-                    )
+                host = "sallimbook-passkey.test" if passkeys else "127.0.0.1"
+                origin = f"https://{host}:{listener.getsockname()[1]}"
+                settings = Settings(
+                    environment="test",
+                    database_url=None,
+                    allowed_origins=[origin],
+                    webauthn_rp_id=host if passkeys else None,
+                    webauthn_web_origins=[origin] if passkeys else [],
+                    webauthn_native_origins=[],
                 )
+                app = create_app(settings)
 
                 @asynccontextmanager
                 async def lifespan(app):
-                    app.state.settings = Settings(
-                        environment="test", database_url=None, allowed_origins=[origin]
-                    )
+                    app.state.settings = settings
                     app.state.engine = engine
                     yield
 
                 app.router.lifespan_context = lifespan
                 dist = (ROOT / "apps/client/dist").resolve()
+                control = secrets.token_urlsafe(32)
+                if passkeys:
+
+                    @app.post("/__test/expire-freshness", include_in_schema=False)
+                    def expire_freshness(
+                        x_test_control: str | None = Header(default=None),
+                    ):
+                        # Test-only clock setup on this disposable schema; never installed by create_app.
+                        if not x_test_control or not secrets.compare_digest(
+                            x_test_control, control
+                        ):
+                            raise HTTPException(status_code=403)
+                        with Session(engine) as session:
+                            session.execute(
+                                update(AuthSession).values(
+                                    authenticated_at=datetime.now(UTC)
+                                    - timedelta(minutes=6)
+                                )
+                            )
+                            session.commit()
+                        return {"aged": True}
 
                 @app.get("/__test/cross-site", include_in_schema=False)
                 def cross_site():
@@ -181,7 +209,13 @@ def run_browser(url: str) -> None:
                 fixture = private / "fixture.json"
                 fixture.touch(mode=0o600)
                 fixture.write_text(
-                    json.dumps({"password": password, "login": "synthetic_https_owner"})
+                    json.dumps(
+                        {
+                            "password": password,
+                            "login": "synthetic_https_owner",
+                            "control": control,
+                        }
+                    )
                 )
                 result = subprocess.run(
                     [
@@ -201,6 +235,7 @@ def run_browser(url: str) -> None:
                         "SALLIMBOOK_HTTPS_SPKI": spki,
                         "SALLIMBOOK_HTTPS_FIXTURE": str(fixture),
                         "SALLIMBOOK_HTTPS_OUTPUT": str(private / "artifacts"),
+                        "SALLIMBOOK_HTTPS_PASSKEYS": "1" if passkeys else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -211,17 +246,24 @@ def run_browser(url: str) -> None:
                     locations = sorted(
                         set(
                             re.findall(
-                                r"auth-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
                     )
                     print("Failed test source locations: " + ", ".join(locations))
+                    phases = re.findall(r"SAFE_PHASE=([A-Z_]+)", result.stdout)
+                    print("Observed synthetic markers: " + ", ".join(phases))
                     raise SystemExit(
                         "HTTPS browser checks failed; private artifacts discarded."
                     )
                 print(
-                    "HTTPS browser checks: 2 passed (real API/PostgreSQL, no HTTP route mocks)."
+                    "HTTPS browser checks passed (real API/PostgreSQL, no HTTP route mocks)."
+                    + (
+                        " WebAuthn: real virtual-authenticator signatures."
+                        if passkeys
+                        else ""
+                    )
                 )
             finally:
                 if server:
@@ -241,5 +283,12 @@ def run_browser(url: str) -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--passkeys",
+        action="store_true",
+        help="Use an isolated .test RP and Chromium virtual authenticator.",
+    )
+    args = parser.parse_args()
     with test_service_lock():
-        execute()
+        execute(passkeys=args.passkeys)

@@ -14,6 +14,8 @@ from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
 from sallimbook.cards.models import Card
 from sallimbook.cards.schemas import CardCreate, CardListResponse, CardPatch, CardResponse
+from sallimbook.cashflow.payment_link_schemas import CLOSURE_FIELDS
+from sallimbook.cashflow.payment_links import require_closure
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
@@ -95,7 +97,7 @@ def create_card(session: Session, principal: Principal, payload: CardCreate) -> 
         action="create",
         before_version=None,
         after_version=card.version,
-        changed_fields=payload.model_fields_set,
+        changed_fields=payload.model_fields_set - CLOSURE_FIELDS,
     )
     result = card_response(session, card)
     session.commit()
@@ -116,14 +118,18 @@ def update_card(
     require_version(card, if_match)
     values = {name: getattr(card, name) for name in CardCreate.model_fields}
     try:
-        candidate = CardCreate.model_validate(values | payload.model_dump(exclude_unset=True))
+        candidate = CardCreate.model_validate(
+            values | payload.model_dump(exclude_unset=True, exclude=CLOSURE_FIELDS)
+        )
     except ValidationError:
         raise DomainError(
             "INVALID_CARD", "카드 사용 기간과 입력 항목을 확인해 주세요.", 422
         ) from None
     _validate_links(session, principal, candidate, previous=card)
+    if candidate.ended_on is not None and candidate.ended_on != card.ended_on:
+        require_closure(session, principal, "card", card.id, payload, candidate.ended_on)
     previous_version = card.version
-    for name in payload.model_fields_set:
+    for name in payload.model_fields_set - CLOSURE_FIELDS:
         setattr(card, name, getattr(candidate, name))
     card.version += 1
     card.updated_by_member_id = principal.member_id
@@ -137,7 +143,7 @@ def update_card(
         action="archive" if archive else "update",
         before_version=previous_version,
         after_version=card.version,
-        changed_fields=payload.model_fields_set,
+        changed_fields=payload.model_fields_set - CLOSURE_FIELDS,
     )
     result = card_response(session, card)
     session.commit()

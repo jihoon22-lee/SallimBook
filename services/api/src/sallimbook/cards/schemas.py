@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from pydantic.json_schema import SkipJsonSchema
 
 from sallimbook.assets.schemas import DateOnly
+from sallimbook.cashflow.payment_link_schemas import CLOSURE_FIELDS, ClosureFields
 
 type CardType = Literal["credit", "debit"]
 Name = Annotated[
@@ -47,7 +48,7 @@ class CardCreate(InputModel):
         return self
 
 
-class CardPatch(InputModel):
+class CardPatch(InputModel, ClosureFields):
     owner_member_id: UUID | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     issuer_name: Name | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     product_name: Name | SkipJsonSchema[None] = Field(default_factory=lambda: None)
@@ -62,7 +63,7 @@ class CardPatch(InputModel):
 
     @model_validator(mode="after")
     def supplied(self) -> Self:
-        if not self.model_fields_set:
+        if not self.model_fields_set - CLOSURE_FIELDS:
             raise ValueError("Supply at least one card field")
         if any(
             getattr(self, field) is None
@@ -73,7 +74,7 @@ class CardPatch(InputModel):
         return self
 
 
-class CardArchive(InputModel):
+class CardArchive(InputModel, ClosureFields):
     ended_on: DateOnly
 
 
