@@ -226,8 +226,8 @@
       "git_sha1": "31821e6c78de26bd0e643896ebb238d5c0caa957"
     },
     "docs/testing/native-security-proof.md": {
-      "sha256": "d75115e8222f75b0d12035b4c0c240c0841bf1027e4725221042ee572b8c8585",
-      "git_sha1": "ecdb1270586433902b11fa97f65b5963a1f0b872"
+      "sha256": "93ebc8ad098f87e2254f522b3509ff5e681ea1c426b3cb9c027f256612507a2e",
+      "git_sha1": "6829ec77c6ed8022ffeaab930ce7b4d1ea4a7dff"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",

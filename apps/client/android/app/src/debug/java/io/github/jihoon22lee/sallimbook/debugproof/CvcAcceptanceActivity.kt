@@ -54,6 +54,14 @@ class CvcAcceptanceActivity : Activity() {
     internal fun syntheticOwnerPresented(): Boolean = resumed && hasWindowFocus() && !isFinishing && !isDestroyed &&
         keyguard?.isDeviceLocked == false
 
+    /** Called by the debug gate after doFinal/write and immediately before AtomicFile commit.
+     * Owner lifetime alone is insufficient: this exact request may have expired in blocking IO. */
+    internal fun syntheticCommitActive(): Boolean {
+        val current = pending ?: return false
+        return current.operation.encrypt && current.returned === current.operation.cipher &&
+            syntheticOwnerPresented() && life.cipherActive(current.id)
+    }
+
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_OFF) stopSession("화면 잠금 · 세션 종료")
@@ -187,8 +195,10 @@ class CvcAcceptanceActivity : Activity() {
         }
         if (!life.claimCipher(current.id)) { terminal(current, "완료 시한 만료"); return }
         var result: ByteArray? = null
+        var committed = false
         try {
             result = store.finish(current.operation, returned, current.value)
+            committed = current.operation.encrypt
             if (!life.finishCipher(current.id, result != null) || !syntheticOwnerPresented() || !NativeVaultAcceptanceGate.active(this))
                 throw NativeVaultFailure("ACCESS_DENIED")
             // Deliberately only the fixed public fixture reaches this native TextView.
@@ -203,7 +213,10 @@ class CvcAcceptanceActivity : Activity() {
             pending = null
         } catch (_: Exception) {
             pending = null
-            stopSession("키/저장/검증 실패 · 자동 교체 없음 · 기존 값 별도 읽기로 확인")
+            // A finishWrite that began in time can return after the deadline. Never describe
+            // that durable write as a failed save merely because its UI completion is stale.
+            stopSession(if (committed) "저장 완료 · 완료 시한/화면 상태 변경으로 세션 종료 · 새 세션에서 읽기로 확인"
+                else "키/저장/검증 실패 · 자동 교체 없음 · 기존 값 별도 읽기로 확인")
         } finally { result?.fill(0); current.discard() }
     }
     private fun stopSession(message: String) {
