@@ -234,8 +234,8 @@
       "git_sha1": "8bd03416201a80a16d1bd9e5a2a8531bf1ac184d"
     },
     "docs/testing/assets-accounts-client.md": {
-      "sha256": "2fb2b5fd39a1f21f55e7817e1310dbf5e0385b939e53a8d4f336a2d584f587f7",
-      "git_sha1": "456bc93b5e0bfccfbe1212be2d5103ecc3dd5be6"
+      "sha256": "b6380e10d8731ca2b92c9fb5688c86ed6e26852a6663aa094d71436fbe1d941a",
+      "git_sha1": "b857b73a2de28b55ef527603c4e523fef0cf3503"
     }
   }
 }
