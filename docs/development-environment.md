@@ -159,6 +159,10 @@ API 변경 후 `pnpm api:generate`와 `pnpm typecheck`로 OpenAPI·TS 계약을 
 
 환경 간 실제 건강·금융데이터를 복사하지 않는다. 꼭 필요한 진단은 익명화·축약된 재현 데이터로 대체한다.
 
+### 반복 규칙 DB 확장
+
+`0009_recurring`의 기간 배타 제약은 고정 PostgreSQL 이미지의 btree_gist 1.8을 사용한다. 마이그레이션 역할에 대상 DB의 CREATE 권한이 필요하고 런타임 API 역할에는 확장 설치 권한을 주지 않는다. public의 기존 확장 버전/위치가 다르면 자동 이동·업그레이드하지 않고 마이그레이션을 중단한다. [PostgreSQL btree_gist 문서](https://www.postgresql.org/docs/18/btree-gist.html), [CREATE EXTENSION 문서](https://www.postgresql.org/docs/18/sql-createextension.html)를 확인했다.
+
 ### 자산·계좌 화면 검증
 
 자산 목록·등록·상세·수정·사용 종료와 계좌 목록·등록·상세·수정·사용 종료를 실제 생성 API client에 연결했다.
