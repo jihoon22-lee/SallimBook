@@ -13,6 +13,10 @@ internal enum class FinanceOperation {
     CREATE_INCOME, CORRECT_INCOME, VOID_INCOME, RETURN_INCOME, CONVERT_INCOME_PRECISION,
     LIST_CARDS, GET_CARD, CREATE_CARD, UPDATE_CARD, ARCHIVE_CARD, DELETE_CARD,
     GET_ASSET_COMPARISON, GET_ASSET_TRENDS,
+    LIST_RECURRING_RULES, CREATE_RECURRING_RULE, GET_RECURRING_RULE, CHANGE_RECURRING_RULE, END_RECURRING_RULE,
+    GENERATE_OBLIGATIONS, LIST_OBLIGATIONS, FIXED_COST_SUMMARY, GET_OBLIGATION, OBLIGATION_HISTORY,
+    RESCHEDULE_OBLIGATION, SKIP_OBLIGATION, UNSKIP_OBLIGATION, COMPLETE_OBLIGATION, REOPEN_OBLIGATION,
+    SETTLE_OBLIGATION, LIST_OBLIGATION_SETTLEMENTS, VOID_FIXED_SETTLEMENT,
 }
 
 /** Constructed from named metadata commands, never from a JS URL, headers or encoded body. */
@@ -146,6 +150,7 @@ internal object FinancePolicy {
         if (CashflowPolicy.supports(operation)) return CashflowPolicy.prepare(operation, value)
         if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.prepare(operation, value)
         if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
+        if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.prepare(operation, value)
         val args = objectValue(value)
         val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
         val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
@@ -184,6 +189,7 @@ internal object FinancePolicy {
 
     fun metadataHttpAllowed(method: String, path: String, body: Any?, ifMatch: String?, idempotencyKey: String? = null): Boolean { return try {
         if (CashflowPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
+        if (FixedCostPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (idempotencyKey != null) return false
         if (CardMetadataPolicy.httpAllowed(method, path, body, ifMatch)) return true
         if (ComparisonPolicy.httpAllowed(method, path, body, ifMatch)) return true
@@ -290,6 +296,7 @@ internal object FinancePolicy {
             if (CashflowPolicy.supports(operation)) return CashflowPolicy.response(operation, request, status, value)
             if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.response(operation, request, status, value)
             if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
+            if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.response(operation, request, status, value)
             if (operation == FinanceOperation.DELETE_ASSET) {
                 if (status != 204 || value != null) invalid()
                 return null

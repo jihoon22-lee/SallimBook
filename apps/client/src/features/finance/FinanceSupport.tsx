@@ -17,7 +17,7 @@ export function FinanceError({ error }: { error: ApiError | null }) {
     INVALID_ASSET: "소유 방식과 소유자, 시작일·종료일을 확인해 주세요.",
     FINANCIAL_ASSET_REQUIRED: "계좌와 연결할 금융 자산을 선택해 주세요.",
     ASSET_ALREADY_LINKED: "이미 다른 계좌와 연결된 자산이에요. 기존 계좌를 확인하거나 다른 금융 자산을 선택해 주세요.",
-    ASSET_KIND_IN_USE: "월 기록이 있는 자산은 자산·부채 구분을 바꿀 수 없어요. 기존 월 기록과 자산을 확인해 주세요.",
+    ASSET_KIND_IN_USE: "월별 금액 기록이 있어 자산·부채 구분을 바꿀 수 없어요. 원래 구분을 유지하거나 새 항목을 등록해 주세요.",
     ASSET_IN_USE: "연결된 기록이 있어 삭제할 수 없어요. 사용 종료로 과거 기록을 보존해 주세요.",
     INVALID_ACCOUNT: "계좌 정보와 개설일·종료일을 확인해 주세요.",
     INVALID_ACCOUNT_DATES: "종료일은 연결된 계좌의 개설일 이후여야 해요. 개설일과 보유 종료일을 확인해 주세요.",

@@ -88,6 +88,24 @@ export interface SallimBookAuth {
   deleteCard(options: { cardId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   getAssetComparison(options: { query: operations["getAssetComparison"]["parameters"]["query"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetComparisonResponse"]>>>;
   getAssetTrends(options: { query: operations["getAssetTrends"]["parameters"]["query"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetTrendResponse"]>>>;
+  listObligations(options: { query: NonNullable<operations["listObligations"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ObligationListResponse"]>>>;
+  generateObligations(options: { input: components["schemas"]["GenerateObligations"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["GenerationResponse"]>>>;
+  fixedCostSummary(options: { query: NonNullable<operations["fixedCostSummary"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["FixedSummaryResponse"]>>>;
+  getObligation(options: { obligationId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ObligationResponse"]>>>;
+  rescheduleObligation(options: { obligationId: string; input: components["schemas"]["ObligationReschedule"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  completeObligation(options: { obligationId: string; input: components["schemas"]["ObligationAction"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  obligationHistory(options: { obligationId: string; query?: NonNullable<operations["obligationHistory"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ObligationHistoryResponse"]>>>;
+  reopenObligation(options: { obligationId: string; input: components["schemas"]["ObligationAction"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  listObligationSettlements(options: { obligationId: string; query?: NonNullable<operations["listObligationSettlements"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["SettlementListResponse"]>>>;
+  settleObligation(options: { obligationId: string; input: components["schemas"]["SettlementCreate"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["SettlementResponse"]>>>;
+  skipObligation(options: { obligationId: string; input: components["schemas"]["ObligationAction"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  unskipObligation(options: { obligationId: string; input: components["schemas"]["ObligationAction"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  listRecurringRules(options: { query?: NonNullable<operations["listRecurringRules"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["RuleListResponse"]>>>;
+  createRecurringRule(options: { input: components["schemas"]["RuleCreate"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  getRecurringRule(options: { ruleId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["RuleResponse"]>>>;
+  changeRecurringRule(options: { ruleId: string; input: components["schemas"]["RuleChange"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  endRecurringRule(options: { ruleId: string; input: components["schemas"]["RuleEnd"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  voidFixedSettlement(options: { settlementId: string; input: components["schemas"]["ObligationAction"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["SettlementResponse"]>>>;
   /** Number plaintext and ciphertext never appear in arguments or return values. */
   editAccountNumberUI(options: { accountId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "saved" | "deleted" | "cancelled" }>>;
   showAccountNumberUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;

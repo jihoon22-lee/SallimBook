@@ -109,3 +109,24 @@ test("domain writes renew CSRF only on its rejection and retain drafts on other 
   await expect(page.getByLabel("자산 이름", { exact: true })).toHaveValue("합성 보존할 작성 내용");
   expect(state.csrfCalls).toBe(2);
 });
+
+
+test("asset kind restriction explains existing values without a stale-version retry loop", async ({ page }) => {
+  await mockFinance(page);
+  await page.route(`**/api/v1/assets/${uid(10)}`, async (route) => {
+    if (route.request().method() === "PATCH" && route.request().postDataJSON().kind === "liability") {
+      return route.fulfill({ status: 409, json: { error: { code: "ASSET_KIND_IN_USE", message: "synthetic", request_id: uid(99) } } });
+    }
+    return route.fallback();
+  });
+  await page.goto(`/assets/${uid(10)}/edit`);
+  await page.getByLabel("자산·부채 구분", { exact: true }).selectOption("liability");
+  await page.getByRole("button", { name: "자산 수정 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("월별 금액 기록이 있어");
+  await expect(page.getByRole("button", { name: "서버의 최신 정보 확인", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "자산 수정 저장", exact: true })).toBeEnabled();
+  await page.getByLabel("자산·부채 구분", { exact: true }).selectOption("asset");
+  await page.getByLabel("자산 이름", { exact: true }).fill("합성 구분 유지 수정");
+  await page.getByRole("button", { name: "자산 수정 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "합성 구분 유지 수정", exact: true })).toBeVisible();
+});
