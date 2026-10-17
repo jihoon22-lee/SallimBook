@@ -43,4 +43,31 @@ internal object NativeVaultTestData {
             mapOf("id" to cardId,"household_id" to household,"version" to 4,"has_secret" to true))
     }
     fun key()=(fixture["hvk_hex"] as String).chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+    fun commands():List<NativeVaultCommand> {
+        val key="synthetic:vault:1"; val id=resource; val empty=emptyMap<String,Any?>()
+        return listOf(
+            NativeVaultCommand(VaultOperation.STATUS),
+            NativeVaultCommand(VaultOperation.INITIALIZE,body=mapOf("key_check" to checkInput(1),"member_wrapping" to (memberInput(version=1)+mapOf("generation" to 1)),"recovery_wrapping" to (recoveryInput(1)+mapOf("generation" to 1))),idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.OWN_WRAP),
+            NativeVaultCommand(VaultOperation.REWRAP,body=mapOf("wrapping" to memberInput(),"key_check_confirmed" to true),version=4,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.RECOVERY_WRAP),
+            NativeVaultCommand(VaultOperation.RECOVER,body=mapOf("member_wrapping" to memberInput(),"recovery_wrapping" to recoveryInput(),"key_check_confirmed" to true),version=3,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.REVOKE,id=partner,body=empty,version=1,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.SHARES),
+            NativeVaultCommand(VaultOperation.SHARE_CREATE,body=mapOf("wrapping" to memberInput()),version=3,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.SHARE_WRAP,id=id),
+            NativeVaultCommand(VaultOperation.SHARE_ACCEPT,id=id,body=mapOf("key_version" to 7,"key_check_confirmed" to true),version=1,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.SHARE_CANCEL,id=id,body=empty,version=1,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.CARD_GET,id=cardId),
+            NativeVaultCommand(VaultOperation.CARD_WRITE,id=cardId,body=cardInput(),version=4,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.CARD_DELETE,id=cardId,version=4,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.ROTATION_START,body=mapOf("reason" to "routine"),version=3,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.ROTATION_GET,id=id),
+            NativeVaultCommand(VaultOperation.ROTATION_PREPARE,id=id,body=mapOf("key_check" to checkInput(8),"member_wrappings" to listOf(memberInput(version=8),memberInput(second,8)),"recovery_wrapping" to recoveryInput(8)),version=2,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.ROTATION_CARD_WRITE,id=id,childId=cardId,body=mapOf("source_envelope_id" to id,"source_revision" to 2,"envelope" to cardInput(8)),version=2,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.ROTATION_CARD_GET,id=id,childId=cardId),
+            NativeVaultCommand(VaultOperation.ROTATION_OWN_WRAP,id=id),
+            NativeVaultCommand(VaultOperation.ROTATION_FINALIZE,id=id,body=mapOf("key_version" to 8,"key_check_confirmed" to true),version=3,idempotencyKey=key),
+            NativeVaultCommand(VaultOperation.ROTATION_ABORT,id=id,body=empty,version=3,idempotencyKey=key))
+    }
 }

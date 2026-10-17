@@ -51,6 +51,7 @@ class NativeVaultActivity : AppCompatActivity() {
     private var rotation:VaultRecord?=null
     private var pending:NativeVaultPrepared?=null
     private var retryCommand:NativeVaultCommand?=null
+    private var managementReauthentication:NativeVaultReauthentication?=null
     private var showing=false; private var recoveryShowing=false
     private lateinit var column:LinearLayout
     private lateinit var status:TextView
@@ -134,7 +135,7 @@ class NativeVaultActivity : AppCompatActivity() {
     private fun failure(code:String) { if(::status.isInitialized) status.text=NativeVaultErrors.message(code); if(code in setOf("APP_LOCKED","SESSION_EXPIRED")) close() }
     private fun busy(value:Boolean) { controls.forEach { it.isEnabled=!value }; if(value) status.text="보관함을 처리하고 있어요." }
     private fun <T> runNative(discard:(T)->Unit={}, supplied:List<CharArray> = emptyList(), display:Boolean=false,
-        abandoned:()->Unit={}, task:(NativeVaultConnection)->T, done:(T)->Unit) {
+        abandoned:()->Unit={}, reauthentication:(()->Unit)?=null, task:(NativeVaultConnection)->T, done:(T)->Unit) {
         if(!ready() || work!=null || prompt!=null) { supplied.forEach { it.fill('\u0000') }; abandoned(); return }
         val id=life.beginWork() ?: run { supplied.forEach { it.fill('\u0000') }; abandoned(); return }
         val gate=ForegroundRequest().also { work=it; activeWorkId=id }; busy(true)
@@ -147,7 +148,13 @@ class NativeVaultActivity : AppCompatActivity() {
                 if(work!==gate || !gate.isActive() || !ready() || !life.workActive(id)) { value?.let(discard); gate.cancel(); if(work===gate) { work=null; activeWorkId=null }; return@runOnUiThread }
                 work=null; activeWorkId=null; gate.cancel(); busy(false)
                 if(!life.consumeWork(id,display && result.code==null,::ready) {
-                    if(result.code!=null || value==null) { value?.let(discard); failure(result.code ?: "ACCESS_DENIED") }
+                    if(result.code!=null || value==null) {
+                        value?.let(discard)
+                        if(NativeVaultReauthentication.required(result.code)) {
+                            try { if(reauthentication!=null) reauthentication() else reauthenticateForm() }
+                            catch(_:Exception) { close() }
+                        } else failure(result.code ?: "ACCESS_DENIED")
+                    }
                     else try { done(value) } catch(_:Exception) { discard(value); failure("ACCESS_DENIED") }
                 }) { value?.let(discard); close() }
             }
@@ -170,6 +177,7 @@ class NativeVaultActivity : AppCompatActivity() {
     }
     private fun navigate(next:String,id:String?=null) {
         NativeVaultUiPolicy.native(next,id); pending?.discard(); pending=null; retryCommand=null
+        managementReauthentication?.discard(); managementReauthentication=null
         action=next; target=id; snapshot=null; rotation=null; loaded=false; heading(); load()
     }
     private fun title(card:VaultRecord)=listOfNotNull(card["alias"] as? String ?: card["product_name"] as? String,card["masked_number"] as? String).joinToString(" · ")
@@ -259,7 +267,17 @@ class NativeVaultActivity : AppCompatActivity() {
     }
     private fun commitPrepared() {
         val value=pending ?: return
-        runNative(task={ c -> sameIdentity(value.material.snapshot,c.snapshot()); c.call(value.command) },done={
+        var continuation:NativeVaultReauthentication?=null
+        runNative(reauthentication={
+            pending=null; retryCommand=null
+            managementReauthenticate(continuation ?: NativeVaultReauthentication.prepared(value))
+        },task={ c ->
+            try { sameIdentity(value.material.snapshot,c.snapshot()); c.call(value.command) }
+            catch(failure:NativeVaultFailure) {
+                if(NativeVaultReauthentication.required(failure.code)) continuation=NativeVaultReauthentication.prepared(value)
+                throw failure
+            }
+        },done={
             completed=true; pending=null; retryCommand=null
             if(value.command.operation==VaultOperation.ROTATION_PREPARE) {
                 val material=value.material; value.recoveryCode?.fill('\u0000'); continueRotation(material,value.command.id!!)
@@ -272,7 +290,7 @@ class NativeVaultActivity : AppCompatActivity() {
     }
     private fun commitSimple(command:NativeVaultCommand) {
         retryCommand=command; val before=snapshot ?: return
-        runNative(task={ c -> sameIdentity(before,c.snapshot()); c.call(command) },done={
+        runNative(reauthentication={ managementReauthenticate(NativeVaultReauthentication.command(before,command)) },task={ c -> sameIdentity(before,c.snapshot()); c.call(command) },done={
             completed=true; retryCommand=null
             if(command.operation==VaultOperation.CARD_DELETE) before.scope?.let { local.clearCard(it,command.id!!) }
             success()
@@ -596,7 +614,7 @@ class NativeVaultActivity : AppCompatActivity() {
     }
     private fun commitStart(command:NativeVaultCommand) {
         retryCommand=command; val before=snapshot ?: return
-        runNative(task={ c -> sameIdentity(before,c.snapshot()); c.call(command) },done={ ref ->
+        runNative(reauthentication={ managementReauthenticate(NativeVaultReauthentication.command(before,command)) },task={ c -> sameIdentity(before,c.snapshot()); c.call(command) },done={ ref ->
             completed=true; retryCommand=null; navigate("resume-rotation",NativeVaultWire.id(ref["id"]))
         })
         if(controls.none { it.text=="동일 시작 요청 다시 확인" }) button("동일 시작 요청 다시 확인") { if(retryCommand===command) commitStart(command) }
@@ -690,6 +708,60 @@ class NativeVaultActivity : AppCompatActivity() {
             NativeVaultWire.version(finished["key_version"])!=current.keyVersion) throw NativeVaultFailure("VAULT_KEY_VERSION_CONFLICT")
         NativeVaultActions.verify(material.nextKey ?: throw NativeVaultFailure("VAULT_NOT_PREPARED"),c.ownWrapping(current),current.householdId,current.keyVersion)
     }
+    private fun reauthenticateForm() {
+        val before=snapshot ?: run { failure("REAUTHENTICATION_REQUIRED"); return }
+        pending?.discard(); pending=null; retryCommand=null
+        rotationProgress?.discard(); rotationProgress=null
+        managementReauthenticate(NativeVaultReauthentication.form(before))
+    }
+    private fun managementReauthenticate(continuation:NativeVaultReauthentication) {
+        if(managementReauthentication!==continuation) managementReauthentication?.discard()
+        managementReauthentication=continuation; continuation.challenge()
+        pending?.discard(); pending=null; retryCommand=null; life.lock(); heading()
+        status.text="이 작업을 계속하려면 계정 재인증이 필요합니다. 원문 보관함 키와 입력은 지웠어요."
+        label("현재 계정의 로그인 암호를 입력하세요. 준비된 암호화 요청은 같은 내용으로 다시 확인하며, 보관함 키가 필요한 다음 단계에서는 암호를 다시 입력합니다.")
+        val password=input("현재 계정 로그인 암호")
+        button("로그인 암호로 재인증") {
+            reauthenticateAccount(take(password)) {
+                if(managementReauthentication!==continuation) { close(); return@reauthenticateAccount }
+                runNative(reauthentication={ managementReauthenticate(continuation) },task={ c ->
+                    c.snapshot().also { continuation.authenticated(it) }
+                },done={ fresh ->
+                    if(managementReauthentication!==continuation) { close() }
+                    else if(!continuation.hasCommand) {
+                        val next=action; val id=target; navigate(next,id)
+                        status.text="계정 재인증을 완료했어요. 지워진 보관함 입력을 다시 입력해 계속하세요."
+                    } else {
+                        snapshot=fresh; heading(); status.text="계정 재인증을 완료했어요. 준비한 동일 요청을 확인해 계속하세요."
+                        button("동일 요청 확인 후 계속") { replayManagement(continuation) }
+                        button("취소",true,::close)
+                    }
+                })
+            }
+        }
+        button("취소",true,::close)
+    }
+    private fun replayManagement(continuation:NativeVaultReauthentication) {
+        if(managementReauthentication!==continuation) return
+        var sent:NativeVaultCommand?=null
+        runNative(reauthentication={ managementReauthenticate(continuation) },task={ c ->
+            val current=c.snapshot(); val command=continuation.retry(current); sent=command
+            c.call(command)
+        },done={ ref ->
+            if(managementReauthentication!==continuation) { close(); return@runNative }
+            val command=sent ?: throw NativeVaultFailure("ACCESS_DENIED")
+            continuation.discard(); managementReauthentication=null; completed=true
+            when(command.operation) {
+                VaultOperation.ROTATION_START -> navigate("resume-rotation",NativeVaultWire.id(ref["id"]))
+                // Raw old/new keys were wiped before reauth. Reopen staged wraps with explicit input.
+                VaultOperation.ROTATION_PREPARE -> navigate("resume-rotation",command.id!!)
+                else -> {
+                    if(command.operation in setOf(VaultOperation.CARD_WRITE,VaultOperation.CARD_DELETE)) snapshot?.scope?.let { local.clearCard(it,command.id!!) }
+                    success()
+                }
+            }
+        })
+    }
     private fun rotationReauthentication(progress:RotationProgress) {
         rotationProgress=progress; heading()
         status.text="계정 재인증이 필요해 보관함 키를 지웠어요. 확인한 카드 진행 정보는 이 화면에서만 유지합니다."
@@ -748,6 +820,7 @@ class NativeVaultActivity : AppCompatActivity() {
     private fun close() {
         entry?.cancel(); work?.cancel(); work=null; activeWorkId=null; life.lock(); prompt?.signal?.cancel(); prompt?.discard(); prompt=null
         pending?.discard(); pending=null; rotationProgress?.discard(); rotationProgress=null; retryCommand=null
+        managementReauthentication?.discard(); managementReauthentication=null
         inputs.forEach { it.text.clear() }; if(::secretOutput.isInitialized) secretOutput.text=""
         showing=false; recoveryShowing=false; snapshot=null; rotation=null
         if(completed) setResult(Activity.RESULT_OK,Intent().putExtra(NativeAuthActivity.EXTRA_STATUS,"completed"))
