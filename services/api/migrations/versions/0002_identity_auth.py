@@ -23,6 +23,9 @@ def upgrade() -> None:
         sa.CheckConstraint("attempts >= 0", name=op.f("ck_login_throttles_nonnegative_attempts")),
         sa.PrimaryKeyConstraint("key_hash", name=op.f("pk_login_throttles")),
     )
+    op.create_index(
+        "ix_login_throttles_window_started_at", "login_throttles", ["window_started_at"]
+    )
     op.create_table(
         "users",
         sa.Column("login_name", sa.String(length=64), nullable=False),
@@ -337,5 +340,6 @@ def downgrade() -> None:
     )
     op.drop_table("household_members")
     op.drop_table("users")
+    op.drop_index("ix_login_throttles_window_started_at", table_name="login_throttles")
     op.drop_table("login_throttles")
     # ### end Alembic commands ###
