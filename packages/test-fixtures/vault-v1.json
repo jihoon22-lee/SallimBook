@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "warning": "PUBLIC SYNTHETIC TEST DATA ONLY. Fixed keys and nonces MUST NEVER be used in the app.",
+  "sources": [
+    "https://docs.stripe.com/testing",
+    "https://www.w3.org/TR/2017/REC-WebCryptoAPI-20170126/",
+    "https://cryptography.io/en/50.0.0/hazmat/primitives/key-derivation-functions/"
+  ],
+  "household_id": "00000000-0000-4000-8000-000000000001",
+  "key_version": 7,
+  "hvk_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "card": {
+    "card_id": "00000000-0000-4000-8000-000000000002",
+    "pan": "4242424242424242",
+    "expiry_year": 2032,
+    "expiry_month": 12,
+    "payload_hex": "53425631103432343234323432343234323432343200000007f00c",
+    "nonce": "AAECAwQFBgcICQoL",
+    "aad_hex": "53616c6c696d426f6f6b2f7661756c742f636172642f7631000000000000004000800000000000000100000000000040008000000000000002000000000000000700000001",
+    "ciphertext": "FECAKtXR8C-_daW_g91KWbHitQDCe198P5fpjWv-FMxW9d15fK1gktOA2A"
+  },
+  "members": [
+    {
+      "member_id": "00000000-0000-4000-8000-000000000003",
+      "password": " synthetic-vault-암호-é-🔐 ",
+      "password_utf8_hex": "2073796e7468657469632d7661756c742dec9594ed98b82d65cc812df09f949020",
+      "generation": 2,
+      "iterations": 600000,
+      "salt": "ICEiIyQlJicoKSorLC0uLw",
+      "nonce": "EBESExQVFhcYGRob",
+      "aad_hex": "53616c6c696d426f6f6b2f7661756c742f6d656d6265722f763100000000000000400080000000000000010000000000004000800000000000000300000000000000070000000000000002000927c0202122232425262728292a2b2c2d2e2f",
+      "derived_kek_hex": "796ba88a36cafda85a69a3db7d2d4d46f36a56962af7b6563ca4cd69be2b766d",
+      "wrapped_hvk": "v_rtS_3hJi5NOvSxPnYxte4TO6_6qdlOXbjQFBAPVhdegKg7lgtnaggr5zjCQ0MG"
+    },
+    {
+      "member_id": "00000000-0000-4000-8000-000000000004",
+      "password": "synthetic-member-two-password",
+      "password_utf8_hex": "73796e7468657469632d6d656d6265722d74776f2d70617373776f7264",
+      "generation": 3,
+      "iterations": 600000,
+      "salt": "MDEyMzQ1Njc4OTo7PD0-Pw",
+      "nonce": "ICEiIyQlJicoKSor",
+      "aad_hex": "53616c6c696d426f6f6b2f7661756c742f6d656d6265722f763100000000000000400080000000000000010000000000004000800000000000000400000000000000070000000000000003000927c0303132333435363738393a3b3c3d3e3f",
+      "derived_kek_hex": "63db9bfcb92714193d648b908757c5572f064d6006b2da546e1df31413abd984",
+      "wrapped_hvk": "pB8aAsqjGq45DP_B-N8nvrR0jLpUHpLU295yoRJokyt_zm2yXOSe4tHkrEsHooxE"
+    }
+  ],
+  "recovery": {
+    "code": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
+    "generation": 3,
+    "salt": "YGFiY2RlZmdoaWprbG1ubw",
+    "nonce": "MDEyMzQ1Njc4OTo7",
+    "hkdf_info_utf8": "SallimBook/vault/recovery-kek/v1",
+    "derived_kek_hex": "894caef32451a4fb8d64d11b122f5e82838993c7113d2291560f28f603d52d13",
+    "aad_hex": "53616c6c696d426f6f6b2f7661756c742f7265636f766572792f7631000000000000004000800000000000000100000000000000070000000000000003606162636465666768696a6b6c6d6e6f",
+    "wrapped_hvk": "fRlgZAAaptm7kU9AJ_7bkssKb1FEtBQPjJxn3VRQUagD-4O4Xjg3DpOcs2mIKAPi"
+  },
+  "key_check": {
+    "plaintext_ascii": "SallimBook vault key check v1",
+    "nonce": "QEFCQ0RFRkdISUpL",
+    "aad_hex": "53616c6c696d426f6f6b2f7661756c742f6b65792d636865636b2f763100000000000000400080000000000000010000000000000007",
+    "ciphertext": "sdjCT09RxWyirzdA-hF_L1mtNyWXVmdGFCxuk6ZOtK5Js2B5_EYAhjaUH4vH"
+  }
+}

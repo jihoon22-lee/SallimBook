@@ -22,6 +22,27 @@ from sallimbook.core.errors import DomainError
 from sallimbook.core.types import SEOUL
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.service import utcnow
+from sallimbook.vault.models import CardSecretEnvelope, VaultState
+
+
+def has_current_secret(session: Session, card: Card) -> bool:
+    return (
+        session.scalar(
+            select(CardSecretEnvelope.id)
+            .join(
+                VaultState,
+                (VaultState.household_id == CardSecretEnvelope.household_id)
+                & (VaultState.current_key_version == CardSecretEnvelope.key_version),
+            )
+            .where(
+                CardSecretEnvelope.household_id == card.household_id,
+                CardSecretEnvelope.card_id == card.id,
+                CardSecretEnvelope.is_current.is_(True),
+                CardSecretEnvelope.ciphertext.is_not(None),
+            )
+        )
+        is not None
+    )
 
 
 def card_response(
@@ -48,9 +69,10 @@ def card_response(
         **{
             name: getattr(card, name)
             for name in CardResponse.model_fields
-            if name not in {"masked_number", "status", "settlement_account_status"}
+            if name not in {"masked_number", "status", "settlement_account_status", "has_secret"}
         },
         masked_number="**** " + card.last_four if card.last_four is not None else None,
+        has_secret=has_current_secret(session, card),
         status="closed" if card.ended_on is not None else "active",
         settlement_account_status=account_status,
     )
@@ -116,6 +138,10 @@ def update_card(
     lock_asset_scope(session, principal)
     card = scoped_entity(session, Card, card_id, principal, for_update=True)
     require_version(card, if_match)
+    if "last_four" in payload.model_fields_set and has_current_secret(session, card):
+        raise DomainError(
+            "CARD_SECRET_PROTECTED", "카드 끝자리는 보관함에서 함께 수정해 주세요.", 409
+        )
     values = {name: getattr(card, name) for name in CardCreate.model_fields}
     try:
         candidate = CardCreate.model_validate(

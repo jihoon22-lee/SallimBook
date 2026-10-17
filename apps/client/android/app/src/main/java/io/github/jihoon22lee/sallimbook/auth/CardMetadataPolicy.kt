@@ -153,12 +153,13 @@ internal object CardMetadataPolicy {
     }
     private fun card(value: Any?): Map<String, Any?> {
         val row = obj(value)
-        val extra = setOf("id", "household_id", "masked_number", "settlement_account_status", "status", "created_by_member_id", "updated_by_member_id", "created_at", "updated_at", "version")
+        val extra = setOf("id", "household_id", "masked_number", "has_secret", "settlement_account_status", "status", "created_by_member_id", "updated_by_member_id", "created_at", "updated_at", "version")
         if (row.keys != fields + extra) invalid()
         input(row.filterKeys { it in fields }, false)
         for (key in listOf("id", "household_id", "created_by_member_id", "updated_by_member_id")) FinancePolicy.id(row[key])
         timestamp(row["created_at"]); timestamp(row["updated_at"]); integer(row["version"])
         if (row["masked_number"] != row["last_four"]?.let { "**** $it" }) invalid()
+        if (row["has_secret"] !is Boolean || row["has_secret"] == true && row["last_four"] == null) invalid()
         choice(row["status"], "active", "closed")
         if ((row["status"] == "closed") != (row["ended_on"] != null)) invalid()
         if (row["settlement_account_id"] == null) {
