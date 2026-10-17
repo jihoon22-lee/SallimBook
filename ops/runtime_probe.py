@@ -201,6 +201,10 @@ def main():
         request("GET", f"/documents/{document['id']}/download", authenticated=False)[0]
         == 401
     )
+    code, body, _ = request("GET", "/audit-events")
+    assert code == 200 and any(
+        row["entity_id"] == asset_id for row in json.loads(body)["items"]
+    )
     objects = list(directory.glob("*.sbdoc"))
     assert len(objects) == 1 and objects[0].read_bytes() != content
     assert (
@@ -210,7 +214,8 @@ def main():
     print(
         "PASS: API UID10001, DDL/trigger-disable/TRUNCATE/audit-UPDATE-DELETE denied, "
         "private socket, tmpfs, "
-        "native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial"
+        "native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial, "
+        "audit INSERT/SELECT"
     )
 
 
