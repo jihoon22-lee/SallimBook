@@ -218,3 +218,13 @@ SB-024~SB-027의 가전·재고 API 21개와 `0012_homecare`를 구현했다.
 관련 순수 계산/스키마 33개, 실제 PostgreSQL API 27개와 DB 불변식 15개, 총 75개 검사와
 migration drift 및 전체 downgrade/upgrade가 통과했다. 상세 범위는 [가전·재고 검증](testing/homecare-server.md)을 참고한다.
 웹·Android 화면과 가전 구매 문서 연결은 후속 통합 범위다.
+
+### 첨부 저장과 검사
+
+SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외부 필드 keyring을 사용한다.
+검사 설정은 `SALLIMBOOK_DOCUMENT_SCANNER_SOCKET`, `SALLIMBOOK_DOCUMENT_TESSERACT_PATH`,
+`SALLIMBOOK_DOCUMENT_PDFTOPPM_PATH`이며 기본 미설정 상태는 업로드 503으로 실패한다.
+호스트에 도구를 임의 설치하거나 운영 키를 생성하지 않았다. 격리된 [실제 검사 도구 이미지](../infra/documents/README.md)와
+[서버 135개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
+정리 명령 `uv run --project services/api python scripts/cleanup_documents.py`는 기본 dry-run이다.
+검토 후 `--apply`를 명시하면 24시간이 지난 DB 미참조/삭제 암호문만 제거하며 metadata 이력은 유지한다.

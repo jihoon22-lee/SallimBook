@@ -341,11 +341,33 @@ PC 웹에서는 별도 vault adapter가 암호문을 복호화하며 일반 Quer
 
 ## 6. 첨부
 
-v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을 명시적으로 변경한다.
-확장자·선언 MIME만 믿지 않고 실제 포맷·크기와 악성 내용을 검사한다.
-다운로드는 권한 확인 후 스트림 또는 매우 짧은 만료의 목적 제한 링크를 사용한다.
-치료명이나 실제 이름을 object storage key에 포함하지 않는다.
-카드 앞뒷면 이미지 첨부는 secret 경계를 우회하므로 지원하지 않는다.
+SB-023은 PDF/JPEG/PNG 원본을 파일당 **20MiB(20,971,520바이트)**까지 지원한다.
+`POST /documents`에 파일명·MIME·실제 크기·SHA-256·typed target·`contains_no_card_data: true`를
+제출하면 pending 문서와 최초 연결을 같은 트랜잭션으로 만든다. 생성은 Idempotency-Key를 요구하고
+201 Location 및 불변 `{id, version}` 참조를 반환한다. 파일명은 경로·제어문자·방향 제어문자를
+허용하지 않으며 확장자도 선언 MIME과 일치해야 한다. 카드 사진·번호·CVC 첨부는 지원하지 않는다.
+
+`PUT /documents/{id}/content`는 `application/octet-stream` 원본과 문서 If-Match/Idempotency-Key를
+받는다. 크기·해시·실제 형식·악성 내용·카드 정보 검사를 모두 통과한 원본만 암호화해 ready로 전환한다.
+본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
+503이다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
+검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
+
+| 동작 | 경로·버전 기준 |
+|---|---|
+| 목록/상세 | GET /documents, GET /documents/{id}; 목록은 target_kind와 target_id를 함께 지정 가능 |
+| 원본 다운로드 | GET /documents/{id}/download; 현재 가계 권한과 ready 상태 확인 후 인증 응답으로 전달 |
+| 문서 삭제 | POST /documents/{id}/delete; 사유·문서 If-Match·멱등키, 연결도 함께 종료 |
+| 연결 추가 | POST /document-links; document_id/target·문서 If-Match·멱등키 |
+| 연결 이력 | GET /documents/{id}/links; 활성·종료 이력을 모두 반환 |
+| 연결 종료 | POST /document-links/{id}/end; 사유·연결 If-Match·멱등키, 문서 버전도 증가 |
+
+target.kind는 policy/case/medical_node/expense/claim/appliance/asset 중 하나이며 같은 가계의
+실제 대상을 검증한다. 카드 대상은 없다. 목록은 UUID cursor와 limit 1~200을 사용한다.
+응답에는 저장소 경로·암호화 키·nonce가 없으며 다운로드는 no-store/nosniff/CSP sandbox와
+attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만들지 않는다.
+pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
+정리 명령과 검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
