@@ -74,8 +74,8 @@
       "git_sha1": "e0533df8bf29036ad1945a30d445469e0487a10b"
     },
     "docs/security-authentication.md": {
-      "sha256": "b54b0ff8cf804451000e1d9ef1f37986d9d173853be17fb4ff28577ba630389d",
-      "git_sha1": "f2d9284b132b9a534a0551b5baf96fa75c3b1bf4"
+      "sha256": "a12167ff18b862df711164a63c8fe511033d97e41ff1431025349387c46b0276",
+      "git_sha1": "c95a43334ae11c095abb19e63fbc060b6a4b56bd"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -102,8 +102,8 @@
       "git_sha1": "d37af19cd11e7f79082b74edc62b8d2dff518b95"
     },
     "docs/decisions-risks-open-items.md": {
-      "sha256": "c250537e79de311fa6126d937f5a68b367def3d58f80f610276505598f8e1bd5",
-      "git_sha1": "b7101ce084021036f743d1e8be71264db61d46e7"
+      "sha256": "0af2c097452fe9ea0b8076e464bbc71c3e9787d75b34b2ff31d2002c0500e6f1",
+      "git_sha1": "ef012269cc1891ba65bc869badbf5efed032294b"
     },
     "docs/design-system.md": {
       "sha256": "cfa2f6a0477fb0413aa8edb857cdee878cf8a329db86fe81f95d71501befce02",
