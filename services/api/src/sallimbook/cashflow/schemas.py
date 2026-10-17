@@ -135,8 +135,20 @@ class CashResponse(BaseModel):
     action: Literal["create", "correct", "void", "convert_source", "convert_result"]
     reason: str | None = Field(repr=False)
     conversion_id: UUID | None
-    editable: bool
-    voidable: bool
+    editable: bool = Field(
+        description=(
+            "Current detail/list/duplicate reads only: active manual income "
+            "without active returns. Historical and immutable command receipts are false; "
+            "fetch current detail before acting."
+        )
+    )
+    voidable: bool = Field(
+        description=(
+            "Current detail/list/duplicate reads only: active manual income or return without "
+            "active returns. Historical and immutable command receipts are false; "
+            "fetch current detail before acting."
+        )
+    )
 
 
 class IncomeListResponse(BaseModel):
