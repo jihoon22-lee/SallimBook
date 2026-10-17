@@ -90,6 +90,22 @@ test("month selection follows monthly records while consumables remain today-bas
   await expect(page.getByText("2025년 2월 · 서울 기준")).toBeVisible();
 });
 
+for (const reload of [false, true]) {
+  test(`a monthly deep link synchronizes the shared selector after back${reload ? " and reload" : ""}`, async ({ page }) => {
+    await page.goto("/assets/months/2025-02");
+    await expect(page.getByText("2025년 2월 · 서울 기준")).toBeVisible();
+    if (reload) {
+      await page.reload();
+      await expect(page.getByText("2025년 2월 · 서울 기준")).toBeVisible();
+    }
+    await page.getByRole("button", { name: "뒤로", exact: true }).click();
+    await expect(page).toHaveURL(/\/assets$/);
+    await expect(page.getByLabel("확인할 월")).toHaveValue("2025-02");
+    await page.getByRole("link", { name: "2025년 2월 확인 안내" }).click();
+    await expect(page).toHaveURL(/\/assets\/months\/2025-02$/);
+  });
+}
+
 test("web vault clearly refuses secret input and leaves browser storage empty", async ({ page }) => {
   await page.goto("/vault");
   await page.getByRole("button", { name: "이 기기의 지원 상태 확인" }).click();

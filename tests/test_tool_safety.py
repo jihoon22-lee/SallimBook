@@ -63,7 +63,7 @@ class AndroidSdkSelectionTests(unittest.TestCase):
             download.assert_not_called()
             run.assert_called_once_with(
                 [str(tools / "bin/sdkmanager"), f"--sdk_root={selected}",
-                 "platform-tools", "platforms;android-36", "build-tools;36.0.0"],
+                 "platforms;android-36", "build-tools;36.0.0"],
                 input=None,
                 text=True,
                 check=True,
