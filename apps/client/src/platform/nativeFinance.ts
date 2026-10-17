@@ -1,7 +1,7 @@
 import type { components } from "@sallimbook/api-client";
 import type {
   NativeAccountCreate, NativeAccountPatch, NativeAccountQuery, NativeAssetQuery,
-  NativeAuthResult, NativeFinanceResponse,
+  NativeAuthResult, NativeFinanceResponse, SallimBookAuth,
 } from "../../../../plugins/sallimbook-auth/src/definitions";
 import { ApiError, apiErrorCode } from "./api";
 import { hasNativeAuth, nativeAuthPlugin as plugin } from "./nativeAuth";
@@ -56,6 +56,14 @@ export const nativeFinance = {
   getAccount: (accountId: string) => metadata(() => plugin.getAccount({ accountId })),
   createAccount: (input: NativeAccountCreate) => { metadataOnly(input); return metadata(() => plugin.createAccount({ input })); },
   updateAccount: (accountId: string, input: NativeAccountPatch, ifMatch: string) => { metadataOnly(input); return metadata(() => plugin.updateAccount({ accountId, input, ifMatch })); },
+  getAssetMonth: (options: Parameters<SallimBookAuth["getAssetMonth"]>[0]) => metadata(() => plugin.getAssetMonth(options)),
+  getAssetMonthRevision: (options: Parameters<SallimBookAuth["getAssetMonthRevision"]>[0]) => metadata(() => plugin.getAssetMonthRevision(options)),
+  listAssetMonthRevisions: (options: Parameters<SallimBookAuth["listAssetMonthRevisions"]>[0]) => metadata(() => plugin.listAssetMonthRevisions(options)),
+  createAssetMonthDraft: (options: Parameters<SallimBookAuth["createAssetMonthDraft"]>[0]) => metadata(() => plugin.createAssetMonthDraft(options)),
+  updateAssetMonthValue: (options: Parameters<SallimBookAuth["updateAssetMonthValue"]>[0]) => metadata(() => plugin.updateAssetMonthValue(options)),
+  synchronizeAssetMonthScope: (options: Parameters<SallimBookAuth["synchronizeAssetMonthScope"]>[0]) => metadata(() => plugin.synchronizeAssetMonthScope(options)),
+  confirmAssetMonth: (options: Parameters<SallimBookAuth["confirmAssetMonth"]>[0]) => metadata(() => plugin.confirmAssetMonth(options)),
+  reopenAssetMonth: (options: Parameters<SallimBookAuth["reopenAssetMonth"]>[0]) => metadata(() => plugin.reopenAssetMonth(options)),
   editAccountNumber: (options: { accountId: string; ifMatch: string }) => invoke(() => plugin.editAccountNumberUI(options)),
   showAccountNumber: (options: { accountId: string }) => invoke(() => plugin.showAccountNumberUI(options)),
   showAccountNumberWithPasskey: (options: { accountId: string }) => invoke(() => plugin.showAccountNumberWithPasskeyUI(options)),

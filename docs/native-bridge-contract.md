@@ -111,7 +111,7 @@ Activity가 아닌 프로세스 공통 네이티브 정책이 요청 세대를 �
 로그인·초대·현재 계정 재인증·명시 로그아웃 경로의 제한된 예외로 일반 metadata를 조회할 수 없다.
 서버 로그인과 앱 잠금, 카드 CryptoObject 인증은 계속 별개다.
 
-## 8. 자산·계좌 메타데이터와 계좌번호 (SB-010/011)
+## 9. 자산·계좌 메타데이터와 계좌번호 (SB-010/011)
 
 `SallimBookAuth`의 별도 typed 메서드가 자산·계좌 API를 호출한다. 입력 DTO는 생성 API client에서
 가져오고 Kotlin은 필드·UUID·버전·쿼리·허용 경로를 다시 검사한다. `request`의 범위를 임의 본문이나
@@ -138,3 +138,22 @@ step-up grant를 JS로 전달하지 않는다. 입력 화면은 번호를 미리
 넣지 않고 제한된 output DOM에 최대 30초 표시한다. blur/pagehide/숨김/화면 이탈/계좌 버전 변경 시
 입력과 표시를 지우고, 취소된 요청의 늦은 응답을 표시하지 않는다. 웹 캡처 차단이나 JS 메모리의 완전한
 영점화는 보장하지 않는다. 계좌번호는 서버 필드 암호화 대상이며 카드 보관함 E2EE와는 별개다.
+
+
+## 10. 월별 자산 메타데이터 (SB-012)
+
+`nativeFinance`는 생성 DTO를 사용하는 8개 이름 있는 명령을 제공한다.
+`getAssetMonth`, `getAssetMonthRevision`, `listAssetMonthRevisions`는 제한된 월·변경본·페이지 인자만 받는다.
+`createAssetMonthDraft`, `updateAssetMonthValue`, `synchronizeAssetMonthScope`, `confirmAssetMonth`,
+`reopenAssetMonth`는 해당 입력 DTO와 필요한 `ifMatch`·`idempotencyKey`만 받는다.
+일반 `request`의 허용 경로는 늘리지 않는다. 네이티브 HTTP는 이름 있는 명령에서 만든 고정 경로와
+본문·버전·중복 방지 키 조합을 다시 검증하며 다른 경로에 `Idempotency-Key`를 붙일 수 없다.
+
+금액은 최대 20자리 정수 십진 문자열을 유지한다. 미입력 null, 0원, 전월값 미확인을 구분하고
+값 변경에 필요한 `revision_id`·`value_id`를 생략할 수 없다. 응답의 월·변경본·자산·값 행 식별자를
+요청과 대조하며 중첩 필드와 페이지 크기도 제한한다. 계산과 권한의 최종 판단은 서버가 수행한다.
+오류는 허용한 코드와 로컬 고정 메시지만 전달한다. 서버 원문 메시지·상세 정보는 전달하지 않는다.
+앱 잠금과 세대 검사는 토큰 접근부터 HTTP 응답·bridge 전달까지 기존 보호 경로를 사용한다.
+
+검증: `pnpm android:sync`, Gradle `:app:testDebugUnitTest :app:compileReleaseKotlin` 통과.
+월별 경계 시험 9개를 포함한 JVM 84개가 통과했으며 실제 Android 기기 동작은 아직 실행하지 않았다.

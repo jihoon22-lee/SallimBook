@@ -134,6 +134,15 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun createAccount(call: PluginCall) = finance(call, FinanceOperation.CREATE_ACCOUNT)
     @PluginMethod fun updateAccount(call: PluginCall) = finance(call, FinanceOperation.UPDATE_ACCOUNT)
 
+    @PluginMethod fun getAssetMonth(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_MONTH)
+    @PluginMethod fun getAssetMonthRevision(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_MONTH_REVISION)
+    @PluginMethod fun listAssetMonthRevisions(call: PluginCall) = finance(call, FinanceOperation.LIST_ASSET_MONTH_REVISIONS)
+    @PluginMethod fun createAssetMonthDraft(call: PluginCall) = finance(call, FinanceOperation.CREATE_ASSET_MONTH_DRAFT)
+    @PluginMethod fun updateAssetMonthValue(call: PluginCall) = finance(call, FinanceOperation.UPDATE_ASSET_MONTH_VALUE)
+    @PluginMethod fun synchronizeAssetMonthScope(call: PluginCall) = finance(call, FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE)
+    @PluginMethod fun confirmAssetMonth(call: PluginCall) = finance(call, FinanceOperation.CONFIRM_ASSET_MONTH)
+    @PluginMethod fun reopenAssetMonth(call: PluginCall) = finance(call, FinanceOperation.REOPEN_ASSET_MONTH)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }

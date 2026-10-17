@@ -62,6 +62,14 @@ export interface SallimBookAuth {
   getAccount(options: { accountId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
   createAccount(options: { input: NativeAccountCreate }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
   updateAccount(options: { accountId: string; input: NativeAccountPatch; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
+  getAssetMonth(options: { month: string; query?: NonNullable<operations["getAssetMonth"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthResponse"]>>>;
+  getAssetMonthRevision(options: { month: string; revisionNo: number; query?: NonNullable<operations["getAssetMonthRevision"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthResponse"]>>>;
+  listAssetMonthRevisions(options: { month: string; query?: NonNullable<operations["listAssetMonthRevisions"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthHistoryResponse"]>>>;
+  createAssetMonthDraft(options: { month: string; input: components["schemas"]["MonthDraft"]; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  updateAssetMonthValue(options: { month: string; assetId: string; input: components["schemas"]["MonthValueUpdate"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthValueResult"]>>>;
+  synchronizeAssetMonthScope(options: { month: string; input: components["schemas"]["MonthScopeSync"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  confirmAssetMonth(options: { month: string; input: components["schemas"]["MonthConfirm"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  reopenAssetMonth(options: { month: string; input: components["schemas"]["MonthReopen"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
   /** Number plaintext and ciphertext never appear in arguments or return values. */
   editAccountNumberUI(options: { accountId: string; ifMatch: string }): Promise<NativeAuthResult<{ status: "saved" | "deleted" | "cancelled" }>>;
   showAccountNumberUI(options: { accountId: string }): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
