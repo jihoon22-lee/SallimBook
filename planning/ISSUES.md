@@ -584,17 +584,17 @@ PC vault 암호 입력과 메모리 한정 PAN/유효기간 표시를 구현한�
 
 ### SB-036 — 상시 서버·HTTPS·배포 구성
 
-실제 운영호스트·도메인·Compose·Caddy·비밀주입·관측을 구성한다.
+현재 PC WSL에서 기존 서버를 보존하는 전용 Compose·Tailscale 노드·HTTPS·비밀주입·관측을 구성한다.
 
 **요구사항:** R-21
 **선행:** SB-035
 
 **완료 조건**
-- [ ] 개발PC 종료와 무관한 접근을 검증한다.
+- [ ] 기존 서버를 변경하지 않고 WSL 재시작 후 SallimBook 복귀와 PC 중단 시 이용 제한을 검증한다.
 - [ ] DB/파일저장소가 외부공개되지 않는다.
 - [ ] 하위호환 배포와 rollback 절차가 있다.
 
-**검증:** 외부네트워크 접근; health/접근제어; 이전앱-새API
+**검증:** 허용 기기의 사설망 접근과 비허용·외부 접근 차단; health/접근제어; 이전앱-새API
 **문서:** [docs/deployment-backup-operations.md](../docs/deployment-backup-operations.md)
 
 ### SB-037 — 백업·내보내기·새 서버 복원

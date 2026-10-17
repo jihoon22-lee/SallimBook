@@ -41,6 +41,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [ADR: vault and local cvc](adr/vault-and-local-cvc.md) | 공유 카드 암호문과 Android 로컬 CVC |
 | [ADR: authoritative server online first](adr/authoritative-server-online-first.md) | 서버 기준·온라인 우선·충돌 처리 |
 | [ADR: auth domains and recovery](adr/auth-domains-and-recovery.md) | 계정 인증·앱 잠금·암호키 복구 분리 |
+| [ADR: private network and app identity](adr/private-network-and-app-identity.md) | 사용자 승인 앱 식별자·API 30·기존 WSL 서버 격리·전용 Tailscale 노드 |
 
 ## 문서 유지 규칙
 

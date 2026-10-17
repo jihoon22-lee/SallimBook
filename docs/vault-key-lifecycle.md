@@ -104,7 +104,7 @@ HVK/평문은 localStorage/IndexedDB/Service Worker/일반 Query cache에 저장
 
 ## 9. PIN fallback와 최소 Android
 
-minSdk는 초기 제안 API 30(Android 11)이며 두 실제 기기의 지원 범위를 확인한 뒤 고정한다.
+minSdk는 사용자 승인으로 API 30(Android 11)에 고정한다. Galaxy S25 Ultra·S24 Ultra에서 실제 키·인증 동작을 검증한다.
 BiometricPrompt의 허용 인증 조합과 auth-per-use/time-based key 구성이 정확히 맞는지 검증한다.
 PIN fallback을 추가하려고 인증 후에도 언제든 사용 가능한 무보호 키를 만들지 않는다.
 기기에서 요구 정책을 충족하지 못하면 보관함 암호 재입력 경로 또는 기능 불가 안내를 사용하고 조용히 약화하지 않는다.

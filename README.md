@@ -2,11 +2,11 @@
 
 **부부가 함께 관리하는 자산과 생활의 기록. Android 앱을 중심으로, 같은 내용을 PC 웹에서도.**
 
-문서 기준일: **2026-10-17** · 목표 릴리스: **v1.0.0** · 현재 상태: **설계 및 개발 백로그 준비**
+문서 기준일: **2026-10-17** · 목표 릴리스: **v1.0.0** · 현재 상태: **M0 기초 구현 진행**
 
-> 이 저장소의 초기 패키지는 설계 문서와 GitHub 게시·문서 검증 도구입니다.
-> Android 앱, 웹 프론트엔드, API, 운영 DB는 아직 구현되지 않았습니다.
-> 문서에 적힌 기술·보안 정책을 이미 동작하는 기능으로 오해하지 마세요.
+> React 웹·Android 개발 빌드, FastAPI health API와 생성 TS client가 추가되었습니다.
+> 현재 화면은 기록 없는 기본 화면이며 금융·보험·재고·인증·보관함은 후속 Issue에서 구현합니다.
+> 개발 APK와 기본 빌드 성공은 v1 기능·보안·실기기 인수 완료를 뜻하지 않습니다.
 
 ## 무엇을 만드는가
 
@@ -70,7 +70,43 @@
 | [마일스톤](docs/roadmap-and-milestones.md) | v1 개발 순서와 완료 조건 |
 | [전체 문서 안내](docs/README.md) | 나머지 설계·결정·추적표 |
 
-## 지금 실행 가능한 명령
+## 개발 실행
+
+Node `24.18.0`, pnpm `9.15.9`, Python `3.14.7`(uv), Android 빌드용 JDK 21을 사용합니다.
+WSL에 있는 기존 서버를 유지하며, 아래 명령은 SallimBook 전용 로컬 포트를 사용합니다.
+
+```bash
+pnpm install --frozen-lockfile
+uv sync --project services/api --frozen
+pnpm dev:api  # 127.0.0.1:18741, 별도 터미널
+pnpm dev      # http://127.0.0.1:18742
+```
+
+```bash
+pnpm api:generate
+pnpm typecheck
+pnpm build
+pnpm test:api
+pnpm --filter @sallimbook/client exec playwright install chromium
+pnpm test:web  # 전용 시험 포트 18743, 다른 실행 중인 서버를 재사용하지 않음
+```
+
+Android는 WSL의 SDK와 JDK를 명시적으로 선택합니다.
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export ANDROID_HOME="$HOME/Android/Sdk"
+python3 scripts/setup_android_sdk.py  # 최초 SDK 설치; 라이선스 확인
+pnpm android:build
+```
+
+산출물은 `apps/client/android/app/build/outputs/apk/debug/app-debug.apk`이며 개발용입니다.
+최소 API 30, 개발 앱 ID `io.github.jihoon22lee.sallimbook.debug`입니다.
+운영 앱 ID는 접미사가 없는 `io.github.jihoon22lee.sallimbook`이며 정식 서명·배포는 SB-038에서 검증합니다.
+
+자세한 환경·검증 범위는 [개발 환경](docs/development-environment.md)을 참고합니다.
+
+## 문서 도구 명령
 
 아래는 **문서 패키지 도구**이며 앱 실행 명령이 아닙니다.
 
@@ -80,13 +116,9 @@ python3 -m unittest discover -s tests -v
 python3 scripts/publish_github.py --owner jihoon22-lee --dry-run
 ```
 
-GitHub에 실제 게시하려면 GitHub CLI가 설치·인증된 환경에서 다음을 실행합니다.
-새 저장소는 기본적으로 비공개입니다. 게시기는 다른 프로젝트의 파일을 덮어쓰지 않도록 검사합니다.
-
-```bash
-gh auth login
-python3 scripts/publish_github.py --owner jihoon22-lee --apply
-```
+현재 원격에는 작업 그룹 Issue #1~#9와 구현 Issue #10~#49가 있습니다.
+최초 게시기의 식별 marker와 다른 형식이므로 이 저장소에 `--apply`를 재실행하지 않습니다.
+기능 개발은 기존 Issue와 Git 브랜치·PR 흐름으로 진행합니다.
 
 정확한 동작·재실행·권한·실패 처리: [저장소 게시 안내](docs/repository-publishing.md).
 로그인 토큰을 문서·채팅·스크립트에 붙여 넣지 않습니다.
@@ -95,5 +127,7 @@ python3 scripts/publish_github.py --owner jihoon22-lee --apply
 
 [SB-001부터 시작하는 백로그](planning/ISSUES.md)를 사용합니다.
 먼저 기초 골격과 인증 경계, 실제 Android 보안 모듈의 가능성을 검증한 뒤 기능을 쌓습니다.
+운영은 사용자가 지정한 현재 PC의 WSL에서 별도 Compose 프로젝트·볼륨·전용 Tailscale 노드로 격리합니다.
+기존 서버와 호스트 Tailscale 설정을 수정하지 않습니다. [승인된 운영 결정](docs/adr/private-network-and-app-identity.md)을 따릅니다.
 실제 개인정보를 테스트 fixture, GitHub Issue, 로그, AI 프롬프트에 입력하지 않습니다.
 오픈소스 라이선스는 아직 선택하지 않았으며, 임의의 라이선스를 부여하지 않습니다.

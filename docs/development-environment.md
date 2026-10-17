@@ -2,7 +2,7 @@
 
 ## 1. 기본 원칙
 
-기존 **WSL 기반 개발 흐름**을 유지한다. Ubuntu 배포판 버전은 실제 개발 환경을 확인해 기록한다.
+기존 **WSL 기반 개발 흐름**을 유지한다. 확인 환경은 WSL2 Ubuntu 26.04.1 LTS다.
 React/API/DB/CLI 빌드와 일반 테스트는 WSL에서 수행할 수 있게 설계한다.
 Android UI 디버깅과 실기기 연결은 Windows Android Studio/ADB 또는 실제 연결 가능한 WSL 경로를 사용한다.
 작업 지시 도구는 특정 AI 제품에 종속되지 않는다.
@@ -34,8 +34,26 @@ SB-001에서 실제 도구 버전을 조사하고 다음을 저장한다.
 Node·pnpm·Python·uv·JDK·Android SDK/Build Tools·Gradle·AGP·Kotlin·Capacitor·PostgreSQL·Docker 버전.
 `packageManager`, lockfile, Python lock, Gradle wrapper와 dependency lock을 통해 반복 가능하게 한다.
 JDK는 선택한 Gradle/AGP 요구와 일치시킨다. 임의의 시스템 java에 의존하지 않는다.
-Android 최소 지원은 API 30 제안이며 실제 두 기기 확인 뒤 최종 결정한다.
-서명하기 전 applicationId는 예시가 아닌 실제 배포값으로 확정한다. 후보 `io.github.jihoon22lee.sallimbook`은 아직 확정이 아니다.
+Android 최소 지원은 사용자 승인에 따라 API 30이다.
+운영 applicationId는 `io.github.jihoon22lee.sallimbook`, 개발 빌드는 `.debug` 접미사로 분리한다.
+실기기는 Galaxy S25 Ultra(OS 미확인), Galaxy S24 Ultra(Android 16)이며 연결·실기기 검증은 아직 수행하지 않았다.
+
+### SB-001 도구 고정
+
+Node 24.18.0, pnpm 9.15.9, 프로젝트 Python 3.14.7, uv 0.12.5, JDK 21을 사용한다.
+시스템 Python 3.14.4와 프로젝트 uv Python은 별개다. `.python-version`은 프로젝트 버전을 고정한다.
+React 19.3.1, Vite 8.3.4, TypeScript 5.9.3, Capacitor 8.5.3,
+FastAPI 0.143.3을 lockfile에 고정했다. OpenAPI 생성기의 TypeScript 5 peer 범위를 따른다.
+Android는 compile/target SDK 36, 앱 Build Tools 36.0.0,
+AGP 8.13.0, Gradle 8.14.3(checksum 고정), Kotlin 2.2.20이다.
+CLI SDK 설치기는 공식 명령 도구 build 15859902의 SHA-256을 검증하며 기존 SDK 설치를 덮어쓰지 않는다.
+앱 Gradle dependency lock은 `apps/client/android/app/gradle.lockfile`에 저장한다.
+DB와 운영 이미지 버전은 해당 Issue에서 호환 시험 후 별도로 고정한다.
+
+버전 선택 근거: [Vite 환경](https://vite.dev/guide/),
+[Capacitor 8 Android 환경](https://capacitorjs.com/docs/updating/8-0),
+[FastAPI 변경 기록](https://fastapi.tiangolo.com/release-notes/),
+[Android 공식 SDK·체크섬](https://developer.android.com/studio#command-tools).
 
 ## 4. 저장소와 실행 환경
 
@@ -47,11 +65,14 @@ Windows의 별도 checkout이 필요하면 Git으로 동기화하고 생성 파�
 
 ## 5. 목표 개발 흐름
 
-기초 코드가 만들어진 뒤 검증된 명령을 README에 추가한다.
-목표 흐름은 의존성 설치 → PostgreSQL 개발 인스턴스 → migration → API → Vite → Android bundle sync → 테스트/빌드다.
+현재 실행 명령은 [README](../README.md#개발-실행)에 있다.
+SB-001은 기본 화면·프로세스 health·웹/Android 빌드까지 포함하고 PostgreSQL·migration은 SB-002에서 추가한다.
+개발 포트는 API 18741, Vite 18742, 웹 E2E 18743이다. 기존 서버를 종료하거나 점유 포트를 빼앗지 않는다.
+앱은 정적 웹 자산을 번들하며 `server.url`로 원격 UI를 로드하지 않는다.
 Capacitor sync 전에 web production build가 완료되어야 앱에 최신 웹 자산이 포함된다.
 Gradle wrapper의 CLI 빌드는 공식 지원 경로다([S18](references.md)).
 에뮬레이터 테스트만으로 실제 지문과 하드웨어 보안키 동작을 검증했다고 쓰지 않는다.
+기본 Android 모듈에는 업무 단위 테스트가 아직 없어 Gradle test task의 `NO-SOURCE`는 테스트 통과 수로 세지 않는다.
 
 ## 6. 환경 구분
 

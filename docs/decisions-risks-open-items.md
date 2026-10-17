@@ -14,19 +14,19 @@ SallimBook 이름, 7개 필수 영역, Android 중심·PC 웹 동등 핵심 기�
 | 항목 | 기본 제안 | 바꾸는 절차 |
 |---|---|---|
 | 저장소 공개 범위 | private | 소유자의 명시적 변경 결정 |
-| 운영 | 상시 호스트 + HTTPS | 인프라 Issue에서 실제 환경 확정 |
+| 운영 | 현재 PC WSL, SallimBook 전용 자원·Tailscale 노드 | 기존 서버 설정 변경 금지; PC/WSL 중단 시 이용 중단 |
 | 날짜·통화 | Asia/Seoul, KRW | 기존 기록 변환 영향 검토 |
 | 오프라인 | online-first | 동기화/암호화 ADR 필요 |
 | 비밀 표시 | 최대30초, 이탈 즉시잠금 | 보안·사용성 검토 |
 | 앱 잠금 | 백그라운드1분 후 | 기기 실사용 검토 |
-| Android 최소 | API30 제안 | 두 기기 지원 확인 후 확정 |
+| Android 최소 | API30 사용자 승인 | S25 Ultra·S24 Ultra 실기기 검증 |
 | 키 파생 | PBKDF2-HMAC-SHA256≥600k 후보 | 성능/암호호환/보안 리뷰 |
 
 ## 3. 개발 전에 확인할 항목
 
-O-01 실제 운영 서버·도메인·외부 접근 방식.
-O-02 두 Android 기기 버전, 생체인증 강도·기기 잠금 정책.
-O-03 실제 package/applicationId와 release 서명키 보관자.
+O-01 운영 호스트는 현재 PC WSL, 접속은 전용 Tailscale 노드. 실제 노드 FQDN·등록과 접근 규칙은 준비 필요.
+O-02 S25 Ultra(OS 미확인)·S24 Ultra(Android 16). 생체인증 강도·기기 잠금·실기기 연결은 검증 필요.
+O-03 applicationId는 `io.github.jihoon22lee.sallimbook` 확정. release 서명키 보관자는 확정 필요.
 O-04 초대/초기 계정 등록 절차와 복구코드 보관 방법.
 O-05 선정 라이브러리의 정확한 지원 버전과 라이선스.
 O-06 오픈소스 라이선스 부여 여부. 현재 자동 부여하지 않는다.

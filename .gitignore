@@ -40,3 +40,8 @@ __pycache__/
 *.aab
 .DS_Store
 .idea/
+.kotlin/
+*.tsbuildinfo
+*.egg-info/
+.pnpm-store/
+.cache/
