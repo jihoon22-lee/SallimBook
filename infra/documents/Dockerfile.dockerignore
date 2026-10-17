@@ -1,0 +1,17 @@
+**
+!infra/
+!infra/documents/
+!infra/documents/Dockerfile
+!infra/documents/requirements.txt
+!infra/documents/clamd.conf
+!infra/documents/freshclam.conf
+!infra/documents/run_checks.py
+!services/
+!services/api/
+!services/api/src/
+!services/api/src/sallimbook/
+!services/api/src/sallimbook/core/
+!services/api/src/sallimbook/core/errors.py
+!services/api/src/sallimbook/documents/
+!services/api/src/sallimbook/documents/validation.py
+!services/api/src/sallimbook/documents/_validation_worker.py

@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sallimbook.core.errors import DomainError
@@ -113,6 +114,10 @@ def _scanner_command(path: str, command: bytes, data: bytes | None = None) -> by
         _fail("DOCUMENT_SCAN_UNAVAILABLE")
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 def check_scanner_availability(scanner_socket: str | None) -> None:
     """Check the private daemon protocol, without sending any document or filename.
 
@@ -123,11 +128,27 @@ def check_scanner_availability(scanner_socket: str | None) -> None:
     if _scanner_command(path, b"zPING\0") != b"PONG":
         _fail("DOCUMENT_SCAN_UNAVAILABLE")
     version = _scanner_command(path, b"zVERSIONCOMMANDS\0")
-    # Require a loaded signature database (numeric revision/date) and explicit INSTREAM.
-    if not re.fullmatch(rb"ClamAV [0-9]+\.[0-9]+\.[0-9]+[^/\r\n]*/[0-9]+/[^\r\n]+", version):
-        _fail("DOCUMENT_SCAN_UNAVAILABLE")
+    # The dedicated daemon runs with TZ=Etc/UTC. VERSION reports its CVD build
+    # timestamp in local ctime format, so treating an arbitrary timezone as UTC
+    # is unsupported. Pin the engine tested with this protocol and parser profile.
     prefix, separator, commands = version.partition(b"| COMMANDS:")
-    if not separator or not prefix or b"INSTREAM" not in commands.split():
+    matched = re.fullmatch(
+        rb"ClamAV ([0-9]+\.[0-9]+\.[0-9]+)/([1-9][0-9]{0,9})/([^|\r\n]+)",
+        prefix.strip(),
+    )
+    if (
+        not matched
+        or matched[1] != b"1.4.6"
+        or not separator
+        or b"INSTREAM" not in commands.split()
+    ):
+        _fail("DOCUMENT_SCAN_UNAVAILABLE")
+    try:
+        built_at = datetime.strptime(matched[3].strip().decode("ascii"), "%a %b %d %H:%M:%S %Y")
+        age = _utc_now() - built_at.replace(tzinfo=UTC)
+    except ValueError, UnicodeError, OverflowError:
+        _fail("DOCUMENT_SCAN_UNAVAILABLE")
+    if age > timedelta(days=7) or age < -timedelta(minutes=5):
         _fail("DOCUMENT_SCAN_UNAVAILABLE")
 
 

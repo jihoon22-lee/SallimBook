@@ -11,6 +11,7 @@ import tempfile
 import threading
 import zlib
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -29,11 +30,16 @@ from sallimbook.core.errors import DomainError
 from sallimbook.documents import _validation_worker as worker
 from sallimbook.documents import validation
 
-VERSION = b"ClamAV 1.4.3/28000/Sat Oct 17 00:00:00 2026 | COMMANDS: PING VERSION INSTREAM END\0"
+VERSION = b"ClamAV 1.4.6/28000/Sat Oct 17 00:00:00 2026 | COMMANDS: PING VERSION INSTREAM END\0"
 TSV_HEADER = (
     b"level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\t"
     b"left\ttop\twidth\theight\tconf\ttext\n"
 )
+
+
+@pytest.fixture(autouse=True)
+def controlled_scanner_clock(monkeypatch):
+    monkeypatch.setattr(validation, "_utc_now", lambda: datetime(2026, 10, 18, tzinfo=UTC))
 
 
 def image_bytes(kind="PNG", size=(400, 200)):
@@ -248,8 +254,8 @@ def test_scanner_refuses_regular_files_symlinks_and_world_writable_socket(tmp_pa
 @pytest.mark.parametrize(
     "response",
     [
-        b"ClamAV 1.4.3\0",
-        b"ClamAV 1.4.3/28000/date | COMMANDS: PING\0",
+        b"ClamAV 1.4.6\0",
+        b"ClamAV 1.4.6/28000/date | COMMANDS: PING\0",
         b"untrusted\0",
         b"x" * 1025,
         b"PONG\0extra",
@@ -743,3 +749,28 @@ def test_active_content_inside_compressed_pdf_object_stream_is_rejected():
 )
 def test_executable_markup_polyglots_are_rejected_inside_valid_container_metadata(marker):
     assert_rejected(lambda: worker._polyglot(image_bytes() + marker, "image/png"))
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        b"ClamAV 1.4.3/28000/Sat Oct 17 00:00:00 2026 | COMMANDS: PING INSTREAM\0",
+        b"ClamAV 1.5.0/28000/Sat Oct 17 00:00:00 2026 | COMMANDS: PING INSTREAM\0",
+        b"ClamAV 1.4.6/28000/Sat Oct 10 23:59:59 2026 | COMMANDS: PING INSTREAM\0",
+        b"ClamAV 1.4.6/28000/Sun Oct 18 00:05:01 2026 | COMMANDS: PING INSTREAM\0",
+        b"ClamAV 1.4.6/28000/invalid-date | COMMANDS: PING INSTREAM\0",
+        b"ClamAV 1.4.6/0/Sat Oct 17 00:00:00 2026 | COMMANDS: PING INSTREAM\0",
+    ],
+)
+def test_scanner_engine_and_signature_age_fail_closed_with_controlled_utc_clock(tmp_path, version):
+    with scanner(tmp_path, {b"zPING\0": b"PONG\0", b"zVERSIONCOMMANDS\0": version}) as (path, _):
+        assert_domain(
+            "DOCUMENT_SCAN_UNAVAILABLE", lambda: validation.check_scanner_availability(path), 503
+        )
+
+
+@pytest.mark.parametrize("date", [b"Sun Oct 11 00:00:00 2026", b"Sun Oct 18 00:05:00 2026"])
+def test_scanner_signature_exact_age_and_small_clock_skew_boundaries(tmp_path, date):
+    version = b"ClamAV 1.4.6/28000/" + date + b" | COMMANDS: PING INSTREAM\0"
+    with scanner(tmp_path, {b"zPING\0": b"PONG\0", b"zVERSIONCOMMANDS\0": version}) as (path, _):
+        validation.check_scanner_availability(path)
