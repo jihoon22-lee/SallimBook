@@ -63,7 +63,7 @@ def _nonce_constraints(table: str, purpose: str):
             ondelete="RESTRICT",
             name=f"fk_{table}_nonce",
         ),
-        UniqueConstraint("household_id", "key_version", "nonce"),
+        UniqueConstraint("household_id", "key_version", "nonce", name=f"uq_{table}_nonce"),
         CheckConstraint(f"purpose = '{purpose}'", name="purpose"),
         CheckConstraint("octet_length(nonce) = 12", name="nonce_length"),
         CheckConstraint("format_version = 1", name="format_version"),
@@ -80,8 +80,8 @@ class OpaqueFields:
 class VaultState(ActorFields, EntityMixin, Base):
     __tablename__ = "vault_states"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id"),
+        UniqueConstraint("household_id", "id", name="uq_vault_states_scope_id"),
+        UniqueConstraint("household_id", name="uq_vault_states_household"),
         *actor_constraints("vault_states"),
         _version_fk("vault_states", "current_key_version"),
         _bounded("current_key_version"),
@@ -96,8 +96,8 @@ class VaultState(ActorFields, EntityMixin, Base):
 class VaultVersion(ActorFields, EntityMixin, Base):
     __tablename__ = "vault_versions"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "key_version"),
+        UniqueConstraint("household_id", "id", name="uq_vault_versions_scope_id"),
+        UniqueConstraint("household_id", "key_version", name="uq_vault_versions_key"),
         *actor_constraints("vault_versions"),
         _version_fk("vault_versions", "source_key_version"),
         _bounded("key_version"),
@@ -140,8 +140,8 @@ class VaultVersion(ActorFields, EntityMixin, Base):
 class VaultMembership(ActorFields, EntityMixin, Base):
     __tablename__ = "vault_memberships"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "member_id"),
+        UniqueConstraint("household_id", "id", name="uq_vault_memberships_scope_id"),
+        UniqueConstraint("household_id", "member_id", name="uq_vault_memberships_member"),
         *actor_constraints("vault_memberships"),
         household_fk("vault_memberships", "member_id", "household_members"),
         _version_fk("vault_memberships", "joined_key_version"),
@@ -158,7 +158,13 @@ class VaultNonceReservation(Base):
     __tablename__ = "vault_nonce_reservations"
     __table_args__ = (
         _version_fk("vault_nonce_reservations"),
-        UniqueConstraint("household_id", "key_version", "nonce", "purpose"),
+        UniqueConstraint(
+            "household_id",
+            "key_version",
+            "nonce",
+            "purpose",
+            name="uq_vault_nonce_reservations_purpose",
+        ),
         CheckConstraint("purpose IN ('card','member','recovery','key_check')", name="purpose"),
         CheckConstraint("octet_length(nonce) = 12", name="nonce_length"),
     )
@@ -172,8 +178,8 @@ class VaultNonceReservation(Base):
 class VaultKeyCheck(OpaqueFields, ActorFields, EntityMixin, Base):
     __tablename__ = "vault_key_checks"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "key_version"),
+        UniqueConstraint("household_id", "id", name="uq_vault_key_checks_scope_id"),
+        UniqueConstraint("household_id", "key_version", name="uq_vault_key_checks_key"),
         *actor_constraints("vault_key_checks"),
         _version_fk("vault_key_checks"),
         *_nonce_constraints("vault_key_checks", "key_check"),
@@ -187,9 +193,21 @@ class VaultKeyCheck(OpaqueFields, ActorFields, EntityMixin, Base):
 class VaultMemberWrapping(OpaqueFields, ActorFields, EntityMixin, Base):
     __tablename__ = "vault_member_wrappings"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "id", "member_id", "key_version"),
-        UniqueConstraint("household_id", "member_id", "key_version", "generation"),
+        UniqueConstraint("household_id", "id", name="uq_vault_member_wrappings_scope_id"),
+        UniqueConstraint(
+            "household_id",
+            "id",
+            "member_id",
+            "key_version",
+            name="uq_vault_member_wrappings_target",
+        ),
+        UniqueConstraint(
+            "household_id",
+            "member_id",
+            "key_version",
+            "generation",
+            name="uq_vault_member_wrappings_generation",
+        ),
         UniqueConstraint("household_id", "salt", name="uq_vault_member_wrappings_salt"),
         *actor_constraints("vault_member_wrappings"),
         household_fk("vault_member_wrappings", "member_id", "household_members"),
@@ -225,8 +243,13 @@ class VaultMemberWrapping(OpaqueFields, ActorFields, EntityMixin, Base):
 class VaultRecoveryWrapping(OpaqueFields, ActorFields, EntityMixin, Base):
     __tablename__ = "vault_recovery_wrappings"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "key_version", "generation"),
+        UniqueConstraint("household_id", "id", name="uq_vault_recovery_wrappings_scope_id"),
+        UniqueConstraint(
+            "household_id",
+            "key_version",
+            "generation",
+            name="uq_vault_recovery_wrappings_generation",
+        ),
         UniqueConstraint("household_id", "salt", name="uq_vault_recovery_wrappings_salt"),
         *actor_constraints("vault_recovery_wrappings"),
         _version_fk("vault_recovery_wrappings"),
@@ -253,9 +276,22 @@ class VaultRecoveryWrapping(OpaqueFields, ActorFields, EntityMixin, Base):
 class CardSecretEnvelope(OpaqueFields, ActorFields, EntityMixin, Base):
     __tablename__ = "card_secret_envelopes"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "card_id", "key_version", "revision"),
-        UniqueConstraint("household_id", "id", "card_id", "key_version", "revision"),
+        UniqueConstraint("household_id", "id", name="uq_card_secret_envelopes_scope_id"),
+        UniqueConstraint(
+            "household_id",
+            "card_id",
+            "key_version",
+            "revision",
+            name="uq_card_secret_envelopes_revision",
+        ),
+        UniqueConstraint(
+            "household_id",
+            "id",
+            "card_id",
+            "key_version",
+            "revision",
+            name="uq_card_secret_envelopes_source",
+        ),
         *actor_constraints("card_secret_envelopes"),
         household_fk("card_secret_envelopes", "card_id", "cards"),
         _version_fk("card_secret_envelopes"),
@@ -290,7 +326,7 @@ class CardSecretEnvelope(OpaqueFields, ActorFields, EntityMixin, Base):
 class VaultShareOffer(ActorFields, EntityMixin, Base):
     __tablename__ = "vault_share_offers"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
+        UniqueConstraint("household_id", "id", name="uq_vault_share_offers_scope_id"),
         *actor_constraints("vault_share_offers"),
         household_fk("vault_share_offers", "source_member_id", "household_members"),
         household_fk("vault_share_offers", "target_member_id", "household_members"),
@@ -306,7 +342,7 @@ class VaultShareOffer(ActorFields, EntityMixin, Base):
             ondelete="RESTRICT",
             name="fk_vault_share_offers_target_wrap",
         ),
-        UniqueConstraint("wrapping_id"),
+        UniqueConstraint("wrapping_id", name="uq_vault_share_offers_wrapping"),
         CheckConstraint("source_member_id <> target_member_id", name="two_members"),
         CheckConstraint("state IN ('pending','accepted','cancelled','expired')", name="state"),
         CheckConstraint("(state <> 'pending') = (closed_at IS NOT NULL)", name="closed_at"),
@@ -331,8 +367,10 @@ class VaultShareOffer(ActorFields, EntityMixin, Base):
 class VaultRotationCard(ActorFields, EntityMixin, Base):
     __tablename__ = "vault_rotation_cards"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "key_version", "card_id"),
+        UniqueConstraint("household_id", "id", name="uq_vault_rotation_cards_scope_id"),
+        UniqueConstraint(
+            "household_id", "key_version", "card_id", name="uq_vault_rotation_cards_target"
+        ),
         *actor_constraints("vault_rotation_cards"),
         _version_fk("vault_rotation_cards"),
         household_fk("vault_rotation_cards", "card_id", "cards"),
@@ -366,8 +404,10 @@ class VaultRotationCard(ActorFields, EntityMixin, Base):
 class VaultRotationMember(ActorFields, EntityMixin, Base):
     __tablename__ = "vault_rotation_members"
     __table_args__ = (
-        UniqueConstraint("household_id", "id"),
-        UniqueConstraint("household_id", "key_version", "member_id"),
+        UniqueConstraint("household_id", "id", name="uq_vault_rotation_members_scope_id"),
+        UniqueConstraint(
+            "household_id", "key_version", "member_id", name="uq_vault_rotation_members_target"
+        ),
         *actor_constraints("vault_rotation_members"),
         _version_fk("vault_rotation_members"),
         ForeignKeyConstraint(
