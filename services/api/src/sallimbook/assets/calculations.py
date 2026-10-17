@@ -70,8 +70,11 @@ class AssetValue:
             raise ValueError("Household share requires a finite Decimal between zero and one")
         if self.amount_krw is not None:
             _amount(self.amount_krw)
-        if self.verification_state == "verified" and self.amount_krw is None:
-            raise ValueError("A verified asset requires an amount, including explicit zero")
+        if (
+            self.verification_state in {"verified", "carried_unconfirmed"}
+            and self.amount_krw is None
+        ):
+            raise ValueError("A verified or carried asset requires an amount, including zero")
         if self.verification_state == "missing" and self.amount_krw is not None:
             raise ValueError("A missing asset has no amount")
 
