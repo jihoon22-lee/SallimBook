@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
+from sallimbook.cards.models import Card
 from sallimbook.cashflow.calculations import IncomeValue, income_totals
 from sallimbook.cashflow.models import (
     FLOWS,
@@ -55,6 +56,7 @@ _VALUES = (
     "date_precision",
     "member_id",
     "account_id",
+    "card_id",
     "reverses_id",
     "state",
     "note",
@@ -174,6 +176,10 @@ def _validate_links(
         )
         if (previous is None or previous.member_id != member.id) and member.status != "active":
             raise DomainError("MEMBER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
+    if payload.card_id is not None:
+        card = scoped_entity(session, Card, payload.card_id, principal, for_update=True)
+        if (previous is None or previous.card_id != card.id) and card.ended_on is not None:
+            raise DomainError("CARD_UNAVAILABLE", "사용 중인 결제 카드를 선택해 주세요.", 422)
 
 
 def _active_returns(session: Session, principal: Principal, row: CashRecord) -> list[CashRecord]:
@@ -212,13 +218,15 @@ def prepare_cash_record(
     No generic HTTP endpoint exposes non-income kinds. Subtype callers must create exactly
     one subtype referencing this ID (unique household-scoped FK) in this same transaction,
     and use their operation's idempotency reservation. This helper never commits, changes
-    account balances, or writes monthly snapshots. Card links require a later real schema.
+    account balances, or writes monthly snapshots.
     """
     lock_cash_household(session, principal)
     if kind not in FLOWS or (kind in REVERSED_KINDS) != (reverses_id is not None):
         raise DomainError("INVALID_CASH_KIND", "금전 기록의 종류와 원본을 확인해 주세요.", 422)
     if kind in (*INCOME_KINDS, "income_return") and payload.member_id is None:
         raise DomainError("MEMBER_REQUIRED", "수입 구성원을 선택해 주세요.", 422)
+    if kind in PROJECTED_INCOME_KINDS and payload.card_id is not None:
+        raise DomainError("INVALID_PAYMENT_METHOD", "입금·반환은 계좌를 선택해 주세요.", 422)
     if reverses_id is not None:
         original = scoped_entity(session, CashRecord, reverses_id, principal, for_update=True)
         if original.kind not in REVERSED_KINDS[kind] or original.state != "active":

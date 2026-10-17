@@ -43,6 +43,7 @@ class CashInput(InputModel):
     occurred_on: DateOnly | None = None
     member_id: UUID | None = None
     account_id: UUID | None = None
+    card_id: UUID | None = None
     note: Note | None = Field(default=None, repr=False)
 
     @model_validator(mode="after")
@@ -51,12 +52,15 @@ class CashInput(InputModel):
             raise ValueError("A cash event must be positive")
         if (self.date_precision == "day") != (self.occurred_on is not None):
             raise ValueError("Only day precision supplies an actual date")
+        if self.account_id is not None and self.card_id is not None:
+            raise ValueError("Choose only one payment method")
         return self
 
 
 class IncomeInput(CashInput):
     kind: IncomeKind
     member_id: UUID
+    card_id: None = None
 
 
 class IncomeCreate(IncomeInput):
@@ -94,6 +98,7 @@ class IncomeReturn(CashInput):
     reason: Reason = Field(repr=False)
     # The member is inherited from the original income; callers cannot choose another one.
     member_id: None = None
+    card_id: None = None
 
 
 class ConversionSource(InputModel):
@@ -124,6 +129,7 @@ class CashResponse(BaseModel):
     date_precision: Precision
     member_id: UUID | None
     account_id: UUID | None
+    card_id: UUID | None
     reverses_id: UUID | None
     state: Literal["active", "void"]
     note: str | None = Field(repr=False)

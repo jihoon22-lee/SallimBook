@@ -56,7 +56,7 @@ def record_event(
     principal: Principal,
     *,
     entity_type: Literal[
-        "asset", "financial_account", "asset_month", "cash_record", "income_conversion"
+        "asset", "financial_account", "asset_month", "cash_record", "income_conversion", "card"
     ],
     entity_id: UUID,
     action: Literal[
@@ -89,6 +89,7 @@ def record_event(
         "asset_month",
         "cash_record",
         "income_conversion",
+        "card",
     } or action not in {
         "create",
         "update",

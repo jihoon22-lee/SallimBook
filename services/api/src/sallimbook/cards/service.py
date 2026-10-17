@@ -1,0 +1,208 @@
+"""Manual card metadata with household links and closure instead of history deletion."""
+
+from datetime import UTC, datetime
+from uuid import UUID
+
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from sallimbook.accounts.models import FinancialAccount
+from sallimbook.assets.locking import lock_asset_scope
+from sallimbook.assets.models import Asset
+from sallimbook.cards.models import Card
+from sallimbook.cards.schemas import CardCreate, CardListResponse, CardPatch, CardResponse
+from sallimbook.core.audit import record_event
+from sallimbook.core.authorization import Principal, require_version, scoped_entity
+from sallimbook.core.errors import DomainError
+from sallimbook.core.types import SEOUL
+from sallimbook.identity.auth_models import HouseholdMember
+from sallimbook.identity.service import utcnow
+
+
+def card_response(session: Session, card: Card) -> CardResponse:
+    account_status = None
+    if card.settlement_account_id is not None:
+        ended_on = session.execute(
+            select(Asset.ended_on)
+            .join(
+                FinancialAccount,
+                (FinancialAccount.asset_id == Asset.id)
+                & (FinancialAccount.household_id == Asset.household_id),
+            )
+            .where(
+                FinancialAccount.id == card.settlement_account_id,
+                FinancialAccount.household_id == card.household_id,
+            )
+        ).one()
+        account_status = "closed" if ended_on[0] is not None else "active"
+    return CardResponse(
+        **{
+            name: getattr(card, name)
+            for name in CardResponse.model_fields
+            if name not in {"masked_number", "status", "settlement_account_status"}
+        },
+        masked_number="**** " + card.last_four if card.last_four is not None else None,
+        status="closed" if card.ended_on is not None else "active",
+        settlement_account_status=account_status,
+    )
+
+
+def _validate_links(session: Session, principal: Principal, payload: CardCreate, previous=None):
+    if payload.ended_on is not None and payload.ended_on > utcnow().astimezone(SEOUL).date():
+        raise DomainError("INVALID_CARD_DATES", "실제로 사용을 종료한 날짜를 입력해 주세요.", 422)
+    if payload.settlement_account_id is not None:
+        account = scoped_entity(session, FinancialAccount, payload.settlement_account_id, principal)
+        asset = scoped_entity(session, Asset, account.asset_id, principal, for_update=True)
+        scoped_entity(session, FinancialAccount, account.id, principal, for_update=True)
+        new_link = previous is None or previous.settlement_account_id != account.id
+        reactivating = (
+            previous is not None and previous.ended_on is not None and payload.ended_on is None
+        )
+        if asset.ended_on is not None and payload.ended_on is None and (new_link or reactivating):
+            raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 결제 계좌를 선택해 주세요.", 422)
+    member = scoped_entity(
+        session, HouseholdMember, payload.owner_member_id, principal, for_update=True
+    )
+    if (previous is None or previous.owner_member_id != member.id) and member.status != "active":
+        raise DomainError("MEMBER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
+
+
+def create_card(session: Session, principal: Principal, payload: CardCreate) -> CardResponse:
+    lock_asset_scope(session, principal)
+    _validate_links(session, principal, payload)
+    card = Card(
+        **payload.model_dump(),
+        household_id=principal.household_id,
+        created_by_member_id=principal.member_id,
+        updated_by_member_id=principal.member_id,
+    )
+    session.add(card)
+    session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="card",
+        entity_id=card.id,
+        action="create",
+        before_version=None,
+        after_version=card.version,
+        changed_fields=payload.model_fields_set,
+    )
+    result = card_response(session, card)
+    session.commit()
+    return result
+
+
+def update_card(
+    session: Session,
+    principal: Principal,
+    card_id: UUID,
+    payload: CardPatch,
+    if_match: str,
+    *,
+    archive=False,
+) -> CardResponse:
+    lock_asset_scope(session, principal)
+    card = scoped_entity(session, Card, card_id, principal, for_update=True)
+    require_version(card, if_match)
+    values = {name: getattr(card, name) for name in CardCreate.model_fields}
+    try:
+        candidate = CardCreate.model_validate(values | payload.model_dump(exclude_unset=True))
+    except ValidationError:
+        raise DomainError(
+            "INVALID_CARD", "카드 사용 기간과 입력 항목을 확인해 주세요.", 422
+        ) from None
+    _validate_links(session, principal, candidate, previous=card)
+    previous_version = card.version
+    for name in payload.model_fields_set:
+        setattr(card, name, getattr(candidate, name))
+    card.version += 1
+    card.updated_by_member_id = principal.member_id
+    card.updated_at = datetime.now(UTC)
+    session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="card",
+        entity_id=card.id,
+        action="archive" if archive else "update",
+        before_version=previous_version,
+        after_version=card.version,
+        changed_fields=payload.model_fields_set,
+    )
+    result = card_response(session, card)
+    session.commit()
+    return result
+
+
+def delete_card(session: Session, principal: Principal, card_id: UUID, if_match: str) -> None:
+    lock_asset_scope(session, principal)
+    card = scoped_entity(session, Card, card_id, principal, for_update=True)
+    require_version(card, if_match)
+    record_event(
+        session,
+        principal,
+        entity_type="card",
+        entity_id=card.id,
+        action="delete",
+        before_version=card.version,
+        after_version=None,
+    )
+    try:
+        session.delete(card)
+        session.flush()
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        if getattr(exc.orig, "sqlstate", None) in {"23001", "23503"}:
+            raise DomainError(
+                "CARD_IN_USE", "기록에서 사용하는 카드입니다. 사용 종료로 보관해 주세요.", 409
+            ) from None
+        raise
+
+
+def get_card(session: Session, principal: Principal, card_id: UUID) -> CardResponse:
+    card = scoped_entity(session, Card, card_id, principal)
+    result = card_response(session, card)
+    session.commit()
+    return result
+
+
+def list_cards(
+    session: Session,
+    principal: Principal,
+    *,
+    owner_member_id=None,
+    card_type=None,
+    settlement_account_id=None,
+    status="active",
+    cursor=None,
+    limit=50,
+) -> CardListResponse:
+    if owner_member_id is not None:
+        scoped_entity(session, HouseholdMember, owner_member_id, principal)
+    if settlement_account_id is not None:
+        scoped_entity(session, FinancialAccount, settlement_account_id, principal)
+    query = select(Card).where(Card.household_id == principal.household_id)
+    for name, value in (
+        ("owner_member_id", owner_member_id),
+        ("card_type", card_type),
+        ("settlement_account_id", settlement_account_id),
+    ):
+        if value is not None:
+            query = query.where(getattr(Card, name) == value)
+    if status != "all":
+        query = query.where(
+            Card.ended_on.is_(None) if status == "active" else Card.ended_on.is_not(None)
+        )
+    if cursor is not None:
+        query = query.where(Card.id < cursor)
+    rows = list(session.scalars(query.order_by(Card.id.desc()).limit(limit + 1)))
+    result = CardListResponse(
+        items=[card_response(session, row) for row in rows[:limit]],
+        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+    )
+    session.commit()
+    return result
