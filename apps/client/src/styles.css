@@ -66,6 +66,21 @@ h1, h2 { line-height: 1.35; }
 .month-action { margin-bottom: 24px; }
 .support-message { margin-bottom: 0; }
 .support-message:empty { display: none; }
+.auth-form { display: grid; gap: 18px; max-width: 40rem; margin-top: 24px; }
+.form-field { display: grid; gap: 6px; min-width: 0; }
+.form-field label { font-weight: 650; }
+.form-field input, .form-field textarea, .form-field select { width: 100%; min-width: 0; min-height: 48px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--foreground); }
+.form-field .muted { margin: 0; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.auth-message { margin-block: 18px; overflow-wrap: anywhere; }
+.auth-message[role="alert"] { padding: 16px; border: 1px solid var(--focus); border-radius: 12px; }
+.session-details { display: grid; gap: 20px; }
+.device-list { display: grid; gap: 14px; padding: 0; list-style: none; }
+.device-card { min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: 14px; }
+.device-card h3 { margin-block: 0 8px; overflow-wrap: anywhere; }
+.device-card .status-chip { margin: 0; }
+.invitation-result { margin-top: 18px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; overflow-wrap: anywhere; }
+.invitation-result code { white-space: normal; word-break: break-all; }
 .back-row { display: flex; align-items: center; gap: 16px; }
 .back-button { background: transparent; color: var(--foreground); border-color: var(--border); }
 .mobile-tabs { position: fixed; inset: auto 0 0; z-index: 10; border-top: 1px solid var(--border); background: var(--surface); padding: 6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); }

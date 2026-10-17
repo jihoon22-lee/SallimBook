@@ -27,6 +27,7 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    ReauthenticationRequest,
     RefreshRequest,
     WebLoginResponse,
 )
@@ -65,6 +66,23 @@ def renew_web_csrf(principal: PrincipalDependency, session: SessionDependency) -
     return CsrfResponse(csrf_token=service.renew_csrf(session, principal))
 
 
+@router.post(
+    "/auth/web/reauthenticate",
+    response_model=MemberResponse,
+    dependencies=[Depends(require_web_transport)],
+    operation_id="reauthenticateWeb",
+)
+def reauthenticate_web(
+    payload: ReauthenticationRequest,
+    request: Request,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+) -> MemberResponse:
+    if principal.transport != "web":
+        raise DomainError("WRONG_AUTH_TRANSPORT", "인증 경로를 확인해 주세요.", 403)
+    return service.reauthenticate(session, principal, payload, request_source(request))
+
+
 @router.post("/auth/web/logout", status_code=204, operation_id="logoutWeb")
 def logout_web(principal: PrincipalDependency, session: SessionDependency) -> Response:
     if principal.transport != "web":
@@ -99,6 +117,23 @@ def refresh_native(
     return service.rotate_refresh(
         session, payload.refresh_token.get_secret_value(), request_source(request)
     )
+
+
+@router.post(
+    "/auth/native/reauthenticate",
+    response_model=MemberResponse,
+    dependencies=[Depends(require_native_transport)],
+    operation_id="reauthenticateNative",
+)
+def reauthenticate_native(
+    payload: ReauthenticationRequest,
+    request: Request,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+) -> MemberResponse:
+    if principal.transport != "native":
+        raise DomainError("WRONG_AUTH_TRANSPORT", "인증 경로를 확인해 주세요.", 403)
+    return service.reauthenticate(session, principal, payload, request_source(request))
 
 
 @router.post(

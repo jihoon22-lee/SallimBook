@@ -4,6 +4,10 @@ test("home preserves asset and consumable priority without inventing zero balanc
   page,
 }) => {
   const errors: string[] = [];
+  await page.route("**/api/v1/me", (route) => route.fulfill({
+    status: 401, contentType: "application/json",
+    body: JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", request_id: "synthetic" } }),
+  }));
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(page).toHaveTitle("SallimBook · 살림북");
