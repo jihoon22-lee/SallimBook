@@ -25,6 +25,7 @@ from sallimbook.identity.passkeys.router import router as passkey_router
 from sallimbook.identity.router import router as identity_router
 from sallimbook.insurance.event_router import router as insurance_events_router
 from sallimbook.insurance.router import router as insurance_router
+from sallimbook.vault.router import router as vault_router
 
 
 class HealthResponse(BaseModel):
@@ -114,6 +115,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(insurance_events_router)
     app.include_router(homecare_router)
     app.include_router(documents_router)
+    app.include_router(vault_router)
 
     app.include_router(asset_comparison_router)
     app.include_router(payment_links_router)
