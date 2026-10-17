@@ -5,16 +5,20 @@ import type { components } from "@sallimbook/api-client";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { NativeAuthAction } from "./NativeAuthAction";
+import { supportsWebAuthn } from "../../platform/webauthn";
+import { useAuthCeremony } from "./useAuthCeremony";
 import { AuthError, clearSensitiveFields, SessionStatus, useMounted, useSensitiveForm } from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
 
 function LoginForm() {
-  const { state, login } = useAuth();
+  const { state, login, loginPasskey } = useAuth();
+  const ceremony = useAuthCeremony();
   const navigate = useNavigate();
   const formRef = useSensitiveForm();
   const mounted = useMounted();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const [passwordError, setPasswordError] = useState(true);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,6 +32,7 @@ function LoginForm() {
     };
     clearSensitiveFields(form);
     setError(null);
+    setPasswordError(true);
     setBusy(true);
     try {
       await login(input);
@@ -37,6 +42,22 @@ function LoginForm() {
     } finally {
       if (mounted.current) setBusy(false);
     }
+  }
+
+  async function passkeyLogin() {
+    const form = formRef.current;
+    if (busy || !form) return;
+    const loginName = form.querySelector<HTMLInputElement>('[name="login_name"]');
+    const deviceName = form.querySelector<HTMLInputElement>('[name="device_label"]');
+    if (!loginName?.reportValidity() || !deviceName?.reportValidity()) return;
+    const input = { login_name: loginName.value, device_label: deviceName.value };
+    clearSensitiveFields(form);
+    setError(null); setPasswordError(false); setBusy(true);
+    try {
+      await ceremony.run((signal) => loginPasskey(input, signal));
+      if (mounted.current) navigate("/settings/auth", { replace: true });
+    } catch (failure) { if (mounted.current) setError(toApiError(failure)); }
+    finally { if (mounted.current) setBusy(false); }
   }
 
   return <section className="card">
@@ -52,10 +73,13 @@ function LoginForm() {
         <input id="login-device" name="device_label" autoComplete="off" required maxLength={80} defaultValue="웹 브라우저" disabled={busy} aria-describedby="login-device-help" />
         <p id="login-device-help" className="muted">등록 기기 목록에서 알아볼 수 있는 이름을 적어 주세요.</p>
       </div>}
-      <AuthError error={error} login />
+      <AuthError error={error} login={passwordError} />
       <button type="submit" disabled={busy}>{busy ? "확인 중…" : state.status === "authenticated" ? "다시 인증" : "로그인"}</button>
+      {state.status !== "authenticated" && <button type="button" disabled={busy || !supportsWebAuthn()} onClick={() => void passkeyLogin()}>패스키로 로그인</button>}
+      {busy && !passwordError && <button type="button" onClick={ceremony.cancel}>패스키 인증 취소</button>}
     </form>
-    <p className="muted">패스키 로그인은 준비 중이에요.</p>
+    {state.status !== "authenticated" && <p className="muted">패스키 로그인에는 로그인 이름과 이 기기 이름만 필요해요. 비밀번호를 입력하지 않아도 돼요.</p>}
+    {state.status !== "authenticated" && !supportsWebAuthn() && <p>이 브라우저에서는 패스키를 사용할 수 없어요. 최신 브라우저의 HTTPS 주소에서 이용해 주세요.</p>}
     <Link to="/onboarding">초대 코드로 계정 등록</Link>
   </section>;
 }

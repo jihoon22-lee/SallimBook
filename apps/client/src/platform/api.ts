@@ -12,6 +12,9 @@ const knownCodes = [
   "VERSION_REQUIRED", "INVALID_VERSION", "VERSION_CONFLICT", "NOT_FOUND",
   "VALIDATION_ERROR", "JSON_REQUIRED", "NETWORK_UNAVAILABLE", "REQUEST_FAILED",
   "REQUEST_CANCELLED", "NATIVE_AUTH_UNAVAILABLE", "ALREADY_AUTHENTICATED", "NATIVE_KEY_INVALIDATED",
+  "PASSKEY_UNSUPPORTED", "PASSKEY_CANCELLED", "PASSKEY_EXPIRED", "PASSKEY_FAILED",
+  "PASSKEY_CONFIGURATION_INVALID", "PASSKEY_VERIFICATION_FAILED", "PASSKEY_REQUIRED",
+  "CREDENTIAL_UNAVAILABLE", "STEP_UP_REQUIRED", "PASSKEYS_DISABLED",
   "REAUTHENTICATION_FAILED",
 ] as const;
 
@@ -44,6 +47,7 @@ export function apiErrorCode(received: unknown, status: number): ApiErrorCode {
 
 export function toApiError(error: unknown): ApiError {
   if (error instanceof ApiError) return error;
+  if (error instanceof DOMException && error.name === "AbortError") return new ApiError(0, "REQUEST_CANCELLED");
   return new ApiError(0, error instanceof TypeError ? "NETWORK_UNAVAILABLE" : "REQUEST_FAILED");
 }
 

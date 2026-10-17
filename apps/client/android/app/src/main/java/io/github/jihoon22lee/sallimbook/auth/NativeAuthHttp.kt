@@ -54,6 +54,7 @@ internal class NativeAuthHttp(private val origin: String) {
         body: JSONObject? = null,
         accessToken: String? = null,
         ifMatch: String? = null,
+        stepUpToken: String? = null,
     ): NativeHttpResponse {
         gate.check()
         if (AuthPolicy.apiOrigin(origin) == null) {
@@ -63,9 +64,17 @@ internal class NativeAuthHttp(private val origin: String) {
             "/api/v1/auth/native/login", "/api/v1/auth/native/refresh",
             "/api/v1/auth/native/logout", "/api/v1/auth/invitations/accept",
             "/api/v1/household/invitations",
+            "/api/v1/auth/native/passkeys/options", "/api/v1/auth/native/passkeys/verify",
+            "/api/v1/auth/passkeys/register/options", "/api/v1/auth/passkeys/register/verify",
+            "/api/v1/auth/step-up/options", "/api/v1/auth/step-up/verify",
             "/api/v1/auth/native/reauthenticate",
         ) && method == "POST" && ifMatch == null
-        if (!internalAuthPath && (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
+        val internalRevoke = method == "DELETE" && PasskeyPolicy.revokePath(path) &&
+            PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && body == null
+        if (!internalAuthPath && !internalRevoke && (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
+            throw AuthFailure(AuthCode.INVALID_REQUEST)
+        }
+        if (stepUpToken != null && !PasskeyPolicy.stepUpHeaderAllowed(method, path, ifMatch, stepUpToken)) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
         var requestBytes: ByteArray? = null
@@ -79,6 +88,7 @@ internal class NativeAuthHttp(private val origin: String) {
                 .apply {
                     if (accessToken != null) header("Authorization", "Bearer $accessToken")
                     if (ifMatch != null) header("If-Match", ifMatch)
+                    if (stepUpToken != null) header("X-Step-Up-Token", stepUpToken)
                 }.build()
             gate.check()
             val call = client.newCall(request)
@@ -128,7 +138,7 @@ internal class NativeAuthHttp(private val origin: String) {
         }
     }
 
-    private fun jsonValue(value: Any?, depth: Int = 0): Any? {
+    internal fun jsonValue(value: Any?, depth: Int = 0): Any? {
         if (depth > 16) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         return when (value) {
             null, JSONObject.NULL -> null

@@ -12,6 +12,7 @@ internal object AuthPolicy {
         "password", "token", "credential", "authorization", "cookie", "csrf", "secret",
         "privatekey", "recovery", "cvc", "cvv", "pan", "accountnumber", "policynumber",
         "ciphertext", "wrappedkey", "keymaterial", "nonce", "session", "bearer", "apikey", "salt",
+        "challenge", "assertion", "attestation", "devicebinding", "grant", "clientdata", "authenticatordata", "signature",
     )
 
     fun apiOrigin(value: String): String? = try {
@@ -43,7 +44,7 @@ internal object AuthPolicy {
             else when (method) {
                 "GET" -> ifMatch == null && when (uri.rawPath) {
                     "/api/v1/me", "/api/v1/household/members" -> uri.rawQuery == null
-                    "/api/v1/devices" -> deviceQueryAllowed(uri.rawQuery)
+                    "/api/v1/devices", "/api/v1/auth/passkeys" -> deviceQueryAllowed(uri.rawQuery)
                     else -> false
                 }
                 "DELETE" -> uri.rawQuery == null &&
@@ -113,6 +114,12 @@ internal object AuthPolicy {
                 val cursor = record["next_cursor"]?.let(::uuidValue)
                 mapOf("items" to items.map(::device), "next_cursor" to cursor)
             }
+            "/api/v1/auth/passkeys" -> {
+                val record = record(value, setOf("items", "next_cursor"))
+                val items = record["items"] as? List<*> ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+                if (items.size > 200) throw AuthFailure(AuthCode.ACCESS_DENIED)
+                mapOf("items" to items.map(::passkey), "next_cursor" to record["next_cursor"]?.let(::uuidValue))
+            }
             else -> throw AuthFailure(AuthCode.ACCESS_DENIED)
         }
     }
@@ -163,6 +170,24 @@ internal object AuthPolicy {
             "platform" to row["platform"], "status" to row["status"], "last_seen_at" to seen,
             "version" to version, "current" to row["current"],
         )
+    }
+
+    fun passkey(value: Any?): Map<String, Any?> {
+        val row = record(value, setOf("id", "label", "created_at", "last_used_at", "backed_up", "device_type", "version"))
+        val version = row["version"]
+        if (!(version is Int && version > 0 || version is Long && version in 1..9_007_199_254_740_991L) ||
+            row["backed_up"] !is Boolean || row["device_type"] !in setOf("single_device", "multi_device")) {
+            throw AuthFailure(AuthCode.ACCESS_DENIED)
+        }
+        val created = row["created_at"] as? String ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+        val last = row["last_used_at"]
+        try {
+            OffsetDateTime.parse(created)
+            if (last != null) OffsetDateTime.parse(last as? String ?: throw AuthFailure(AuthCode.ACCESS_DENIED))
+        } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+        return mapOf("id" to uuidValue(row["id"]), "label" to boundedText(row["label"], 80),
+            "created_at" to created, "last_used_at" to last, "backed_up" to row["backed_up"],
+            "device_type" to row["device_type"], "version" to version)
     }
 
     /** Preserve only recognized server codes/correlation; messages are local constants. */
@@ -238,6 +263,7 @@ internal class ForegroundRequest {
 internal enum class AuthCode {
     AUTH_UNAVAILABLE, AUTH_CANCELLED, ACCESS_DENIED, SESSION_EXPIRED, KEY_INVALIDATED,
     NETWORK_UNAVAILABLE, INVALID_REQUEST, AUTH_FAILED, REGISTRATION_FAILED,
+    PASSKEYS_DISABLED, PASSKEY_REQUIRED, PASSKEY_CANCELLED, PASSKEY_FAILED, REAUTHENTICATION_REQUIRED,
 }
 
 /** Exception messages and causes deliberately contain no request, response, or credential. */

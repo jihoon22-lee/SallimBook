@@ -5,7 +5,10 @@ import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import io.github.jihoon22lee.sallimbook.BuildConfig
 import org.json.JSONObject
+import org.json.JSONTokener
+import java.time.Instant
 import java.time.OffsetDateTime
+import java.util.Base64
 import java.util.concurrent.Executors
 
 /** This value is delivered exclusively to NativeAuthActivity, never an AuthOutcome or Intent. */
@@ -281,5 +284,176 @@ internal class NativeAuthSession private constructor(context: Context) {
                 ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         }
         AuthOutcome.success(mapOf("status" to response.status, "body" to safeBody))
+    }
+
+    private fun passkeyFailure(response: NativeHttpResponse, unauthenticatedLogin: Boolean = false): Nothing {
+        PasskeyPolicy.reject(response.status, response.body, unauthenticatedLogin, ::clearLocal)
+    }
+
+    fun beginPasskey(
+        operation: PasskeyOperation, text: String, targetId: String?, ifMatch: String?,
+        gate: ForegroundRequest, callback: (AuthOutcome, NativePasskeyCeremony?) -> Unit,
+    ) {
+        executor.execute {
+            var ceremony: NativePasskeyCeremony? = null
+            val outcome = try {
+                requireAvailable()
+                gate.check()
+                val configuration = PasskeyConfiguration.read(app) ?: throw AuthFailure(AuthCode.PASSKEYS_DISABLED)
+                var target = targetId
+                val access = if (operation == PasskeyOperation.LOGIN) null else access(gate)
+                if (operation == PasskeyOperation.DEVICE_REVOKE && !PasskeyPolicy.target(target, ifMatch)) {
+                    throw AuthFailure(AuthCode.INVALID_REQUEST)
+                }
+                if (operation in setOf(PasskeyOperation.LOGIN, PasskeyOperation.INVITE) &&
+                    !Regex("[A-Za-z][A-Za-z0-9_.-]{2,63}").matches(text)) throw AuthFailure(AuthCode.INVALID_REQUEST)
+                if (operation == PasskeyOperation.REGISTER && (text.isBlank() || text.codePointCount(0, text.length) > 80)) {
+                    throw AuthFailure(AuthCode.INVALID_REQUEST)
+                }
+                if (operation == PasskeyOperation.INVITE) {
+                    val me = http.send("GET", "/api/v1/me", gate, accessToken = access)
+                    if (me.status != 200) passkeyFailure(me)
+                    val member = AuthPolicy.metadataBody("GET", "/api/v1/me", 200, me.body) as Map<*, *>
+                    if (member["role"] != "owner") throw AuthFailure(AuthCode.ACCESS_DENIED)
+                    target = member["household_id"] as String
+                }
+                val path = when (operation) {
+                    PasskeyOperation.LOGIN -> "/api/v1/auth/native/passkeys/options"
+                    PasskeyOperation.REGISTER -> "/api/v1/auth/passkeys/register/options"
+                    else -> "/api/v1/auth/step-up/options"
+                }
+                val payload = when (operation) {
+                    PasskeyOperation.LOGIN -> JSONObject().put("login_name", text).put("device_label", "Android")
+                    PasskeyOperation.REGISTER -> JSONObject().put("label", text)
+                    else -> JSONObject().put("purpose", if (operation == PasskeyOperation.INVITE) "household.invite" else "device.revoke")
+                        .put("target_id", target)
+                }
+                val response = http.send("POST", path, gate, body = payload, accessToken = access)
+                if (response.status != 200) passkeyFailure(response, operation == PasskeyOperation.LOGIN)
+                val record = response.body as? Map<*, *> ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                val keys = setOf("challenge_id", "public_key", "expires_at") +
+                    if (operation == PasskeyOperation.LOGIN) setOf("device_binding") else emptySet()
+                if (record.keys != keys) throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                val id = record["challenge_id"] as? String ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                if (!PasskeyPolicy.uuid.matches(id)) throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                val options = PasskeyPolicy.options(record["public_key"], operation == PasskeyOperation.REGISTER, configuration.rpId)
+                val expiry = record["expires_at"] as? String ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                val remaining = PasskeyPolicy.remaining(expiry, Instant.now(), 300_000)
+                if (remaining == 0L) throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                val binding = if (operation == PasskeyOperation.LOGIN) {
+                    PasskeyPolicy.encoded(record["device_binding"], 32, 128).toCharArray()
+                } else null
+                gate.check()
+                ceremony = NativePasskeyCeremony(operation, id, options["challenge"] as String,
+                    JSONObject(options).toString().toCharArray(), binding, target, ifMatch,
+                    if (operation == PasskeyOperation.INVITE) text else null,
+                    SystemClock.elapsedRealtime() + remaining, configuration)
+                AuthOutcome.success(mapOf("status" to "ready"))
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.PASSKEY_FAILED) }
+            callback(outcome, ceremony)
+        }
+    }
+
+    /** Verification and any scoped mutation are one native operation; no grant is returned. */
+    fun finishPasskey(
+        ceremony: NativePasskeyCeremony, credentialJson: CharArray, gate: ForegroundRequest,
+        callback: (AuthOutcome, NativeInvitation?) -> Unit,
+    ) {
+        executor.execute {
+            var invitation: NativeInvitation? = null
+            var payload: JSONObject? = null
+            var grant: CharArray? = null
+            val outcome = try {
+                requireAvailable()
+                gate.check()
+                if (!ceremony.claim(SystemClock.elapsedRealtime()) || credentialJson.size !in 1..100_000) {
+                    throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                }
+                val configuration = PasskeyConfiguration.read(app) ?: throw AuthFailure(AuthCode.PASSKEYS_DISABLED)
+                if (configuration.rpId != ceremony.configuration.rpId || configuration.androidOrigin != ceremony.configuration.androidOrigin) {
+                    throw AuthFailure(AuthCode.PASSKEYS_DISABLED)
+                }
+                val tokener = JSONTokener(String(credentialJson))
+                val json = tokener.nextValue() as? JSONObject ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                if (tokener.nextClean() != 0.toChar()) throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                credentialJson.fill('\u0000')
+                val registration = ceremony.operation == PasskeyOperation.REGISTER
+                val credential = PasskeyPolicy.credential(http.jsonValue(json), registration)
+                val responseData = credential["response"] as Map<*, *>
+                val clientDataBytes = Base64.getUrlDecoder().decode(responseData["clientDataJSON"] as String)
+                val clientData = try { http.jsonValue(JSONObject(clientDataBytes.toString(Charsets.UTF_8))) }
+                    finally { clientDataBytes.fill(0) }
+                if (!PasskeyPolicy.clientData(clientData, registration, ceremony.challenge, configuration.androidOrigin)) {
+                    throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                }
+                payload = JSONObject().put("challenge_id", ceremony.challengeId).put("credential", json)
+                val operation = ceremony.operation
+                val path = when (operation) {
+                    PasskeyOperation.LOGIN -> "/api/v1/auth/native/passkeys/verify"
+                    PasskeyOperation.REGISTER -> "/api/v1/auth/passkeys/register/verify"
+                    else -> "/api/v1/auth/step-up/verify"
+                }
+                if (operation == PasskeyOperation.LOGIN) payload.put("device_binding", String(ceremony.binding
+                    ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)))
+                val access = if (operation == PasskeyOperation.LOGIN) null else access(gate)
+                val response = http.send("POST", path, gate, body = payload, accessToken = access)
+                val expected = if (registration) 201 else 200
+                if (response.status != expected) passkeyFailure(response, operation == PasskeyOperation.LOGIN)
+                gate.check()
+                when (operation) {
+                    PasskeyOperation.LOGIN -> {
+                        // A failed/cancelled replacement must not destroy the current session.
+                        // acceptTokens publishes only inside the active gate after encrypted save.
+                        acceptTokens(response.body, gate)
+                        AuthOutcome.success(mapOf("status" to "authenticated"))
+                    }
+                    PasskeyOperation.REGISTER -> {
+                        AuthPolicy.passkey(response.body)
+                        AuthOutcome.success(mapOf("status" to "registered"))
+                    }
+                    else -> {
+                        val purpose = if (operation == PasskeyOperation.INVITE) "household.invite" else "device.revoke"
+                        grant = PasskeyPolicy.grant(response.body, purpose, ceremony.targetId, Instant.now()).toCharArray()
+                        gate.check()
+                        if (operation == PasskeyOperation.DEVICE_REVOKE) {
+                            val removed = http.send("DELETE", "/api/v1/devices/${ceremony.targetId}", gate,
+                                accessToken = access, ifMatch = ceremony.ifMatch, stepUpToken = String(grant))
+                            if (removed.status != 204) passkeyFailure(removed)
+                            AuthOutcome.success(mapOf("status" to "revoked"))
+                        } else {
+                            val created = http.send("POST", "/api/v1/household/invitations", gate,
+                                body = JSONObject().put("intended_login", ceremony.intendedLogin),
+                                accessToken = access, stepUpToken = String(grant))
+                            if (created.status != 201) passkeyFailure(created)
+                            val record = created.body as? Map<*, *> ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                            if (record.keys != setOf("id", "token", "expires_at") ||
+                                !PasskeyPolicy.uuid.matches(record["id"] as? String ?: "")) throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                            val token = PasskeyPolicy.encoded(record["token"], 32, 128)
+                            val expiry = record["expires_at"] as? String ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                            if (PasskeyPolicy.remaining(expiry, Instant.now(), 30_000) == 0L) throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                            invitation = NativeInvitation(token.toCharArray(), expiry)
+                            AuthOutcome.success(mapOf("status" to "created"))
+                        }
+                    }
+                }
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.PASSKEY_FAILED) }
+            finally {
+                payload?.remove("credential")
+                payload?.remove("device_binding")
+                credentialJson.fill('\u0000')
+                grant?.fill('\u0000')
+                ceremony.discard()
+            }
+            callback(outcome, invitation)
+        }
+    }
+
+    fun revokePasskey(id: String, ifMatch: String, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) = execute(gate, callback) {
+        if (!PasskeyPolicy.target(id, ifMatch)) throw AuthFailure(AuthCode.INVALID_REQUEST)
+        val response = http.send("DELETE", "/api/v1/auth/passkeys/$id", gate, accessToken = access(gate), ifMatch = ifMatch)
+        if (response.status != 204) passkeyFailure(response)
+        AuthOutcome.success(mapOf("status" to "revoked"))
     }
 }

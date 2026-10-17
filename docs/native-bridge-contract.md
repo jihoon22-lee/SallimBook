@@ -64,3 +64,34 @@ JS는 '키 무효화'를 단순 재시도로 우회하지 않고 복구 안내�
 일반 UI는 같은 의도를 호출하되 PC는 web vault controller로 PAN/유효기간을 다룬다.
 CVC 관련 명령은 비지원 상태를 명확히 반환하고 브라우저 로컬 저장으로 몰래 대체하지 않는다.
 web vault에서도 secret component에만 평문을 한정하고 일반 상태관리·URL·분석 SDK에 노출하지 않는다.
+
+
+## 7. 계정 인증 bridge (SB-005/006)
+
+계정 인증은 위 보관함과 별개인 `plugins/sallimbook-auth`다.
+[실제 TypeScript 정의](../plugins/sallimbook-auth/src/definitions.ts)를 기준으로 Kotlin 경계를 함께 검증한다.
+모든 호출은 `{ok: true, value}` 또는 허용한 오류 코드만 반환한다. 네이티브 화면에서 로그인 이름·비밀번호·
+패스키 이름·초대 입력을 처리하며 WebAuthn challenge·assertion·device binding·step-up grant·세션 토큰은
+호출 인자와 반환값에 포함하지 않는다.
+
+| 메서드 | JS 입력 | 성공 값 |
+|---|---|---|
+| `getSession` | 없음 | available, authenticated |
+| `loginUI`, `passkeyLoginUI` | 없음 | authenticated/cancelled |
+| `reauthenticateUI` | 없음 | authenticated/cancelled; 기존 세션·기기 유지 |
+| `registerPasskeyUI` | 없음 | registered/cancelled |
+| `revokePasskeyUI` | credentialId, If-Match 형식의 ifMatch | revoked/cancelled |
+| `revokeDeviceUI` | deviceId, If-Match 형식의 ifMatch | revoked/cancelled |
+| `acceptInvitationUI` | 없음 | accepted/cancelled; 로그인은 별도 동작 |
+| `createInvitationUI`, `createInvitationWithPasskeyUI` | 없음 | created/cancelled; 초대 코드는 네이티브에 최대 30초 표시 |
+| `logout` | 없음 | signedOut, serverRevoked |
+| `request` | 허용된 method/path/ifMatch | status와 검증된 공개 메타데이터 |
+
+`request`는 GET `/me`, `/household/members`, `/devices`, `/auth/passkeys`와 버전을 지정한
+DELETE `/devices/{UUID}`만 허용한다(공통 `/api/v1` 접두사). 쿼리·ID·응답 필드도 제한하며,
+일반 API 메타데이터의 TS 타입은 생성 API client를 사용한다. 임의 본문·헤더·URL을 받아 전송하지 않는다.
+
+`revokeDeviceUI`와 `createInvitationWithPasskeyUI`는 각각 대상 기기와 현재 가계에 고정한 scope로
+Credential Manager 인증을 수행하고 같은 네이티브 작업 안에서 grant를 소비한다. 패스키 등록·폐기는
+최근 계정 로그인 조건을 별도로 만족해야 한다. 단순 로컬 생체 인증 콜백으로 서버 인증을 대신하지 않는다.
+비밀번호 재인증 실패는 기존 로그인 정보를 지우거나 새 기기를 만들지 않는다.

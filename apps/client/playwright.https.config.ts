@@ -4,6 +4,7 @@ if (!process.env.SALLIMBOOK_HTTPS_ORIGIN || !process.env.SALLIMBOOK_HTTPS_FIXTUR
 
 export default defineConfig({
   testDir: "./integration",
+  testMatch: process.env.SALLIMBOOK_HTTPS_PASSKEYS === "1" ? "passkeys-https.spec.ts" : "auth-https.spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -14,6 +15,6 @@ export default defineConfig({
     baseURL: process.env.SALLIMBOOK_HTTPS_ORIGIN,
     trace: "off", screenshot: "off", video: "off",
     // Trust only this temporary certificate's public key in this test browser process.
-    launchOptions: { args: [`--ignore-certificate-errors-spki-list=${process.env.SALLIMBOOK_HTTPS_SPKI}`] },
+    launchOptions: { args: [`--ignore-certificate-errors-spki-list=${process.env.SALLIMBOOK_HTTPS_SPKI}`, ...(process.env.SALLIMBOOK_HTTPS_PASSKEYS === "1" ? ["--host-resolver-rules=MAP sallimbook-passkey.test 127.0.0.1", "--no-proxy-server"] : [])] },
   },
 });
