@@ -296,3 +296,9 @@ consumable_replacements 다섯 테이블을 추가한다. 가전/소모품/동�
 가전·소모품·기기별 연결의 참조 없는 오등록 삭제는 허용한다. `0012_homecare`의 metadata
 trigger는 identity/version 갱신을 보호하고, 삭제 시 모든 참조를 RESTRICT FK로 검증한다.
 재고 원장과 교체 이력의 UPDATE/DELETE 금지는 유지하며 취소된 이력도 참조로 남는다.
+
+
+`0013_documents`의 `document_storage_reservations`는 파일 쓰기 전에 별도 commit하는
+가계·문서 복합 FK의 저장 용량 예약이다. API 트랜잭션 rollback 뒤에도 암호문 크기/개수는 유지된다.
+파일이 실제 제거된 뒤에만 released_at을 한 번 기록한다. 식별자/크기 변경과 예약 삭제는 금지하며
+현재 ready 문서는 해제되지 않은 동일 문서·크기의 예약을 반드시 참조한다.

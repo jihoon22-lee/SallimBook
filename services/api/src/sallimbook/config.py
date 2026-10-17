@@ -29,3 +29,8 @@ class Settings(BaseSettings):
     document_scanner_socket: Path | None = None
     document_tesseract_path: Path = Path("/usr/bin/tesseract")
     document_pdftoppm_path: Path = Path("/usr/bin/pdftoppm")
+    document_household_quota_bytes: int = Field(default=256 * 1024 * 1024, ge=1)
+    document_household_quota_count: int = Field(default=200, ge=1)
+    document_global_quota_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=1)
+    document_global_quota_count: int = Field(default=2000, ge=1)
+    document_min_free_bytes: int = Field(default=1024 * 1024 * 1024, ge=0)
