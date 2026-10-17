@@ -72,7 +72,7 @@ def _money(value):
     return None if value is None else krw_string(value)
 
 
-def _audit(session, principal, row, entity, action, fields, before=None):
+def _audit(session, principal, row, entity, action, fields, before=None, after=None):
     record_event(
         session,
         principal,
@@ -80,7 +80,7 @@ def _audit(session, principal, row, entity, action, fields, before=None):
         entity_id=row.id,
         action=action,
         before_version=before,
-        after_version=getattr(row, "version", 1),
+        after_version=after if after is not None else getattr(row, "version", 1),
         changed_fields=fields,
     )
 
@@ -172,7 +172,10 @@ def create_rule(session, principal, payload, key):
             session, principal, payload.account_id, payload.card_id, payload.loan_asset_id
         )
         row = RecurringRule(
-            household_id=principal.household_id, created_by_member_id=principal.member_id
+            household_id=principal.household_id,
+            created_by_member_id=principal.member_id,
+            ended_on=payload.effective_until,
+            end_reason=payload.end_reason,
         )
         session.add(row)
         session.flush()
@@ -182,6 +185,8 @@ def create_rule(session, principal, payload, key):
                 household_id=principal.household_id,
                 rule_id=row.id,
                 effective_from=payload.effective_from,
+                effective_until=payload.effective_until,
+                reason=payload.end_reason,
             )
         )
         _audit(session, principal, row, "recurring_rule", "create", payload.model_fields_set)
@@ -805,7 +810,16 @@ def void_settlement(session, principal, settlement_id, payload, if_match, key):
         )
         row.manually_completed = False
         _touch(session, principal, row, "void_settlement", payload.reason)
-        _audit(session, principal, payment, "fixed_settlement", "void", ("cash_record_id",))
+        _audit(
+            session,
+            principal,
+            payment,
+            "fixed_settlement",
+            "void",
+            ("cash_record_id",),
+            before=fact.version - 1,
+            after=fact.version,
+        )
         return IdempotentResult(payment.id, "fixed_settlement", fact.version, 200)
 
     result = run_idempotent(

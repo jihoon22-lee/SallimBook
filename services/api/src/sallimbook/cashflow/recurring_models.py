@@ -104,6 +104,7 @@ class RecurringRuleVersion(ScheduleFields, Base):
             (text("daterange(effective_from, effective_until, '[)')"), "&&"),
             name="ex_recurring_rule_versions_period",
             using="gist",
+            ops={"household_id": "public.gist_uuid_ops", "rule_id": "public.gist_uuid_ops"},
         ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

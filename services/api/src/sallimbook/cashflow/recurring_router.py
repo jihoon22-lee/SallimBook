@@ -290,3 +290,35 @@ def void(
     )
     response.headers["ETag"] = f'"{result.cash.version}"'
     return result
+
+
+# Declare returned version headers in the generated client contract. Settlement
+# versions belong to the cash fact; obligation mutations return their own version.
+for _route in router.routes:
+    if getattr(_route, "operation_id", None) in {
+        "createRecurringRule",
+        "getRecurringRule",
+        "changeRecurringRule",
+        "endRecurringRule",
+        "getObligation",
+        "rescheduleObligation",
+        "skipObligation",
+        "unskipObligation",
+        "completeObligation",
+        "reopenObligation",
+        "settleObligation",
+        "voidFixedSettlement",
+    }:
+        _status = _route.status_code or 200
+        _description = (
+            "Quoted cash fact version for settlement cancellation."
+            if _route.operation_id in {"settleObligation", "voidFixedSettlement"}
+            else "Quoted resource version for If-Match."
+        )
+        _headers = {"ETag": {"description": _description, "schema": {"type": "string"}}}
+        if _route.operation_id == "createRecurringRule":
+            _headers["Location"] = {
+                "description": "Created recurring rule path.",
+                "schema": {"type": "string"},
+            }
+        _route.responses[_status] = {"headers": _headers}

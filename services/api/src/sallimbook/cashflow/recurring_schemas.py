@@ -52,9 +52,20 @@ class ScheduleTerms(InputModel):
 
 class RuleCreate(ScheduleTerms):
     effective_from: DateOnly
+    effective_until: DateOnly | None = None
+    end_reason: Reason | None = Field(default=None, repr=False)
+
+    @model_validator(mode="after")
+    def valid_initial_period(self) -> Self:
+        if (self.effective_until is None) != (self.end_reason is None):
+            raise ValueError("An initially ended rule requires its end date and reason")
+        if self.effective_until is not None and self.effective_until <= self.effective_from:
+            raise ValueError("The initial end date must follow its start")
+        return self
 
 
-class RuleChange(RuleCreate):
+class RuleChange(ScheduleTerms):
+    effective_from: DateOnly
     reason: Reason = Field(repr=False)
 
 

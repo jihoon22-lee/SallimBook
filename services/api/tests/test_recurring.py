@@ -32,6 +32,7 @@ from sallimbook.cashflow.recurring_schemas import GenerateObligations, RuleCreat
 from sallimbook.cashflow.scheduling import occurrence_dates, payment_breakdown, settlement_totals
 from sallimbook.config import Settings
 from sallimbook.core.audit import AuditEvent
+from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.core.idempotency import IdempotencyRecord
 from sallimbook.core.types import MAX_KRW
@@ -935,7 +936,6 @@ class TestRecurringDatabase:
                     amount_basis="owned",
                     started_on="2025-01-01",
                 ),
-                None,
             )
             draft = month_service.create_draft(
                 session,
@@ -984,3 +984,192 @@ class TestRecurringDatabase:
                 mode="json"
             )
             assert after == before and after["values"][0]["input_amount_krw"] == "50000000"
+
+    def test_card_planning_and_actual_method_use_real_scoped_references(
+        self, recurring_app, actors, db_engine
+    ):
+        from sallimbook.cards import service as cards
+        from sallimbook.cards.schemas import CardCreate, CardPatch
+
+        actor, _, foreign = actors
+        with Session(db_engine) as session:
+            own_card = cards.create_card(
+                session,
+                actor.principal,
+                CardCreate(
+                    owner_member_id=actor.member_id,
+                    issuer_name="합성",
+                    product_name="합성 카드",
+                    card_type="credit",
+                ),
+            )
+            foreign_card = cards.create_card(
+                session,
+                foreign.principal,
+                CardCreate(
+                    owner_member_id=foreign.member_id,
+                    issuer_name="합성",
+                    product_name="합성 외부",
+                    card_type="credit",
+                ),
+            )
+        with TestClient(recurring_app) as client:
+            result = client.post(
+                "/api/v1/recurring-rules",
+                headers=headers(actor),
+                json=rule_payload() | {"card_id": str(foreign_card.id)},
+            )
+            assert result.status_code == 404
+            rule = post_rule(client, actor, card_id=str(own_card.id))
+            generate(client, actor, rule["id"])
+            row = obligation_for(client, actor, "2026-01")
+            assert row["card_id"] == str(own_card.id) and row["account_id"] is None
+            result = client.post(
+                f"/api/v1/obligations/{row['id']}/settlements",
+                headers=headers(actor, version=1),
+                json={
+                    "amount_krw": "100",
+                    "occurred_on": "2026-01-31",
+                    "card_id": str(foreign_card.id),
+                },
+            )
+            assert result.status_code == 404
+            payment = settle(client, actor, row, card_id=str(own_card.id)).json()
+            assert payment["cash"]["card_id"] == str(own_card.id)
+            assert payment["cash"]["account_id"] is None
+            # Card cash-out is not an extra second cash fact or consumption record.
+            with Session(db_engine) as session:
+                assert session.scalar(select(func.count()).select_from(CashRecord)) == 1
+                with pytest.raises(DomainError) as rejected:
+                    cards.delete_card(session, actor.principal, own_card.id, '"1"')
+                assert getattr(rejected.value, "code", None) == "CARD_IN_USE"
+                cards.update_card(
+                    session,
+                    actor.principal,
+                    own_card.id,
+                    CardPatch(ended_on="2026-01-31"),
+                    '"1"',
+                    archive=True,
+                )
+            next_row = obligation_for(client, actor, "2026-02")
+            result = client.post(
+                f"/api/v1/obligations/{next_row['id']}/settlements",
+                headers=headers(actor, version=1),
+                json={
+                    "amount_krw": "100",
+                    "occurred_on": "2026-01-31",
+                    "card_id": str(own_card.id),
+                },
+            )
+            assert (
+                result.status_code == 422 and result.json()["error"]["code"] == "CARD_UNAVAILABLE"
+            )
+            result = client.post(
+                "/api/v1/recurring-rules",
+                headers=headers(actor),
+                json=rule_payload() | {"card_id": str(own_card.id)},
+            )
+            assert result.status_code == 422
+            assert obligation_for(client, actor, "2026-01")["actual_amount_krw"] == "35000"
+
+    def test_actual_account_and_card_are_mutually_exclusive(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        account = make_account(db_engine, actor)
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            row = obligation_for(client, actor, "2026-01")
+            result = client.post(
+                f"/api/v1/obligations/{row['id']}/settlements",
+                headers=headers(actor, version=1),
+                json={
+                    "amount_krw": "1",
+                    "occurred_on": "2026-01-31",
+                    "account_id": str(account.id),
+                    "card_id": str(uuid4()),
+                },
+            )
+            assert result.status_code == 422
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(CashRecord)) == 0
+
+    def test_loan_reference_rejects_assets_and_foreign_households(
+        self, recurring_app, actors, db_engine
+    ):
+        from sallimbook.assets import service as assets
+        from sallimbook.assets.schemas import AssetCreate
+
+        actor, _, foreign = actors
+        own_asset = make_account(db_engine, actor)
+        with Session(db_engine) as session:
+            alien_loan = assets.create_asset(
+                session,
+                foreign.principal,
+                AssetCreate(
+                    name="합성 외부 부채",
+                    kind="liability",
+                    category="loan",
+                    ownership_kind="joint",
+                    amount_basis="owned",
+                    started_on="2025-01-01",
+                ),
+            )
+        with TestClient(recurring_app) as client:
+            for identifier, expected in ((own_asset.asset_id, 422), (alien_loan.id, 404)):
+                result = client.post(
+                    "/api/v1/recurring-rules",
+                    headers=headers(actor),
+                    json=rule_payload()
+                    | {"economic_type": "loan", "loan_asset_id": str(identifier)},
+                )
+                assert result.status_code == expected
+
+    def test_initial_historical_ended_rule_keeps_its_original_period(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(
+                client,
+                actor,
+                anchor_date="2025-01-31",
+                effective_from="2025-01-01",
+                effective_until="2025-03-01",
+                end_reason="합성 과거 종료 기록",
+            )
+            result = generate(client, actor, rule["id"], start="2025-01-01", end="2025-12-31")
+            assert len(result["items"]) == 2
+            stored = client.get(
+                f"/api/v1/recurring-rules/{rule['id']}", headers=actor.headers
+            ).json()
+            assert stored["ended_on"] == "2025-03-01"
+            assert stored["end_reason"] == "합성 과거 종료 기록"
+            assert stored["versions"][0]["effective_until"] == "2025-03-01"
+            assert stored["versions"][0]["reason"] == "합성 과거 종료 기록"
+            assert (
+                client.get("/api/v1/obligations?month=2025-03", headers=actor.headers).json()[
+                    "items"
+                ]
+                == []
+            )
+            assert (
+                client.patch(
+                    f"/api/v1/recurring-rules/{rule['id']}",
+                    headers=headers(actor, version=1),
+                    json=rule_payload()
+                    | {"effective_from": "2026-03-01", "reason": "합성 과거변경 금지"},
+                ).status_code
+                == 409
+            )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"effective_until": "2026-03-01"},
+        {"end_reason": "합성"},
+        {"effective_until": "2026-01-01", "end_reason": "합성"},
+        {"effective_until": "2025-12-31", "end_reason": "합성"},
+    ],
+)
+def test_initial_ended_rule_requires_ordered_period_and_reason_pair(overrides):
+    with pytest.raises(ValidationError):
+        RuleCreate(**(rule_payload() | overrides))
