@@ -51,6 +51,7 @@ class NativePasskeyActivity : AppCompatActivity() {
         internal const val REVOKE = "passkey-revoke"
         internal const val DEVICE = "device-revoke"
         internal const val INVITE = "passkey-invite"
+        internal const val ACCOUNT = "account-number-passkey"
         internal const val EXTRA_ID = "sallimbook.auth.target"
         internal const val EXTRA_VERSION = "sallimbook.auth.version"
     }
@@ -72,6 +73,8 @@ class NativePasskeyActivity : AppCompatActivity() {
     private var response: CharArray? = null
     private var invitation: InvitationDisplay? = null
     private var createdInvitation = false
+    private var accountDisplay: AccountNumberDisplay? = null
+    private var shownAccountNumber = false
     private lateinit var status: TextView
     private lateinit var field: EditText
     private lateinit var code: TextView
@@ -79,6 +82,7 @@ class NativePasskeyActivity : AppCompatActivity() {
     private val finishWhenReady = Runnable { finishProviderResponse() }
     private val expire = Runnable { cancelPending(); showFailure(AuthCode.PASSKEY_CANCELLED) }
     private val hideInvitation = Runnable { clearInvitation(); status.text = "초대 코드를 지웠어요. 필요하면 다시 만들어 주세요." }
+    private val hideAccount = Runnable { clearInvitation(); status.text = "계좌번호 표시 시간이 끝났어요. 다시 보려면 새로 인증해 주세요." }
     private var receiverRegistered = false
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -94,12 +98,17 @@ class NativePasskeyActivity : AppCompatActivity() {
         targetId = intent.getStringExtra(EXTRA_ID)
         ifMatch = intent.getStringExtra(EXTRA_VERSION)
         val targetMode = mode in setOf(REVOKE, DEVICE)
-        val allowedExtras = setOf(NativeAuthActivity.EXTRA_MODE) + if (targetMode) setOf(EXTRA_ID, EXTRA_VERSION) else emptySet()
+        val allowedExtras = setOf(NativeAuthActivity.EXTRA_MODE) + when {
+            targetMode -> setOf(EXTRA_ID, EXTRA_VERSION)
+            mode == ACCOUNT -> setOf(EXTRA_ID)
+            else -> emptySet()
+        }
         val internal = try { !packageManager.getActivityInfo(ComponentName(this, NativePasskeyActivity::class.java), 0).exported }
             catch (_: Exception) { false }
         if (savedInstanceState != null || !internal || !auth.available ||
-            mode !in setOf(LOGIN, REGISTER, REVOKE, DEVICE, INVITE) || intent.extras?.keySet() != allowedExtras ||
-            targetMode && !PasskeyPolicy.target(targetId, ifMatch)) {
+            mode !in setOf(LOGIN, REGISTER, REVOKE, DEVICE, INVITE, ACCOUNT) || intent.extras?.keySet() != allowedExtras ||
+            targetMode && !PasskeyPolicy.target(targetId, ifMatch) ||
+            mode == ACCOUNT && (targetId == null || !PasskeyPolicy.uuid.matches(targetId!!))) {
             failAndFinish(AuthCode.AUTH_UNAVAILABLE)
             return
         }
@@ -136,6 +145,7 @@ class NativePasskeyActivity : AppCompatActivity() {
             REGISTER -> "SallimBook · 패스키 등록"
             REVOKE -> "SallimBook · 패스키 삭제"
             DEVICE -> "SallimBook · 기기 연결 해제"
+            ACCOUNT -> "SallimBook · 패스키로 계좌번호 보기"
             else -> "SallimBook · 패스키로 구성원 초대"
         }).textSize = 24f
         label(when (mode) {
@@ -143,6 +153,7 @@ class NativePasskeyActivity : AppCompatActivity() {
             REVOKE -> "현재 계정에서 이 패스키를 더 이상 로그인에 사용하지 못하게 합니다. 인증 제공자의 저장 항목은 별도로 관리해 주세요."
             DEVICE -> "표시된 기기의 연결만 해제하도록 패스키로 인증합니다."
             INVITE -> "현재 가계의 구성원 초대에만 사용할 인증을 진행합니다."
+            ACCOUNT -> "표시된 계좌의 번호를 최대 30초 동안 볼 수 있도록 인증합니다."
             else -> "로그인 이름을 입력한 뒤 시스템 화면에서 사용할 패스키를 선택해 주세요."
         })
         field = EditText(this).apply {
@@ -159,16 +170,16 @@ class NativePasskeyActivity : AppCompatActivity() {
             filters = arrayOf(InputFilter.LengthFilter(if (mode == REGISTER) 80 else 64))
             hint = when (mode) { REGISTER -> "패스키 이름"; INVITE -> "초대할 구성원의 로그인 이름"; else -> "로그인 이름" }
             minimumHeight = 48.dp()
-            if (mode in setOf(REVOKE, DEVICE)) visibility = View.GONE
+            if (mode in setOf(REVOKE, DEVICE, ACCOUNT)) visibility = View.GONE
             column.addView(this)
         }
         code = label("").apply { setTextIsSelectable(false); isLongClickable = false }
-        status = label(if (mode in setOf(REVOKE, DEVICE)) "대상을 확인하고 있어요." else "")
+        status = label(if (mode in setOf(REVOKE, DEVICE, ACCOUNT)) "대상을 확인하고 있어요." else "")
         submit = Button(this).apply {
-            text = when (mode) { REVOKE -> "이 패스키 삭제"; DEVICE -> "인증하고 기기 연결 해제"; INVITE -> "인증하고 초대 만들기"; REGISTER -> "패스키 등록"; else -> "패스키 로그인" }
+            text = when (mode) { REVOKE -> "이 패스키 삭제"; DEVICE -> "인증하고 기기 연결 해제"; INVITE -> "인증하고 초대 만들기"; REGISTER -> "패스키 등록"; ACCOUNT -> "인증하고 계좌번호 표시"; else -> "패스키 로그인" }
             minimumHeight = 48.dp()
             filterTouchesWhenObscured = true
-            isEnabled = mode !in setOf(REVOKE, DEVICE)
+            isEnabled = mode !in setOf(REVOKE, DEVICE, ACCOUNT)
             setOnClickListener { submitNativePasskey() }
             column.addView(this)
         }
@@ -191,22 +202,29 @@ class NativePasskeyActivity : AppCompatActivity() {
     private fun ready() = resumed && hasWindowFocus() && !keyguard.isDeviceLocked && !isFinishing && !isDestroyed
 
     private fun loadTarget() {
-        if (!ready() || gate != null || targetLoaded || mode !in setOf(REVOKE, DEVICE)) return
+        if (!ready() || gate != null || targetLoaded || mode !in setOf(REVOKE, DEVICE, ACCOUNT)) return
         val request = ForegroundRequest().also { gate = it }
         val path = if (mode == REVOKE) "/api/v1/auth/passkeys?limit=200" else "/api/v1/devices?limit=200"
-        auth.request("GET", path, null, request) { outcome -> runOnUiThread {
+        val completion: (AuthOutcome) -> Unit = { outcome -> runOnUiThread {
             if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
             gate = null
             val body = outcome.value?.get("body") as? Map<*, *>
-            val row = (body?.get("items") as? List<*>)?.mapNotNull { it as? Map<*, *> }?.singleOrNull { it["id"] == targetId }
-            if (outcome.code != null || outcome.value?.get("status") != 200 || row == null || "\"${row["version"]}\"" != ifMatch) {
+            val row = if (mode == ACCOUNT) body else (body?.get("items") as? List<*>)?.mapNotNull { it as? Map<*, *> }?.singleOrNull { it["id"] == targetId }
+            if (outcome.code != null || outcome.value?.get("status") != 200 || row == null ||
+                mode != ACCOUNT && "\"${row["version"]}\"" != ifMatch || mode == ACCOUNT && row["has_number"] != true) {
                 showFailure(outcome.code ?: AuthCode.ACCESS_DENIED)
             } else {
                 targetLoaded = true
-                status.text = "대상: ${row["label"]}\n아래 버튼으로 이 항목의 해제를 확인해 주세요."
+                status.text = if (mode == ACCOUNT) {
+                    val asset = row["asset"] as Map<*, *>
+                    "${asset["name"]} · ${row["institution_name"]}\n${row["masked_number"]}\n이 계좌의 전체 번호를 확인합니다."
+                } else "대상: ${row["label"]}\n아래 버튼으로 이 항목의 해제를 확인해 주세요."
                 submit.isEnabled = true
             }
         } }
+        if (mode == ACCOUNT) auth.finance(FinanceOperation.GET_ACCOUNT,
+            org.json.JSONObject().put("accountId", targetId), request, completion)
+        else auth.request("GET", path, null, request, completion)
     }
 
     private fun submitNativePasskey() {
@@ -216,7 +234,7 @@ class NativePasskeyActivity : AppCompatActivity() {
             if (value == null) clearInvitation() else { code.text = value; submit.isEnabled = false }
             return
         }
-        if (mode in setOf(REVOKE, DEVICE) && !targetLoaded) return
+        if (shownAccountNumber || mode in setOf(REVOKE, DEVICE, ACCOUNT) && !targetLoaded) return
         val text = field.text.toString().trim()
         if (mode in setOf(LOGIN, INVITE) && !Regex("[A-Za-z][A-Za-z0-9_.-]{2,63}").matches(text) ||
             mode == REGISTER && text.isBlank()) { status.text = "입력 항목을 확인해 주세요."; return }
@@ -228,7 +246,7 @@ class NativePasskeyActivity : AppCompatActivity() {
             auth.revokePasskey(targetId!!, ifMatch!!, request) { result -> runOnUiThread { complete(request, result, null) } }
             return
         }
-        val operation = when (mode) { LOGIN -> PasskeyOperation.LOGIN; REGISTER -> PasskeyOperation.REGISTER; INVITE -> PasskeyOperation.INVITE; else -> PasskeyOperation.DEVICE_REVOKE }
+        val operation = when (mode) { LOGIN -> PasskeyOperation.LOGIN; REGISTER -> PasskeyOperation.REGISTER; INVITE -> PasskeyOperation.INVITE; ACCOUNT -> PasskeyOperation.ACCOUNT_REVEAL; else -> PasskeyOperation.DEVICE_REVOKE }
         auth.beginPasskey(operation, text, targetId, ifMatch, request) { result, pending -> runOnUiThread {
             if (gate !== request || !request.isActive() || !ready()) {
                 pending?.discard(); request.cancel(); return@runOnUiThread
@@ -305,15 +323,24 @@ class NativePasskeyActivity : AppCompatActivity() {
         val request = gate ?: run { cancelPending(); return }
         handler.removeCallbacks(finishWhenReady)
         status.text = "서버에서 인증을 확인하고 있어요."
-        auth.finishPasskey(pending, result, request) { outcome, invitation -> runOnUiThread { complete(request, outcome, invitation) } }
+        auth.finishPasskey(pending, result, request) { outcome, invitation, number -> runOnUiThread { complete(request, outcome, invitation, number) } }
     }
 
-    private fun complete(request: ForegroundRequest, outcome: AuthOutcome, received: NativeInvitation?) {
+    private fun complete(request: ForegroundRequest, outcome: AuthOutcome, received: NativeInvitation?, number: NativeAccountNumber? = null) {
         try {
             if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return }
             cancelPending()
             if (outcome.code != null) { showFailure(outcome.code); return }
-            if (mode == INVITE && received != null) {
+            if (mode == ACCOUNT) {
+                if (number == null) { showFailure(AuthCode.ACCESS_DENIED); return }
+                val now = SystemClock.elapsedRealtime()
+                accountDisplay = AccountNumberDisplay(number.number.copyOf(), now)
+                code.text = accountDisplay?.reveal(now, resumed, hasWindowFocus(), !keyguard.isDeviceLocked) ?: ""
+                shownAccountNumber = true
+                submit.isEnabled = false
+                status.text = "최대 30초 동안 표시합니다. 화면을 벗어나면 즉시 지웁니다."
+                handler.postDelayed(hideAccount, 30_000)
+            } else if (mode == INVITE && received != null) {
                 createdInvitation = true
                 val remaining = PasskeyPolicy.remaining(received.expiresAt, Instant.now(), 30_000)
                 invitation = InvitationDisplay(received.token.copyOf(), SystemClock.elapsedRealtime(), remaining)
@@ -326,7 +353,7 @@ class NativePasskeyActivity : AppCompatActivity() {
                 setResult(Activity.RESULT_OK, Intent().putExtra(NativeAuthActivity.EXTRA_STATUS, status))
                 finish()
             }
-        } finally { received?.discard() }
+        } finally { received?.discard(); number?.discard() }
     }
 
     private fun providerFailure(owner: NativePasskeyCeremony, code: AuthCode) {
@@ -351,9 +378,11 @@ class NativePasskeyActivity : AppCompatActivity() {
 
     private fun clearInvitation() {
         handler.removeCallbacks(hideInvitation)
+        handler.removeCallbacks(hideAccount)
+        accountDisplay?.discard(); accountDisplay = null
         invitation?.discard(); invitation = null
         if (::code.isInitialized) code.text = ""
-        if (createdInvitation && ::submit.isInitialized) submit.isEnabled = false
+        if ((createdInvitation || shownAccountNumber) && ::submit.isInitialized) submit.isEnabled = false
     }
 
     private fun showFailure(code: AuthCode) {
@@ -366,7 +395,7 @@ class NativePasskeyActivity : AppCompatActivity() {
             AuthCode.NETWORK_UNAVAILABLE -> "연결을 확인할 수 없어요. 자동으로 다시 전송하지 않았어요."
             else -> "요청을 완료하지 못했어요. 대상과 계정 상태를 확인해 주세요."
         }
-        submit.isEnabled = providerOwner == null && (mode !in setOf(REVOKE, DEVICE) || targetLoaded)
+        submit.isEnabled = !shownAccountNumber && providerOwner == null && (mode !in setOf(REVOKE, DEVICE, ACCOUNT) || targetLoaded)
         field.isEnabled = true
     }
 
@@ -379,6 +408,7 @@ class NativePasskeyActivity : AppCompatActivity() {
         cancelPending(); clearInvitation()
         if (::field.isInitialized) field.text.clear()
         if (createdInvitation) setResult(Activity.RESULT_OK, Intent().putExtra(NativeAuthActivity.EXTRA_STATUS, "created"))
+        if (shownAccountNumber) setResult(Activity.RESULT_OK, Intent().putExtra(NativeAuthActivity.EXTRA_STATUS, "completed"))
         if (!isFinishing) finish()
     }
 

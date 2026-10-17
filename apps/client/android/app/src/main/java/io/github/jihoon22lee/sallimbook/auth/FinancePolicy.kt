@@ -1,0 +1,321 @@
+package io.github.jihoon22lee.sallimbook.auth
+
+import java.net.URI
+import java.time.LocalDate
+import java.time.OffsetDateTime
+
+internal enum class FinanceOperation {
+    LIST_ASSETS, GET_ASSET, CREATE_ASSET, UPDATE_ASSET, ARCHIVE_ASSET, DELETE_ASSET,
+    LIST_ACCOUNTS, GET_ACCOUNT, CREATE_ACCOUNT, UPDATE_ACCOUNT,
+}
+
+/** Constructed from named metadata commands, never from a JS URL, headers or encoded body. */
+internal class FinanceRequest(val method: String, val path: String, val body: Map<String, Any?>?, val ifMatch: String?) {
+    override fun toString() = "FinanceRequest(redacted)"
+}
+
+/** Security projection of the generated asset/account schemas. Server owns all domain rules. */
+internal object FinancePolicy {
+    private val uuid = PasskeyPolicy.uuid
+    private val versionTag = Regex("\"[1-9][0-9]{0,18}\"")
+    private val share = Regex("(0(?:\\.[0-9]{1,18})?|1(?:\\.0{1,18})?)")
+    private val assetKinds = setOf("asset", "liability")
+    private val categories = setOf("real_estate", "deposit", "financial", "loan", "other")
+    private val owners = setOf("individual", "joint")
+    private val basis = setOf("whole", "owned")
+    private val inclusion = setOf("included", "excluded")
+    private val accountTypes = setOf("checking", "savings", "term_deposit", "brokerage", "pension_savings",
+        "irp", "dc_pension", "isa", "cma", "other")
+    private val assetFields = setOf("name", "kind", "category", "ownership_kind", "owner_member_id", "household_share",
+        "amount_basis", "inclusion_status", "started_on", "ended_on", "note")
+    private val assetRequired = setOf("name", "kind", "category", "ownership_kind", "amount_basis", "started_on")
+    private val accountFields = setOf("institution_name", "account_type", "purpose", "opened_on")
+    private val auditFields = setOf("id", "household_id", "created_by_member_id", "updated_by_member_id", "created_at", "updated_at", "version")
+
+    private fun invalid(): Nothing = throw AuthFailure(AuthCode.INVALID_REQUEST)
+    private fun objectValue(value: Any?): Map<String, Any?> {
+        val row = value as? Map<*, *> ?: invalid()
+        if (row.keys.any { it !is String } || row.size > 32) invalid()
+        return row.entries.associate { it.key as String to it.value }
+    }
+    fun id(value: Any?): String {
+        val text = value as? String ?: invalid()
+        if (!uuid.matches(text)) invalid()
+        return text
+    }
+    private fun tag(value: Any?): String {
+        val text = value as? String ?: invalid()
+        if (!versionTag.matches(text)) invalid()
+        return text
+    }
+    private fun text(value: Any?, max: Int, empty: Boolean = false): String {
+        val result = value as? String ?: invalid()
+        val trimmed = result.trim()
+        if ((!empty && trimmed.isEmpty()) || result.codePointCount(0, result.length) > max) invalid()
+        return result
+    }
+    private fun date(value: Any?): String {
+        val result = value as? String ?: invalid()
+        if (!Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}").matches(result)) invalid()
+        try { LocalDate.parse(result) } catch (_: Exception) { invalid() }
+        return result
+    }
+    private fun timestamp(value: Any?): String {
+        val result = value as? String ?: invalid()
+        try { OffsetDateTime.parse(result) } catch (_: Exception) { invalid() }
+        return result
+    }
+    private fun choice(value: Any?, allowed: Set<String>): String {
+        val result = value as? String ?: invalid()
+        if (result !in allowed) invalid()
+        return result
+    }
+    private fun version(value: Any?): Any {
+        if (!(value is Int && value > 0 || value is Long && value in 1..9_007_199_254_740_991L)) invalid()
+        return value!!
+    }
+
+    fun assetInput(value: Any?, patch: Boolean): Map<String, Any?> {
+        val row = objectValue(value)
+        if (row.isEmpty() || !assetFields.containsAll(row.keys) || !patch && !row.keys.containsAll(assetRequired)) invalid()
+        for ((key, item) in row) when (key) {
+            "name" -> text(item, 120)
+            "kind" -> choice(item, assetKinds)
+            "category" -> choice(item, categories)
+            "ownership_kind" -> choice(item, owners)
+            "owner_member_id" -> if (item != null) id(item)
+            "household_share" -> if (item !is String || item.length > 20 || !share.matches(item)) invalid()
+            "amount_basis" -> choice(item, basis)
+            "inclusion_status" -> choice(item, inclusion)
+            "started_on" -> date(item)
+            "ended_on" -> if (item != null) date(item)
+            "note" -> if (item != null) text(item, 2000, true)
+        }
+        if (!patch && ((row["ownership_kind"] == "individual") != (row["owner_member_id"] != null))) invalid()
+        if (row["started_on"] != null && row["ended_on"] != null && (row["ended_on"] as String) < (row["started_on"] as String)) invalid()
+        return row
+    }
+
+    fun accountInput(value: Any?, patch: Boolean): Map<String, Any?> {
+        val row = objectValue(value)
+        val permitted = accountFields + if (patch) emptySet() else setOf("asset_id", "asset")
+        if (row.isEmpty() || !permitted.containsAll(row.keys)) invalid()
+        if (!patch && (!row.keys.containsAll(setOf("institution_name", "account_type")) ||
+                (row["asset_id"] == null) == (row["asset"] == null))) invalid()
+        for ((key, item) in row) when (key) {
+            "institution_name" -> text(item, 120)
+            "account_type" -> choice(item, accountTypes)
+            "purpose" -> if (item != null) text(item, 500, true)
+            "opened_on" -> if (item != null) date(item)
+            "asset_id" -> if (item != null) id(item)
+            "asset" -> if (item != null) {
+                val asset = assetInput(item, false)
+                if (asset["kind"] != "asset" || asset["category"] != "financial") invalid()
+            }
+        }
+        return row
+    }
+
+    private fun query(value: Any?, account: Boolean): String {
+        if (value == null) return ""
+        val row = objectValue(value)
+        val allowed = if (account) setOf("cursor", "limit", "account_type", "owner_member_id", "status")
+            else setOf("cursor", "limit", "kind", "category", "ownership_kind", "owner_member_id", "inclusion_status", "status")
+        if (!allowed.containsAll(row.keys)) invalid()
+        for ((key, item) in row) when (key) {
+            "cursor", "owner_member_id" -> id(item)
+            "limit" -> if (item !is Int || item !in 1..200) invalid()
+            "account_type" -> choice(item, accountTypes)
+            "kind" -> choice(item, assetKinds)
+            "category" -> choice(item, categories)
+            "ownership_kind" -> choice(item, owners)
+            "inclusion_status" -> choice(item, inclusion)
+            "status" -> choice(item, if (account) setOf("active", "closed", "all") else setOf("active", "archived", "all"))
+        }
+        // Values are now bounded enum/UUID/integer only; no arbitrary URL encoding is needed.
+        return if (row.isEmpty()) "" else "?" + row.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }
+    }
+
+    fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
+        val args = objectValue(value)
+        val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
+        val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
+        val idKey = if (account) "accountId" else "assetId"
+        return when (operation) {
+            FinanceOperation.LIST_ASSETS, FinanceOperation.LIST_ACCOUNTS -> {
+                if (!setOf("query").containsAll(args.keys)) invalid()
+                FinanceRequest("GET", base + query(args["query"], account), null, null)
+            }
+            FinanceOperation.GET_ASSET, FinanceOperation.GET_ACCOUNT -> {
+                if (args.keys != setOf(idKey)) invalid()
+                FinanceRequest("GET", "$base/${id(args[idKey])}", null, null)
+            }
+            FinanceOperation.CREATE_ASSET, FinanceOperation.CREATE_ACCOUNT -> {
+                if (args.keys != setOf("input")) invalid()
+                FinanceRequest("POST", base, if (account) accountInput(args["input"], false) else assetInput(args["input"], false), null)
+            }
+            FinanceOperation.UPDATE_ASSET, FinanceOperation.UPDATE_ACCOUNT -> {
+                if (args.keys != setOf(idKey, "input", "ifMatch")) invalid()
+                FinanceRequest("PATCH", "$base/${id(args[idKey])}", if (account) accountInput(args["input"], true) else assetInput(args["input"], true), tag(args["ifMatch"]))
+            }
+            FinanceOperation.ARCHIVE_ASSET -> {
+                if (args.keys != setOf(idKey, "input", "ifMatch")) invalid()
+                val input = objectValue(args["input"])
+                if (input.keys != setOf("ended_on")) invalid()
+                date(input["ended_on"])
+                FinanceRequest("POST", "$base/${id(args[idKey])}/archive", input, tag(args["ifMatch"]))
+            }
+            FinanceOperation.DELETE_ASSET -> {
+                if (args.keys != setOf(idKey, "ifMatch")) invalid()
+                FinanceRequest("DELETE", "$base/${id(args[idKey])}", null, tag(args["ifMatch"]))
+            }
+        }
+    }
+
+    fun metadataHttpAllowed(method: String, path: String, body: Any?, ifMatch: String?): Boolean = try {
+        val uri = URI(path)
+        if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path ||
+            path.any { it.isWhitespace() || it.code < 32 }) false
+        else {
+            val pieces = uri.rawPath.split('/')
+            val account = pieces.getOrNull(3) == "accounts"
+            val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
+            if (uri.rawPath != base && !uri.rawPath.startsWith("$base/")) false
+            else {
+                val idKey = if (account) "accountId" else "assetId"
+                val args = mutableMapOf<String, Any?>()
+                val operation = when {
+                    uri.rawPath == base && method == "GET" && body == null && ifMatch == null -> {
+                        val values = mutableMapOf<String, Any?>()
+                        uri.rawQuery?.let { query ->
+                            if (query.isEmpty()) invalid()
+                            for (part in query.split('&')) {
+                                val pair = part.split('=', limit = 2)
+                                if (pair.size != 2 || pair[0] in values) invalid()
+                                values[pair[0]] = if (pair[0] == "limit") {
+                                    val number = pair[1].toIntOrNull() ?: invalid()
+                                    if (number.toString() != pair[1]) invalid()
+                                    number
+                                } else pair[1]
+                            }
+                        }
+                        args["query"] = values
+                        if (account) FinanceOperation.LIST_ACCOUNTS else FinanceOperation.LIST_ASSETS
+                    }
+                    uri.rawPath == base && method == "POST" && uri.rawQuery == null && ifMatch == null -> {
+                        args["input"] = body
+                        if (account) FinanceOperation.CREATE_ACCOUNT else FinanceOperation.CREATE_ASSET
+                    }
+                    pieces.size == 5 && uri.rawQuery == null -> {
+                        args[idKey] = id(pieces[4])
+                        when (method) {
+                            "GET" -> {
+                                if (body != null || ifMatch != null) invalid()
+                                if (account) FinanceOperation.GET_ACCOUNT else FinanceOperation.GET_ASSET
+                            }
+                            "PATCH" -> {
+                                args["input"] = body; args["ifMatch"] = ifMatch
+                                if (account) FinanceOperation.UPDATE_ACCOUNT else FinanceOperation.UPDATE_ASSET
+                            }
+                            "DELETE" -> {
+                                if (account || body != null) invalid()
+                                args["ifMatch"] = ifMatch; FinanceOperation.DELETE_ASSET
+                            }
+                            else -> invalid()
+                        }
+                    }
+                    !account && pieces.size == 6 && pieces[5] == "archive" && method == "POST" && uri.rawQuery == null -> {
+                        args[idKey] = id(pieces[4]); args["input"] = body; args["ifMatch"] = ifMatch
+                        FinanceOperation.ARCHIVE_ASSET
+                    }
+                    else -> invalid()
+                }
+                prepare(operation, args).let { it.method == method && it.path == path && it.ifMatch == ifMatch }
+            }
+        }
+    } catch (_: Exception) { false }
+
+    fun asset(value: Any?): Map<String, Any?> {
+        val row = objectValue(value)
+        if (row.keys != assetFields + auditFields + setOf("status", "archived_at")) invalid()
+        assetInput(row.filterKeys { it in assetFields }, false)
+        audit(row)
+        choice(row["status"], setOf("active", "archived"))
+        row["archived_at"]?.let(::timestamp)
+        return row
+    }
+
+    fun account(value: Any?): Map<String, Any?> {
+        val row = objectValue(value)
+        if (row.keys != accountFields + auditFields + setOf("asset_id", "asset", "masked_number", "has_number", "closed_on", "status")) invalid()
+        audit(row)
+        id(row["asset_id"])
+        val asset = asset(row["asset"])
+        if (asset["id"] != row["asset_id"] || asset["household_id"] != row["household_id"] ||
+            asset["kind"] != "asset" || asset["category"] != "financial") invalid()
+        text(row["institution_name"], 120)
+        choice(row["account_type"], accountTypes)
+        row["purpose"]?.let { text(it, 500, true) }
+        row["opened_on"]?.let(::date)
+        row["closed_on"]?.let(::date)
+        choice(row["status"], setOf("active", "closed"))
+        val hasNumber = row["has_number"] as? Boolean ?: invalid()
+        val masked = row["masked_number"]
+        if (hasNumber && (masked !is String || !Regex("\\*\\*\\*\\* [A-Za-z0-9]{4}").matches(masked)) || !hasNumber && masked != null) invalid()
+        return row + mapOf("asset" to asset)
+    }
+
+    private fun audit(row: Map<String, Any?>) {
+        listOf("id", "household_id", "created_by_member_id", "updated_by_member_id").forEach { id(row[it]) }
+        timestamp(row["created_at"]); timestamp(row["updated_at"]); version(row["version"])
+    }
+
+    fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
+        try {
+            if (operation == FinanceOperation.DELETE_ASSET) {
+                if (status != 204 || value != null) invalid()
+                return null
+            }
+            val expected = if (operation in setOf(FinanceOperation.CREATE_ASSET, FinanceOperation.CREATE_ACCOUNT)) 201 else 200
+            if (status != expected) invalid()
+            val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
+            if (operation in setOf(FinanceOperation.LIST_ASSETS, FinanceOperation.LIST_ACCOUNTS)) {
+                val row = objectValue(value)
+                if (row.keys != setOf("items", "next_cursor")) invalid()
+                val items = row["items"] as? List<*> ?: invalid()
+                if (items.size > 200) invalid()
+                return mapOf("items" to items.map { if (account) account(it) else asset(it) },
+                    "next_cursor" to row["next_cursor"]?.let(::id))
+            }
+            val row = if (account) account(value) else asset(value)
+            if (operation !in setOf(FinanceOperation.CREATE_ASSET, FinanceOperation.CREATE_ACCOUNT) &&
+                row["id"] != URI(request.path).path.split('/')[4]) invalid()
+            return row
+        } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+    }
+
+    /** Internal number routes have a separate validator and never enter metadata projection. */
+    fun numberPath(path: String, reveal: Boolean): Boolean {
+        val prefix = "/api/v1/accounts/"
+        if (!path.startsWith(prefix)) return false
+        val suffix = path.removePrefix(prefix)
+        return if (reveal) suffix.endsWith("/reveal") && uuid.matches(suffix.removeSuffix("/reveal")) else uuid.matches(suffix)
+    }
+
+    fun number(value: CharArray): Boolean {
+        if (value.size !in 5..64 || !value.first().isAsciiLetterOrDigit() || !value.last().isAsciiLetterOrDigit()) return false
+        if (value.any { !it.isAsciiLetterOrDigit() && it != ' ' && it != '-' }) return false
+        return value.count { it != ' ' && it != '-' } in 5..40
+    }
+
+    fun readNumber(value: Any?, accountId: String): CharArray {
+        try {
+            val row = objectValue(value)
+            if (row.keys != setOf("id", "account_number", "display_for_seconds") || row["id"] != id(accountId) || row["display_for_seconds"] != 30) invalid()
+            val result = (row["account_number"] as? String)?.toCharArray() ?: invalid()
+            if (!number(result)) { result.fill('\u0000'); invalid() }
+            return result
+        } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+    }
+    private fun Char.isAsciiLetterOrDigit() = this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9'
+}

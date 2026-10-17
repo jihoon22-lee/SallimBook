@@ -55,6 +55,7 @@ internal class NativeAuthHttp(private val origin: String) {
         accessToken: String? = null,
         ifMatch: String? = null,
         stepUpToken: String? = null,
+        nativeAccountNumber: Boolean = false,
     ): NativeHttpResponse {
         gate.check()
         if (AuthPolicy.apiOrigin(origin) == null) {
@@ -71,9 +72,21 @@ internal class NativeAuthHttp(private val origin: String) {
         ) && method == "POST" && ifMatch == null
         val internalRevoke = method == "DELETE" && PasskeyPolicy.revokePath(path) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && body == null
-        if (!internalAuthPath && !internalRevoke && (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
+        val metadata = FinancePolicy.metadataHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch)
+        val numberFields = body?.keys()?.asSequence()?.toSet()
+        val numberMutation = nativeAccountNumber && method == "PATCH" && FinancePolicy.numberPath(path, false) &&
+            PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && numberFields == setOf("account_number") &&
+            (body?.opt("account_number") == JSONObject.NULL || (body?.opt("account_number") as? String)?.let {
+                val characters = it.toCharArray()
+                try { FinancePolicy.number(characters) } finally { characters.fill('\u0000') }
+            } == true)
+        val numberReveal = nativeAccountNumber && method == "POST" && FinancePolicy.numberPath(path, true) &&
+            ifMatch == null && numberFields == emptySet<String>()
+        if (!internalAuthPath && !internalRevoke && !metadata && !numberMutation && !numberReveal &&
+            (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
+        if (nativeAccountNumber && !numberMutation && !numberReveal) throw AuthFailure(AuthCode.INVALID_REQUEST)
         if (stepUpToken != null && !PasskeyPolicy.stepUpHeaderAllowed(method, path, ifMatch, stepUpToken)) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
@@ -107,7 +120,9 @@ internal class NativeAuthHttp(private val origin: String) {
                         while (true) {
                             val count = stream.read(buffer)
                             if (count < 0) break
-                            if (output.size() + count > 262_144) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+                            // Up to 200 accounts may each include a bounded nested asset note.
+                            val maximumBytes = if (metadata) 3_145_728 else 262_144
+                            if (output.size() + count > maximumBytes) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
                             output.write(buffer, 0, count)
                         }
                         buffer.fill(0)
