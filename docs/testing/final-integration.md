@@ -10,21 +10,22 @@ SB-034~040 · R-01~R-22 · 2026-10-18 WSL Ubuntu.
 |---|---|---|
 | API·실제 PostgreSQL | `uv run --project services/api python scripts/test_database.py services/api/tests -q --tb=short` | **1,210 통과**, 679.18초. Starlette deprecation warning 1개 |
 | DB 구조 | 위 harness의 Alembic check, downgrade base, upgrade head | 모델 차이 0, 역방향·재적용 성공, 시험 DB 중지·잠금 반환 |
-| Android 전체 | Android sync 뒤 JDK 21·고정 SDK로 `:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin` | `ba4d0ac` **330 통과**, 실패·오류·건너뜀 0. debug APK·release Kotlin 성공, 1분 5초 |
+| Android 전체 | Android sync 뒤 JDK 21·고정 SDK로 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease` | 최종 소스 **333 통과**, 실패·오류·건너뜀 0. debug·instrumentation·unsigned release APK 성공, 1분 29초. 기기 테스트 실행은 아님 |
 | Android 실행 설정 | `python3 scripts/test_android_runtime_config.py` | bundled config 및 원격·wildcard·잘못된 navigation 거절 5개 성공. 생성 설정 원상 복원 |
 | API 계약·타입 | `pnpm api:generate`, 생성 파일 `git diff --exit-code`, `pnpm typecheck` | 재생성 차이 0, 타입 오류 0 |
 | 실제 HTTPS | `scripts/test_web_auth.py`와 11개 업무 선택 플래그를 각각 실행 | 인증·패스키·자산/계좌·월 기록·비교·생활비·보험·소모품·보관함·문서·내보내기·감사의 **12개 흐름 통과**. 감사 외 11개 순차 실행 414.7초 |
-| 웹 배포 빌드 | `pnpm build` | 165 modules 성공. JS 894.13kB/gzip 231.15kB, 기존 chunk 크기 경고 남음 |
+| 전체 웹 | `TMPDIR=/home/jihoon/.cache/sallimbook pnpm test:web --workers=2` | `1f81039` **982 통과**, 실패·건너뜀 0, 6.7분. PC/Android 크기와 native plugin 모의시험이며 실기기 인수와 구분 |
+| 웹 배포 빌드 | `pnpm build` | 165 modules 성공. JS 894.22kB/gzip 231.17kB, 기존 chunk 크기 경고 남음 |
 | 정적 검사 | API src/tests/migrations와 실제 HTTPS harness Ruff | 통과 |
-| 저장소·운영 도구 | `python3 -m unittest discover -s tests -v` | 운영 14개 포함 **54 통과** |
-| 운영 컨테이너 | `python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE` | `fc297d2`: migration/readiness, runtime DB 역할, 4가지 권한 변조 거부, UID10001, 한국어 OCR·ClamAV 업로드, AEAD 저장·다운로드, 익명 차단 통과 |
+| 저장소·운영 도구 | `python3 -m unittest discover -s tests -q` | 운영 16개 포함 **56 통과** |
+| 운영 컨테이너 | `python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE` | `5d5f48a`: migration/readiness, runtime DB 역할, 11가지 권한 변조 거부, 감사 UPDATE/DELETE의 42501 및 정상 INSERT/조회, UID10001, 한국어 OCR·ClamAV 업로드, AEAD 저장·다운로드, 익명 차단 통과 |
 | 암호화 백업·복원 | 검증한 age/PostgreSQL client 경로에서 `uv run --project services/api python -m ops.test_recovery` | 실제 새 합성 DB 복원, manifest·전체 테이블 행 수·첨부 AEAD, 기존 인증 폐기와 pending/new rotation gate 통과 |
 | 배포 설정 | `python3 -m ops.test_deployment` | 고정 Caddy/Tailscale Compose, 공개 JSON/다른 경로 404 통과. 실제 tailnet 노드 등록은 미실행 |
 | APK 서명 도구 | JDK 21·고정 SDK에서 `python3 -m ops.test_release --sdk /DEDICATED_ANDROID_SDK` | `fc297d2`: 합성 키로 release v2/v3 실제 빌드·서명, manifest/native 설정·zipalign·인증서·증가 versionCode·이전 APK·변조 거부 통과. 시험 키/APK 제거 |
 
 API 전체 시험은 `013fa19`의 테스트 DB 설정으로 시작했다. 이후 통합한 보관함 재인증·내보내기
 오류 처리·감사 UI/native 변경은 서버 API·테스트·마이그레이션 파일을 바꾸지 않았으며
-`ba4d0ac`와의 파일 차이가 없음을 확인했다. 프런트엔드·Android 통합 결과는 해당 최종 코드로
+`1f81039`와의 파일 차이가 없음을 확인했다. 프런트엔드·Android 통합 결과는 해당 최종 코드로
 다시 검사했다. 이 기준과 뒤의 추가 결과를 구분하여 기록한다.
 
 ## 실패와 조치
@@ -45,7 +46,9 @@ trace가 없어 같은 원인으로 확정하지 않았다. 세 시나리오를 
 수정한 직후 삭제할 때, 빠른 native 응답으로 loading 상태가 한 번에 렌더되면 삭제 검토의
 초기 버전이 유지되는 문제를 확인했다. 최신 주기는 표시하지만 DELETE가 이전 버전으로 나가
 409를 받았다. 데이터는 삭제되지 않았으며 이 실행도 전체 성공으로 계산하지 않는다.
-공통 삭제 검토의 대상 ID/버전 변경을 명시적으로 처리하고 회귀 검증한 뒤 전체 실행을 반복한다.
+공통 삭제 검토의 대상 ID/버전 변경을 명시적으로 처리했다. 새 회귀 10개와 기존 가전·소모품
+시험 60개가 통과했고, 같은 회귀를 구 코드에 적용하면 기대 버전 2 대신 1을 보내 실패함을
+확인했다. 수정 후 실제 `--homecare` HTTPS와 위 전체 **982개**가 통과했다.
 
 최초 운영 이미지의 실제 첨부 시험은 저장소 경계 검사에서 실패했다. 이미지의 API source 경로가
 원래 저장소보다 얕아 repository root를 잘못 계산한 원인이었다. `Dockerfile.api`가 원래의
@@ -64,9 +67,20 @@ trace가 없어 같은 원인으로 확정하지 않았다. 세 시나리오를 
 실제 API/PostgreSQL을 사용했고 HTTP route mock은 없었다. WebAuthn은 Chromium 가상 인증기의
 실제 서명을 사용했고, 문서/내보내기는 고정 이미지의 실제 검사 도구와 연결했다.
 각 실행은 일회용 schema·임시 인증서·합성 계정·private 출력물을 정리하고 DB를 중지했다.
-최종 전체 웹은 위 버전 상태 수정과 추가 회귀 검증 뒤 Docker 네트워크 변경 없이 다시 실행한다.
-새 debug CVC acceptance proof의 release 제외 검사는 해당 Android 변경 이후 추가한다.
-실행 대기 상태를 통과로 표시하지 않는다.
+최종 전체 웹은 위 버전 상태 수정과 추가 회귀 검증 뒤 Docker 네트워크 변경 없이 통과했다.
+debug CVC 인수 도구는 실제 store를 별도 합성 namespace에서 사용하며 일반 CVC gate는 닫혀 있다.
+333개 JVM에는 시한 경계 회귀 3개를 포함한다. 테스트 APK의 기기 검사 11개(새 CVC 7·기존 WebView 4)는
+빌드만 했고 실행하지 않았다. 최종 unsigned release의 전체 DEX 2개에서 debug marker 9개가
+모두 없음을 확인했다. 실제 서명·기기 인수와 이 정적 검사를 구분한다.
+
+최종 로컬 APK SHA-256:
+
+- debug: `4799cc5e88c440899d72219b55487cafbf81de60100ab9e5cc9a9c98cbf7f81f`
+- androidTest: `2949ffa59d87ee41a1ec97333f0b9308e4a1af62ffe6d3fb5a075f650f661b42`
+- unsigned release: `a6534bd9c69ea4af7dffae5773ddd7403925f8545af46037a0deda39b5710403`
+
+공개 origin/RP/cert가 공란인 개발 검증 산출물이므로 실제 서버 로그인용 배포 APK가 아니다.
+운영 리뷰의 마지막 이미지 revision 대조·scanner readiness 보완은 별도 통합 검증 결과를 추가한다.
 
 GitHub Actions는 기존 PR부터 runner·step이 시작되기 전에 종료되는 상태를 관찰했다.
 조회 권한 때문에 일부 상태/로그 API도 거절됐다. 로컬 동등 명령 결과와 원격 CI 성공을
