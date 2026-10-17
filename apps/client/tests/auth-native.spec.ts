@@ -16,8 +16,10 @@ async function nativeMock(page: Page, scenario: Scenario = {}) {
       __nativeMock: state,
       CapacitorCustomPlatform: { name: "android" },
       Capacitor: {
-        PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "loginUI", "reauthenticateUI", "acceptInvitationUI", "createInvitationUI", "logout", "request", "passkeyLoginUI", "registerPasskeyUI", "revokePasskeyUI", "revokeDeviceUI", "createInvitationWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })) }],
+        PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "loginUI", "reauthenticateUI", "acceptInvitationUI", "createInvitationUI", "logout", "request", "passkeyLoginUI", "registerPasskeyUI", "revokePasskeyUI", "revokeDeviceUI", "createInvitationWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })).concat([{ name: "addListener", rtype: "callback" }, { name: "removeListener", rtype: "promise" }]) }],
+        nativeCallback: () => "synthetic-lock-listener",
         nativePromise: async (_plugin: string, method: string, args: Record<string, unknown> = {}) => {
+          if (method === "removeListener") return;
           state.calls.push({ method, args });
           const success = (value: unknown) => ({ ok: true, value });
           if (method === "getSession") return success({ available: true, authenticated: state.authenticated });
