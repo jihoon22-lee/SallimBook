@@ -66,8 +66,8 @@
       "git_sha1": "c983f17105fa6fb3fc966afb93970673421ba33d"
     },
     "docs/api-contract.md": {
-      "sha256": "5871e28c8cef7ff28be671039e89ca5dd2c352c27adbfa737e02308c7d5c0ca9",
-      "git_sha1": "dfee7abe38a4c47b95053fff46aeec9426faacc6"
+      "sha256": "f85c170e7114bcd0ca2e22e7381060ab261e0e020088564cfdb783f0017f879f",
+      "git_sha1": "9c7510a820ba2a32285b3f1ffaecabf405d90352"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
@@ -242,8 +242,8 @@
       "git_sha1": "f4ca9f527aef0a213cf38ff21c48098d2c077287"
     },
     "docs/testing/assets-comparison-client.md": {
-      "sha256": "a701e5c2c68263c78b3c8191243b13468fc6f915b9dc7d2630c7bab4ea0f38fc",
-      "git_sha1": "e6456e6c53e6b9d57b27c131b125ba50563c55d2"
+      "sha256": "226bf23365e5d0760ec2c18726379e63b411875816f9d212ab6dba8c34fba3c7",
+      "git_sha1": "430221764340d608cdd93c0c0c4b88bc69f3a021"
     }
   }
 }

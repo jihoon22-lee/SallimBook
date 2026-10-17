@@ -67,3 +67,19 @@ pnpm android:build
 ```
 
 실제 Galaxy 두 대의 실패 시나리오·운영 키·서명 배포는 아직 실행하지 않았다.
+
+
+## 선택한 제외 자산의 기준일 진단
+
+PR #70 리뷰 보완으로 명시한 asset_id의 합계 제외 관측값도 기준일 진단에 포함했다.
+금액 합계와 일반 조회의 포함 항목 정책은 유지한다. 다른 필터와 맞지 않는 관측값은 진단에서도 제외한다.
+미입력/월중/월말 기준일 × 작성/확정/정정 상태, 다른 자산·분류·소유·종류 필터 불일치,
+일반 포함 항목의 혼합 날짜, 실제 API의 작성→확정 경계와 제외 금액 불변을 확인했다.
+비교 API 검사 39개와 Alembic drift/왕복이 통과했다. 타입 검사와 ruff도 통과했다.
+비교 UI 32개도 통과했다. 신규 4개는 PC/Android 크기의 확정·미확정 상태에서 비교 화면과 자산·계좌 상세의
+미입력/월중 경고를 확인한다. OpenAPI 필드와 생성 client의 변경은 없다. 기존 UI의 날짜 경고를 그대로 사용한다.
+
+```bash
+TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp uv run --project services/api python scripts/test_database.py services/api/tests/test_asset_comparison.py -q
+TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp pnpm --filter @sallimbook/client exec playwright test tests/comparison.spec.ts --config playwright.comparison.config.ts --workers 1
+```

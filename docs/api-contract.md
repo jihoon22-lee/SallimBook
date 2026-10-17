@@ -164,6 +164,9 @@ draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `
 문자열로 반환한다. 0원/음수 기준은 null과 zero_previous_total/negative_previous_total 사유를 반환한다.
 원 단위 증감은 유지한다. 증감률은 투자 수익률이나 저축률이 아니다.
 각 월의 월말 아닌 기준일·미입력 기준일 ID와 혼합 날짜 여부도 반환한다.
+일반 조회의 날짜 진단은 필터에 맞는 합계 포함 항목만 대상으로 한다. `asset_id`를 명시하면
+모든 필터에 맞는 해당 항목의 합계 제외 관측값도 날짜 진단에 포함한다. 금액 합계에는 계속 제외한다.
+날짜 진단은 작성/정정/확정 상태와 무관하게 제공하며, 서로 다른 월의 기준일을 한 달의 혼합 날짜로 묶지 않는다.
 
 추이는 missing/draft/reopened/confirmed 기록 상태와 missing_month/missing_item/outside_filter/
 missing_value/unconfirmed/verified 금액 상태를 구분한다. `observed_amount_krw`는 현재 관찰값,
