@@ -90,8 +90,8 @@
       "git_sha1": "7376f529f93df8eefec6d206802c4ae1fcbc57c2"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "a9d764228ed99f1ab8e9c2e73686d8599c46d5947ff3d2c53670093346b2f5e9",
-      "git_sha1": "b4878d3bffe5582ae05cc7e9ee890806f1621c30"
+      "sha256": "32e8b18daccd8778c420ef9efe6b6fd4001cbcc13cda5f147131b8444926ea31",
+      "git_sha1": "adf751d4f7ad6b1b2ae567c476ad03413e7ec499"
     },
     "docs/deployment-backup-operations.md": {
       "sha256": "2df325fa1228bd019d5c95b9a7e59481b02cc64fb23317d37528afd896a723e6",
@@ -208,6 +208,10 @@
     "scripts/test_database.py": {
       "sha256": "429775febbbca7beeb2aa6251e19c544dcda25b4d69d420288e22b7f32af8253",
       "git_sha1": "8accf5f4e9f214fff7ec99bd87c472cc16629c9f"
+    },
+    "packages/test-fixtures/README.md": {
+      "sha256": "5864b90d1a56bbc02aa47937c576073d65093ec40b45233452e7ed56e0a63e6f",
+      "git_sha1": "69ed9222ed3245867e43ff5bc75d7e01d2ed64b7"
     },
     "scripts/test_android_runtime_config.py": {
       "sha256": "dd8de566a7a18cf61bfe6cfad86e7c3cd02a556d189840120ae7e278f543606a",

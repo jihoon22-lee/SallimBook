@@ -1,0 +1,1050 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "issue": "SB-004",
+  "source": "docs/testing-and-acceptance.md",
+  "timezone": "Asia/Seoul",
+  "currency": "KRW",
+  "fixtures": {
+    "medical_case": {
+      "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+      "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+      "patient_member_id": "42046756-3340-568c-9b5b-4e6db748ac1b",
+      "provider_name": "합성 의료기관",
+      "nodes": [
+        {
+          "id": "ce622f83-36c6-5bbd-a14f-155f17e13ede",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": null,
+          "kind": "outpatient"
+        },
+        {
+          "id": "0a5edc59-6645-5d4c-8117-7a623cd11401",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": "ce622f83-36c6-5bbd-a14f-155f17e13ede",
+          "kind": "prescription"
+        },
+        {
+          "id": "ff67bee4-a64e-56c4-95f9-710425035028",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": null,
+          "kind": "inpatient"
+        },
+        {
+          "id": "a3ba0f95-0a58-5029-bb86-4223ffd70699",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": "ff67bee4-a64e-56c4-95f9-710425035028",
+          "kind": "procedure_detail"
+        },
+        {
+          "id": "fd21e383-3de5-5c8d-b43b-8960f8f66091",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": null,
+          "kind": "pharmacy"
+        },
+        {
+          "id": "f2761971-f83e-5619-bd4f-459e8c82f4ba",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": null,
+          "kind": "followup"
+        },
+        {
+          "id": "7447911f-fe14-52a1-a9bc-fda36d7066c2",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": "f2761971-f83e-5619-bd4f-459e8c82f4ba",
+          "kind": "followup_1"
+        },
+        {
+          "id": "6aa10c11-4bc7-5192-8064-306fd59bbf99",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "parent_id": "f2761971-f83e-5619-bd4f-459e8c82f4ba",
+          "kind": "followup_2"
+        }
+      ],
+      "cash_records": [
+        {
+          "id": "ef4f475f-042e-5e73-99d1-1eb674e8bf4e",
+          "kind": "medical_payment",
+          "flow": "out",
+          "amount_krw": "30000"
+        },
+        {
+          "id": "aca92e48-42a8-5246-b2f4-9baebf927088",
+          "kind": "medical_payment",
+          "flow": "out",
+          "amount_krw": "860000"
+        },
+        {
+          "id": "e7e4bf1c-bec7-50ae-a16a-703fac0bd418",
+          "kind": "medical_payment",
+          "flow": "out",
+          "amount_krw": "20000"
+        },
+        {
+          "id": "1587baa8-c9b4-530b-b25b-e540027d7c00",
+          "kind": "medical_payment",
+          "flow": "out",
+          "amount_krw": "25000"
+        },
+        {
+          "id": "978a9bcf-f426-51fe-8f35-18dde9afff22",
+          "kind": "medical_payment",
+          "flow": "out",
+          "amount_krw": "25000"
+        }
+      ],
+      "expenses": [
+        {
+          "id": "239c67b5-ffe7-52d3-8109-6a2f0aeab823",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "node_id": "ce622f83-36c6-5bbd-a14f-155f17e13ede",
+          "cash_record_id": "ef4f475f-042e-5e73-99d1-1eb674e8bf4e"
+        },
+        {
+          "id": "444ebd0d-94f7-5823-ae63-d9e483b3f52d",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "node_id": "ff67bee4-a64e-56c4-95f9-710425035028",
+          "cash_record_id": "aca92e48-42a8-5246-b2f4-9baebf927088"
+        },
+        {
+          "id": "ce22f867-d2a1-513e-9751-5951fa25e35f",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "node_id": "fd21e383-3de5-5c8d-b43b-8960f8f66091",
+          "cash_record_id": "e7e4bf1c-bec7-50ae-a16a-703fac0bd418"
+        },
+        {
+          "id": "54dac6fe-8d08-5cff-bf6c-acfdf9be61eb",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "node_id": "7447911f-fe14-52a1-a9bc-fda36d7066c2",
+          "cash_record_id": "1587baa8-c9b4-530b-b25b-e540027d7c00"
+        },
+        {
+          "id": "5114c4d8-b221-5def-8382-1432622b30d4",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "node_id": "6aa10c11-4bc7-5192-8064-306fd59bbf99",
+          "cash_record_id": "978a9bcf-f426-51fe-8f35-18dde9afff22"
+        }
+      ],
+      "expense_lines": [
+        {
+          "expense_id": "444ebd0d-94f7-5823-ae63-d9e483b3f52d",
+          "label": "합성 설명용 분해 1",
+          "amount_krw": "600000"
+        },
+        {
+          "expense_id": "444ebd0d-94f7-5823-ae63-d9e483b3f52d",
+          "label": "합성 설명용 분해 2",
+          "amount_krw": "260000"
+        }
+      ],
+      "claims": [
+        {
+          "id": "620f82ec-0496-57cf-b6d1-cdb9ed3623ad",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "policy_id": "c691f015-356f-5466-b502-1d6ce6a48c9f"
+        },
+        {
+          "id": "fd6dad2a-b7c9-50ac-84da-faba4b36a33e",
+          "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+          "policy_id": "30500287-dd2c-5a49-b411-45348c1feedc"
+        }
+      ],
+      "claim_expenses": [
+        {
+          "claim_id": "620f82ec-0496-57cf-b6d1-cdb9ed3623ad",
+          "expense_id": "444ebd0d-94f7-5823-ae63-d9e483b3f52d"
+        },
+        {
+          "claim_id": "fd6dad2a-b7c9-50ac-84da-faba4b36a33e",
+          "expense_id": "444ebd0d-94f7-5823-ae63-d9e483b3f52d"
+        }
+      ],
+      "refund": {
+        "id": "dfa611c9-4d80-5810-a418-ea0a7f0e7f54",
+        "expense_id": "444ebd0d-94f7-5823-ae63-d9e483b3f52d",
+        "reverses_id": "aca92e48-42a8-5246-b2f4-9baebf927088",
+        "kind": "medical_refund",
+        "flow": "in",
+        "amount_krw": "10000"
+      }
+    },
+    "insurance_receipts": [
+      {
+        "id": "b85f78c4-fddf-5f70-97a4-4ba51b6f538f",
+        "cash_record_id": "52cb98d3-16ea-55a8-b965-28c746b4ee81",
+        "kind": "insurance_receipt",
+        "flow": "in",
+        "amount_krw": "600000",
+        "allocations": [
+          {
+            "id": "bf0cfa91-287c-5e40-9f61-862627a78480",
+            "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+            "policy_id": "c691f015-356f-5466-b502-1d6ce6a48c9f",
+            "claim_id": null,
+            "benefit_type": "reimbursement",
+            "amount_krw": "600000"
+          }
+        ]
+      },
+      {
+        "id": "93f3af9b-65cc-58c7-975b-b02e7475a167",
+        "cash_record_id": "9307e223-1ce1-502d-8ecd-b35ad27e65dc",
+        "kind": "insurance_receipt",
+        "flow": "in",
+        "amount_krw": "200000",
+        "allocations": [
+          {
+            "id": "0c0a27e5-3124-5beb-8522-ee1dabface2f",
+            "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+            "policy_id": "30500287-dd2c-5a49-b411-45348c1feedc",
+            "claim_id": null,
+            "benefit_type": "fixed",
+            "amount_krw": "200000"
+          }
+        ]
+      }
+    ],
+    "insurance_return": {
+      "id": "8c311f4c-c7a6-501d-83e7-f99787fd8cc0",
+      "payout_id": "b85f78c4-fddf-5f70-97a4-4ba51b6f538f",
+      "original_allocation_id": "bf0cfa91-287c-5e40-9f61-862627a78480",
+      "reverses_id": "52cb98d3-16ea-55a8-b965-28c746b4ee81",
+      "kind": "insurance_return",
+      "flow": "out",
+      "amount_krw": "50000"
+    }
+  },
+  "vectors": [
+    {
+      "id": "T-01",
+      "title": "순자산",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "assets_krw": "100000000",
+        "liabilities_krw": "30000000"
+      },
+      "expected": {
+        "net_assets_krw": "70000000"
+      }
+    },
+    {
+      "id": "T-02",
+      "title": "계좌와 자산의 동일 원본",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-06",
+        "R-18",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "asset_id": "1dbdc3f1-53fb-55b0-a411-1444f652bf8f",
+        "account_asset_id": "1dbdc3f1-53fb-55b0-a411-1444f652bf8f",
+        "amount_krw": "5000000"
+      },
+      "expected": {
+        "household_total_krw": "5000000",
+        "included_source_count": 1
+      }
+    },
+    {
+      "id": "T-03",
+      "title": "가계 지분과 공동 소유 표시",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "valuation_krw": "600000000",
+        "household_share": "0.5",
+        "amount_basis": "whole",
+        "owner_member_ids": [
+          "42046756-3340-568c-9b5b-4e6db748ac1b",
+          "f23bf323-e15d-5347-8bab-1b50c53e2b31"
+        ]
+      },
+      "expected": {
+        "owned_amount_krw": "300000000",
+        "household_total_krw": "300000000"
+      }
+    },
+    {
+      "id": "T-04",
+      "title": "연금계좌 내부 참고자산 제외",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-06",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "account_total_krw": "20000000",
+        "reference_holdings": [
+          {
+            "label": "합성 ETF",
+            "amount_krw": "15000000",
+            "included_in_total": false
+          }
+        ]
+      },
+      "expected": {
+        "household_total_krw": "20000000"
+      }
+    },
+    {
+      "id": "T-05",
+      "title": "이번 월 미입력",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-05",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "previous_amount_krw": "5000000",
+        "current_amount_krw": null,
+        "verification_state": "missing"
+      },
+      "expected": {
+        "current_amount_krw": null,
+        "delta_krw": null,
+        "comparison_state": "unavailable",
+        "can_confirm": false
+      }
+    },
+    {
+      "id": "T-06",
+      "title": "첫 월 비교 없음",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-05",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "previous_amount_krw": null,
+        "current_amount_krw": "5000000"
+      },
+      "expected": {
+        "delta_krw": null,
+        "change_percent": null,
+        "comparison_state": "no_previous_month"
+      }
+    },
+    {
+      "id": "T-07",
+      "title": "기존 보유 계좌의 뒤늦은 등록",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-05",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "previous": [
+          {
+            "asset_id": "1dbdc3f1-53fb-55b0-a411-1444f652bf8f",
+            "amount_krw": "5000000"
+          }
+        ],
+        "current": [
+          {
+            "asset_id": "1dbdc3f1-53fb-55b0-a411-1444f652bf8f",
+            "amount_krw": "5000000"
+          },
+          {
+            "asset_id": "f21ed98d-beb3-54d5-ba1e-f6fec39eafbb",
+            "amount_krw": "10000000",
+            "change_reason": "late_registration"
+          }
+        ]
+      },
+      "expected": {
+        "total_delta_krw": "10000000",
+        "common_scope_delta_krw": "0",
+        "scope_changed": true,
+        "inferred_savings_krw": null
+      }
+    },
+    {
+      "id": "T-08",
+      "title": "수입과 계좌 스냅샷 독립",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-07",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "income_krw": "3000000",
+        "snapshot_before_krw": "5000000"
+      },
+      "expected": {
+        "snapshot_after_krw": "5000000"
+      }
+    },
+    {
+      "id": "T-09",
+      "title": "원리금과 소비성 비용",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-08",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "payment_krw": "1000000",
+        "principal_krw": "700000",
+        "interest_krw": "300000",
+        "liability_snapshot_before_krw": "30000000"
+      },
+      "expected": {
+        "cash_payment_krw": "1000000",
+        "consumption_krw": "300000",
+        "liability_snapshot_after_krw": "30000000"
+      }
+    },
+    {
+      "id": "T-10",
+      "title": "짧은 달 말일과 회차 중복 방지",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-08",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "rule_id": "8d101d05-72fc-53c1-8d5f-26c8d9a04996",
+        "frequency": "monthly",
+        "anchor_day": 31,
+        "months": [
+          "2025-02",
+          "2025-03"
+        ],
+        "generation_attempts": 2
+      },
+      "expected": {
+        "scheduled_dates": [
+          "2025-02-28",
+          "2025-03-31"
+        ],
+        "occurrence_counts": [
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "T-11",
+      "title": "예정과 실제 금액 구분",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-08",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "expected_krw": "33000",
+        "actual_payments_krw": [
+          "35000"
+        ]
+      },
+      "expected": {
+        "actual_total_krw": "35000",
+        "difference_krw": "2000"
+      }
+    },
+    {
+      "id": "T-12",
+      "title": "실제 의료비 원본 합계",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "medical_fixture": "medical_case"
+      },
+      "expected": {
+        "medical_total_krw": "960000"
+      }
+    },
+    {
+      "id": "T-13",
+      "title": "동일 영수증의 두 청구 연결",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "medical_fixture": "medical_case",
+        "linked_expense_id": "444ebd0d-94f7-5823-ae63-d9e483b3f52d",
+        "claim_count": 2
+      },
+      "expected": {
+        "medical_total_krw": "960000",
+        "expense_source_count": 5
+      }
+    },
+    {
+      "id": "T-14",
+      "title": "실제 보험금 수령",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "medical_fixture": "medical_case",
+        "receipts_fixture": "insurance_receipts"
+      },
+      "expected": {
+        "received_krw": "800000",
+        "net_burden_krw": "160000"
+      }
+    },
+    {
+      "id": "T-15",
+      "title": "병원 환불",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "medical_fixture": "medical_case",
+        "receipts_fixture": "insurance_receipts",
+        "refund_fixture": "medical_case.refund"
+      },
+      "expected": {
+        "net_medical_krw": "950000",
+        "net_received_krw": "800000",
+        "net_burden_krw": "150000"
+      }
+    },
+    {
+      "id": "T-16",
+      "title": "보험사 반환",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "medical_fixture": "medical_case",
+        "receipts_fixture": "insurance_receipts",
+        "refund_fixture": "medical_case.refund",
+        "return_fixture": "insurance_return"
+      },
+      "expected": {
+        "net_medical_krw": "950000",
+        "net_received_krw": "750000",
+        "net_burden_krw": "200000"
+      }
+    },
+    {
+      "id": "T-17",
+      "title": "정액 지급과 음수 부담",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "medical_krw": "100000",
+        "received_krw": "150000",
+        "benefit_type": "fixed"
+      },
+      "expected": {
+        "net_burden_krw": "-50000"
+      }
+    },
+    {
+      "id": "T-18",
+      "title": "입금 원본과 사건 배분",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-07",
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "receipt_krw": "500000",
+        "allocations": [
+          {
+            "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+            "claim_id": null,
+            "amount_krw": "300000"
+          },
+          {
+            "case_id": "af3d9124-368f-5c1e-8775-d37e30436d5e",
+            "claim_id": null,
+            "amount_krw": "200000"
+          }
+        ]
+      },
+      "expected": {
+        "monthly_inflow_krw": "500000",
+        "cash_record_count": 1,
+        "case_totals": [
+          {
+            "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+            "amount_krw": "300000"
+          },
+          {
+            "case_id": "af3d9124-368f-5c1e-8775-d37e30436d5e",
+            "amount_krw": "200000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "T-19",
+      "title": "배분 불일치의 원자적 거부",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "receipt_krw": "500000",
+        "allocations": [
+          {
+            "case_id": "37219348-1b94-5df6-b313-2de259df87e3",
+            "amount_krw": "300000"
+          },
+          {
+            "case_id": "af3d9124-368f-5c1e-8775-d37e30436d5e",
+            "amount_krw": "150000"
+          }
+        ],
+        "requested_state": "confirmed"
+      },
+      "expected": {
+        "allocation_total_krw": "450000",
+        "accepted": false,
+        "created_cash_records": 0,
+        "created_payouts": 0,
+        "created_allocations": 0
+      }
+    },
+    {
+      "id": "T-20",
+      "title": "입고와 교체의 독립",
+      "kind": "calculation_vector",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-17",
+        "R-22"
+      ],
+      "required_validation": [
+        "domain",
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "initial_stock": 0,
+        "last_replaced_on": "2025-01-01",
+        "movements": [
+          {
+            "kind": "receipt",
+            "quantity_delta": 3,
+            "occurred_on": "2025-03-01"
+          },
+          {
+            "kind": "replacement",
+            "quantity_delta": -1,
+            "occurred_on": "2025-03-02"
+          }
+        ]
+      },
+      "expected": {
+        "stock_after_receipt": 3,
+        "last_replaced_after_receipt": "2025-01-01",
+        "final_stock": 2,
+        "last_replaced_after_replacement": "2025-03-02"
+      }
+    },
+    {
+      "id": "T-21",
+      "title": "동시 교체와 재고 부족",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-17",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "initial_stock": 1,
+        "requests": [
+          {
+            "appliance_id": "b5e3f971-5bab-59fe-b8b1-849eb3917564",
+            "quantity": 1,
+            "appliance_consumable_id": "4aa215f2-0555-5584-9364-ac24758356ad",
+            "actor_member_id": "42046756-3340-568c-9b5b-4e6db748ac1b"
+          },
+          {
+            "appliance_id": "c4f04164-12e1-55b5-a64f-33797023ecbb",
+            "quantity": 1,
+            "appliance_consumable_id": "c5633615-aa9b-5077-aad7-e679afc17951",
+            "actor_member_id": "f23bf323-e15d-5347-8bab-1b50c53e2b31"
+          }
+        ],
+        "execution": "concurrent",
+        "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+        "consumable_id": "485ea5d7-66b6-5ec9-84a5-431bb8f6f3e7",
+        "appliance_consumables": [
+          {
+            "id": "4aa215f2-0555-5584-9364-ac24758356ad",
+            "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+            "appliance_id": "b5e3f971-5bab-59fe-b8b1-849eb3917564",
+            "consumable_id": "485ea5d7-66b6-5ec9-84a5-431bb8f6f3e7"
+          },
+          {
+            "id": "c5633615-aa9b-5077-aad7-e679afc17951",
+            "household_id": "71804bdd-9e7c-5937-b0a0-6ccb50f7b39f",
+            "appliance_id": "c4f04164-12e1-55b5-a64f-33797023ecbb",
+            "consumable_id": "485ea5d7-66b6-5ec9-84a5-431bb8f6f3e7"
+          }
+        ]
+      },
+      "expected": {
+        "success_count": 1,
+        "insufficient_stock_count": 1,
+        "final_stock": 0,
+        "replacement_count": 1,
+        "stock_movement_count": 1
+      }
+    },
+    {
+      "id": "T-22",
+      "title": "지급과 교체 재전송",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-15",
+        "R-17",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "actor_id": "3f68bcda-4755-5264-9efc-5862371e4350",
+        "payout": {
+          "idempotency_key": "synthetic-payout-retry",
+          "attempts": 2,
+          "amount_krw": "500000"
+        },
+        "replacement": {
+          "idempotency_key": "synthetic-replacement-retry",
+          "attempts": 2,
+          "initial_stock": 3,
+          "quantity": 1
+        }
+      },
+      "expected": {
+        "received_krw": "500000",
+        "cash_record_count": 1,
+        "payout_count": 1,
+        "final_stock": 2,
+        "replacement_count": 1,
+        "stock_movement_count": 1
+      }
+    },
+    {
+      "id": "T-23",
+      "title": "기존 버전 수정 충돌",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-19",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "actor_id": "3f68bcda-4755-5264-9efc-5862371e4350",
+        "concurrent_actor_id": "ba84a1d3-c43f-5164-ba8d-d44576536678",
+        "request_version": 7,
+        "stored_version": 8
+      },
+      "expected": {
+        "http_status": 409,
+        "stored_version": 8,
+        "overwrite_allowed": false
+      }
+    },
+    {
+      "id": "T-24",
+      "title": "과거 자산월과 오늘 소모품",
+      "kind": "integration_scenario",
+      "implementation_status": "pending",
+      "requirements": [
+        "R-03",
+        "R-17",
+        "R-22"
+      ],
+      "required_validation": [
+        "api",
+        "web",
+        "android"
+      ],
+      "inputs": {
+        "selected_asset_month": "2025-01",
+        "now_utc": "2026-10-16T15:30:00Z",
+        "timezone": "Asia/Seoul",
+        "next_check_on": "2026-10-17",
+        "stock": 2
+      },
+      "expected": {
+        "asset_month": "2025-01",
+        "consumables_as_of": "2026-10-17",
+        "replacement_due": true,
+        "purchase_needed": false
+      }
+    }
+  ],
+  "edge_cases": {
+    "exact_money": [
+      {
+        "value_krw": "0",
+        "canonical_krw": "0"
+      },
+      {
+        "value_krw": "-50000",
+        "canonical_krw": "-50000"
+      },
+      {
+        "value_krw": "9007199254740993",
+        "canonical_krw": "9007199254740993"
+      },
+      {
+        "value_krw": "99999999999999999999",
+        "canonical_krw": "99999999999999999999"
+      },
+      {
+        "value_krw": "-99999999999999999999",
+        "canonical_krw": "-99999999999999999999"
+      }
+    ],
+    "invalid_money_json": [
+      "1",
+      "1.5",
+      "true",
+      "\"1.5\"",
+      "\"1e3\"",
+      "\"+1\"",
+      "\"01\"",
+      "\"-0\"",
+      "\" 1\"",
+      "\"100000000000000000000\""
+    ],
+    "snapshot_states": [
+      {
+        "name": "missing",
+        "previous_krw": "5000000",
+        "current_krw": null,
+        "verification_state": "missing",
+        "expected_delta_krw": null,
+        "can_confirm": false
+      },
+      {
+        "name": "verified_zero",
+        "previous_krw": "5000000",
+        "current_krw": "0",
+        "verification_state": "verified",
+        "expected_delta_krw": "-5000000",
+        "can_confirm": true
+      },
+      {
+        "name": "carried_unconfirmed",
+        "previous_krw": "5000000",
+        "current_krw": "5000000",
+        "verification_state": "carried_unconfirmed",
+        "expected_delta_krw": null,
+        "can_confirm": false
+      },
+      {
+        "name": "verified_unchanged",
+        "previous_krw": "5000000",
+        "current_krw": "5000000",
+        "verification_state": "verified",
+        "expected_delta_krw": "0",
+        "can_confirm": true
+      }
+    ],
+    "household_share_rounding": [
+      {
+        "amount_krw": "1",
+        "share": "0.5",
+        "basis": "whole",
+        "owned_krw": "1"
+      },
+      {
+        "amount_krw": "3",
+        "share": "0.5",
+        "basis": "whole",
+        "owned_krw": "2"
+      },
+      {
+        "amount_krw": "300000000",
+        "share": "0.5",
+        "basis": "owned",
+        "owned_krw": "300000000"
+      }
+    ],
+    "annual_leap_day": {
+      "anchor_month": 2,
+      "anchor_day": 29,
+      "years": [
+        2024,
+        2025
+      ],
+      "scheduled_dates": [
+        "2024-02-29",
+        "2025-02-28"
+      ]
+    },
+    "idempotency_payload_conflict": {
+      "actor_id": "3f68bcda-4755-5264-9efc-5862371e4350",
+      "operation": "insurance_payout",
+      "key": "synthetic-payout-conflict",
+      "first_amount_krw": "500000",
+      "retry_amount_krw": "600000",
+      "expected_http_status": 409,
+      "expected_cash_record_count": 1
+    }
+  }
+}

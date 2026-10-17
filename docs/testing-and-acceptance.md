@@ -2,6 +2,18 @@
 
 이 문서의 테스트는 **개발해야 할 기준**이다. 초기 문서 패키지에서 앱 테스트가 이미 수행되었다는 뜻이 아니다.
 
+## 구현된 검사 기반
+
+SB-004의 [공유 합성 fixture](../packages/test-fixtures/README.md)는 H1/H2와 T-01~T-24의
+입력·기대 결과를 JSON으로 제공한다. fixture 구조·금액·관계 검사 45개는 예제 자체의 일관성 검사이며,
+아래 제품 인수 완료를 뜻하지 않는다. 각 vector의 제품 인수 상태는 현재 `pending`이다.
+
+GitHub Actions는 문서·도구, API lint/단위, 타입·OpenAPI 생성 drift, PostgreSQL migration/API,
+PC·모바일 viewport 웹 동작, Android 개발 빌드의 6개 job을 실행한다.
+동일 PostgreSQL 이미지 digest와 frozen 의존성을 사용하며 저장소 비밀·서명키·실데이터를 주입하지 않는다.
+DB 테스트 미설정 skip, Android `NO-SOURCE`, 모바일 viewport는 각각 실제 DB·단위·실기기 통과와 구분한다.
+실기기 실패 시나리오와 독립 보안 리뷰, 운영 복구 검증은 아래 별도 게이트로 유지한다.
+
 ## 1. 계층
 
 | 계층 | 도구/대상 | 필수 검증 |
