@@ -131,6 +131,20 @@ def test_all_account_types_and_single_asset_source_schema():
     assert SYNTHETIC_NUMBER not in request.model_dump_json()
 
 
+def test_account_patch_openapi_nullability_matches_validation():
+    app = FastAPI()
+    app.include_router(router)
+    schema = app.openapi()["components"]["schemas"]["AccountPatch"]
+    for name, prop in schema["properties"].items():
+        assert name not in schema.get("required", [])
+        nullable = any(item.get("type") == "null" for item in prop.get("anyOf", []))
+        assert nullable == (name not in {"institution_name", "account_type"})
+        if not nullable:
+            assert "default" not in prop
+            with pytest.raises(ValidationError):
+                AccountPatch.model_validate({name: None})
+
+
 @pytest.mark.parametrize(
     "change",
     [
