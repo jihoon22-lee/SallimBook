@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 from test_database import COMPOSE, ROOT, test_service_lock, validate_test_url
 
 
-def execute(*, passkeys: bool = False) -> None:
+def execute(*, passkeys: bool = False, finance: bool = False) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
     }
@@ -58,12 +58,12 @@ def execute(*, passkeys: bool = False) -> None:
         subprocess.run(
             COMPOSE + ["up", "-d", "--wait", "db-test"], env=environment, check=True
         )
-        run_browser(url, passkeys=passkeys)
+        run_browser(url, passkeys=passkeys, finance=finance)
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
 
 
-def run_browser(url: str, *, passkeys: bool = False) -> None:
+def run_browser(url: str, *, passkeys: bool = False, finance: bool = False) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
     engine = make_engine(url, schema=schema)
@@ -93,6 +93,22 @@ def run_browser(url: str, *, passkeys: bool = False) -> None:
             )
         with tempfile.TemporaryDirectory(prefix="sallimbook-https-") as directory:
             private = Path(directory)
+            field_keys = private / "field-keys.json"
+            if finance:
+                field_keys.touch(mode=0o600)
+                field_keys.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "active_key_version": 1,
+                            "keys": {
+                                "1": base64.b64encode(secrets.token_bytes(32)).decode(
+                                    "ascii"
+                                )
+                            },
+                        }
+                    )
+                )
             key, cert = private / "key.pem", private / "cert.pem"
             subprocess.run(
                 [
@@ -137,6 +153,7 @@ def run_browser(url: str, *, passkeys: bool = False) -> None:
                     webauthn_rp_id=host if passkeys else None,
                     webauthn_web_origins=[origin] if passkeys else [],
                     webauthn_native_origins=[],
+                    field_encryption_key_file=field_keys if finance else None,
                 )
                 app = create_app(settings)
 
@@ -236,6 +253,7 @@ def run_browser(url: str, *, passkeys: bool = False) -> None:
                         "SALLIMBOOK_HTTPS_FIXTURE": str(fixture),
                         "SALLIMBOOK_HTTPS_OUTPUT": str(private / "artifacts"),
                         "SALLIMBOOK_HTTPS_PASSKEYS": "1" if passkeys else "0",
+                        "SALLIMBOOK_HTTPS_FINANCE": "1" if finance else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -246,7 +264,7 @@ def run_browser(url: str, *, passkeys: bool = False) -> None:
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|passkeys|finance)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -289,6 +307,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Use an isolated .test RP and Chromium virtual authenticator.",
     )
+    parser.add_argument(
+        "--finance",
+        action="store_true",
+        help="Verify asset/account UI with an ephemeral keyring and real scoped WebAuthn.",
+    )
     args = parser.parse_args()
     with test_service_lock():
-        execute(passkeys=args.passkeys)
+        execute(passkeys=args.passkeys or args.finance, finance=args.finance)

@@ -1,6 +1,6 @@
 package io.github.jihoon22lee.sallimbook.auth
 
-internal enum class PasskeyOperation { LOGIN, REGISTER, INVITE, DEVICE_REVOKE }
+internal enum class PasskeyOperation { LOGIN, REGISTER, INVITE, DEVICE_REVOKE, ACCOUNT_REVEAL }
 
 /** Never placed in an Intent, saved state, bridge response, cache or log. */
 internal class NativePasskeyCeremony(

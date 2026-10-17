@@ -544,10 +544,12 @@ def upgrade() -> None:
             IF TG_OP = 'DELETE' THEN
                 RAISE EXCEPTION 'Rule versions are immutable' USING ERRCODE = '55000';
             END IF;
-            IF OLD.effective_until IS NOT NULL OR NEW.effective_until IS NULL OR
+            IF NEW.effective_until IS NULL OR
+                (OLD.effective_until IS NOT NULL AND
+                 NEW.effective_until >= OLD.effective_until) OR
                 (to_jsonb(OLD) - 'effective_until') IS DISTINCT FROM
                 (to_jsonb(NEW) - 'effective_until') THEN
-                RAISE EXCEPTION 'Only the open rule period can be closed once'
+                RAISE EXCEPTION 'Only the rule period end can be shortened'
                     USING ERRCODE = '55000';
             END IF;
             RETURN NEW;

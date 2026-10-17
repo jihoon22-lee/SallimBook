@@ -49,11 +49,12 @@ internal object PasskeyPolicy {
     fun stepUpHeaderAllowed(method: String, path: String, ifMatch: String?, token: String): Boolean =
         Regex("[A-Za-z0-9_-]{32,128}").matches(token) &&
             (method == "POST" && path == "/api/v1/household/invitations" && ifMatch == null ||
+                method == "POST" && FinancePolicy.numberPath(path, true) && ifMatch == null ||
                 method == "DELETE" && AuthPolicy.requestAllowed(method, path, ifMatch))
 
     fun grant(value: Any?, purpose: String, targetId: String?, now: Instant): String {
         val result = value as? Map<*, *> ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
-        if (purpose !in setOf("household.invite", "device.revoke") || targetId == null || !uuid.matches(targetId) ||
+        if (purpose !in setOf("household.invite", "device.revoke", "account.reveal") || targetId == null || !uuid.matches(targetId) ||
             result.keys != setOf("grant_token", "purpose", "target_id", "expires_at") ||
             result["purpose"] != purpose || result["target_id"] != targetId ||
             remaining(result["expires_at"] as? String ?: "", now, 120_000) == 0L) {
@@ -188,6 +189,7 @@ internal class PasskeyPresentationPolicy(private val clock: () -> Long, private 
     private enum class Phase { FETCHED, PROVIDER, WAITING, VERIFYING, CANCELLED }
     private var phase = Phase.FETCHED
     private var returnedAt = 0L
+    private var providerBackgroundAt: Long? = null
     fun awaitingProvider(): Boolean = phase == Phase.PROVIDER
     fun waitingForPresentation(): Boolean = phase == Phase.WAITING
     fun mayWaitForPresentation(): Boolean = phase in setOf(Phase.PROVIDER, Phase.WAITING)
@@ -197,13 +199,41 @@ internal class PasskeyPresentationPolicy(private val clock: () -> Long, private 
         return true
     }
     fun providerReturned(): Boolean {
-        if (phase != Phase.PROVIDER || clock() >= expiresAt) { cancel(); return false }
+        if (!providerWaitValid()) { cancel(); return false }
         phase = Phase.WAITING
         returnedAt = clock()
         return true
     }
     fun canWait(): Boolean = phase == Phase.WAITING && clock() >= returnedAt &&
         clock() - returnedAt < 1_000L && clock() < expiresAt
+    /** A provider may cover the Activity. Its first loss of presentation starts a fixed limit. */
+    fun keepPendingInBackground(providerOwned: Boolean, requestActive: Boolean, unlocked: Boolean): Boolean {
+        if (!requestActive || !unlocked) { cancel(); return false }
+        return when (phase) {
+            Phase.PROVIDER -> {
+                if (!providerOwned) { cancel(); return false }
+                if (providerBackgroundAt == null) providerBackgroundAt = clock()
+                providerWaitValid().also { if (!it) cancel() }
+            }
+            Phase.WAITING -> canWait().also { if (!it) cancel() }
+            else -> { cancel(); false }
+        }
+    }
+    fun providerWaitValid(): Boolean {
+        if (phase != Phase.PROVIDER || clock() >= expiresAt) return false
+        val start = providerBackgroundAt ?: return true
+        return clock() >= start && clock() - start < 60_000L
+    }
+    /** No lifecycle callback can extend either the original challenge or the return deadline. */
+    fun remainingPresentationMillis(): Long {
+        val now = clock()
+        val remaining = when (phase) {
+            Phase.PROVIDER -> providerBackgroundAt?.let { 60_000L - (now - it) } ?: (expiresAt - now)
+            Phase.WAITING -> 1_000L - (now - returnedAt)
+            else -> 0L
+        }
+        return minOf(expiresAt - now, remaining).coerceAtLeast(0)
+    }
     fun claimVerification(resumed: Boolean, focused: Boolean, unlocked: Boolean): Boolean {
         if (!canWait()) { cancel(); return false }
         if (!resumed || !focused || !unlocked) return false
@@ -211,4 +241,11 @@ internal class PasskeyPresentationPolicy(private val clock: () -> Long, private 
         return true
     }
     fun cancel() { phase = Phase.CANCELLED }
+}
+
+/** The pinned Credential Manager passkey controllers use this non-exported same-task trampoline. */
+internal object PasskeyProviderActivityPolicy {
+    private const val HIDDEN = "androidx.credentials.playservices.controllers.identityauth.HiddenActivity"
+    fun permits(className: String, exported: Boolean, sameTask: Boolean, currentProviderOwned: Boolean): Boolean =
+        className == HIDDEN && !exported && sameTask && currentProviderOwned
 }

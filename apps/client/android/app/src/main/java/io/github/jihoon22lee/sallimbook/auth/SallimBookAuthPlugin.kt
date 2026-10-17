@@ -22,12 +22,41 @@ class SallimBookAuthPlugin : Plugin() {
     private val main = Handler(Looper.getMainLooper())
     private var resumed = false
     private val pending = mutableMapOf<PluginCall, ForegroundRequest>()
+    private val lockedAllowed = mutableSetOf<PluginCall>()
     private val cancelled = mutableSetOf<PluginCall>()
     private var uiCall: PluginCall? = null
     private var uiMode: String? = null
     private var uiOutcome: AuthOutcome? = null
     private var lastUiLaunch = Long.MIN_VALUE
     private val auth get() = NativeAuthSession.get(context)
+    private val appLock get() = AppLockController.get(context)
+    private var lockEventPending = true
+    private val lockChanged: () -> Unit = {
+        lockEventPending = true
+        if (appLock.locked) pending.forEach { (call, gate) ->
+            if (call !in lockedAllowed) { gate.cancel(); cancelled.add(call) }
+        }
+        flushCancelled(); flushLockEvent()
+    }
+    override fun load() { appLock.addListener(lockChanged) }
+
+    private fun flushLockEvent() {
+        if (lockEventPending && trustedForeground()) {
+            lockEventPending = false
+            notifyListeners("appLockChanged", JSObject().put("locked", appLock.locked), true)
+        }
+    }
+
+    @PluginMethod fun getAppLock(call: PluginCall) { main.post {
+        if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
+        else if (!trustedForeground()) failure(call, AuthCode.ACCESS_DENIED)
+        else resolve(call, AuthOutcome.success(mapOf("locked" to appLock.locked)))
+    } }
+    @PluginMethod fun lockApp(call: PluginCall) { main.post {
+        if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
+        else if (!trustedForeground()) failure(call, AuthCode.ACCESS_DENIED)
+        else { appLock.lock(); resolve(call, AuthOutcome.success(mapOf("locked" to true))) }
+    } }
 
     private fun trustedForeground(): Boolean = resumed && !activity.isFinishing && !activity.isDestroyed &&
         (activity as? MainActivity)?.secureBridgeReady == true &&
@@ -45,16 +74,20 @@ class SallimBookAuthPlugin : Plugin() {
 
     private fun failure(call: PluginCall, code: AuthCode) = resolve(call, AuthOutcome.failure(code))
 
-    private fun begin(call: PluginCall, action: (ForegroundRequest, (AuthOutcome) -> Unit) -> Unit) {
+    private fun begin(call: PluginCall, allowLocked: Boolean = false, action: (ForegroundRequest, (AuthOutcome) -> Unit) -> Unit) {
         if (!trustedForeground()) { failure(call, AuthCode.ACCESS_DENIED); return }
+        if (appLock.locked && !allowLocked) { failure(call, AuthCode.APP_LOCKED); return }
         if (pending.size >= 8 || uiCall != null) { failure(call, AuthCode.AUTH_UNAVAILABLE); return }
         val gate = ForegroundRequest()
         pending[call] = gate
+        if (allowLocked) lockedAllowed.add(call)
         action(gate) { outcome ->
             main.post {
                 if (pending[call] !== gate) return@post
-                if (gate.isActive() && trustedForeground()) {
+                val loggedOut = allowLocked && outcome.value?.get("status") == "signedOut"
+                if ((gate.isActive() || loggedOut) && trustedForeground() && (!appLock.locked || allowLocked)) {
                     pending.remove(call)
+                    lockedAllowed.remove(call)
                     resolve(call, outcome)
                 } else {
                     gate.cancel()
@@ -72,7 +105,7 @@ class SallimBookAuthPlugin : Plugin() {
 
     @PluginMethod fun logout(call: PluginCall) { main.post {
         if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
-        else begin(call) { gate, callback -> auth.logout(gate, callback) }
+        else begin(call, allowLocked = true) { gate, callback -> auth.logout(gate, callback) }
     } }
 
     @PluginMethod fun request(call: PluginCall) { main.post {
@@ -87,6 +120,20 @@ class SallimBookAuthPlugin : Plugin() {
         } else begin(call) { gate, callback -> auth.request(method, path, ifMatch, gate, callback) }
     } }
 
+    private fun finance(call: PluginCall, operation: FinanceOperation) { main.post {
+        begin(call) { gate, callback -> auth.finance(operation, call.data, gate, callback) }
+    } }
+    @PluginMethod fun listAssets(call: PluginCall) = finance(call, FinanceOperation.LIST_ASSETS)
+    @PluginMethod fun getAsset(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET)
+    @PluginMethod fun createAsset(call: PluginCall) = finance(call, FinanceOperation.CREATE_ASSET)
+    @PluginMethod fun updateAsset(call: PluginCall) = finance(call, FinanceOperation.UPDATE_ASSET)
+    @PluginMethod fun archiveAsset(call: PluginCall) = finance(call, FinanceOperation.ARCHIVE_ASSET)
+    @PluginMethod fun deleteAsset(call: PluginCall) = finance(call, FinanceOperation.DELETE_ASSET)
+    @PluginMethod fun listAccounts(call: PluginCall) = finance(call, FinanceOperation.LIST_ACCOUNTS)
+    @PluginMethod fun getAccount(call: PluginCall) = finance(call, FinanceOperation.GET_ACCOUNT)
+    @PluginMethod fun createAccount(call: PluginCall) = finance(call, FinanceOperation.CREATE_ACCOUNT)
+    @PluginMethod fun updateAccount(call: PluginCall) = finance(call, FinanceOperation.UPDATE_ACCOUNT)
+
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
@@ -96,6 +143,21 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun createInvitationWithPasskeyUI(call: PluginCall) { main.post { launchForm(call, NativePasskeyActivity.INVITE) } }
     @PluginMethod fun revokePasskeyUI(call: PluginCall) { main.post { launchTargetForm(call, NativePasskeyActivity.REVOKE, "credentialId") } }
     @PluginMethod fun revokeDeviceUI(call: PluginCall) { main.post { launchTargetForm(call, NativePasskeyActivity.DEVICE, "deviceId") } }
+    @PluginMethod fun editAccountNumberUI(call: PluginCall) { main.post { launchAccountForm(call, NativeAccountNumberActivity.EDIT) } }
+    @PluginMethod fun showAccountNumberUI(call: PluginCall) { main.post { launchAccountForm(call, NativeAccountNumberActivity.SHOW) } }
+    @PluginMethod fun showAccountNumberWithPasskeyUI(call: PluginCall) { main.post { launchAccountForm(call, NativePasskeyActivity.ACCOUNT) } }
+
+    private fun launchAccountForm(call: PluginCall, mode: String) {
+        val fields = call.data.keys().asSequence().toSet()
+        val id = call.data.opt("accountId") as? String
+        val tag = call.data.opt("ifMatch") as? String
+        val expected = if (mode == NativeAccountNumberActivity.EDIT) setOf("accountId", "ifMatch") else setOf("accountId")
+        if (fields != expected || id == null || !PasskeyPolicy.uuid.matches(id) ||
+            mode == NativeAccountNumberActivity.EDIT && !PasskeyPolicy.target(id, tag)) {
+            failure(call, AuthCode.INVALID_REQUEST); return
+        }
+        launchForm(call, mode, id, tag)
+    }
 
     private fun launchTargetForm(call: PluginCall, mode: String, idKey: String) {
         val names = call.data.keys().asSequence().toSet()
@@ -110,6 +172,7 @@ class SallimBookAuthPlugin : Plugin() {
     private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null) {
         if (targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
         if (!trustedForeground() || !activity.hasWindowFocus()) { failure(call, AuthCode.ACCESS_DENIED); return }
+        if (appLock.locked) { failure(call, AuthCode.APP_LOCKED); return }
         val now = SystemClock.elapsedRealtime()
         if (!auth.available || uiCall != null || pending.isNotEmpty() ||
             lastUiLaunch != Long.MIN_VALUE && now - lastUiLaunch < 1000) {
@@ -121,11 +184,16 @@ class SallimBookAuthPlugin : Plugin() {
         uiMode = mode
         try {
             val passkey = mode in setOf(NativePasskeyActivity.LOGIN, NativePasskeyActivity.REGISTER,
-                NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE, NativePasskeyActivity.INVITE)
-            val intent = Intent(activity, if (passkey) NativePasskeyActivity::class.java else NativeAuthActivity::class.java)
+                NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE, NativePasskeyActivity.INVITE, NativePasskeyActivity.ACCOUNT)
+            val component = when {
+                passkey -> NativePasskeyActivity::class.java
+                mode in setOf(NativeAccountNumberActivity.EDIT, NativeAccountNumberActivity.SHOW) -> NativeAccountNumberActivity::class.java
+                else -> NativeAuthActivity::class.java
+            }
+            val intent = Intent(activity, component)
                 .putExtra(NativeAuthActivity.EXTRA_MODE, mode)
             if (targetId != null) intent.putExtra(NativePasskeyActivity.EXTRA_ID, targetId)
-                .putExtra(NativePasskeyActivity.EXTRA_VERSION, ifMatch)
+            if (ifMatch != null) intent.putExtra(NativePasskeyActivity.EXTRA_VERSION, ifMatch)
             startActivityForResult(call, intent, "authActivityResult")
         } catch (_: Exception) {
             uiCall = null
@@ -142,11 +210,14 @@ class SallimBookAuthPlugin : Plugin() {
             NativeAuthActivity.CREATE_INVITATION, NativePasskeyActivity.INVITE -> "created"
             NativePasskeyActivity.REGISTER -> "registered"
             NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE -> "revoked"
+            NativeAccountNumberActivity.EDIT -> "saved"
+            NativeAccountNumberActivity.SHOW, NativePasskeyActivity.ACCOUNT -> "completed"
             else -> "accepted"
         }
         val status = result.data?.getStringExtra(NativeAuthActivity.EXTRA_STATUS)
-        uiOutcome = if (result.resultCode == Activity.RESULT_OK && status == expected) {
-            AuthOutcome.success(mapOf("status" to expected))
+        uiOutcome = if (result.resultCode == Activity.RESULT_OK &&
+            (status == expected || uiMode == NativeAccountNumberActivity.EDIT && status == "deleted")) {
+            AuthOutcome.success(mapOf("status" to status))
         } else if (result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) != null) {
             val code = AuthCode.entries.firstOrNull { it.name == result.data?.getStringExtra(NativeAuthActivity.EXTRA_ERROR) }
             AuthOutcome.failure(code ?: AuthCode.AUTH_UNAVAILABLE)
@@ -161,7 +232,7 @@ class SallimBookAuthPlugin : Plugin() {
         uiCall = null
         uiMode = null
         uiOutcome = null
-        resolve(call, outcome)
+        resolve(call, if (appLock.locked) AuthOutcome.failure(AuthCode.APP_LOCKED) else outcome)
     }
 
     private fun flushCancelled() {
@@ -169,13 +240,14 @@ class SallimBookAuthPlugin : Plugin() {
         cancelled.toList().forEach { call ->
             cancelled.remove(call)
             pending.remove(call)
-            failure(call, AuthCode.AUTH_CANCELLED)
+            lockedAllowed.remove(call)
+            failure(call, if (appLock.locked) AuthCode.APP_LOCKED else AuthCode.AUTH_CANCELLED)
         }
     }
 
     override fun handleOnResume() {
         resumed = true
-        main.post { flushCancelled(); flushUiResult() }
+        main.post { flushLockEvent(); flushCancelled(); flushUiResult() }
     }
 
     override fun handleOnPause() {
@@ -184,9 +256,11 @@ class SallimBookAuthPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        appLock.removeListener(lockChanged)
         resumed = false
         pending.forEach { (call, gate) -> gate.cancel(); call.release(bridge) }
         pending.clear()
+        lockedAllowed.clear()
         cancelled.clear()
         uiCall?.release(bridge)
         uiCall = null

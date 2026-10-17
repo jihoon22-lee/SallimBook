@@ -34,16 +34,26 @@ internal class NativeAuthSession private constructor(context: Context) {
     private val origin = AuthPolicy.apiOrigin(BuildConfig.SALLIMBOOK_API_ORIGIN)
     val available = origin != null && (app.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP) == 0
     private val executor = Executors.newSingleThreadExecutor { task -> Thread(task, "sallimbook-account-auth") }
+    private val appLock by lazy { AppLockController.get(app) }
+    fun hasLocalSession(): Boolean = accessToken != null || available && store.hasRefresh()
+
+    private fun authorize(gate: ForegroundRequest, kind: AppRequestKind = AppRequestKind.PROTECTED) {
+        if (kind in setOf(AppRequestKind.LOGIN, AppRequestKind.INVITATION) && appLock.locked && hasLocalSession())
+            throw AuthFailure(AuthCode.APP_LOCKED)
+        appLock.bind(gate, kind)
+    }
+
     private val store by lazy { RefreshStore(app, origin.orEmpty()) }
     private val http by lazy { NativeAuthHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
-    private var accessToken: String? = null
+    @Volatile private var accessToken: String? = null
     private var accessExpiresAt = 0L
 
     private fun execute(gate: ForegroundRequest, callback: (AuthOutcome) -> Unit, action: () -> AuthOutcome) {
         executor.execute {
             val outcome = try {
+                authorize(gate)
                 gate.check()
-                action()
+                action().also { gate.check() }
             } catch (failure: AuthFailure) {
                 AuthOutcome.failure(failure.code)
             } catch (_: Exception) {
@@ -126,6 +136,7 @@ internal class NativeAuthSession private constructor(context: Context) {
         executor.execute {
             var payload: JSONObject? = null
             val outcome = try {
+                authorize(gate, AppRequestKind.LOGIN)
                 requireAvailable()
                 gate.check()
                 payload = JSONObject().put("login_name", loginName).put("password", String(password))
@@ -134,6 +145,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 val response = http.send("POST", "/api/v1/auth/native/login", gate, body = payload)
                 if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
                 acceptTokens(response.body, gate)
+                appLock.finishServerAuthentication(gate)
                 AuthOutcome.success(mapOf("status" to "authenticated"))
             } catch (failure: AuthFailure) {
                 AuthOutcome.failure(failure.code)
@@ -153,6 +165,7 @@ internal class NativeAuthSession private constructor(context: Context) {
         executor.execute {
             var payload: JSONObject? = null
             val outcome = try {
+                authorize(gate, AppRequestKind.REAUTHENTICATE)
                 requireAvailable()
                 gate.check()
                 val token = access(gate)
@@ -167,6 +180,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
                 AuthPolicy.metadataBody("GET", "/api/v1/me", response.status, response.body)
                 gate.check()
+                appLock.finishServerAuthentication(gate)
                 AuthOutcome.success(mapOf("status" to "authenticated"))
             } catch (failure: AuthFailure) {
                 AuthOutcome.failure(failure.code)
@@ -187,6 +201,7 @@ internal class NativeAuthSession private constructor(context: Context) {
         executor.execute {
             var payload: JSONObject? = null
             val outcome = try {
+                authorize(gate, AppRequestKind.INVITATION)
                 requireAvailable()
                 gate.check()
                 payload = JSONObject().put("token", String(invitation)).put("password", String(password))
@@ -218,6 +233,7 @@ internal class NativeAuthSession private constructor(context: Context) {
         executor.execute {
             var invitation: NativeInvitation? = null
             val outcome = try {
+                authorize(gate, AppRequestKind.PROTECTED)
                 requireAvailable()
                 gate.check()
                 val response = http.send("POST", "/api/v1/household/invitations", gate,
@@ -252,13 +268,14 @@ internal class NativeAuthSession private constructor(context: Context) {
         executor.execute {
             val outcome = try {
                 val token = if (available && gate.isActive()) {
-                    try { access(gate) } catch (_: AuthFailure) { null }
+                    try { authorize(gate, AppRequestKind.LOGOUT); access(gate) } catch (_: AuthFailure) { null }
                 } else null
                 // A foreground logout intent still clears locally if the Activity pauses while queued.
                 clearLocal()
                 val revoked = if (token == null || !gate.isActive()) false else try {
                     http.send("POST", "/api/v1/auth/native/logout", gate, body = JSONObject(), accessToken = token).status == 204
                 } catch (_: AuthFailure) { false }
+                appLock.lock()
                 AuthOutcome.success(mapOf("status" to "signedOut", "serverRevoked" to revoked))
             } catch (failure: AuthFailure) {
                 AuthOutcome.failure(failure.code)
@@ -286,6 +303,83 @@ internal class NativeAuthSession private constructor(context: Context) {
         AuthOutcome.success(mapOf("status" to response.status, "body" to safeBody))
     }
 
+    fun finance(
+        operation: FinanceOperation, arguments: JSONObject,
+        gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,
+    ) = execute(gate, callback) {
+        requireAvailable()
+        val request = FinancePolicy.prepare(operation, http.jsonValue(arguments))
+        val response = http.send(request.method, request.path, gate,
+            body = request.body?.let { JSONObject(it) }, accessToken = access(gate), ifMatch = request.ifMatch)
+        if (response.status == 401) clearLocal()
+        val safe = if (response.status in 200..299) FinancePolicy.response(operation, request, response.status, response.body)
+            else AuthPolicy.safeError(response.status, response.body, response.requestId)
+                ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+        AuthOutcome.success(mapOf("status" to response.status, "body" to safe))
+    }
+
+    private fun accountNumberFailure(response: NativeHttpResponse): Nothing {
+        if (response.status == 401) { clearLocal(); throw AuthFailure(AuthCode.SESSION_EXPIRED) }
+        val code = ((response.body as? Map<*, *>)?.get("error") as? Map<*, *>)?.get("code")
+        throw AuthFailure(when {
+            response.status == 403 && code == "REAUTHENTICATION_REQUIRED" -> AuthCode.REAUTHENTICATION_REQUIRED
+            response.status == 409 && code == "VERSION_CONFLICT" -> AuthCode.VERSION_CONFLICT
+            response.status == 503 -> AuthCode.AUTH_UNAVAILABLE
+            else -> AuthCode.ACCESS_DENIED
+        })
+    }
+
+    private fun accountNumberResponse(response: NativeHttpResponse, accountId: String): NativeAccountNumber {
+        if (response.status != 200) accountNumberFailure(response)
+        return NativeAccountNumber(FinancePolicy.readNumber(response.body, accountId))
+    }
+
+    fun editAccountNumber(
+        accountId: String, ifMatch: String, number: CharArray?, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,
+    ) {
+        executor.execute {
+            var payload: JSONObject? = null
+            val outcome = try {
+                authorize(gate, AppRequestKind.PROTECTED)
+                requireAvailable(); gate.check()
+                if (!PasskeyPolicy.target(accountId, ifMatch) || number != null && !FinancePolicy.number(number)) {
+                    throw AuthFailure(AuthCode.INVALID_REQUEST)
+                }
+                payload = JSONObject().put("account_number", number?.let(::String) ?: JSONObject.NULL)
+                number?.fill('\u0000')
+                val response = http.send("PATCH", "/api/v1/accounts/$accountId", gate, body = payload,
+                    accessToken = access(gate), ifMatch = ifMatch, nativeAccountNumber = true)
+                if (response.status != 200) accountNumberFailure(response)
+                val safe = try { FinancePolicy.account(response.body) } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+                if (safe["id"] != accountId) throw AuthFailure(AuthCode.ACCESS_DENIED)
+                gate.check()
+                AuthOutcome.success(mapOf("status" to if (number == null) "deleted" else "saved"))
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            finally { payload?.remove("account_number"); number?.fill('\u0000') }
+            callback(outcome)
+        }
+    }
+
+    fun revealAccountNumber(
+        accountId: String, gate: ForegroundRequest, callback: (AuthOutcome, NativeAccountNumber?) -> Unit,
+    ) {
+        executor.execute {
+            var number: NativeAccountNumber? = null
+            val outcome = try {
+                authorize(gate, AppRequestKind.PROTECTED)
+                requireAvailable(); gate.check(); FinancePolicy.id(accountId)
+                val response = http.send("POST", "/api/v1/accounts/$accountId/reveal", gate,
+                    body = JSONObject(), accessToken = access(gate), nativeAccountNumber = true)
+                number = accountNumberResponse(response, accountId)
+                gate.check()
+                AuthOutcome.success(mapOf("status" to "completed"))
+            } catch (failure: AuthFailure) { number?.discard(); number = null; AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { number?.discard(); number = null; AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            callback(outcome, number)
+        }
+    }
+
     private fun passkeyFailure(response: NativeHttpResponse, unauthenticatedLogin: Boolean = false): Nothing {
         PasskeyPolicy.reject(response.status, response.body, unauthenticatedLogin, ::clearLocal)
     }
@@ -297,12 +391,16 @@ internal class NativeAuthSession private constructor(context: Context) {
         executor.execute {
             var ceremony: NativePasskeyCeremony? = null
             val outcome = try {
+                authorize(gate, if (operation == PasskeyOperation.LOGIN) AppRequestKind.LOGIN else AppRequestKind.PROTECTED)
                 requireAvailable()
                 gate.check()
                 val configuration = PasskeyConfiguration.read(app) ?: throw AuthFailure(AuthCode.PASSKEYS_DISABLED)
                 var target = targetId
                 val access = if (operation == PasskeyOperation.LOGIN) null else access(gate)
                 if (operation == PasskeyOperation.DEVICE_REVOKE && !PasskeyPolicy.target(target, ifMatch)) {
+                    throw AuthFailure(AuthCode.INVALID_REQUEST)
+                }
+                if (operation == PasskeyOperation.ACCOUNT_REVEAL && (target == null || !PasskeyPolicy.uuid.matches(target) || ifMatch != null)) {
                     throw AuthFailure(AuthCode.INVALID_REQUEST)
                 }
                 if (operation in setOf(PasskeyOperation.LOGIN, PasskeyOperation.INVITE) &&
@@ -325,7 +423,11 @@ internal class NativeAuthSession private constructor(context: Context) {
                 val payload = when (operation) {
                     PasskeyOperation.LOGIN -> JSONObject().put("login_name", text).put("device_label", "Android")
                     PasskeyOperation.REGISTER -> JSONObject().put("label", text)
-                    else -> JSONObject().put("purpose", if (operation == PasskeyOperation.INVITE) "household.invite" else "device.revoke")
+                    else -> JSONObject().put("purpose", when (operation) {
+                        PasskeyOperation.INVITE -> "household.invite"
+                        PasskeyOperation.ACCOUNT_REVEAL -> "account.reveal"
+                        else -> "device.revoke"
+                    })
                         .put("target_id", target)
                 }
                 val response = http.send("POST", path, gate, body = payload, accessToken = access)
@@ -358,13 +460,15 @@ internal class NativeAuthSession private constructor(context: Context) {
     /** Verification and any scoped mutation are one native operation; no grant is returned. */
     fun finishPasskey(
         ceremony: NativePasskeyCeremony, credentialJson: CharArray, gate: ForegroundRequest,
-        callback: (AuthOutcome, NativeInvitation?) -> Unit,
+        callback: (AuthOutcome, NativeInvitation?, NativeAccountNumber?) -> Unit,
     ) {
         executor.execute {
             var invitation: NativeInvitation? = null
+            var accountNumber: NativeAccountNumber? = null
             var payload: JSONObject? = null
             var grant: CharArray? = null
             val outcome = try {
+                authorize(gate, if (ceremony.operation == PasskeyOperation.LOGIN) AppRequestKind.LOGIN else AppRequestKind.PROTECTED)
                 requireAvailable()
                 gate.check()
                 if (!ceremony.claim(SystemClock.elapsedRealtime()) || credentialJson.size !in 1..100_000) {
@@ -406,6 +510,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                         // A failed/cancelled replacement must not destroy the current session.
                         // acceptTokens publishes only inside the active gate after encrypted save.
                         acceptTokens(response.body, gate)
+                        appLock.finishServerAuthentication(gate)
                         AuthOutcome.success(mapOf("status" to "authenticated"))
                     }
                     PasskeyOperation.REGISTER -> {
@@ -413,10 +518,20 @@ internal class NativeAuthSession private constructor(context: Context) {
                         AuthOutcome.success(mapOf("status" to "registered"))
                     }
                     else -> {
-                        val purpose = if (operation == PasskeyOperation.INVITE) "household.invite" else "device.revoke"
+                        val purpose = when (operation) {
+                            PasskeyOperation.INVITE -> "household.invite"
+                            PasskeyOperation.ACCOUNT_REVEAL -> "account.reveal"
+                            else -> "device.revoke"
+                        }
                         grant = PasskeyPolicy.grant(response.body, purpose, ceremony.targetId, Instant.now()).toCharArray()
                         gate.check()
-                        if (operation == PasskeyOperation.DEVICE_REVOKE) {
+                        if (operation == PasskeyOperation.ACCOUNT_REVEAL) {
+                            val accountId = ceremony.targetId ?: throw AuthFailure(AuthCode.INVALID_REQUEST)
+                            val revealed = http.send("POST", "/api/v1/accounts/$accountId/reveal", gate,
+                                body = JSONObject(), accessToken = access, stepUpToken = String(grant), nativeAccountNumber = true)
+                            accountNumber = accountNumberResponse(revealed, accountId)
+                            AuthOutcome.success(mapOf("status" to "completed"))
+                        } else if (operation == PasskeyOperation.DEVICE_REVOKE) {
                             val removed = http.send("DELETE", "/api/v1/devices/${ceremony.targetId}", gate,
                                 accessToken = access, ifMatch = ceremony.ifMatch, stepUpToken = String(grant))
                             if (removed.status != 204) passkeyFailure(removed)
@@ -446,7 +561,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 grant?.fill('\u0000')
                 ceremony.discard()
             }
-            callback(outcome, invitation)
+            callback(outcome, invitation, accountNumber)
         }
     }
 

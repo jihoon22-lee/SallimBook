@@ -163,7 +163,23 @@ API 변경 후 `pnpm api:generate`와 `pnpm typecheck`로 OpenAPI·TS 계약을 
 
 `0009_recurring`의 기간 배타 제약은 고정 PostgreSQL 이미지의 btree_gist 1.8을 사용한다. 마이그레이션 역할에 대상 DB의 CREATE 권한이 필요하고 런타임 API 역할에는 확장 설치 권한을 주지 않는다. public의 기존 확장 버전/위치가 다르면 자동 이동·업그레이드하지 않고 마이그레이션을 중단한다. [PostgreSQL btree_gist 문서](https://www.postgresql.org/docs/18/btree-gist.html), [CREATE EXTENSION 문서](https://www.postgresql.org/docs/18/sql-createextension.html)를 확인했다.
 
-SB-018 결제수단 연결 조회·종료 확인은 새 migration 없이 `0009_recurring` 위에 연결했다.
-`test_payment_links.py`42개, 카드30개, 자산61개, 고정비69개, 계좌68개가 현재 코드에서 통과했다
-(총270개, 종료 확인이 필요한 기존 fixture 수정 후 분리 재검증 포함). Alembic drift 없음과
-downgrade/upgrade 왕복도 확인했다. 기존 서버·데이터는 변경하지 않고 일회용 시험 DB만 사용했다.
+
+### 자산·계좌 화면 검증
+
+자산 목록·등록·상세·수정·사용 종료와 계좌 목록·등록·상세·수정·사용 종료를 실제 생성 API client에 연결했다.
+월 스냅샷/월간 비교 API 연결은 별도 작업이며 현재 화면은 아직 조회하지 않은 금액을 0원으로 채우지 않는다.
+계좌는 하나의 금융 자산과 연결하고 평가액을 중복 합산하지 않는다.
+
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.finance.config.ts`는 별도
+loopback 18748 포트에서 UI 회귀를 실행한다. `uv run --project services/api python scripts/test_web_auth.py --finance`는
+전용 DB 18745의 임시 schema, 임시 HTTPS 인증서·서버 필드 암호키, 실제 가상 WebAuthn 인증기를 사용한다.
+전역 DB 시험 잠금을 획득하며 다른 체크아웃이 사용 중이면 서비스 변경 없이 종료한다.
+키 파일과 비공개 브라우저 산출물은 mode 0700 임시 디렉터리에 만들고 종료 시 삭제한다.
+기존 서버·신뢰 저장소·운영 RP·서명키를 변경하지 않는다.
+
+구현 범위와 검증 결과는 [자산·계좌 UI 검증 기록](testing/assets-accounts-client.md)을 따른다.
+Android 번호 입력·표시 실기기 시험은 빌드/JVM/브라우저 bridge 모의시험과 구분한다.
+
+### 병렬 검증 자원
+
+같은 WSL에서 UI 브라우저 검사를 실행하는 동안 Docker 시험 컨테이너의 생성·시작·중지를 병행하지 않는다. 네트워크 인터페이스 변경이 Chromium의 모듈 요청에 `ERR_NETWORK_CHANGED`를 일으킬 수 있어 순서를 조정한다. 별도 UI 포트는 config 하나의 webServer로 지정한다. `/tmp`가 메모리 기반이고 공간이 부족하면 재생성 가능한 이전 빌드 캐시를 정리하거나 TMPDIR를 충분한 로컬 저장소로 지정한다. 소스·사용자 파일·기존 서비스는 정리 대상이 아니다.
