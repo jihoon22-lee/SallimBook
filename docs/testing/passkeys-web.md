@@ -40,16 +40,25 @@ Chromium 가상 인증기가 실제 서명을 만들고 API가 실제 PostgreSQL
 
 ## 결과
 
-2026-10-18 Asia/Seoul 기준 결과:
+2026-10-18 Asia/Seoul 기준, 서버 기기 폐기 경합 수정과 동일 세션 비밀번호 재인증을 병합한 결과:
 
-- 전체 Playwright UI 검사 **106개 통과**. 이후 숨김·늦은 옵션 응답·네이티브 세션 만료 6개를 추가한 관련 검사 **62개 통과**.
-- 실제 HTTPS WebAuthn 검사 **2개 통과**: 등록·로그인·공개 목록·폐기, 폐기 키 재로그인 거부,
-  초대·기기 해제용 scoped grant의 실제 소비와 계정 인증 시각 비갱신, 실제 대기 중인 인증의 취소.
-- TypeScript 검사와 Vite 빌드 통과. 전용 테스트 DB 서비스 중지와 임시 스키마 정리 완료.
-- 테스트 중 발견한 fixture 문제는 이미 로그아웃으로 폐기된 기기를 대상으로 선택한 점과,
-  확인 버튼 표시 전환을 실제 서버 폐기 완료로 오인한 점이었다. 별도 활성 기기를 만들고 서버 목록의
-  연결 해제 상태를 기다리도록 수정했다. 제품 성공을 모의 응답으로 대체하지 않았다.
-- Galaxy 실기기 시험은 전체 기능 개발 이후에 수행하며 현재 미실행이다.
+| 검사 | 결과 |
+|---|---|
+| `pnpm --filter @sallimbook/client exec playwright test --config playwright.passkeys.config.ts` | 전체 UI **120개 통과** |
+| `uv run --project services/api python scripts/test_web_auth.py --passkeys` | 실제 HTTPS WebAuthn **2개 통과** |
+| `uv run --project services/api python scripts/test_web_auth.py` | 실제 HTTPS 쿠키·CSRF·동일 세션 비밀번호 재인증 **2개 통과** |
+| `uv run --project services/api python scripts/test_database.py services/api/tests/test_identity.py services/api/tests/test_passkeys.py` | API·권한·검증 **100개 통과**, Alembic drift 없음, downgrade/upgrade 성공 |
+| `pnpm api:generate`, `pnpm typecheck` | 통합 서버에서 API 계약 재생성·타입 검사 통과 |
+| `pnpm android:sync` 후 `:app:testDebugUnitTest :app:assembleDebug :app:compileReleaseKotlin` | 인증 JVM **27개 통과**, 개발 APK·release Kotlin 컴파일 성공 |
+
+WebAuthn 검사는 등록·로그인·공개 목록·폐기와 폐기 키 재로그인 거부를 확인했다. 초대·기기 해제용 scoped
+grant를 실제로 소비한 뒤에도 패스키 등록·폐기에 필요한 계정 인증 시각이 갱신되지 않음을 확인했다.
+기기 폐기 검사는 별도 브라우저에서 실제 활성 기기를 만들고 서버 목록의 연결 해제 상태를 기다려 판정한다.
+대기 중인 실제 가상 인증기를 취소할 때 등록 검증 요청이 전송되지 않음도 확인했다.
+
+모든 DB 실행 뒤 전용 테스트 서비스 중지와 임시 스키마 정리를 완료했다. API 검사에 Starlette의 httpx
+폐기 예정 경고 1개가 있었으며 실패·건너뜀은 없었다. Galaxy 실기기 시험은 전체 기능 개발 이후에 수행하며
+현재 미실행이다. 이 결과는 운영 RP·인증서·DAL 배포나 실제 생체 인증·보관함 보안 게이트의 완료가 아니다.
 
 ## 표준 근거
 

@@ -128,7 +128,29 @@ staging·production은 기본 허용 origin이 없으며 환경변수 또는 `.e
 native는 [Android Digital Asset Links 절차](https://developer.android.com/identity/credential-manager/prerequisites)에 따라
 실제 RP 도메인에 `/.well-known/assetlinks.json`을 배포하고 applicationId와 실제 서명 인증서를 연결해야 한다.
 DAL의 `sha256_cert_fingerprints`와 서버 native origin의 base64url 해시 표현을 구분한다.
-현재 실제 도메인·운영 서명 인증서·DAL 배포·PC/Android 인증 UI 연결은 미완료이며, 서버 검증만 구현했다.
+웹 WebAuthn UI와 Android Credential Manager UI를 서버 검증에 연결했다. 실제 도메인·운영 서명 인증서·
+DAL 배포·실기기 인증은 아직 미완료다. [웹 검증 기록](testing/passkeys-web.md)의 가상 인증기 결과를
+Android 실기기 검증으로 해석하지 않는다.
+
+Android 빌드에는 다음 Gradle 속성을 별도로 지정한다. 기본값은 모두 비어 있으며 임의의 운영 호스트나
+개발 인증서 지문을 자동 채우지 않는다. 환경변수로 지정할 때는 `ORG_GRADLE_PROJECT_` 접두사를 쓴다.
+
+| Gradle 속성 | 내용 |
+|---|---|
+| `sallimbookApiOrigin` | 네이티브 API의 고정 HTTPS origin |
+| `sallimbookPasskeyRpId` | 실제 RP 호스트명. API 호스트는 이 RP 또는 그 하위 도메인이어야 함 |
+| `sallimbookPasskeyCertSha256` | 실제 APK 서명 인증서 SHA-256 64자리 hex. 콜론과 대소문자는 정규화 |
+
+실행 시 실제 APK 서명 인증서가 지정 지문과 일치하는지 확인한다. RP·인증서가 미지정이거나 잘못되면
+패스키를 사용할 수 없으며 다른 인증으로 성공 처리하지 않는다. APK의 `asset_statements`는 지정 RP의
+`/.well-known/assetlinks.json`을 참조한다. 서버 native origin과 DAL에는 배포할 debug/release applicationId와
+실제 서명 인증서를 각각 정확히 연결한다. 지문 확인은 DAL의 실제 배포 검증을 대신하지 않는다.
+
+Android 의존성은 `androidx.credentials:credentials`와 `credentials-play-services-auth` **1.6.0**으로 고정했다.
+[공식 릴리스](https://developer.android.com/jetpack/androidx/releases/credentials)와 AAR 요구 SDK를 확인한 뒤
+현재 SDK 36·AGP 8.13.0·JDK 21에서 debug 빌드, release Kotlin 컴파일, JVM 정책 검사로 호환성을 확인했다.
+비밀번호·패스키·초대 UI 및 토큰은 네이티브에 남기며 JS에는 완료·취소 상태와 공개 메타데이터만 반환한다.
+구체적인 메서드는 [계정 인증 bridge 계약](native-bridge-contract.md#7-계정-인증-bridge-sb-005006)을 따른다.
 
 서버 검증 명령은 `uv run --project services/api --frozen python scripts/test_database.py`다.
 전체 테스트와 Alembic 차이 검사·`downgrade base`/`upgrade head`를 전용 시험 DB에서 실행한다.
