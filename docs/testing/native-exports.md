@@ -93,6 +93,13 @@ Android provider를 실행한 결과가 아니다.
 export 형식·선택 schema·응답 제한·취소 수명 검사 **44개**도 통과했다. 이 명령은 DB를 쓰지 않으며
 서버/마이그레이션/계약/lockfile을 수정하지 않았다. DB 권한·최근 인증의 서버 통합시험 결과와 구분한다.
 
+최신 플랫폼 통합 기준 `def1c228` 병합 후 typecheck·Android sync·debug APK·release Kotlin 검증을
+다시 통과했다. 네이티브 소스와 export adapter/시험은 위 검토본과 동일하다. JVM task는 이어서
+`:app:testDebugUnitTest --rerun`으로 실제 재실행해 **308개** 모두 통과했다(실패·오류·건너뜀 0).
+release Kotlin은 변경 없는 입력에 대한 Gradle UP-TO-DATE 검증이며 debug APK는 새 웹 bundle로
+다시 생성했다. export bridge/API 형식 시험의 동일 파일은 재실행하지 않고 위 58개/44개 결과를 유지한다.
+웹 bundle의 기존 500KiB chunk 경고는 남아 있다.
+
 실제 Android 재인증·SAF·파일 제공자·64MiB 메모리/저장·잠금·늦은 callback·부분 사본 삭제는 아직
 두 Galaxy에서 실행하지 않았다. proxy/log/bridge/backup 검사, 잘못된 hash·권한 철회·저장 공간 부족·
 provider 지연/강제 종료와 새 서버 복원도 인수 단계에서 별도로 수행해야 한다.

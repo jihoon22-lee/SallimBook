@@ -302,8 +302,8 @@
       "git_sha1": "c8d785f25257c30141e59008be46acc0711197b4"
     },
     "docs/testing/native-exports.md": {
-      "sha256": "fe77acf9c24919fbafbc64cc82738fa42f3e3f69b138572f3b16a37cb0524a93",
-      "git_sha1": "6ef8968d7834e085c346ce7e4e2ede0840e7970d"
+      "sha256": "7e484452d96b11c14f28b064861ec2eeac88d312b71363606ce8e3323ed544b8",
+      "git_sha1": "0ac25fc89f7972988d47af8f42a62bebdb6082a9"
     },
     "docs/testing/vault-server.md": {
       "sha256": "3a745029c31d11afe5eaa28fd17a51b0cdaf90e68ad45472813d77a503a11e4e",
