@@ -1,5 +1,6 @@
 """Manual card metadata with household links and closure instead of history deletion."""
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -21,9 +22,13 @@ from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.service import utcnow
 
 
-def card_response(session: Session, card: Card) -> CardResponse:
+def card_response(
+    session: Session, card: Card, *, account_statuses: Mapping[UUID, str] | None = None
+) -> CardResponse:
     account_status = None
-    if card.settlement_account_id is not None:
+    if card.settlement_account_id is not None and account_statuses is not None:
+        account_status = account_statuses[card.settlement_account_id]
+    elif card.settlement_account_id is not None:
         ended_on = session.execute(
             select(Asset.ended_on)
             .join(
@@ -50,6 +55,9 @@ def card_response(session: Session, card: Card) -> CardResponse:
 
 
 def _validate_links(session: Session, principal: Principal, payload: CardCreate, previous=None):
+    reactivating = (
+        previous is not None and previous.ended_on is not None and payload.ended_on is None
+    )
     if payload.ended_on is not None and payload.ended_on > utcnow().astimezone(SEOUL).date():
         raise DomainError("INVALID_CARD_DATES", "실제로 사용을 종료한 날짜를 입력해 주세요.", 422)
     if payload.settlement_account_id is not None:
@@ -57,15 +65,14 @@ def _validate_links(session: Session, principal: Principal, payload: CardCreate,
         asset = scoped_entity(session, Asset, account.asset_id, principal, for_update=True)
         scoped_entity(session, FinancialAccount, account.id, principal, for_update=True)
         new_link = previous is None or previous.settlement_account_id != account.id
-        reactivating = (
-            previous is not None and previous.ended_on is not None and payload.ended_on is None
-        )
         if asset.ended_on is not None and payload.ended_on is None and (new_link or reactivating):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 결제 계좌를 선택해 주세요.", 422)
     member = scoped_entity(
         session, HouseholdMember, payload.owner_member_id, principal, for_update=True
     )
-    if (previous is None or previous.owner_member_id != member.id) and member.status != "active":
+    if (
+        previous is None or previous.owner_member_id != member.id or reactivating
+    ) and member.status != "active":
         raise DomainError("MEMBER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
 
 
@@ -200,8 +207,30 @@ def list_cards(
     if cursor is not None:
         query = query.where(Card.id < cursor)
     rows = list(session.scalars(query.order_by(Card.id.desc()).limit(limit + 1)))
+    account_ids = {
+        row.settlement_account_id for row in rows[:limit] if row.settlement_account_id is not None
+    }
+    account_statuses = {}
+    if account_ids:
+        account_statuses = {
+            account_id: "closed" if ended_on is not None else "active"
+            for account_id, ended_on in session.execute(
+                select(FinancialAccount.id, Asset.ended_on)
+                .join(
+                    Asset,
+                    (Asset.id == FinancialAccount.asset_id)
+                    & (Asset.household_id == FinancialAccount.household_id),
+                )
+                .where(
+                    FinancialAccount.household_id == principal.household_id,
+                    FinancialAccount.id.in_(account_ids),
+                )
+            )
+        }
     result = CardListResponse(
-        items=[card_response(session, row) for row in rows[:limit]],
+        items=[
+            card_response(session, row, account_statuses=account_statuses) for row in rows[:limit]
+        ],
         next_cursor=rows[limit - 1].id if len(rows) > limit else None,
     )
     session.commit()
