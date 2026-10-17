@@ -76,3 +76,8 @@ python3 scripts/validate_docs.py
 누락/오래된 교체·최근 인증 필요·알 수 없는 오류의 세 reader 회귀를 추가했으며,
 `pnpm --filter @sallimbook/client exec playwright test tests/vault-native-bridge.spec.ts --workers=2`의
 **36개**와 typecheck·문서 검증을 통과했다. 오류 원문은 노출하지 않고 웹 요청이나 자동 재시도를 하지 않는다.
+
+두 번째 PR 검토에서 모든 자리가 0인 PAN의 Luhn 합계가 0이어서 웹에서 허용되던
+경계를 확인했다. Android와 동일하게 최소 한 자리의 0이 아닌 숫자를 요구하며,
+13~19자리 각각의 입력·암호화·복호화 거절을 검증했다. 공개 교차 플랫폼 벡터를
+포함한 `vault-crypto.spec.ts` **10개**가 desktop/android-size에서 통과했다.
