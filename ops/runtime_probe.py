@@ -206,7 +206,8 @@ def main():
         and stat.S_IMODE(objects[0].stat().st_mode) == 0o600
     )
     print(
-        "PASS: API UID10001, DDL/trigger-disable/TRUNCATE denied, private socket, tmpfs, native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial"
+        "PASS: API UID10001, DDL/trigger-disable/TRUNCATE denied, private socket, tmpfs, "
+        "native login, real Korean OCR/ClamAV upload, AEAD storage/download, anonymous denial"
     )
 
 

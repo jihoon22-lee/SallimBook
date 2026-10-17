@@ -14,7 +14,8 @@ APPLICATION_ROLE = "sallimbook_app"
 
 def verify_role(conn):
     row = conn.execute(
-        "SELECT current_user,rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls,rolcanlogin "
+        "SELECT current_user,rolsuper,rolcreatedb,rolcreaterole,"
+        "rolreplication,rolbypassrls,rolcanlogin "
         "FROM pg_roles WHERE rolname=current_user"
     ).fetchone()
     if row != (APPLICATION_ROLE, False, False, False, False, False, True):
@@ -28,7 +29,8 @@ def verify_role(conn):
         "SELECT has_schema_privilege('public','CREATE'), "
         "has_database_privilege(current_database(),'CREATE'), "
         "has_database_privilege(current_database(),'TEMP'), "
-        "has_table_privilege('public.alembic_version','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'), "
+        "has_table_privilege('public.alembic_version',"
+        "'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'), "
         "EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
         "WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','f') "
         "AND has_table_privilege(c.oid,'TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')), "

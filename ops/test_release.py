@@ -97,7 +97,8 @@ def main(sdk):
         )
         assert first["signed"] and first["version_code"] == 2
         print(
-            "PASS: synthetic release v2 actual build, manifest/native configuration, alignment, signing/certificate",
+            "PASS: synthetic release v2 actual build, manifest/native configuration, "
+            "alignment, signing/certificate",
             flush=True,
         )
         next_config = {**config, "version_code": 3, "version_name": "0.1.2"}
@@ -123,7 +124,8 @@ def main(sdk):
         except OperationError:
             pass
         print(
-            "PASS: same-certificate prior-APK gate, increasing v3 release, tamper refusal. No device install/real signing key used."
+            "PASS: same-certificate prior-APK gate, increasing v3 release, tamper refusal. "
+            "No device install/real signing key used."
         )
 
 

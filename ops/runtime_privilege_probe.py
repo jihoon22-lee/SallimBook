@@ -49,7 +49,8 @@ def main(service_file):
                 conn.execute(undo)
             assert verify_runtime()["status"] == "runtime-role-verified"
     print(
-        "PASS: runtime verifier rejects Alembic INSERT/DELETE, audit TRUNCATE, immutable guard-function ownership"
+        "PASS: runtime verifier rejects Alembic INSERT/DELETE, audit TRUNCATE, "
+        "immutable guard-function ownership"
     )
 
 
