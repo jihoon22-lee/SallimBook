@@ -61,7 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "X-CSRF-Token",
             "X-Step-Up-Token",
         ],
-        expose_headers=["X-Request-ID", "ETag"],
+        expose_headers=["X-Request-ID", "ETag", "Location"],
     )
 
     @app.get("/api/v1/health", response_model=HealthResponse, operation_id="getHealth")

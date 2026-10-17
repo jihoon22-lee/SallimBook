@@ -1194,6 +1194,10 @@ export interface operations {
             /** @description Successful Response */
             201: {
                 headers: {
+                    /** @description Quoted record version for If-Match. */
+                    ETag?: string;
+                    /** @description Created asset resource path. */
+                    Location?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1297,6 +1301,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted record version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1389,8 +1395,8 @@ export interface operations {
     deleteAsset: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 asset_id: string;
@@ -1492,8 +1498,8 @@ export interface operations {
     updateAsset: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 asset_id: string;
@@ -1509,6 +1515,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted record version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1601,8 +1609,8 @@ export interface operations {
     archiveAsset: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 asset_id: string;
@@ -1618,6 +1626,8 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    /** @description Quoted record version for If-Match. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {

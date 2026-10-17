@@ -162,6 +162,28 @@ def test_openapi_patch_nullability_matches_server_validation():
                 AssetPatch.model_validate({name: None})
 
 
+def test_openapi_declares_required_versions_and_runtime_response_headers():
+    app = FastAPI()
+    app.include_router(router)
+    paths = app.openapi()["paths"]
+    base = "/api/v1/assets"
+    for path, method in (
+        (base + "/{asset_id}", "patch"),
+        (base + "/{asset_id}", "delete"),
+        (base + "/{asset_id}/archive", "post"),
+    ):
+        header = next(p for p in paths[path][method]["parameters"] if p["name"] == "If-Match")
+        assert header["required"] is True
+        assert header["schema"]["type"] == "string"
+    for path, method, status, headers in (
+        (base, "post", "201", {"ETag", "Location"}),
+        (base + "/{asset_id}", "get", "200", {"ETag"}),
+        (base + "/{asset_id}", "patch", "200", {"ETag"}),
+        (base + "/{asset_id}/archive", "post", "200", {"ETag"}),
+    ):
+        assert paths[path][method]["responses"][status]["headers"].keys() == headers
+
+
 @dataclass(frozen=True)
 class Actor:
     user_id: UUID

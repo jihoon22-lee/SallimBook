@@ -1,5 +1,7 @@
+from typing import Annotated
 from uuid import UUID
 
+from fastapi import Header
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
 
@@ -85,3 +87,18 @@ def test_readiness_without_db_does_not_claim_success():
         response = client.get("/api/v1/ready")
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+
+
+def test_required_version_header_preserves_custom_missing_response():
+    app = create_app(Settings(environment="test"))
+
+    @app.patch("/test-only/version")
+    def version(if_match: Annotated[str, Header(alias="If-Match")]):
+        return {"version": if_match}
+
+    with TestClient(app) as client:
+        missing = client.patch("/test-only/version")
+        present = client.patch("/test-only/version", headers={"If-Match": '"1"'})
+    assert missing.status_code == 400
+    assert missing.json()["error"]["code"] == "VERSION_REQUIRED"
+    assert present.status_code == 200
