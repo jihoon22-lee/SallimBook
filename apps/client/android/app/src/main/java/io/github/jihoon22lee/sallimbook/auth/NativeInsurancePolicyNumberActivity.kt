@@ -102,7 +102,7 @@ class NativeInsurancePolicyNumberActivity : AppCompatActivity() {
         }
         label(if (mode == EDIT) "SallimBook · 증권번호 입력" else "SallimBook · 증권번호 보기").textSize = 24f
         label("이 화면을 벗어나면 입력과 표시를 지웁니다. 증권번호는 서버에서 암호화하여 보관합니다.")
-        status = label("보험계약를 확인하고 있어요.")
+        status = label("보험계약을 확인하고 있어요.")
         output = label("")
         input = object : EditText(this) {
             override fun onTextContextMenuItem(id: Int): Boolean = false
@@ -210,9 +210,9 @@ class NativeInsurancePolicyNumberActivity : AppCompatActivity() {
         if (!::status.isInitialized) return
         setResult(Activity.RESULT_CANCELED, Intent().putExtra(NativeAuthActivity.EXTRA_ERROR, code.name))
         status.text = when (code) {
-            AuthCode.VERSION_CONFLICT -> "다른 기기에서 보험계약를 수정했어요. 이 화면을 닫고 최신 내용을 다시 확인해 주세요."
+            AuthCode.VERSION_CONFLICT -> "다른 기기에서 보험계약을 수정했어요. 이 화면을 닫고 최신 내용을 다시 확인해 주세요."
             AuthCode.REAUTHENTICATION_REQUIRED, AuthCode.SESSION_EXPIRED -> "이 화면을 닫고 현재 계정의 비밀번호로 다시 인증한 뒤 열어 주세요."
-            AuthCode.NETWORK_UNAVAILABLE, AuthCode.AUTH_CANCELLED -> "처리 결과를 확인할 수 없어요. 자동 재전송하지 않았으니 화면을 닫고 보험계약를 새로 조회해 주세요."
+            AuthCode.NETWORK_UNAVAILABLE, AuthCode.AUTH_CANCELLED -> "처리 결과를 확인할 수 없어요. 자동 재전송하지 않았으니 화면을 닫고 보험계약을 새로 조회해 주세요."
             else -> "증권번호를 처리할 수 없어요. 화면을 닫고 보험계약 상태와 서버 보호 설정을 확인해 주세요."
         }
         action.isEnabled = false; delete.isEnabled = false
