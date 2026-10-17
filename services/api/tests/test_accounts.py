@@ -131,6 +131,35 @@ def test_all_account_types_and_single_asset_source_schema():
     assert SYNTHETIC_NUMBER not in request.model_dump_json()
 
 
+def test_account_patch_openapi_nullability_matches_validation():
+    app = FastAPI()
+    app.include_router(router)
+    schema = app.openapi()["components"]["schemas"]["AccountPatch"]
+    for name, prop in schema["properties"].items():
+        assert name not in schema.get("required", [])
+        nullable = any(item.get("type") == "null" for item in prop.get("anyOf", []))
+        assert nullable == (name not in {"institution_name", "account_type"})
+        if not nullable:
+            assert "default" not in prop
+            with pytest.raises(ValidationError):
+                AccountPatch.model_validate({name: None})
+
+
+def test_account_openapi_declares_versions_and_response_headers():
+    app = FastAPI()
+    app.include_router(router)
+    paths = app.openapi()["paths"]
+    patch = paths["/api/v1/accounts/{account_id}"]["patch"]
+    header = next(item for item in patch["parameters"] if item["name"] == "If-Match")
+    assert header["required"] is True
+    assert header["schema"]["type"] == "string"
+    assert set(patch["responses"]["200"]["headers"]) == {"ETag"}
+    assert set(paths["/api/v1/accounts"]["post"]["responses"]["201"]["headers"]) == {
+        "ETag",
+        "Location",
+    }
+
+
 @pytest.mark.parametrize(
     "change",
     [

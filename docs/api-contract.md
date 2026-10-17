@@ -96,8 +96,11 @@ step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
 목록은 UUID cursor와 최대 200건, 자산/부채·분류·소유자·소유 방식·합산 여부·활성/종료 상태 필터를 사용한다.
 응답의 `household_share`는 정확한 십진 문자열이고 생성·수정 응답은 `ETag`, 생성은 `Location`도 반환한다.
 수정·종료·삭제는 `If-Match`가 필요하며 다른 가계의 자산/소유자는 404, 버전 충돌은 409다.
+생성 계약에도 `If-Match` 필수 여부와 `ETag`·`Location` 응답 헤더를 명시한다. 누락된 버전 헤더는 `400 VERSION_REQUIRED`로 반환한다.
 종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다.
 metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액은 후속 API다.
+PATCH에서 생략한 필드는 유지한다. null로 지울 수 있는 필드는 `owner_member_id`, `ended_on`, `note`뿐이며
+OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다.
 
 ### 7) 금융계좌 (SB-011)
 
@@ -128,11 +131,25 @@ metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받�
 
 draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `version`만 가진다. 이후 편집해도 같은 멱등키는
 같은 참조를 반환한다. 값 PATCH는 수정 행·현재 revision version·전체 합계를 반환한다.
+필수 버전·멱등 헤더와 성공 응답의 `ETag`·`Location`도 OpenAPI 및 생성 client에 명시한다.
 월 GET의 `version`은 현재 revision version이고 값 행마다 별도 version이 있다. 부모 revision이 바뀌면
 `REVISION_CONFLICT`, 범위 재생성으로 행 UUID가 바뀌면 `VALUE_CONFLICT`, 기존 행 버전 충돌이면 `VERSION_CONFLICT`로 409를 반환한다.
 포함된 항목이 미입력이면 해당 합계는 null이다. 전월 복사값은 숫자를 보여도 `provisional=true`이고 확정할 수 없다.
 확정할 때 `acknowledge_non_month_end_dates`, `acknowledge_scope_change`로 표시된 차이를 명시 확인한다.
 Android/웹 월 입력·비교·홈 화면 연결은 후속 client 변경에서 진행한다.
+
+### 9) 수동 수입과 반환 (SB-014)
+
+`GET/POST /income`, `GET /income/summary`, `GET /income/duplicates`, `POST /income/convert`,
+`GET/PATCH /income/{id}`, `GET /income/{id}/history`, `POST /income/{id}/void`, `POST /income/{id}/returns`를 제공한다.
+모든 mutation은 `Idempotency-Key`, 정정·무효·반환은 원본 `If-Match`도 필수다.
+각 변경본을 불변 이력으로 저장하므로 재전송은 이후 정정과 무관하게 최초 응답의 버전을 돌려준다.
+수입은 급여·상여·기타수입, 반환은 원본 연결이 필요하다. 보험금 입금·반환은 공통 원본에서 읽기 전용으로 집계하며 수입 API에서 복제 생성하지 않는다.
+금액은 양수 정수 원 문자열이다. day는 실제 날짜를 요구하고 month는 날짜를 비워 둔다. 실제 날짜는 서울 오늘을 넘을 수 없지만 귀속월은 입금월과 달라도 된다.
+같은 월·구성원·종류의 일별/월합계 혼용은 후보 조회와 명시 확인을 요구한다. 정밀도 전환은 해당 범위의 모든 활성 원본과 버전을 받아 합계 보존·원본 무효·대체 기록 생성을 원자적으로 수행한다.
+반환 합계는 원본 이하이며, 활성 반환이 있으면 원본 정정·무효·전환을 막는다. 정정·무효·반환·전환은 사유를 남긴다.
+계좌·구성원은 가계 FK와 API 권한을 함께 검증한다. 수입·반환 입력은 자산 월 스냅샷이나 계좌 잔액을 자동으로 변경하지 않는다.
+목록·이력은 cursor를 지원하고 요약은 근로·부수입과 실제 보험금 유입/반환을 분리한다. 웹/Android 수입 화면 연결은 후속 client 변경에서 진행한다.
 
 ## 1. 공통 규약
 

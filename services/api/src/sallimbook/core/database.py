@@ -17,7 +17,7 @@ CONVENTIONS = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
-REQUIRED_SCHEMA_REVISION = "0006_asset_months"
+REQUIRED_SCHEMA_REVISION = "0007_cash_records"
 
 
 class Base(DeclarativeBase):

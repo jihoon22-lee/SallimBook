@@ -62,12 +62,12 @@
       "git_sha1": "8b1efc9af0109b44edebba0787076a0962c6dfd9"
     },
     "docs/data-model.md": {
-      "sha256": "4da5983e1f3856c7b4203d14db58b792b392e31883b37048101e0f57a34f1de2",
-      "git_sha1": "a54962840468add4c16bb829ddd7f4186bb84bc3"
+      "sha256": "12bfebee1cb54fbd3f886111ce8408799c60880e3a615734dc988144589e5396",
+      "git_sha1": "39cfa3386d563e1fd60a4a299078a15cfed89f4b"
     },
     "docs/api-contract.md": {
-      "sha256": "3612545ceca90d2e69041c87b9afc2fb5510053bdc75c4e20e75b3cced2a0088",
-      "git_sha1": "e4c9e80572e22ce7fbdabb6666d64daf8be2e48c"
+      "sha256": "210072f2cad1993cf7d8030586b5b32bbf1e2864ff344efc93c47acaf44c82e2",
+      "git_sha1": "8921cea9ccda1edac65ff6fb871d8746b86fddda"
     },
     "docs/screen-specifications.md": {
       "sha256": "a2de11652e19ce32a8c9727a5da7053e47140c65f5cdce13a7facbcad819d1e3",
