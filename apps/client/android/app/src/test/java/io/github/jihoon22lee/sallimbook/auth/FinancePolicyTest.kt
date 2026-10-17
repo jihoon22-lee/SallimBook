@@ -44,7 +44,7 @@ class FinancePolicyTest {
             "input" to mapOf("ended_on" to "2026-12-31", "closure_ack" to false), "ifMatch" to "\"1\""))
         for (request in listOf(patch, archive)) assertTrue(FinancePolicy.metadataHttpAllowed(request.method, request.path, request.body, request.ifMatch))
         invalid { FinancePolicy.assetInput(mapOf("closure_ack" to false), true) }
-        invalid { FinancePolicy.assetInput(mapOf("note" to "합성", "closure_ack" to true, "payment_links_digest" to "invalid"), true) }
+        invalid { FinancePolicy.assetInput(mapOf("note" to "합성", "closure_ack" to true, "usage_digest" to "invalid"), true) }
         invalid { FinancePolicy.assetInput(input() + ("closure_ack" to false), false) }
     }
 

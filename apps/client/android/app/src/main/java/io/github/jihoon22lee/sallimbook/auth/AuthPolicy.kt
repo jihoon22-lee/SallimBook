@@ -194,6 +194,15 @@ internal object AuthPolicy {
     fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
         if (requestId == null || !uuid.matches(requestId)) return null
         val messages = mapOf(
+            "RETURN_EXCEEDS_ALLOCATION" to (409 to "반환 합계가 원래 배분 금액을 초과합니다."),
+            "INSURANCE_PAYOUT_HAS_RETURNS" to (409 to "활성 반환을 먼저 확인해 주세요."),
+            "CLAIM_ALLOCATION_MISMATCH" to (422 to "청구와 같은 사건·보험계약을 선택해 주세요."),
+            "INVALID_SUBMISSION_DATE" to (422 to "실제 접수 날짜를 확인해 주세요."),
+            "MEDICAL_EXPENSE_UNAVAILABLE" to (422 to "활성 의료비를 선택해 주세요."),
+            "MEDICAL_EXPENSE_IN_CLAIM" to (409 to "청구의 현재 비용 근거를 먼저 정정해 주세요."),
+            "MEDICAL_EXPENSE_HAS_REFUNDS" to (409 to "활성 환불을 먼저 확인해 주세요."),
+            "PRESCRIPTION_HAS_NO_PAYMENT" to (422 to "처방전에는 비용을 입력할 수 없습니다."),
+            "EVENT_ALREADY_VOID" to (409 to "이미 무효 처리된 기록입니다."),
             "BAD_REQUEST" to (400 to "요청 형식을 확인해 주세요."),
             "VERSION_REQUIRED" to (400 to "수정할 버전을 지정해 주세요."),
             "INVALID_VERSION" to (400 to "버전 형식을 확인해 주세요."),

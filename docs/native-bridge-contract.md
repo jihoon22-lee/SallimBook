@@ -349,3 +349,36 @@ Home/화면 꺼짐·30초 만료·앱 잠금·늦은 HTTP 응답 시나리오는
 고정 메타데이터 계약, 증권번호 전용 HTTP, 앱 잠금/foreground gate, 비공개 Activity의 지우기와
 상태만 반환하는 경계를 서버 계약과 대조했다. 이는 source 검토 결과이며 실제 Galaxy 기기의
 보호 화면 실패 시나리오는 아직 실행하지 않았다. 검토자는 별도 Gradle/실기기 시험 통과를 주장하지 않았다.
+
+## 17. 의료비·청구·실제 보험금·환불·반환 (SB-021/022)
+
+생성 API의 보험 이벤트 34개 operationId를 같은 이름의 `nativeFinance` 명령으로 연결했다.
+의료비·보험금은 목록/생성/상세/정정/무효/현금 이력, 환불·반환은 부모별 목록/생성 및
+상세/정정/무효/현금 이력을 제공한다. 청구는 목록/생성/상세/사유 있는 수정/typed 이력,
+지급 배분은 상세/청구 연결 변경/typed 이력, 사건과 진료 노드는 각각 합계를 제공한다.
+경로의 `resource_id`, `claim_id`, `allocation_id`, `case_id`, `node_id`는 bridge에서
+`resourceId`, `claimId`, `allocationId`, `caseId`, `nodeId`로 전달한다.
+TS 본문/응답/조회 조건은 생성 `components`와 `operations`를 참조한다.
+
+금전 생성·정정·무효와 배분 연결에는 `idempotencyKey`, 기존 대상의 변경에는 `ifMatch`를
+요구한다. 환불/반환 생성의 버전은 부모 의료비/보험금 도메인 버전이다. 청구 생성에는
+두 헤더가 없고 청구 수정에는 `ifMatch`만 사용한다. 금전 명령의 `{id, version}`는 당시의
+불변 참조이며 최신 상태로 해석하지 않는다. 정정·환불·반환은 새 ID를 반환할 수 있다.
+후속 수정은 GET의 도메인 version을 사용한다. 중첩 cash의 version과 도메인 version은
+별개이며 현금 이력의 id는 부모 도메인 id와 달라도 같은 cash 원본을 계속 가리켜야 한다.
+
+`InsuranceEventPolicy`는 명명된 명령의 고정 경로만 허용한다. 요청과 응답의 알 수 없는 필드,
+비밀 필드, 임의 헤더·URL, 잘못된 상태·날짜·원 문자열을 차단한다. null·0원·음수 순부담과
+최대 20자리 금액을 유지하며 상세/배분 합계를 BigInteger로 대조한다. 중첩 cash는 올바른
+금전 종류·방향·실제 일자와 `editable=false`, `voidable=false`를 요구한다. 가계와 부모 ID,
+목록 필터·limit·cursor·중복, typed 이력의 대상/불변 연결과 현금 이력의 불변 원본을 대조한다.
+최종 가계 권한과 금액 규칙은 서버에서 검증하며 노드 합계에 보험금을 임의 배분하지 않는다.
+
+새 명령은 공통 native finance 실행 경로의 앱 잠금·foreground/cancel gate를 사용한다.
+증권번호·계좌번호·CVC 경로를 추가하지 않으며 native 보호 화면의 평문을 JS로 반환하지 않는다.
+오류는 알려진 서버 코드와 로컬 고정 문구만 반환하고 원문 진료 메모나 서버 오류 상세를 버린다.
+합성 JVM 시험은 34개 요청/응답, 정확한 헤더 범위, 새 ID 정정, cash/domain 버전 차이,
+큰 금액·청구 중복·배분 합계·다른 가계/부모·읽기 전용 cash·페이지/이력 조작을 포함한다.
+브라우저 모의시험 `insurance-events-native-bridge.spec.ts`는 34개 명령 전달과 잠금/재인증/
+사용 불가/도메인 충돌에서 웹 HTTP 우회·storage 저장이 없음을 검사한다.
+실제 Android 기기에서 잠금/백그라운드/늦은 응답을 검증한 결과로 대체하지 않는다.
