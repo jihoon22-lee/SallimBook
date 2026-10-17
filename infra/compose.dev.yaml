@@ -25,6 +25,10 @@ services:
     <<: *database
     # Test migrations and immutable histories live on tmpfs, which counts toward this limit.
     mem_limit: 1g
+    # The default 1GiB WAL target can exhaust this entire tmpfs-backed container
+    # during the full migration-heavy suite. Keep durability enabled and checkpoint
+    # earlier; production/development DB settings are not changed.
+    command: [postgres, -c, shared_buffers=64MB, -c, max_wal_size=128MB, -c, min_wal_size=32MB, -c, checkpoint_timeout=30s]
     profiles: [test]
     environment:
       POSTGRES_USER: sallimbook
