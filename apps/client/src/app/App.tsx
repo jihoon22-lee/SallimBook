@@ -29,6 +29,7 @@ import { PolicyListPage, PolicyNewPage, PolicyDetailPage } from "../features/ins
 import { CaseListPage, CaseNewPage, CaseDetailPage } from "../features/insurance/cases/CasePages";
 import { ClaimNewPage, ClaimDetailPage } from "../features/insurance/claims/ClaimPages";
 import { EventDetailPage, ExpenseNewPage, PayoutNewPage, PayoutListPage, ReturnNewPage } from "../features/insurance/events/EventPages";
+import { ExportsPage } from "../features/exports/ExportsPage";
 import { VaultPage } from "../features/vault/VaultPage";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
 import { MonthProvider } from "../shared/MonthContext";
@@ -52,6 +53,7 @@ const screens = [
   { path: "/appliance-consumables/:id", title: "기기별 소모품 관리", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <DeviceDetailPage /> },
   { path: "/appliance-consumables/:id/replace", title: "소모품 교체 기록", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <DeviceDetailPage replacing /> },
   { path: "/appliance-consumables/:id/replacements/:replacementId", title: "교체 기록 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ReplacementDetailPage /> },
+  { path: "/exports", title: "자료 내보내기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <ExportsPage /> },
   { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <VaultPage /> },
   ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
   { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <SessionSettings /> },

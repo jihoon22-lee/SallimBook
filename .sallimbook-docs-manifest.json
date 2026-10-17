@@ -126,8 +126,8 @@
       "git_sha1": "0e5a5b8fcb1aac58888751ef9fd6ff2fab3ad024"
     },
     "docs/README.md": {
-      "sha256": "b7d3abd81abf3185b531452db5de9d82bd8f3517470ab966e09dc26dee8427ea",
-      "git_sha1": "f0bc97a1d84aa78f4adb23c4955242df7569802d"
+      "sha256": "51cd3086db7e6f10b7c34d0aed29ddc8874d13da41a96094d34a148ec29516f4",
+      "git_sha1": "331054e0b2b6097c7311c1824c11a15f23e527b3"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -222,8 +222,8 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "5f566de73bdee1565e9b61f09a76cd16e3866dd44f6cb41bc04f5de3ab285876",
-      "git_sha1": "c7bc88fb44a9ca51b43acba7cbe92938c6cf2fb2"
+      "sha256": "f6b78782fd0ba9eb16c88e8fa2395e1bad978ded409c13e2df3c6c8cc4696fea",
+      "git_sha1": "7173392c6a618c5cb8cd72728975093cb846b6a1"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
@@ -320,6 +320,10 @@
     "docs/testing/exports-server.md": {
       "sha256": "47335f81fdc13dd47c9e1174982a41cd8c7790c95282757996df29f0808f768e",
       "git_sha1": "4f990254002c6e8efc564087cdc56c3bf48b6133"
+    },
+    "docs/testing/exports-client.md": {
+      "sha256": "f896c3c08aaa6432b479babd15417ca8804782b96384e41aafb9263f5e52bfe0",
+      "git_sha1": "b3d07ee6a953eb3d40fa7564f80e0c8f997ae7d2"
     }
   }
 }
