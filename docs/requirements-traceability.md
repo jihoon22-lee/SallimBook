@@ -28,7 +28,9 @@
 | R-21 | SB-001, SB-036, SB-038 | 정식서명·HTTPS·업그레이드 | [고정 도구/실행](development-environment.md), [운영·배포 인수 기준](deployment-backup-operations.md) |
 | R-22 | SB-002, SB-004, SB-007, SB-010, SB-013, SB-014, SB-016, SB-021, SB-022, SB-026, SB-035 | T-01~T-24 | [T-01~24 명세](testing-and-acceptance.md), [공통 fixture](../packages/test-fixtures/README.md) |
 
-최종 전체 인수는 SB-040에 모은다. 요구사항 정의는 [제품 요구사항](product-requirements.md), 검증 방법은 [테스트 명세](testing-and-acceptance.md)를 따른다.
+최종 전체 인수는 SB-040에 모은다. 현재 [통합 검증 기록](testing/final-integration.md)과
+[운영 도구·복원 절차](operations-runbook.md)를 연결한다. 요구사항 정의는
+[제품 요구사항](product-requirements.md), 검증 방법은 [테스트 명세](testing-and-acceptance.md)를 따른다.
 
 실제 Galaxy 2대의 인증·Keystore/CVC·수명주기·접근성·데이터 보존 업데이트와, 실제 전용
 Tailscale 노드/RP/DAL·서명키 보관·운영 복원 인수는 별도 증거가 필요하다. 이 항목들을

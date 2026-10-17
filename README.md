@@ -5,7 +5,7 @@
 문서 기준일: **2026-10-18** · 목표 릴리스: **v1.0.0** · 현재 상태: **전체 기능 통합·운영 검증 진행, 0.x 개발 빌드**
 
 > 자산·계좌·카드·수입·고정 납부·보험·가전/소모품의 수동 입력과 이력, 비공개 문서, 보관함, 사용자 내보내기, 설정·감사 조회를 웹/Android에 연결했습니다.
-> 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. 근거는 [요구사항 추적표](docs/requirements-traceability.md)에 연결합니다.
+> 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. [최종 통합 검증 기록](docs/testing/final-integration.md)과 [요구사항 추적표](docs/requirements-traceability.md)에 근거를 연결합니다.
 > 두 Galaxy의 보안·업데이트 인수와 실제 사설망 운영은 남아 있습니다. CVC는 실기기 보안 검증과 사용자 선택 전까지 비활성화하며, v1.0.0 출시로 표시하지 않습니다.
 
 ## 무엇을 만드는가
@@ -68,6 +68,7 @@
 | [보험 사건 흐름](docs/insurance-workflows.md) | 진료 트리와 청구·지급 정산 예시 |
 | [테스트·인수 기준](docs/testing-and-acceptance.md) | 계산 예제와 보안 실패 테스트 |
 | [운영·백업](docs/deployment-backup-operations.md) | 배포, 복구, APK 서명·업데이트 |
+| [운영 도구 실행](docs/operations-runbook.md) | 격리 배포 설정, 암호화 백업·복원, 서명 APK 도구 |
 | [마일스톤](docs/roadmap-and-milestones.md) | v1 개발 순서와 완료 조건 |
 | [전체 문서 안내](docs/README.md) | 나머지 설계·결정·추적표 |
 

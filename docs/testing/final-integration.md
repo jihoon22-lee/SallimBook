@@ -15,6 +15,11 @@ SB-034~040 · R-01~R-22 · 2026-10-18 WSL Ubuntu.
 | API 계약·타입 | `pnpm api:generate`, 생성 파일 `git diff --exit-code`, `pnpm typecheck` | 재생성 차이 0, 타입 오류 0 |
 | 웹 배포 빌드 | `pnpm build` | 165 modules 성공. JS 894.13kB/gzip 231.15kB, 기존 chunk 크기 경고 남음 |
 | 정적 검사 | API src/tests/migrations와 실제 HTTPS harness Ruff | 통과 |
+| 저장소·운영 도구 | `python3 -m unittest discover -s tests -v` | 운영 14개 포함 **54 통과** |
+| 운영 컨테이너 | `python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE` | `fc297d2`: migration/readiness, runtime DB 역할, 4가지 권한 변조 거부, UID10001, 한국어 OCR·ClamAV 업로드, AEAD 저장·다운로드, 익명 차단 통과 |
+| 암호화 백업·복원 | 검증한 age/PostgreSQL client 경로에서 `uv run --project services/api python -m ops.test_recovery` | 실제 새 합성 DB 복원, manifest·전체 테이블 행 수·첨부 AEAD, 기존 인증 폐기와 pending/new rotation gate 통과 |
+| 배포 설정 | `python3 -m ops.test_deployment` | 고정 Caddy/Tailscale Compose, 공개 JSON/다른 경로 404 통과. 실제 tailnet 노드 등록은 미실행 |
+| APK 서명 도구 | JDK 21·고정 SDK에서 `python3 -m ops.test_release --sdk /DEDICATED_ANDROID_SDK` | `fc297d2`: 합성 키로 release v2/v3 실제 빌드·서명, manifest/native 설정·zipalign·인증서·증가 versionCode·이전 APK·변조 거부 통과. 시험 키/APK 제거 |
 
 API 전체 시험은 `013fa19`의 테스트 DB 설정으로 시작했다. 이후 통합한 보관함 재인증·내보내기
 오류 처리·감사 UI/native 변경은 서버 API·테스트·마이그레이션 파일을 바꾸지 않았으며
@@ -35,11 +40,21 @@ trace가 없어 같은 원인으로 확정하지 않았다. 세 시나리오를 
 멈추고, 보관함 private/workflow 시험의 trace를 명시적으로 껐다. 최초 실행을 전체 성공으로
 계산하지 않는다.
 
+최초 운영 이미지의 실제 첨부 시험은 저장소 경계 검사에서 실패했다. 이미지의 API source 경로가
+원래 저장소보다 얕아 repository root를 잘못 계산한 원인이었다. `Dockerfile.api`가 원래의
+`services/api/src` 깊이를 유지하도록 수정하고 전체 운영 smoke를 재실행해 통과했다.
+스토리지 경계 검사는 약화하지 않았다. 운영 시험이 만든 container/network/volume과 테스트 DB는
+정리했으며 실제 운영 서비스·사용자 자료는 만들거나 변경하지 않았다.
+
 ## 추가 검증 상태
 
 설정·감사 UI 44개와 기존 경로 16개, native 감사 bridge 38개는 각 기능 검증에서 통과했다.
-최종 전체 웹·실제 HTTPS 업무 검증과 운영 컨테이너·백업/복원 결과는 실행 완료 후 이 기록에
-추가한다. 실행 대기 상태를 통과로 표시하지 않는다.
+실제 감사 HTTPS도 `ba4d0ac`에서 통과했다. 현재 가계 52개 기록의 50+2 페이지, 값 없는
+메타데이터·필터, 다른 가계 actor 404, 최근 인증 만료 후 안전한 조회, 로그아웃 뒤 401과
+화면 제거, no-store·브라우저 저장소 미사용을 검증했다.
+최종 전체 웹·나머지 실제 HTTPS 업무 검증은 실행 완료 후 결과를 추가한다.
+새 debug CVC acceptance proof의 release 제외 검사는 해당 Android 변경 이후 추가한다.
+실행 대기 상태를 통과로 표시하지 않는다.
 
 GitHub Actions는 기존 PR부터 runner·step이 시작되기 전에 종료되는 상태를 관찰했다.
 조회 권한 때문에 일부 상태/로그 API도 거절됐다. 로컬 동등 명령 결과와 원격 CI 성공을
