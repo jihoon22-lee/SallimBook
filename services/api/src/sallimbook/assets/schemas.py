@@ -11,6 +11,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
+from pydantic.json_schema import SkipJsonSchema
 
 type AssetKind = Literal["asset", "liability"]
 type AssetCategory = Literal["real_estate", "deposit", "financial", "loan", "other"]
@@ -72,16 +73,22 @@ class AssetCreate(AssetInput):
         return self
 
 
+def _omitted_patch_field():
+    # None represents an omitted Python attribute only. The validator rejects an
+    # explicit null; a factory avoids advertising null as a JSON Schema default.
+    return Field(default_factory=lambda: None)
+
+
 class AssetPatch(AssetInput):
-    name: AssetName | None = None
-    kind: AssetKind | None = None
-    category: AssetCategory | None = None
-    ownership_kind: OwnershipKind | None = None
+    name: AssetName | SkipJsonSchema[None] = _omitted_patch_field()
+    kind: AssetKind | SkipJsonSchema[None] = _omitted_patch_field()
+    category: AssetCategory | SkipJsonSchema[None] = _omitted_patch_field()
+    ownership_kind: OwnershipKind | SkipJsonSchema[None] = _omitted_patch_field()
     owner_member_id: UUID | None = None
-    household_share: HouseholdShare | None = None
-    amount_basis: AmountBasis | None = None
-    inclusion_status: InclusionStatus | None = None
-    started_on: DateOnly | None = None
+    household_share: HouseholdShare | SkipJsonSchema[None] = _omitted_patch_field()
+    amount_basis: AmountBasis | SkipJsonSchema[None] = _omitted_patch_field()
+    inclusion_status: InclusionStatus | SkipJsonSchema[None] = _omitted_patch_field()
+    started_on: DateOnly | SkipJsonSchema[None] = _omitted_patch_field()
     ended_on: DateOnly | None = None
     note: AssetNote | None = None
 
