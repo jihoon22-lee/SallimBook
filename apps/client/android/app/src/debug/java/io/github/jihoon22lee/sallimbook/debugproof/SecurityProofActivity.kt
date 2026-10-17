@@ -292,6 +292,13 @@ class SecurityProofActivity : AppCompatActivity() {
             return
         }
         if (!policy.claimCipherForUse(operation.request)) {
+            // The clock may cross the deadline between the remaining-time check and
+            // this claim. Retire presentation immediately instead of scheduling a retry
+            // for a request the policy has already discarded.
+            if (!policy.ownsRequest(operation.request)) {
+                lock("화면 초점 복귀를 확인하지 못했어요. 다시 인증해 주세요.")
+                return
+            }
             handler.removeCallbacks(focusSettlement)
             handler.postDelayed(focusSettlement, minOf(remaining, 50L))
             return

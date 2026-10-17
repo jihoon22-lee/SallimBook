@@ -128,6 +128,19 @@ class ProofDisplayPolicyTest {
         assertTrue(policy.canAcceptAction())
     }
 
+    @Test fun focusDeadlineCrossingBetweenChecksRetiresTheRequestImmediately() {
+        val request = policy.beginRequest()!!
+        assertTrue(policy.authenticationSucceeded(request))
+        elapsed += ProofDisplayPolicy.MAX_FOCUS_SETTLE_MILLIS - 1
+        assertEquals(1L, policy.remainingFocusWaitMillis(request))
+        elapsed += 1
+        assertFalse(policy.claimCipherForUse(request))
+        assertFalse(policy.ownsRequest(request))
+        assertFalse(policy.isWaitingForFocus(request))
+        assertTrue(policy.canAcceptAction())
+        assertEquals(0L, policy.remainingDisplayMillis())
+    }
+
     @Test fun focusLossBetweenCipherUseAndPresentationRejectsDisplay() {
         val request = readyCipher()
         policy.updatePresentation(resumed = true, focused = false, unlocked = true)

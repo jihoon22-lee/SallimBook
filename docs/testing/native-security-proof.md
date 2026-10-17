@@ -84,6 +84,8 @@ cd apps/client/android
 중복 요청 차단, 잠금 뒤 늦은 콜백 차단, 재생성 초기 잠금, 단조 시간 역행 시 차단을 포함한다.
 추가로 초점 복귀 전 키 연산 금지, 최대 1초 초점 복귀 대기, 시간 초과, 취소 완료 콜백 전 새 인증 금지,
 이전 요청 콜백과 새 요청 분리, 대기 중 일시정지·화면 잠금을 검증한다.
+초점 대기 잔여 시간 확인과 실제 키 연산 허용 검사 사이에서 기한이 만료되는 경계도 검사한다.
+만료된 요청에는 재시도를 예약하지 않고 잠금 안내와 버튼 상태를 즉시 갱신한다.
 릴리스 검사는 `SecurityProofActivity`·`ProofDisplayPolicy`가 릴리스 클래스와 병합 manifest에 없고,
 `androidx.biometric:biometric`이 릴리스 runtime classpath에 없는지 확인한다. 서명·릴리스 배포는 수행하지 않는다.
 
@@ -93,7 +95,7 @@ JDK 21·compile SDK 36을 사용했으며, 이는 아래 실기기 검증표와 
 | 검사 | 결과 |
 |---|---|
 | `pnpm install --frozen-lockfile`, `pnpm android:sync` | 성공. 고정 의존성 설치·웹 타입 검사와 빌드·Android 자산 동기화 |
-| `:app:testDebugUnitTest :app:assembleDebug` | 성공. 정책 테스트 18개, 실패·오류·건너뜀 0개. 개발 APK 생성 |
+| `:app:testDebugUnitTest :app:assembleDebug` | 성공. 정책 테스트 19개, 실패·오류·건너뜀 0개. 개발 APK 생성 |
 | `:app:compileReleaseKotlin :app:processReleaseMainManifest` | 성공. 릴리스 컴파일 클래스·병합 manifest에 검증 Activity와 정책 클래스 없음. `USE_BIOMETRIC`·`USE_FINGERPRINT` 권한 없음 |
 | `releaseRuntimeClasspath` | `androidx.biometric:biometric` 없음 |
 | 디버그 병합 manifest | 검증 Activity, DUMP 권한 보호, USE_BIOMETRIC 선언 확인 |
