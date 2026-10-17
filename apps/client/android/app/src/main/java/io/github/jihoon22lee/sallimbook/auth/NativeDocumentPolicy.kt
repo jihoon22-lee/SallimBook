@@ -13,6 +13,8 @@ internal class NativeDocumentInfo(val id: String, val name: String, val mime: St
 /** Six public metadata commands; create and binary content are native file-screen operations only. */
 internal object NativeDocumentPolicy {
     val errorMessages = mapOf(
+        "DOCUMENT_STORAGE_QUOTA_EXCEEDED" to (413 to "첨부파일 보관 용량을 초과했어요. 기존 문서를 확인해 주세요."),
+        "DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE" to (503 to "첨부파일 저장 공간을 사용할 수 없어요. 잠시 후 목록을 확인해 주세요."),
         "DOCUMENT_UPLOAD_BUSY" to (503 to "다른 첨부파일을 처리하고 있어요. 잠시 후 목록을 확인해 주세요."),
         "INVALID_DOCUMENT_TARGET" to (422 to "첨부할 항목의 종류와 대상을 확인해 주세요."),
         "DOCUMENT_UNAVAILABLE" to (409 to "삭제된 첨부파일입니다."),

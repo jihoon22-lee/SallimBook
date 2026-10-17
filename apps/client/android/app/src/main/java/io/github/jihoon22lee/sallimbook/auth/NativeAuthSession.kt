@@ -46,6 +46,8 @@ internal class NativeAuthSession private constructor(context: Context) {
 
     private val store by lazy { RefreshStore(app, origin.orEmpty()) }
     private val http by lazy { NativeAuthHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val vaultHttp by lazy { NativeVaultHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val vaultLocal by lazy { NativeVaultStore.get(app) }
     private val documentHttp by lazy { NativeDocumentHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     @Volatile private var accessToken: String? = null
     private var accessExpiresAt = 0L
@@ -69,10 +71,14 @@ internal class NativeAuthSession private constructor(context: Context) {
         if (!available) throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
     }
 
+    @Volatile var vaultGeneration = 0L
+        private set
+
     private fun clearLocal() {
+        vaultGeneration += 1
         accessToken = null
         accessExpiresAt = 0L
-        store.clear()
+        try { vaultLocal.clearAll() } finally { try { store.clear() } finally { appLock.lock() } }
     }
 
     private fun acceptTokens(body: Any?, gate: ForegroundRequest) {
@@ -318,6 +324,50 @@ internal class NativeAuthSession private constructor(context: Context) {
             else AuthPolicy.safeError(response.status, response.body, response.requestId)
                 ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         AuthOutcome.success(mapOf("status" to response.status, "body" to safe))
+    }
+
+    fun vaultMetadata(operation: VaultOperation, arguments: JSONObject, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) {
+        val command = try { NativeVaultUiPolicy.metadata(operation, http.jsonValue(arguments)) }
+            catch (_: Exception) { callback(AuthOutcome.failure(AuthCode.INVALID_REQUEST)); return }
+        vault(gate, {}, { connection ->
+            val snapshot = connection.snapshot()
+            val row = when (operation) {
+                VaultOperation.STATUS -> snapshot.status
+                VaultOperation.ROTATION_GET -> connection.rotation(snapshot, command.id!!)
+                VaultOperation.SHARES -> connection.call(command).also { page ->
+                    if ((page["items"] as List<*>).any { (it as Map<*, *>)["household_id"] != snapshot.householdId }) throw NativeVaultFailure("ACCESS_DENIED")
+                }
+                else -> throw NativeVaultFailure("INVALID_REQUEST")
+            }
+            // Re-project only these safe response types at the bridge boundary.
+            NativeVaultWire.response(command, 200, row)
+        }) { outcome ->
+            val value = outcome.value
+            if (outcome.code == null && value != null) callback(AuthOutcome.success(mapOf("status" to 200, "body" to value)))
+            else callback(AuthOutcome.failure(AuthCode.entries.firstOrNull { it.name == outcome.code } ?: AuthCode.ACCESS_DENIED))
+        }
+    }
+
+    /** Native-only task scope. Generic values never become a bridge AuthOutcome. */
+    fun <T> vault(gate: ForegroundRequest, discard: (T) -> Unit, task: (NativeVaultConnection) -> T,
+        callback: (NativeVaultOutcome<T>) -> Unit) {
+        executor.execute {
+            var result: T? = null
+            try {
+                authorize(gate); requireAvailable(); gate.check()
+                val connection = NativeVaultConnection(app.packageName, origin!!, access(gate), http, vaultHttp, gate, vaultLocal)
+                result = task(connection)
+                gate.check()
+                callback(NativeVaultOutcome(value = result))
+                result = null
+            } catch (failure: NativeVaultFailure) {
+                if (failure.code == "SESSION_EXPIRED") try { clearLocal() } catch (_: Exception) { }
+                callback(NativeVaultOutcome(code = failure.code))
+            } catch (failure: AuthFailure) { callback(NativeVaultOutcome(code = failure.code.name)) }
+            catch (failure: VaultCryptoFailure) { callback(NativeVaultOutcome(code = failure.code.name)) }
+            catch (_: Exception) { callback(NativeVaultOutcome(code = "ACCESS_DENIED")) }
+            finally { result?.let(discard) }
+        }
     }
 
     /** Native Activity alone supplies the confirmed file; never serialized into an AuthOutcome. */

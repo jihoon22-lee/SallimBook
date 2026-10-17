@@ -1,5 +1,7 @@
 # Android 보관함 암호·수명 경계 — SB-028/029/032
 
+이 문서는 첫 암호 checkpoint의 기록이다. 후속 production 연결은 [native 수명주기 검증](native-vault-lifecycle.md)을 따른다.
+
 관련 요구사항 R-09/R-10/R-11/R-18/R-20, Issue #37/#38/#41.
 이 단계는 [v1 포맷](../adr/vault-format-v1.md)의 Android 암호 codec과 순수 수명 정책이다.
 서버 API 연결, 실제 Keystore 키, 카드 입력·표시 화면과 CVC 저장은 아직 이 checkpoint에 포함하지 않는다.

@@ -122,8 +122,8 @@
       "git_sha1": "34cb6de1be33e6f786516c326ef84fd6f722d021"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "8d79f24bde8bf8a0c357a266a0079b8235c601b32acc0b7873594dfdc3ed29fd",
-      "git_sha1": "96fafbdf99e5f1162a2484c7164efe29169d73fd"
+      "sha256": "760ed8b3bd7763eeef4f510674c1e0a53adef41b5855c98071ff53ec5ab59055",
+      "git_sha1": "121346c1a1d835ede49978663d9581f5f7aacde1"
     },
     "docs/README.md": {
       "sha256": "52b44d7e76cd413ac97619b61e17ade0d93638700b6682b69817c50d305a785b",
@@ -262,8 +262,8 @@
       "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
     },
     "docs/testing/native-vault-crypto.md": {
-      "sha256": "83fdb551874d1837aa434d1fe8ca9cd62a82b5db82d0e59cc73660d331390cc5",
-      "git_sha1": "7d5006f6bfdf758f87b80384c0cea9fefdc19aac"
+      "sha256": "0fcd76d8aa1c97b3e9c4748efd0a74e7a9cba6a08f87945d0f22da3050fb99f1",
+      "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
     },
     "docs/testing/documents-server.md": {
       "sha256": "bf953e309bffc75d9a836dd2ca7328286767ef9ef674f432e645cfc3bfb08dcd",
@@ -276,6 +276,10 @@
     "scripts/test_document_tools.py": {
       "sha256": "166136e8691243996d2bf2ea0e561d2a3d505748427613eb7df2965d0dec2f64",
       "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
+    },
+    "docs/testing/native-vault-lifecycle.md": {
+      "sha256": "934b08e66d36e27d48e53338acd394f59146ba00f9b28f55b93b031483e9ab2b",
+      "git_sha1": "86a885498df724e35b1046ec34ac49df8528017e"
     }
   }
 }

@@ -539,3 +539,29 @@ TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec play
 
 실제 Galaxy의 파일 제공자·URI 권한·선택기/회전/잠금·부분 저장·취소 시험,
 정식 서명·배포는 실행하지 않았다. 빌드와 합성 JVM 검사를 실기기 성공으로 해석하지 않는다.
+
+
+## 20. Android 카드 보관함과 로컬 보안코드 (SB-028/029/030/032)
+
+`nativeVault.open`은 action과 해당 card/member/offer/rotation ID만 받는 `openVaultUI`를 호출한다.
+보호 화면은 설정·기기 등록·번호/유효기간 입력과 보기·비밀 purge·암호 변경·복구·공유 수락/취소·
+접근 철회·키 회전 시작/재개/중단을 처리하고 completed/cancelled 상태만 반환한다.
+입력은 TS와 Kotlin 양쪽에서 정확한 필드를 검증한다. 암호·PAN·복구코드·암호문·CVC는 bridge에 없다.
+일반 상태 화면은 `getVaultStatus`, `listVaultShares`, `getVaultRotation` 세 생성 DTO만 조회한다.
+23개 vault API의 opaque wrapping/envelope와 모든 변경은 private native 경로로 제한한다.
+
+`NativeVaultActivity`는 현재 계정·활성 기기·가계·키 버전을 서버에서 재확인하고,
+Keystore strong auth-per-use CryptoObject의 동일 Cipher/실제 doFinal 또는 명시적 보관함 암호로 키를 연다.
+앱 잠금 인증 bool로 복호화하지 않는다. 표시 30초·초점 복귀 1초·작업 60초, 취소/잠금 세대를 적용하고
+늦은 KDF/HTTP 결과를 폐기한다. 로컬 HVK/CVC 암호문은 별도 AAD/키로 noBackupFilesDir에 둔다.
+CVC는 현재 카드 secret ID/revision에 묶고 서버/API/web/backup에 전달하지 않는다.
+실기기 인수 전 CVC 입력·열람 gate는 비활성 상태이며 v1/R-12 완료를 뜻하지 않는다.
+
+설정·복구·회전 준비에는 새 복구코드의 명시적 오프라인 보관 확인을 요구한다. 네트워크 결과가
+불명확하면 같은 Activity의 요청/key를 유지해 수동 재시도하고, 종료 뒤에는 서버 staged wrapping으로
+복원해 회전을 재개한다. 과거 암호문 전체 purge와 일반 새 envelope 교체를 구분한다.
+세부 보안 경계·공식 근거·검증 명령·미실행 Galaxy 항목은 [native 보관함 수명주기](testing/native-vault-lifecycle.md)를 따른다.
+
+브라우저 브리지 모의시험 **52개**(vault 28개 + 문서 24개)가 통과했다. 서버 quota 후속 계약의
+`DOCUMENT_STORAGE_QUOTA_EXCEEDED` 413과 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE` 503도
+문서 native 고정 오류 문구로 보존한다. 이 검증은 실제 Keystore·생체인증·백업·캡처 실패 시험을 대신하지 않는다.

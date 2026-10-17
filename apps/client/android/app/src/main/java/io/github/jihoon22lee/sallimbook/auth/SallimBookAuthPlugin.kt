@@ -270,6 +270,20 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun createDocumentLink(call: PluginCall) = finance(call, FinanceOperation.CREATE_DOCUMENT_LINK)
     @PluginMethod fun endDocumentLink(call: PluginCall) = finance(call, FinanceOperation.END_DOCUMENT_LINK)
 
+    @PluginMethod fun getVaultStatus(call: PluginCall) = vaultMetadata(call, VaultOperation.STATUS)
+    @PluginMethod fun listVaultShares(call: PluginCall) = vaultMetadata(call, VaultOperation.SHARES)
+    @PluginMethod fun getVaultRotation(call: PluginCall) = vaultMetadata(call, VaultOperation.ROTATION_GET)
+    private fun vaultMetadata(call: PluginCall, operation: VaultOperation) { main.post {
+        begin(call) { gate, callback -> auth.vaultMetadata(operation, call.data, gate, callback) }
+    } }
+    @PluginMethod fun openVaultUI(call: PluginCall) { main.post {
+        try {
+            val args=call.data.keys().asSequence().associateWith { call.data.opt(it) }
+            val (action, id)=NativeVaultUiPolicy.arguments(args)
+            launchForm(call, NativeVaultActivity.MODE, id, vaultAction=action)
+        } catch (_: Exception) { failure(call, AuthCode.INVALID_REQUEST) }
+    } }
+
     @PluginMethod fun uploadDocumentUI(call: PluginCall) { main.post {
         try {
             if (call.data.keys().asSequence().toSet() != setOf("target")) throw AuthFailure(AuthCode.INVALID_REQUEST)
@@ -340,8 +354,8 @@ class SallimBookAuthPlugin : Plugin() {
         launchForm(call, mode, id, ifMatch)
     }
 
-    private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null, targetKind: String? = null) {
-        if (targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
+    private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null, targetKind: String? = null, vaultAction: String? = null) {
+        if (mode != NativeVaultActivity.MODE && targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
         if (!trustedForeground() || !activity.hasWindowFocus()) { failure(call, AuthCode.ACCESS_DENIED); return }
         if (appLock.locked) { failure(call, AuthCode.APP_LOCKED); return }
         val now = SystemClock.elapsedRealtime()
@@ -353,11 +367,12 @@ class SallimBookAuthPlugin : Plugin() {
         lastUiLaunch = now
         uiCall = call
         uiMode = mode
-        documentUiRequest = if (mode in setOf(NativeDocumentActivity.UPLOAD, NativeDocumentActivity.DOWNLOAD)) ForegroundRequest() else null
+        documentUiRequest = if (mode in setOf(NativeDocumentActivity.UPLOAD, NativeDocumentActivity.DOWNLOAD, NativeVaultActivity.MODE)) ForegroundRequest() else null
         try {
             val passkey = mode in setOf(NativePasskeyActivity.LOGIN, NativePasskeyActivity.REGISTER,
                 NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE, NativePasskeyActivity.INVITE, NativePasskeyActivity.ACCOUNT)
             val component = when {
+                mode == NativeVaultActivity.MODE -> NativeVaultActivity::class.java
                 passkey -> NativePasskeyActivity::class.java
                 mode in setOf(NativeAccountNumberActivity.EDIT, NativeAccountNumberActivity.SHOW) -> NativeAccountNumberActivity::class.java
                 mode in setOf(NativeInsurancePolicyNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.SHOW) -> NativeInsurancePolicyNumberActivity::class.java
@@ -366,6 +381,7 @@ class SallimBookAuthPlugin : Plugin() {
             }
             val intent = Intent(activity, component)
                 .putExtra(NativeAuthActivity.EXTRA_MODE, mode)
+            if (vaultAction != null) intent.putExtra(NativeVaultActivity.EXTRA_ACTION, vaultAction)
             if (targetId != null) intent.putExtra(NativePasskeyActivity.EXTRA_ID, targetId)
             if (ifMatch != null) intent.putExtra(NativePasskeyActivity.EXTRA_VERSION, ifMatch)
             if (targetKind != null) intent.putExtra(NativeDocumentActivity.EXTRA_KIND, targetKind)
@@ -388,6 +404,7 @@ class SallimBookAuthPlugin : Plugin() {
             NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE -> "revoked"
             NativeAccountNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.EDIT -> "saved"
             NativeAccountNumberActivity.SHOW, NativePasskeyActivity.ACCOUNT, NativeInsurancePolicyNumberActivity.SHOW -> "completed"
+            NativeVaultActivity.MODE -> "completed"
             NativeDocumentActivity.UPLOAD -> "uploaded"
             NativeDocumentActivity.DOWNLOAD -> "downloaded"
             else -> "accepted"
