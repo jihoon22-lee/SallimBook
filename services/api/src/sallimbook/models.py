@@ -27,8 +27,22 @@ from sallimbook.identity.auth_models import (
 )
 from sallimbook.identity.models import Household
 from sallimbook.identity.passkeys.models import AuthChallenge, AuthCredential, StepUpGrant
+from sallimbook.insurance.models import (
+    InsuranceCase,
+    InsuranceCaseRevision,
+    InsuranceCoverage,
+    InsurancePolicy,
+    MedicalNode,
+    PolicyPremiumLink,
+)
 
 __all__ = [
+    "InsurancePolicy",
+    "InsuranceCoverage",
+    "PolicyPremiumLink",
+    "InsuranceCase",
+    "InsuranceCaseRevision",
+    "MedicalNode",
     "Asset",
     "AssetMonthRecord",
     "AssetMonthRevision",
