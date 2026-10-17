@@ -247,3 +247,7 @@ erDiagram
 각 단계의 테스트 DB 생성·migration round-trip을 검증한다.
 운영 데이터가 있는 migration은 백업/복구와 하위 호환 API 기간을 먼저 계획한다.
 금액·키·암호문 타입 변경을 자동 정리라는 이름으로 소실시키지 않는다.
+
+### SB-014 구현 상태
+
+`0007_cash_records`는 `cash_records`, `cash_record_revisions`, `income_conversions`를 추가한다. CashRecord 버전별 원본과 전환 묶음은 타입이 있는 행으로 남기고 DB trigger가 UPDATE/DELETE를 거부한다. 일반 audit에는 금액·메모 원문을 복제하지 않는다. 수입의 계좌 연결은 구현됐고 카드 FK는 실제 카드 테이블을 추가하는 migration에서 연결한다. 향후 고정 납부·의료비·보험금 subtype는 공통 cash 생성 helper를 같은 트랜잭션에서 호출하며 수입 API는 임의 subtype 생성을 노출하지 않는다.
