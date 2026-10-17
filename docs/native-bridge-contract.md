@@ -96,6 +96,22 @@ Credential Manager 인증을 수행하고 같은 네이티브 작업 안에서 g
 최근 계정 로그인 조건을 별도로 만족해야 한다. 단순 로컬 생체 인증 콜백으로 서버 인증을 대신하지 않는다.
 비밀번호 재인증 실패는 기존 로그인 정보를 지우거나 새 기기를 만들지 않는다.
 
+패스키 제공자의 불투명 화면이 네이티브 Activity를 중단하거나 상태 저장을 요청해도,
+현재 제공자·ceremony·요청 세대·취소 신호가 일치할 때만 메모리의 요청을 잠시 유지한다.
+첫 포커스/화면 이탈부터 최대 60초 또는 challenge 만료 중 더 이른 시각에 취소한다.
+반복 pause/stop/save는 기한을 연장하지 않는다. 제공자 응답 후에는 1초 안에 resumed·포커스·
+기기 잠금 해제 상태가 모두 돌아와야 서버 검증을 시작하며, 이후 화면 이탈은 전송도 취소한다.
+Home 등으로 계속 이탈한 경우 응답을 사용하지 않으며 위 고정 기한 안에 폐기한다.
+화면 꺼짐·명시 취소·앱 잠금·Activity 파괴는 제공자 취소 신호와 ceremony를 함께 폐기한다.
+상태 Bundle·WebView·bridge에 인증 응답을 저장하지 않는다.
+
+현재 고정된 AndroidX Credential Manager 1.6.0의 패스키 controller가 사용하는
+`androidx.credentials.playservices.controllers.identityauth.HiddenActivity`는 같은 task의
+현재 제공자 요청이 있을 때만 앱 잠금 중 화면 전환을 허용한다. 실제 manifest에서 non-exported임을
+다시 확인하며, 일반 API 권한이나 앱 잠금 해제를 부여하지 않는다. 다른 SDK Activity는 허용하지 않는다.
+이 예외는 [Android Activity 생명주기](https://developer.android.com/guide/components/activities/activity-lifecycle)와
+[고정 버전의 공식 소스](https://dl.google.com/dl/android/maven2/androidx/credentials/credentials-play-services-auth/1.6.0/credentials-play-services-auth-1.6.0-sources.jar)를 확인해 제한했다.
+
 ## 8. 앱 잠금 상태 (Refs #18, #38)
 
 `SallimBookAuth.getAppLock()`은 `{locked}`만 반환하고 `lockApp()`은 인자 없이 즉시 잠근다.

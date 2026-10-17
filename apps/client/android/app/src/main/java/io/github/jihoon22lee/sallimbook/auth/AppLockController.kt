@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ComponentName
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
@@ -27,6 +28,7 @@ internal class AppLockController private constructor(private val app: Applicatio
     private val keyguard = app.getSystemService(KeyguardManager::class.java)
     private val started = mutableSetOf<Activity>()
     private val resumed = mutableSetOf<Activity>()
+    private val passkeyOwners = mutableSetOf<NativePasskeyActivity>()
     private val gates = WeakHashMap<ForegroundRequest, Boolean>()
     private val listeners = mutableSetOf<() -> Unit>()
     private val expiry = Runnable {
@@ -74,7 +76,9 @@ internal class AppLockController private constructor(private val app: Applicatio
         if (wasLocked) changed()
     }
 
-    override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+    override fun onActivityCreated(activity: Activity, state: Bundle?) {
+        if (activity is NativePasskeyActivity) passkeyOwners.add(activity)
+    }
     override fun onActivityStarted(activity: Activity) { started.add(activity); main.removeCallbacks(expiry) }
     override fun onActivityResumed(activity: Activity) {
         resumed.add(activity)
@@ -88,7 +92,15 @@ internal class AppLockController private constructor(private val app: Applicatio
             val bootstrap = !NativeAuthSession.get(app).hasLocalSession() &&
                 (activity is NativeAuthActivity && mode in setOf(NativeAuthActivity.LOGIN, NativeAuthActivity.INVITATION) ||
                     activity is NativePasskeyActivity && mode == NativePasskeyActivity.LOGIN)
-            if (!bootstrap) activity.finish()
+            // AndroidX launches a non-exported trampoline while Credential Manager owns the
+            // ceremony. This permits that screen only; it grants no unlock or HTTP privilege.
+            val provider = passkeyOwners.any { owner ->
+                val exported = try { app.packageManager.getActivityInfo(ComponentName(app, activity.javaClass), 0).exported }
+                    catch (_: Exception) { true }
+                PasskeyProviderActivityPolicy.permits(activity.javaClass.name, exported, activity.taskId == owner.taskId,
+                    owner.ownsCredentialProvider())
+            }
+            if (!bootstrap && !provider) activity.finish()
         }
     }
     override fun onActivityPaused(activity: Activity) {
@@ -103,7 +115,10 @@ internal class AppLockController private constructor(private val app: Applicatio
         }
     }
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-    override fun onActivityDestroyed(activity: Activity) { resumed.remove(activity); started.remove(activity) }
+    override fun onActivityDestroyed(activity: Activity) {
+        resumed.remove(activity); started.remove(activity)
+        if (activity is NativePasskeyActivity) passkeyOwners.remove(activity)
+    }
 }
 
 /** Install before any Activity can expose a WebView or dispatch an auth request. */
