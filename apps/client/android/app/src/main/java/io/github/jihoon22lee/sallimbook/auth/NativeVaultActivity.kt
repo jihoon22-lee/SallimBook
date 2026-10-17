@@ -599,15 +599,16 @@ class NativeVaultActivity : AppCompatActivity() {
         })
         if(controls.none { it.text=="동일 시작 요청 다시 확인" }) button("동일 시작 요청 다시 확인") { if(retryCommand===command) commitStart(command) }
     }
-    private class RotationProgress(val material:NativeVaultMaterial?,val rotationId:String,val retry:NativeVaultCommand?,val code:String?) {
-        fun discard() { material?.discard() }
+    private class RotationProgress(val material:NativeVaultMaterial?,val rotationId:String,val retry:NativeVaultCommand?,val code:String?,
+        val cursor:NativeVaultRotationCursor?=null,val advance:Boolean=false) {
+        fun discard() { material?.discard(); cursor?.discard() }
     }
     private var rotationProgress:RotationProgress?=null
     @Suppress("UNCHECKED_CAST")
-    private fun continueRotation(material:NativeVaultMaterial,rotationId:String,retry:NativeVaultCommand?=null) {
+    private fun continueRotation(material:NativeVaultMaterial,rotationId:String,retry:NativeVaultCommand?=null,previous:NativeVaultRotationCursor?=null) {
         rotationProgress=null
-        runNative(discard=RotationProgress::discard,abandoned=material::discard,task={ c ->
-            var failedCommand:NativeVaultCommand?=retry; var retained=false
+        runNative(discard=RotationProgress::discard,abandoned={ material.discard(); previous?.discard() },task={ c ->
+            var failedCommand:NativeVaultCommand?=retry; var retained=false; var cursor=previous
             try {
                 val fresh=c.snapshot(); sameIdentity(material.snapshot,fresh)
                 if(fresh.keyVersion!=material.snapshot.keyVersion) {
@@ -619,14 +620,24 @@ class NativeVaultActivity : AppCompatActivity() {
                     throw NativeVaultFailure("VAULT_KEY_VERSION_CONFLICT")
                 }
                 NativeVaultActions.verify(material.key,c.ownWrapping(fresh),fresh.householdId,fresh.keyVersion)
-                if(retry!=null) { c.call(retry); failedCommand=null }
-                var manifest=c.rotation(fresh,rotationId)
+                if(retry!=null) {
+                    c.call(retry); failedCommand=null
+                    if(retry.operation==VaultOperation.ROTATION_FINALIZE) {
+                        confirmRotation(c,material,rotationId)
+                        return@runNative RotationProgress(null,rotationId,null,null)
+                    }
+                }
+                val manifest=c.rotation(fresh,rotationId)
                 if(manifest["state"]!="staging") throw NativeVaultFailure("VAULT_ROTATION_UNAVAILABLE")
                 val newKey=material.nextKey ?: throw NativeVaultFailure("VAULT_NOT_PREPARED")
                 NativeVaultActions.verify(newKey,c.ownWrapping(fresh,manifest),fresh.householdId,NativeVaultWire.version(manifest["key_version"]))
-                for(row in manifest["cards"] as List<VaultRecord>) {
-                    c.check(); val cardId=NativeVaultWire.id(row["card_id"]); val source=c.cardEnvelope(fresh,cardId)
-                    if(source["id"]!=row["source_envelope_id"] || source["revision"]!=row["source_revision"] || source["last_four"]!=row["last_four"]) throw NativeVaultFailure("VAULT_ROTATION_SNAPSHOT_CONFLICT")
+                val progress=cursor ?: NativeVaultRotationCursor(manifest).also { cursor=it }
+                val card=progress.next(manifest)
+                // Exactly one card per foreground work lease; the next card receives its own 60s gate.
+                if(card!=null) {
+                    c.check(); val cardId=card.id; val source=c.cardEnvelope(fresh,cardId)
+                    if(source["id"]!=card.source || NativeVaultWire.version(source["revision"])!=card.revision || source["last_four"]!=card.lastFour) throw NativeVaultFailure("VAULT_ROTATION_SNAPSHOT_CONFLICT")
+                    val row=(manifest["cards"] as List<VaultRecord>).single { it["card_id"]==cardId }
                     if(row["prepared"]==true) {
                         val staged=c.cardEnvelope(fresh,cardId,manifest)
                         val oldSecret=NativeVaultActions.openCard(material.key,source,fresh.householdId,fresh.keyVersion)
@@ -638,30 +649,38 @@ class NativeVaultActivity : AppCompatActivity() {
                     } else {
                         failedCommand=NativeVaultActions.stageCard(material,manifest,source)
                         c.call(failedCommand); failedCommand=null
-                        manifest=c.rotation(fresh,rotationId)
                     }
+                    c.check(); progress.verified(card); retained=true
+                    return@runNative RotationProgress(material,rotationId,null,null,progress,true)
                 }
-                manifest=c.rotation(fresh,rotationId)
-                if(manifest["key_check_prepared"]!=true || manifest["recovery_prepared"]!=true ||
-                    (manifest["cards"] as List<VaultRecord>).any { it["prepared"]!=true } || (manifest["members"] as List<VaultRecord>).any { it["prepared"]!=true }) throw NativeVaultFailure("VAULT_ROTATION_INCOMPLETE")
+                progress.requireComplete(manifest)
                 failedCommand=NativeVaultActions.simple(VaultOperation.ROTATION_FINALIZE,fresh,rotationId,NativeVaultWire.version(manifest["version"]),
                     mapOf("key_version" to manifest["key_version"],"key_check_confirmed" to true))
-                c.call(failedCommand); failedCommand=null; c.snapshot()
+                c.call(failedCommand); failedCommand=null; confirmRotation(c,material,rotationId)
                 RotationProgress(null,rotationId,null,null)
             } catch(failure:Exception) {
                 val code=when(failure) { is NativeVaultFailure -> failure.code; is AuthFailure -> failure.code.name; is VaultCryptoFailure -> failure.code.name; else -> "ACCESS_DENIED" }
                 if(code=="NETWORK_UNAVAILABLE" && failedCommand!=null) {
-                    retained=true; RotationProgress(material,rotationId,failedCommand,code)
+                    retained=true; RotationProgress(material,rotationId,failedCommand,code,cursor)
                 } else throw failure
-            } finally { if(!retained) material.discard() }
+            } finally { if(!retained) { material.discard(); cursor?.discard() } }
         },done={ progress ->
-            if(progress.code==null) { completed=true; progress.discard(); success("새 키로 전환했어요. 이 기기의 보관함을 다시 등록하고 보안코드는 기기에서 다시 입력해 주세요.") }
+            if(progress.advance) {
+                status.text="카드 ${progress.cursor!!.verifiedCount}/${progress.cursor.total}개 확인·준비 완료"
+                continueRotation(progress.material!!,progress.rotationId,previous=progress.cursor)
+            } else if(progress.code==null) { completed=true; progress.discard(); success("새 키로 전환했어요. 이 기기의 보관함을 다시 등록하고 보안코드는 기기에서 다시 입력해 주세요.") }
             else {
                 rotationProgress=progress; heading(); failure(progress.code)
-                button("같은 회전 요청 확인 후 계속") { val retained=rotationProgress ?: return@button; rotationProgress=null; continueRotation(retained.material!!,retained.rotationId,retained.retry) }
+                button("같은 회전 요청 확인 후 계속") { val retained=rotationProgress ?: return@button; rotationProgress=null; continueRotation(retained.material!!,retained.rotationId,retained.retry,retained.cursor) }
                 button("닫고 나중에 이어가기",true,::close)
             }
         })
+    }
+    private fun confirmRotation(c:NativeVaultConnection,material:NativeVaultMaterial,rotationId:String) {
+        val current=c.snapshot(); sameIdentity(material.snapshot,current); val finished=c.rotation(current,rotationId)
+        if(finished["state"]!="current" || current.keyVersion==material.snapshot.keyVersion ||
+            NativeVaultWire.version(finished["key_version"])!=current.keyVersion) throw NativeVaultFailure("VAULT_KEY_VERSION_CONFLICT")
+        NativeVaultActions.verify(material.nextKey ?: throw NativeVaultFailure("VAULT_NOT_PREPARED"),c.ownWrapping(current),current.householdId,current.keyVersion)
     }
     private fun close() {
         entry?.cancel(); work?.cancel(); work=null; activeWorkId=null; life.lock(); prompt?.signal?.cancel(); prompt?.discard(); prompt=null

@@ -125,6 +125,14 @@ JCA/Tink·JVM/Android의 내부 복사본과 native 렌더링 문자열의 완�
 확인한 내용을 새 키로 암호화하고 현재 rotation version을 사용한다. 이미 준비된 카드는 기존/새
 평문이 일치하는지 native 내부에서 확인한다. 전체 준비 manifest 확인 뒤 원자 finalize를 요청한다.
 
+한 foreground 작업은 카드 한 개만 확인·준비하고 다음 카드는 새 60초 작업 gate에서 이어간다.
+각 단계는 현재 계정·scope·기존/새 키 확인을 반복하며, Activity 안의 검증 cursor는 같은 회전 ID,
+키 버전, 카드 원본 envelope/revision/last-four, 구성원 membership version에만 유효하다.
+이미 준비된 카드도 한 번씩 대조한 뒤 다음 단계로 전진하므로 카드가 많아도 매 작업마다 앞부분을
+처음부터 반복하지 않는다. 마지막 단계는 전체 로컬 검증 완료와 fresh 서버 준비 상태를 모두
+요구한다. 취소/화면 종료는 키와 cursor를 폐기한다. 이후 재개는 서버 staged 키로 복원하고 처음부터
+검증하되 여러 제한된 작업으로 계속 전진한다. finalize 재시도 성공도 현재 키와 key-check로 확인한다.
+
 전송 결과가 불명확하면 Activity가 살아 있는 동안 같은 command body·version·Idempotency-Key를
 보관해 사용자의 재시도에 사용한다. 자동 재전송하지 않는다. 프로세스/화면 종료 후에는 서버 상태를
 다시 읽고 staged 본인 wrapping·새 암호로 새 HVK를 복원해 재개한다. 새 키를 무조건 다시 만들지 않는다.
@@ -160,6 +168,12 @@ TS 브리지 계약 변경이 없으므로 위 브라우저 52개 결과를 유�
 
 요청별 bearer 유효시간 후속 수정은 fake-clock/지연/401 무재전송/취소 회귀 4개를 포함해
 JVM **280개**(실패·오류·건너뜀 0), debug APK, release Kotlin을 통과했다.
+
+회전 진행 분할 후 JVM **287개**(실패·오류·건너뜀 0), debug APK, release Kotlin을 통과했다.
+추가 7개는 요청당 1초를 가정한 fake-clock에서 준비/미준비 카드 120개가 전체 60초를 넘겨도
+개별 작업 제한을 지키며 finalize 가능한 상태에 도달하는지, 재개 시 재검증, source/member 변경,
+완료 전 finalize 거절, 중복/과다 카드와 폐기된 cursor 거절을 검사한다. 실제 지연 네트워크나
+Android Activity instrumentation을 실행했다는 뜻은 아니다.
 
 실기기 미실행 항목: 최초 등록/암호화/별도 열람, 지문 추가·삭제·잠금 방식 제거·키 무효화,
 기존 등록/CVC가 있는 재저장 prompt 취소·오류 뒤 원래 값의 열람, 저장 실패 뒤 기존 암호문의 복원,
