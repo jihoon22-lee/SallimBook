@@ -274,8 +274,8 @@
       "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
     },
     "docs/operations-runbook.md": {
-      "sha256": "205ce16da8d8de51e5f613fd6fef41062e572c2b5daf91c7aab229a716afbf38",
-      "git_sha1": "9290c9ce3a2e479ce2c2af3caf4bf9e850064fb2"
+      "sha256": "54580c4df05186c620d98bcc1e7156c388cbe05392da1a955d15dfb931bd78cd",
+      "git_sha1": "8b4c68619fb8fdbfab738b07ef1f870bd322d4e9"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
@@ -342,8 +342,8 @@
       "git_sha1": "0d44ef17c5426e1f95b513607c3f2802dc3be25a"
     },
     "docs/testing/final-integration.md": {
-      "sha256": "cfa3b053299d8705316dbe0edafd66db9ae04e353bcc5ec5c89fa2ada869da72",
-      "git_sha1": "07bc2efe03affa272a641b0c9af8a1a23c263f59"
+      "sha256": "754992a710f9c04f3336524739553f977f0e8c606483eeb0b63caef61c00c715",
+      "git_sha1": "11bf2b9f96de7f1ead2f9e0d37f36e8340f73c0d"
     }
   }
 }

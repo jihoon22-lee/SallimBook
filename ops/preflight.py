@@ -6,10 +6,42 @@ import stat
 import subprocess
 from pathlib import Path
 
-from ops.backup import OperationError, private_file
+from ops.backup import OperationError, digest, private_file
 from ops.build_context import REVISION_LABEL, ROLE_LABEL
 from ops.database import APPLICATION_ROLE
 from ops.deploy import POSTGRES, render, validate
+from ops.release import inspect_apk
+
+
+def verify_download_apk(directory, config, sdk):
+    apk = directory / "downloads/SallimBook.apk"
+    if apk.is_symlink() or any(parent.is_symlink() for parent in apk.parents):
+        raise OperationError("Download APK symlink paths are forbidden")
+    if not apk.exists():
+        return {"status": "not-present"}
+    if sdk is None:
+        raise OperationError("--sdk is required to verify a present download APK")
+    before = apk.lstat()
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or before.st_nlink != 1
+        or stat.S_IMODE(before.st_mode) not in {0o444, 0o644}
+    ):
+        raise OperationError("Download APK must be a readable non-shared regular file")
+    expected = digest(apk)
+    # A neighbouring release receipt is not proof of the currently served bytes.
+    # Always run the real SDK signature, identity, version and security checks.
+    verified = inspect_apk(apk, config, sdk, signed=True)
+    after = apk.lstat()
+    fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+    if (
+        any(getattr(before, field) != getattr(after, field) for field in fields)
+        or verified.get("signed") is not True
+        or verified.get("sha256") != expected
+        or digest(apk) != expected
+    ):
+        raise OperationError("Download APK changed during verification")
+    return {"status": "verified", **verified}
 
 
 def verify_image_details(details, *, revision=None, role=None):
@@ -52,7 +84,7 @@ def validate_database_settings(values, password):
         raise OperationError("Unexpected runtime environment setting")
 
 
-def check(config_directory, verify_database=False):
+def check(config_directory, verify_database=False, sdk=None):
     directory = Path(config_directory).absolute()
     config = validate(json.loads((directory / "deployment.json").read_text()))
     generated = render(config)
@@ -61,6 +93,7 @@ def check(config_directory, verify_database=False):
         actual = raw if isinstance(expected, str) else json.loads(raw)
         if actual != expected:
             raise OperationError("Rendered deployment configuration drift")
+    download_apk = verify_download_apk(directory, config, sdk)
     runtime = Path(config["runtime_directory"])
     environment_file = private_file(runtime / "api.env")
     password_file = private_file(runtime / "app-db-password")
@@ -174,6 +207,7 @@ def check(config_directory, verify_database=False):
         "images": len(images),
         "postgres_image": POSTGRES,
         "runtime_uid": 10001,
+        "download_apk": download_apk,
         "database_role_check": "passed"
         if verify_database
         else "required-before-api-start",
@@ -185,9 +219,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("configuration", type=Path)
     parser.add_argument("--verify-database", action="store_true")
+    parser.add_argument(
+        "--sdk", type=Path, help="Required whenever downloads/SallimBook.apk exists"
+    )
     args = parser.parse_args()
     try:
-        report = check(args.configuration, args.verify_database)
+        report = check(args.configuration, args.verify_database, args.sdk)
     except Exception:
         raise SystemExit(
             "Preflight failed. No service or existing host configuration was changed."

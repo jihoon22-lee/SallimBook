@@ -1,11 +1,13 @@
 """Validate pinned proxy images in disposable network-none containers; no node registration."""
 
+import argparse
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
 
-from ops.deploy import CADDY, TAILSCALE, write_config
+from ops.deploy import TAILSCALE, write_config
 
 
 def command(args):
@@ -15,7 +17,7 @@ def command(args):
     return result.stdout
 
 
-def main():
+def main(web_image):
     assert command(
         [
             "docker",
@@ -25,7 +27,7 @@ def main():
             "none",
             "--entrypoint",
             "caddy",
-            CADDY,
+            web_image,
             "version",
         ]
     ).startswith("v2.11.7 ")
@@ -62,7 +64,28 @@ def main():
             "source_commit": "a" * 40,
         }
         output = root / "rendered"
-        write_config(manifest, output)
+        previous = os.umask(0o077)
+        try:
+            write_config(manifest, output)
+        finally:
+            os.umask(previous)
+        apk = output / "downloads/SallimBook.apk"
+        apk.write_bytes(b"synthetic APK transport fixture, not an installable release")
+        apk.chmod(0o644)
+        (output / "downloads/other.apk").write_bytes(b"must not be served")
+        (output / "downloads/other.apk").chmod(0o644)
+        isolated = [
+            "docker", "run", "--rm", "--network", "none", "--user", "10001:10001",
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+        ]
+        assert command(isolated + ["--entrypoint", "getcap", web_image, "/usr/bin/caddy"]) == ""
+        command([
+            "docker", "run", "--rm", "--network", "none", "--user", "0:0",
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+            "--read-only", "--entrypoint", "sh",
+            "-v", str(output / "node") + ":/config:ro",
+            web_image, "-c", "test -x /config && test -r /config/serve.json",
+        ])
         command(
             [
                 "docker",
@@ -75,20 +98,15 @@ def main():
         )
         for filename in ("public.Caddyfile", "private.Caddyfile"):
             result = command(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--network",
-                    "none",
+                isolated + [
                     "--entrypoint",
                     "caddy",
                     "-v",
-                    str(output) + ":/config:ro",
-                    CADDY,
+                    str(output / filename) + ":/etc/caddy/Caddyfile:ro",
+                    web_image,
                     "validate",
                     "--config",
-                    "/config/" + filename,
+                    "/etc/caddy/Caddyfile",
                     "--adapter",
                     "caddyfile",
                 ]
@@ -105,39 +123,72 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 0.1
 done
 grep -q io.github.jihoon22lee.sallimbook /tmp/body
-for path in / /api/v1/health /.well-known/assetlinks.json/ /private.key; do
+for path in / /api/v1/health /.well-known/assetlinks.json/ /private.key \\
+    /downloads/SallimBook.apk; do
     if wget -S -O /tmp/body "http://127.0.0.1:8081$path" 2>/tmp/headers; then exit 1; fi
     grep -q '404 Not Found' /tmp/headers
 done
 """
         command(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "--network",
-                "none",
+            isolated + [
                 "--read-only",
                 "--tmpfs",
-                "/tmp:rw,nosuid,noexec,size=16m",
+                "/tmp:rw,nosuid,noexec,size=16m,uid=10001,gid=10001,mode=0700",
                 "--entrypoint",
                 "sh",
                 "-v",
                 str(output / "public.Caddyfile") + ":/etc/caddy/Caddyfile:ro",
                 "-v",
                 str(output / "public") + ":/srv/public:ro",
-                CADDY,
+                web_image,
                 "-c",
                 script,
             ]
         )
+        private_script = """set -eu
+caddy run --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy.log 2>&1 &
+pid=$!
+trap 'kill "$pid" 2>/dev/null || true' EXIT
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    if wget -q -O /tmp/apk --header='Host: synthetic.example.ts.net' \\
+        http://127.0.0.1:8080/downloads/SallimBook.apk 2>/dev/null; then break; fi
+    sleep 0.1
+done
+cmp /tmp/apk /srv/downloads/SallimBook.apk
+wget -S -O /tmp/apk --header='Host: synthetic.example.ts.net' \\
+    http://127.0.0.1:8080/downloads/SallimBook.apk 2>/tmp/headers
+grep -q 'application/vnd.android.package-archive' /tmp/headers
+grep -q 'attachment; filename=SallimBook.apk' /tmp/headers
+grep -q 'no-store' /tmp/headers
+wget --spider -S --header='Host: synthetic.example.ts.net' \\
+    http://127.0.0.1:8080/downloads/SallimBook.apk 2>/tmp/headers
+if wget -S -O /tmp/body --header='Host: synthetic.example.ts.net' --post-data=synthetic \\
+    http://127.0.0.1:8080/downloads/SallimBook.apk 2>/tmp/headers; then exit 1; fi
+grep -q '404 Not Found' /tmp/headers
+for path in /downloads /downloads/ /downloads/other.apk /downloads/SallimBook.apk/; do
+    if wget -S -O /tmp/body --header='Host: synthetic.example.ts.net' \\
+        "http://127.0.0.1:8080$path" 2>/tmp/headers; then exit 1; fi
+    grep -q '404 Not Found' /tmp/headers
+done
+"""
+        command(isolated + [
+            "--read-only", "--tmpfs",
+            "/tmp:rw,nosuid,noexec,size=16m,uid=10001,gid=10001,mode=0700",
+            "--entrypoint", "sh",
+            "-v", str(output / "private.Caddyfile") + ":/etc/caddy/Caddyfile:ro",
+            "-v", str(output / "downloads") + ":/srv/downloads:ro",
+            web_image, "-c", private_script,
+        ])
         serve = json.loads((output / "node/serve.json").read_text())
         assert set(serve["AllowFunnel"]) == {manifest["fqdn"] + ":443"}
     print(
         "PASS: pinned Caddy/Tailscale versions, Compose/Caddy validation, "
-        "isolated public JSON/404 routing. No tailnet node or real HTTPS tested."
+        "strict-umask UID10001/cap-drop reads, private exact APK/public 404 routing. "
+        "No tailnet node, installable APK, or real HTTPS tested."
     )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--web-image", required=True)
+    main(parser.parse_args().web_image)
