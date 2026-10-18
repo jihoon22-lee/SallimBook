@@ -80,3 +80,50 @@ worker는 요청 dependency와 별도 DB session을 소유해 취소된 요청�
 `SALLIMBOOK_DOCUMENT_MIN_FREE_BYTES`이며 기본 여유 공간 1GiB를 남기지 못하면 쓰기 전에 503을 반환한다.
 용량은 413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유는 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
 이미 내려받은 파일이나 운영 백업 공간은 이 온라인 저장소 한도와 별도로 관리한다.
+
+
+## PDF 날짜 메타데이터 오탐 회귀 — 2026-10-18
+
+일반 CI `39100098307`의 문서 도구 job `117594466154`가 `pdf_image_korean`에서 실패했다.
+수정 전 같은 도구 이미지에서 동일한 합성 영수증을 UTC `2026-10-18 05:19:00`과
+`05:19:08`로 고정해 만들면 전자는 허용되고 후자는 `DOCUMENT_CARD_DATA`로 거절됐다.
+두 파일은 날짜 바이트 외에는 같았다. 전체 검사에서도 각각 2.384초 허용/0.281초 거절이었고,
+후자는 OCR 전에 PDF `/Info`의 자동 생성일·수정일 문자열이 Luhn 검사에 걸렸다.
+시간 제한이나 CPU 부하 때문에 발생한 실패로 처리하지 않는다.
+
+PDF 표준의 날짜 타입을 식별하는 범위를 trailer의 간접 `/Info` dictionary 안의
+`/CreationDate`와 `/ModDate`로 제한한다. ASCII `D:` 날짜 문법과 실제 달력·시각·시차 범위를
+모두 통과하는 문자열만 날짜로 취급한다. 해당 문자열을 제목·페이지·배열·고립 객체 등에서
+다시 참조하면 그 위치에서는 일반 카드정보 검사를 받는다. 방문 기록도 객체의 해석 문맥을
+구분하므로 날짜 위치를 먼저 방문한 순서가 일반 문자열 검사를 생략시키지 않는다.
+잘못된 날짜·추가 문구·Unicode 위장·임의 dictionary의 같은 키에는 예외를 적용하지 않는다.
+본문·다른 metadata·CVC/PAN·파일 크기·OCR·악성코드·자원 제한은 그대로다.
+
+근거는 Adobe가 게시한 [ISO 32000-1:2008](https://opensource.adobe.com/dc-acrobat-sdk-docs/standards/pdfstandards/pdf/PDF32000_2008.pdf)의
+§7.9.4, Table 15, §14.3.3/Table 317과 PDF Association의
+[ISO 승인 날짜 정오표](https://pdf-issues.pdfa.org/32000-2-2020/clause07.html#794-dates)다.
+일반 합성 PDF에서는 자동 시각 metadata를 생략해 fixture를 결정적으로 만들고,
+별도의 실제 도구 사례에서 오탐을 재현한 날짜를 명시해 정상 허용을 검증한다.
+카드정보가 있는 제목과 날짜 뒤의 추가 카드 문구는 거부 사례로 유지한다.
+
+이 변경은 PDF 내용 검사이며 API 계약·DB schema·저장 원본을 바꾸지 않는다.
+사용자의 파일을 수정하거나 metadata를 삭제하는 기능이 아니다.
+
+
+다음 실제 PostgreSQL 실행은 **225개 통과**, Alembic drift 없음과 downgrade/upgrade 왕복,
+시험 DB 정지까지 확인했다. 가계 경계·첨부 접근 권한·저장 무결성·기존 검사와 날짜 회귀를 함께
+실행한 결과이며 이전 150개와 합산하지 않는다. 기존 Starlette TestClient의 httpx 교체 안내
+경고 1개가 있었고 실패는 없었다.
+
+```sh
+uv run --project services/api python scripts/test_database.py services/api/tests/test_documents.py services/api/tests/test_document_storage.py services/api/tests/test_document_validation.py services/api/tests/test_pdf_metadata_dates.py -q
+```
+
+
+그 뒤 추가한 PDF fixture의 페이지 수 회귀를 포함해 날짜·기존 검사 **157개**가 통과했다.
+worker 본문은 위 DB 실행 후 변경하지 않았다. 실제 network-none·4GiB·2CPU 도구 이미지에서도
+**23개 모두 통과**했다. `pdf_dated_korean` 허용과 `card_pdf_metadata`, `card_pdf_date_suffix`
+거절을 포함하며 timeout·OCR·서명 DB 기준을 낮추지 않았다. 초기 새 fixture의 writer context
+진입이 clone 페이지를 초기화하는 문제를 명시적 close로 고쳤고, 정상 페이지 1개를 별도 검사한다.
+최종 검사 이미지 ID는 `sha256:1bcd3e967ad706a3df96cc8ab4ae333e6a8eae6f9621650ad114fa0ee8ed4ed3`이다.
+전용 임시 컨테이너는 종료·제거했고 검토용 이미지는 보존했다. 이는 운영 배포 완료 기록과 구분한다.
