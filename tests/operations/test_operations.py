@@ -241,6 +241,9 @@ class DeploymentTests(unittest.TestCase):
     def test_invalid_deployments_rejected(self):
         cases = [
             ("api_image", "api:latest"),
+            ("api_image", "sha256:" + "a" * 12),
+            ("api_image", "sha256:" + "a" * 63),
+            ("api_image", "sha256:" + "a" * 65),
             ("web_image", "web:latest@sha256:" + "a" * 64),
             ("fqdn", "https://example.ts.net"),
             ("fqdn", "host.tail.ts.net:8443"),
@@ -254,6 +257,15 @@ class DeploymentTests(unittest.TestCase):
         for key, value in cases:
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 deploy.render({**config(), key: value})
+
+    def test_full_local_image_ids_are_preserved_without_repository_prefix(self):
+        local = {**config(), "api_image": "sha256:" + "a" * 64,
+                 "web_image": "sha256:" + "b" * 64}
+        services = deploy.render(local)["compose.json"]["services"]
+        for name in ("api", "scanner"):
+            self.assertEqual(services[name]["image"], local["api_image"])
+        for name in ("web", "public"):
+            self.assertEqual(services[name]["image"], local["web_image"])
 
     def test_output_is_new_and_checksums_cover_generated_files(self):
         with tempfile.TemporaryDirectory() as tmp:

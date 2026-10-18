@@ -20,7 +20,9 @@ POSTGRES = (
     "postgres:18.6-bookworm@sha256:"
     "afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c"
 )
-IMAGE = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}")
+# Repository digests and full local image IDs are immutable references. A local
+# build's image ID is not a repository digest and must never be appended to a tag.
+IMAGE = re.compile(r"(?:[a-z0-9][a-z0-9./:_-]*@)?sha256:[0-9a-f]{64}")
 REQUIRED = {
     "format",
     "project",
