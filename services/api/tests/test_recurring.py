@@ -811,12 +811,24 @@ class TestRecurringDatabase:
         actor = actors[0]
         original = service._remember
         count = 0
+        flushed_before_failure = {}
 
         def fail_second(*args, **kwargs):
             nonlocal count
             count += 1
             original(*args, **kwargs)
             if count == 2:
+                session = args[0]
+                for model in (ScheduledObligation, ObligationRevision):
+                    flushed_before_failure[model.__tablename__] = session.scalar(
+                        select(func.count()).select_from(model)
+                    )
+                flushed_before_failure["reservation_state"] = session.scalar(
+                    select(IdempotencyRecord.state).where(
+                        IdempotencyRecord.operation == "obligations.generate",
+                        IdempotencyRecord.key == "synthetic-retry",
+                    )
+                )
                 raise RuntimeError("Synthetic batch failure")
 
         with TestClient(recurring_app, raise_server_exceptions=False) as client:
@@ -828,12 +840,136 @@ class TestRecurringDatabase:
                 json={"start_date": "2026-01-01", "end_date": "2026-03-31", "rule_id": rule["id"]},
             )
             assert result.status_code == 500
+            assert result.json()["error"]["code"] == "INTERNAL_ERROR"
+            assert count == 2
+            assert flushed_before_failure == {
+                ScheduledObligation.__tablename__: 2,
+                ObligationRevision.__tablename__: 2,
+                "reservation_state": "pending",
+            }
             with Session(db_engine) as session:
-                assert session.scalar(select(func.count()).select_from(ScheduledObligation)) == 0
-                assert session.scalar(select(func.count()).select_from(ObligationRevision)) == 0
-                assert session.scalar(select(func.count()).select_from(ObligationGeneration)) == 0
+                for model in (
+                    ScheduledObligation,
+                    ObligationRevision,
+                    ObligationGeneration,
+                    ObligationGenerationItem,
+                ):
+                    assert session.scalar(select(func.count()).select_from(model)) == 0
+                assert (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(IdempotencyRecord)
+                        .where(IdempotencyRecord.operation == "obligations.generate")
+                    )
+                    == 0
+                )
+                assert (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(AuditEvent)
+                        .where(AuditEvent.entity_type == "obligation")
+                    )
+                    == 0
+                )
             monkeypatch.setattr(service, "_remember", original)
-            assert len(generate(client, actor, rule["id"], "synthetic-retry")["items"]) == 3
+            recovered = generate(client, actor, rule["id"], "synthetic-retry")
+            assert len(recovered["items"]) == 3
+            assert generate(client, actor, rule["id"], "synthetic-retry") == recovered
+        with Session(db_engine) as session:
+            assert session.execute(
+                select(ScheduledObligation.nominal_date, func.count())
+                .group_by(ScheduledObligation.nominal_date)
+                .order_by(ScheduledObligation.nominal_date)
+            ).all() == [(date(2026, 1, 31), 1), (date(2026, 2, 28), 1), (date(2026, 3, 31), 1)]
+            for model, expected in (
+                (ObligationRevision, 3),
+                (ObligationGeneration, 1),
+                (ObligationGenerationItem, 3),
+            ):
+                assert session.scalar(select(func.count()).select_from(model)) == expected
+            reservation = session.scalars(
+                select(IdempotencyRecord).where(
+                    IdempotencyRecord.operation == "obligations.generate"
+                )
+            ).one()
+            assert reservation.state == "completed"
+            assert reservation.resource_id == UUID(recovered["id"])
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(AuditEvent.entity_type == "obligation")
+                )
+                == 3
+            )
+
+    def test_generation_committed_before_response_failure_replays_same_result(
+        self, recurring_app, actors, db_engine, monkeypatch
+    ):
+        actor = actors[0]
+        original = service.generate
+        committed_responses = []
+
+        def fail_after_commit(*args, **kwargs):
+            response = original(*args, **kwargs)
+            committed_responses.append(response.model_dump(mode="json"))
+            # The real service has committed, but its successful HTTP response is not delivered.
+            raise RuntimeError("Synthetic response delivery failure")
+
+        with TestClient(recurring_app, raise_server_exceptions=False) as client:
+            rule = post_rule(client, actor)
+            with monkeypatch.context() as patch:
+                patch.setattr(service, "generate", fail_after_commit)
+                result = client.post(
+                    "/api/v1/obligations/generate",
+                    headers=headers(actor, "synthetic-response-retry"),
+                    json={
+                        "start_date": "2026-01-01",
+                        "end_date": "2026-03-31",
+                        "rule_id": rule["id"],
+                    },
+                )
+            assert result.status_code == 500
+            assert result.json()["error"]["code"] == "INTERNAL_ERROR"
+            assert len(committed_responses) == 1
+            committed = committed_responses[0]
+            with Session(db_engine) as session:
+                committed_ids = set(session.scalars(select(ScheduledObligation.id)))
+                assert committed_ids == {UUID(item["id"]) for item in committed["items"]}
+                assert len(committed_ids) == 3
+                reservation = session.scalars(
+                    select(IdempotencyRecord).where(
+                        IdempotencyRecord.operation == "obligations.generate"
+                    )
+                ).one()
+                assert reservation.state == "completed"
+                assert reservation.resource_id == UUID(committed["id"])
+            for _ in range(2):
+                assert generate(client, actor, rule["id"], "synthetic-response-retry") == committed
+        with Session(db_engine) as session:
+            assert set(session.scalars(select(ScheduledObligation.id))) == committed_ids
+            for model, expected in (
+                (ObligationRevision, 3),
+                (ObligationGeneration, 1),
+                (ObligationGenerationItem, 3),
+            ):
+                assert session.scalar(select(func.count()).select_from(model)) == expected
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(IdempotencyRecord)
+                    .where(IdempotencyRecord.operation == "obligations.generate")
+                )
+                == 1
+            )
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(AuditEvent.entity_type == "obligation")
+                )
+                == 3
+            )
 
     def test_same_key_concurrent_settlement_has_one_cash_fact(
         self, recurring_app, actors, db_engine
