@@ -65,3 +65,6 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 - [사용자 내보내기 화면 검증](testing/exports-client.md) — JSON·CSV·선택 문서 ZIP과 플랫폼별 저장 경계
 
 설정과 감사 이력 화면·26개 경로 확인은 [설정·감사 UI 검증](testing/settings-audit.md)을 참고합니다.
+
+모바일 직접 시작과 배우자 연결은 [통합 검증](testing/mobile-onboarding.md)과
+[Android 검증](testing/native-onboarding.md)을 참고합니다.

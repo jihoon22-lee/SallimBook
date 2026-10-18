@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "e642b49a4f5f80ca515eeff1621f9a2818abab1cd46a264c55bc8c438fef0a8d",
-      "git_sha1": "81e56f51eac912ca19dc2ddba919072c70f4a0a4"
+      "sha256": "45823ed8c5feefbdcf26d192189d9b21ca793a3223821dded83a2e61e50ce0d1",
+      "git_sha1": "a838efff848c201c1240c3fbfc24b2b197d3dace"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -126,8 +126,8 @@
       "git_sha1": "55259ff24ebf33dd439b2d646f59771442602058"
     },
     "docs/README.md": {
-      "sha256": "5a44b9199530ab1793ed31f1c099a2cb1294a7bdf4fbcb4391d1eaa399d13571",
-      "git_sha1": "66008fa838342a3f3a76cb4509ec05b28b98face"
+      "sha256": "0c83aa9d09c39402e33bea238e73982f73a731683819155673bc021fd8f79f2c",
+      "git_sha1": "d90a82ccc8b8ab8535c3763bbf5e1631b9027514"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -342,12 +342,20 @@
       "git_sha1": "0d44ef17c5426e1f95b513607c3f2802dc3be25a"
     },
     "docs/testing/final-integration.md": {
-      "sha256": "12f630ecd4bd3b9d0f873fb8ef464088a794421eaab3679bc8dc41913f3ec9cb",
-      "git_sha1": "0546b36e3d1aa6ef0ac90dbe75e0ca25aceec1a2"
+      "sha256": "0e354331ea349cada87da934d283354af4b296d14da7c4a39ad2c8ab9ef5f395",
+      "git_sha1": "ce58e5813c516b2d631edaf570b250958ae7028f"
     },
     "docs/adr/mobile-first-start.md": {
       "sha256": "8d11b14255d18b61265b0ae97501afbfb0d359c909906b4715a01ff9d0ccc273",
       "git_sha1": "a0fd17c419450e649c476748e96032b2e312c17e"
+    },
+    "docs/testing/native-onboarding.md": {
+      "sha256": "73c5a4e0432c551161c4c527814a71dd64180f69200b73d77fbe762bfbbfa7ac",
+      "git_sha1": "b5a2ba78a85981b6f7646bb274e709575f3d1a60"
+    },
+    "docs/testing/mobile-onboarding.md": {
+      "sha256": "f36d245dcebcf2c1e42f82283512f3ac77b8b34aa0f97ca38ffea548f393b45b",
+      "git_sha1": "4f6016a381cf181ba0930f5811d7bec8c2ec3a94"
     }
   }
 }

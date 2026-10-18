@@ -117,8 +117,9 @@ uv run --project services/api python scripts/test_web_auth.py  # 실제 HTTPS + 
 ```
 
 실제 HTTPS 업무 검증은 같은 명령에 `--passkeys`, `--finance`, `--months`, `--comparison`,
-`--cashflow`, `--insurance`, `--homecare`, `--documents`, `--exports`, `--audit`, `--vault` 중
+`--cashflow`, `--insurance`, `--homecare`, `--documents`, `--exports`, `--audit`, `--vault`, `--onboarding` 중
 하나를 붙여 실행합니다. 각 명령은 합성 계정·일회용 schema를 만들고 종료 시 제거합니다.
+`--onboarding`은 빈 가계에서 첫 등록·자동 로그인·배우자 연결을 실제 HTTPS로 검증합니다.
 문서·내보내기는 고정 이미지의 파일 검사 도구도 실행합니다. 공유 테스트 DB는 동시 실행을
 거부합니다. 브라우저 시험 중 다른 Docker 네트워크를 만들거나 제거하면 Chromium의 네트워크
 변경 오류가 발생할 수 있으므로 전체 웹 시험과 컨테이너 시작·종료를 순차로 실행합니다.

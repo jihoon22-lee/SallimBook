@@ -58,6 +58,10 @@ def verify_image_details(details, *, revision=None, role=None):
 
 
 def validate_database_settings(values, password):
+    # Reject non-database settings before parsing or importing database tooling.
+    # Security/origin/storage values come only from the validated renderer.
+    if set(values) != {"SALLIMBOOK_DATABASE_URL"}:
+        raise OperationError("Unexpected runtime environment setting")
     from sqlalchemy.engine import make_url
 
     raw = values.get("SALLIMBOOK_DATABASE_URL", "")
@@ -77,11 +81,6 @@ def validate_database_settings(values, password):
         valid = False
     if not valid:
         raise OperationError("Dedicated database URL/password mismatch")
-    # Other security/origin/storage values come from the validated renderer and
-    # cannot drift in a forgotten env file. Quota overrides remain explicit JSON
-    # manifest work rather than silently weakening production admission here.
-    if set(values) != {"SALLIMBOOK_DATABASE_URL"}:
-        raise OperationError("Unexpected runtime environment setting")
 
 
 def check(config_directory, verify_database=False, sdk=None):
