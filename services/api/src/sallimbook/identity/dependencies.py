@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+import ipaddress
+import socket
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -82,3 +86,44 @@ PrincipalDependency = Annotated[Principal, Depends(get_principal)]
 def request_source(request: Request) -> str:
     # Trust the ASGI peer only; callers cannot evade throttles with X-Forwarded-For.
     return request.client.host if request.client else "unknown-peer"
+
+
+def self_setup_identity_allowed(request: Request) -> bool:
+    """Trust identity only from the actual isolated Serve/Caddy network peer.
+
+    Serve v1.104.1 removes supplied identity headers before setting its own.
+    Caddy binds loopback in that node's namespace; API has no published port and
+    Uvicorn must keep --no-proxy-headers. A forwarded IP is never evidence here.
+    """
+    settings = request.app.state.settings
+    expected = settings.self_setup_identity_sha256
+    proxy = settings.self_setup_proxy_host
+    values = request.headers.getlist("tailscale-user-login")
+    if (
+        not expected
+        or not proxy
+        or request.client is None
+        or len(values) != 1
+        or not values[0]
+        or len(values[0]) > 512
+        or not values[0].isascii()
+        or any(ord(value) < 32 or ord(value) == 127 for value in values[0])
+        or "tailscale-funnel-request" in request.headers
+    ):
+        return False
+    try:
+        peer = ipaddress.ip_address(request.client.host)
+        resolved = {
+            ipaddress.ip_address(address[4][0])
+            for address in socket.getaddrinfo(proxy, None, type=socket.SOCK_STREAM)
+        }
+    except OSError, ValueError:
+        return False
+    if peer not in resolved:
+        return False
+    return hmac.compare_digest(expected, hashlib.sha256(values[0].encode("ascii")).hexdigest())
+
+
+def require_self_setup_identity(request: Request) -> None:
+    if not self_setup_identity_allowed(request):
+        raise DomainError("SETUP_UNAVAILABLE", "이 연결에서는 처음 시작할 수 없습니다.", 403)

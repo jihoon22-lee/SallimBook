@@ -15,11 +15,15 @@ from sallimbook.identity.dependencies import (
     request_source,
     require_native_transport,
     require_registration_transport,
+    require_self_setup_identity,
     require_web_transport,
+    self_setup_identity_allowed,
 )
 from sallimbook.identity.passkeys.models import StepUpPurpose
 from sallimbook.identity.passkeys.service import consume_step_up
 from sallimbook.identity.schemas import (
+    ConnectionCodeResponse,
+    ConnectionRequest,
     CsrfResponse,
     DeviceListResponse,
     DeviceResponse,
@@ -31,10 +35,135 @@ from sallimbook.identity.schemas import (
     NativeTokenResponse,
     ReauthenticationRequest,
     RefreshRequest,
+    SetupRequest,
+    SetupStatusResponse,
     WebLoginResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
+
+
+def _web_session_response(response: Response, result: service.LoginResult) -> WebLoginResponse:
+    response.set_cookie(
+        SESSION_COOKIE,
+        result.token,
+        max_age=int(service.WEB_ABSOLUTE.total_seconds()),
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        path="/",
+    )
+    return WebLoginResponse(
+        member=result.member, csrf_token=result.csrf_token, expires_at=result.expires_at
+    )
+
+
+@router.get(
+    "/household/setup", response_model=SetupStatusResponse, operation_id="getHouseholdSetup"
+)
+def get_household_setup(
+    request: Request, response: Response, session: SessionDependency
+) -> SetupStatusResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return SetupStatusResponse(
+        available=(self_setup_identity_allowed(request) and service.setup_available(session))
+    )
+
+
+@router.post(
+    "/auth/web/setup",
+    response_model=WebLoginResponse,
+    status_code=201,
+    dependencies=[Depends(require_web_transport), Depends(require_self_setup_identity)],
+    operation_id="setupHouseholdWeb",
+)
+def setup_household_web(
+    payload: SetupRequest,
+    request: Request,
+    response: Response,
+    session: SessionDependency,
+) -> WebLoginResponse:
+    return _web_session_response(
+        response,
+        service.setup_household(
+            session,
+            payload,
+            request_source(request),
+            "web",
+        ),
+    )
+
+
+@router.post(
+    "/auth/native/setup",
+    response_model=NativeTokenResponse,
+    status_code=201,
+    dependencies=[Depends(require_native_transport), Depends(require_self_setup_identity)],
+    operation_id="setupHouseholdNative",
+)
+def setup_household_native(
+    payload: SetupRequest,
+    request: Request,
+    session: SessionDependency,
+) -> NativeTokenResponse:
+    return service.setup_household(
+        session, payload, request_source(request), "native"
+    ).native_tokens
+
+
+@router.post(
+    "/auth/web/connect",
+    response_model=WebLoginResponse,
+    status_code=201,
+    dependencies=[Depends(require_web_transport)],
+    operation_id="connectHouseholdWeb",
+)
+def connect_household_web(
+    payload: ConnectionRequest,
+    request: Request,
+    response: Response,
+    session: SessionDependency,
+) -> WebLoginResponse:
+    return _web_session_response(
+        response,
+        service.connect_household(
+            session,
+            payload,
+            request_source(request),
+            "web",
+        ),
+    )
+
+
+@router.post(
+    "/auth/native/connect",
+    response_model=NativeTokenResponse,
+    status_code=201,
+    dependencies=[Depends(require_native_transport)],
+    operation_id="connectHouseholdNative",
+)
+def connect_household_native(
+    payload: ConnectionRequest,
+    request: Request,
+    session: SessionDependency,
+) -> NativeTokenResponse:
+    return service.connect_household(
+        session, payload, request_source(request), "native"
+    ).native_tokens
+
+
+@router.post(
+    "/household/connection-code",
+    response_model=ConnectionCodeResponse,
+    status_code=201,
+    operation_id="createHouseholdConnectionCode",
+)
+def create_household_connection_code(
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    step_up_token: Annotated[str | None, Header(alias="X-Step-Up-Token", max_length=128)] = None,
+) -> ConnectionCodeResponse:
+    return service.create_connection_code(session, principal, step_up_token=step_up_token)
 
 
 @router.post(
@@ -47,20 +176,7 @@ def login_web(
     payload: LoginRequest, request: Request, response: Response, session: SessionDependency
 ) -> WebLoginResponse:
     result = service.login(session, payload, request_source(request), "web")
-    response.set_cookie(
-        SESSION_COOKIE,
-        result.token,
-        max_age=int(service.WEB_ABSOLUTE.total_seconds()),
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        path="/",
-    )
-    return WebLoginResponse(
-        member=result.member,
-        csrf_token=result.csrf_token,
-        expires_at=result.expires_at,
-    )
+    return _web_session_response(response, result)
 
 
 @router.get("/auth/web/csrf", response_model=CsrfResponse, operation_id="renewWebCsrf")

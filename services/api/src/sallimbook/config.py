@@ -20,6 +20,10 @@ class Settings(BaseSettings):
         )
     )
     database_url: SecretStr | None = None
+    # Self-start is opt-in and requires both the real private proxy peer and its
+    # authenticated Tailscale identity. Never infer authorization from a UI flag.
+    self_setup_identity_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    self_setup_proxy_host: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{0,62}$")
     # Passkeys require the actual HTTPS RP and signed Android origins to be configured.
     webauthn_rp_id: str | None = None
     webauthn_web_origins: list[str] = Field(default_factory=list)
