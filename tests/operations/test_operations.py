@@ -442,6 +442,8 @@ class BackupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "secret"
             path.write_bytes(b"synthetic")
+            # Exercise a public file even on runners with a private default umask.
+            path.chmod(0o644)
             with self.assertRaises(backup.OperationError):
                 backup.private_file(path)
             path.chmod(0o600)
