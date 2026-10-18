@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "cc9af50454967c55a9869efe8e7f80cb69ad9f92d6279dcf9b8bdec570019d01",
-      "git_sha1": "c82875b06c7c8e5d1eb76277242abb6cbd10e65d"
+      "sha256": "3184a41d4338882cbec8148f72b82ca097a7324efb4dd54a2857e417b5ac8387",
+      "git_sha1": "77c02c901dd7b719e9ec1c5e89c06afa8a83d5b5"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
@@ -374,16 +374,16 @@
       "git_sha1": "10b7d5a3395629224b144f837cfb318b43f0b388"
     },
     "docs/testing/operations-automation.md": {
-      "sha256": "f7944efeb06533856044ca22d61cf3406cb3d9432591885992a6a6ebe7d37509",
-      "git_sha1": "24c1c1023d247debea649995f6f571fe5b0eccce"
+      "sha256": "a727cb6a40e47c5debbd1154ca16785ca225115cef6988944c5ffae936fd9262",
+      "git_sha1": "94d601c87de3e17785d4dfa48c2c6350d7a8937a"
     },
     "docs/testing/design-refresh.md": {
-      "sha256": "75a8bdf1d963694f96fdc537f45520c7320219438d058e90f931742def9d9b2f",
-      "git_sha1": "4663e10f40372406e7e8314917c472ee1eda3bd5"
+      "sha256": "2d78085d608778318a904b768f7346b20ba5a928ce6acc0a28cd66c0092769b9",
+      "git_sha1": "425b939a4e128e7aa08b92bd6fe487feb99b0870"
     },
     "docs/testing/android-ci.md": {
-      "sha256": "f145115ca77b77d238e6f4b51e12ea8dd7f36f3c6c8e949f9f997d69ce557ea5",
-      "git_sha1": "1dbbd653b04a89eb392be0c1fab714fb4c474731"
+      "sha256": "ee68e7babb9bf86aae332729021089d2cb60f7ed849806d9dd70dc976d388537",
+      "git_sha1": "1bf01b869adbf604f852dd0545f88d11ddb30b82"
     },
     "docs/testing/android-cloud-results.md": {
       "sha256": "b97c40aae567a07b6e27d6d5a7bc65cbe9502991e589b2555fa739f045f334a0",

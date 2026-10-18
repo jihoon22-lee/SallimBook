@@ -28,6 +28,7 @@ Pretendard Variable v1.3.9 원본 WOFF2와 OFL을 앱에 포함했다. 출처·�
 | `git diff --check` | 통과 |
 | 통합 단계 실제 HTTPS `--onboarding`, `--finance`, `--homecare`, `--insurance` | 모두 통과, 실제 API/PostgreSQL 사용 |
 | 통합 단계 `pnpm test:docs` | 문서 70개·링크 336개·68 tests 통과 |
+| PR #93 최종 원격 CI, `7498c94`, run `39094729822` | 필수 7개 job 모두 성공. Web job 전체 브라우저 1,100건 통과(12.0분), 실제 HTTPS 시나리오 11개 성공 |
 
 위 브라우저 수치는 단계별 재검증을 포함하므로 서로 더한 값을 서로 다른 테스트 수로 해석하지 않는다. 모든 fixture는 합성 데이터다. 브라우저 범위는 인증·가계 시작·native adapter·앱 잠금·자산·계좌·카드·월 비교·고정비·보험·가전/재고·첨부·26개 직접 경로를 포함한다.
 
@@ -50,6 +51,8 @@ Chromium의 실제 렌더 글꼴 조회에서 `Pretendard Variable`, `isCustomFo
 통합 재검토에서 첫 달의 모든 금액이 확인됐어도 월 자체는 작성 중·정정 중일 수 있음을 확인했다. 비교 결과가 `no_previous_month`여도 현재 월 상태를 독립적인 배지로 항상 표시하도록 수정하고 두 상태를 PC·Android 크기에서 검사했다. 좁은 화면의 설정 링크도 최소 48×48px로 맞췄다.
 
 별도 원격 기준 `d8585dc`의 2-worker 전체 회귀는 1,072건 중 1,070건 통과·홈 2건 실패였다. 가계 시작 안내까지 포함한 전체 h2 locator가 원인이며, setup fixture 누락으로 Vite 연결 거부도 3회 발생했다. 이번 변경의 `home.spec.ts`는 `.dashboard-grid`의 두 핵심 제목만 검사하고 `/api/v1/household/setup`을 명시적으로 응답한다. 위 30건 실행에 해당 홈 검사를 포함했다.
+
+이후 [PR #93의 원격 전체 실행](https://github.com/jihoon22-lee/SallimBook/actions/runs/39094729822)에서 해당 실패가 해소됐고 7개 job이 모두 성공했다. 브라우저 1,100건과 HTTPS 11개는 같은 Web job의 서로 다른 검사 단계이며, 다른 job의 첨부·내보내기 결과를 이 11개에 포함하지 않았다. PR #93은 main에 병합됐다. 원격 CI 성공은 운영 웹·APK 배포 완료나 실제 Galaxy 인수를 뜻하지 않는다.
 
 ## 한계
 

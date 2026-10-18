@@ -121,3 +121,39 @@ CA/키, 비밀번호·세션 body는 업로드하지 않는다. `always()`로 �
 시간 예산 후속 검증에서는 모든 16개 step의 명시적 제한 합계 121분과 job 제한 135분의 관계를
 검사하고, actionlint 및 Android 결과 정제 회귀 시험을 다시 실행했다. 이 변경은 이미 진행 중인
 원격 실행의 제한을 바꾸지 않으며, 새 workflow로 시작한 실행부터 적용된다.
+
+## 실제 KVM 실행 기록 — 2026-10-18
+
+| 실행 | 실제 checkout SHA | 기존 네이티브 | 신규 가입 | 결과 |
+| --- | --- | --- | --- | --- |
+| [39095425156](https://github.com/jihoon22-lee/SallimBook/actions/runs/39095425156) | `91e8b286b39c49d8fcb65cc2762cec86c68cdcf1` | 11 PASS / 1 SKIPPED | 1 FAIL, 정제 증거로 세부 단계 확인 불가 | FAIL |
+| [39096333533](https://github.com/jihoon22-lee/SallimBook/actions/runs/39096333533) | `a7b56fb89154c120d13f670f33a750a3ec411351` | 11 PASS / 1 SKIPPED | 1 FAIL, `CANCEL_FORM` | FAIL |
+
+두 checkout SHA는 GitHub가 만든 PR merge ref이며 각각 PR head `3ca1bd3`, `39adb28`에 해당한다.
+두 실행 모두 KVM 가속, API 36/x86_64 부팅, AVD/ADB 종료와 합성 DB·포트 정리를 확인했다.
+등록된 생체 인증이 없는 AVD의 `ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization`
+한 건이 실제 skip됐다. 전체 13건의 수치는 매 실행 11 PASS / 1 FAIL / 1 SKIPPED이며 합산하지 않는다.
+
+가입 실패로 후속 정상 release 격리 단계는 실행되지 않았다. 따라서 해당 실행의
+`release_isolation_verified=false`와 APK metadata 부재를 별도로 유지한다. 최초 실행에서 제거된
+실패 단계는 후속 실행의 `CANCEL_FORM`으로 소급해 단정하지 않는다. 후속 진단은 고정 allowlist
+단계명만 보존하며 Espresso 오류 원문·입력값·UI tree를 공개하지 않는다.
+
+정제 artifact 4개씩을 보존했다: 첫 실행의 [요약](evidence/android-kvm-20261018/run-39095425156/summary.json),
+[SDK](evidence/android-kvm-20261018/run-39095425156/sdk.json),
+[기존 시험 XML](evidence/android-kvm-20261018/run-39095425156/existing.xml),
+[가입 XML](evidence/android-kvm-20261018/run-39095425156/onboarding.xml);
+진단 실행의 [요약](evidence/android-kvm-20261018/run-39096333533/summary.json),
+[SDK](evidence/android-kvm-20261018/run-39096333533/sdk.json),
+[기존 시험 XML](evidence/android-kvm-20261018/run-39096333533/existing.xml),
+[가입 XML](evidence/android-kvm-20261018/run-39096333533/onboarding.xml).
+
+이 결과로 기존 클라우드 환경의 `BLOCKED_ENV` 이력은 지우지 않는다. 실행 환경이 바뀌어 실제
+계측이 가능해졌다는 후속 증거이며, 가입 실패 수정 및 A01~A13 나머지 사용자 흐름은 별도 작업이다.
+
+`763bd0b`에서는 가입 Activity의 resumed/focus와 버튼 준비를 기다린 다음 해당 Activity의 decor와
+실제 View로 클릭 대상을 한정했다. 취소 후 main 복귀와 새 setup 조회도 기다린다. 취소·스크롤·클릭·
+복귀를 서로 다른 고정 단계로 기록해 실패 위치를 구분한다. 별도로 초기 전제를 네이티브 잠금 커튼·
+빈 세션·bridge 준비로 교정했고, 마지막 실제 등록 세션과 API 응답 홈 판정은 유지했다.
+제품의 잠금/세션 로직은 변경하지 않았다. Kotlin 계측 컴파일, 정제 도구 12건, 실제 React 브라우저
+홈 판정 10건이 통과했다. 수정 후 원격 계측 성공은 별도 실행 결과로 확인해야 한다.
