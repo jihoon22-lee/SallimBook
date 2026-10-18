@@ -182,6 +182,8 @@ def test_bootstrap_cli_writes_only_private_file_and_rolls_back_failed_commit(tmp
 def test_bootstrap_cli_rejects_public_directory_and_symlink_destination(tmp_path, monkeypatch):
     directory = tmp_path / "public"
     directory.mkdir(mode=0o755)
+    # mkdir's mode is filtered by umask; explicitly create the rejected fixture.
+    directory.chmod(0o755)
     settings = Settings(
         database_url=SecretStr("postgresql+psycopg://synthetic.invalid/example_test")
     )

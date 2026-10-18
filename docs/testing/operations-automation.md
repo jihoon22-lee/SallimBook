@@ -13,8 +13,8 @@
 | 작업 | 기본 예약, Asia/Seoul | 성공 조건 | 제한 시간 |
 | --- | --- | --- | --- |
 | `startup` | 사용자 manager의 `default.target` | 실제 배포 preflight, 전용 Compose 시작, 6개 서비스 및 스캐너 확인 | 10분 |
-| `backup` | 매일 03:15 | 일관된 암호화 백업, 실제 archive SHA-256, 별도 운영 장부 기록 | 30분 |
-| `health` | 매시간 15분 | 서비스 상태, 실제 스캐너 응답/신선도, 백업 존재·26시간 이내, 운영 장부/백업 저장소 여유 1GiB 이상 | 5분 |
+| `backup` | 매일 03:15 | 일관된 암호화 백업, 실제 archive SHA-256, 별도 운영 장부 기록 | 45분(백업 worker 30분 + 준비·ack·실패 정리 여유 15분) |
+| `health` | 매시간 15분 | 서비스 상태, 실제 스캐너 응답/신선도, 백업 존재·26시간 이내, 운영 장부/백업/build/daemon 이미지 저장소 여유 1GiB 이상 | 5분 |
 | `restore-check` | 매월 1일 04:30 | 격리 DB의 스키마·테이블 수·첨부 해시·필드 암호문 인증 | 2시간 |
 | `cvd-refresh` | 매일 05:00 | 서명 DB가 4일 이상이면 원래 앱 소스로 API 이미지만 재빌드 후 검사·승격 | 1시간 |
 | `recover` | 명시적 실행 | 중단 기록과 실제 소유 리소스 대조, 필요한 복귀/장부 기록 | 10분 |
@@ -173,14 +173,32 @@ python -m ops.automation run /PRIVATE/automation.json --sha256 CONFIG_SHA256 --t
 새 배포 디렉터리도 preflight한다. 이후 전용 scanner/API만 갱신하고 실제 health/신선도를 확인한 다음
 state/active-deployment.json을 atomic rename+fsync한다. 실패하면 이전 scanner/API로 복귀한다. pointer
 rename은 끝났지만 fsync 결과가 불확실하면 새 서비스를 임의로 되돌리지 않고 `PROMOTION_COMMIT_UNCERTAIN`
-및 복구 필요 기록을 남긴다. 기존 이미지·빌드 디렉터리·APK를 자동 삭제하지 않는다.
+및 복구 필요 기록을 남긴다.
+
+새 CVD 빌드 전에는 기준 배포, 현재 배포와 직전 rollback 배포를 보호하고 이전에 **완료된 자체 CVD
+세대**만 정리한다. 새 이미지에 project/run/operator-source/kind 소유 label을 붙이고, 승격 검사 후
+세대 디렉터리의 전체 파일 SHA-256·권한·정확한 tag/image ID를 private receipt로 묶는다. 삭제는 같은
+앱/운영 소스, 완료 장부, 단일 링크 파일과 디렉터리 소유권, receipt 및 실제 이미지 label을 모두 재확인한다.
+다른 manifest가 참조하거나 다른 RepoTag가 붙은 이미지, 실행 중이거나 정지한 컨테이너가 사용하는
+이미지는 보존한다. 정확한 자체 tag에 `docker image rm --no-prune TAG`만 실행하며 image ID 삭제,
+force 삭제, 전역 prune은 하지 않는다. ID가 남거나 untag 결과가 불확실하면 빌드 파일도 보존한다.
+
+receipt 없는 과거 산출물, 미완료/변조/공유/symlink/hardlink 산출물은 삭제하지 않는다. 이 항목과
+orphan 자체 image tag까지 합쳐 6세대가 남으면 새 빌드를 중지한다. 정상 갱신은 현재·직전 세대를
+보존하며 새 세대를 만든다. BuildKit의 공유 cache를 강제 정리하지 않으므로, 새 빌드 전에 build와
+Docker 이미지 파일시스템의 여유가 각각 2GiB 이상인지 확인한다. health도 두 저장소의 여유를 기록하며
+1GiB 미만이면 실패한다. Docker Desktop처럼 daemon 저장소가 호스트에서 보이지 않는 경우에도
+network-none/read-only/UID 10001 worker가 이미지 루트의 statvfs를 조회한다.
+
+기준 이미지·현재/직전 APK·운영 백업·사용자 소스는 이 정리 대상이 아니다. 제한에 걸린 불확실한
+산출물은 운영자가 장부와 참조를 대조해 처리해야 하며 자동으로 삭제 범위를 넓히지 않는다.
 
 ## 검증 범위
 
 합성 단위 시험 명령:
 
 ```sh
-python3 -m unittest tests.operations.test_automation tests.operations.test_schedule -v
+python3 -m unittest tests.operations.test_automation tests.operations.test_schedule tests.operations.test_cvd_retention -v
 python3 -m unittest discover -s tests/operations -v
 ruff check --config services/api/pyproject.toml ops/automation.py ops/automation_runtime.py ops/automation_worker.py ops/restore_check.py ops/schedule.py ops/build_context.py tests/operations/test_automation.py tests/operations/test_schedule.py
 ```
@@ -224,3 +242,18 @@ python3 -m tests.operations.automation_integration \
 `integration-result.json`과 각 run의 private 장부를 검토한다. 실패한 restore 볼륨은 자동 삭제하지 않는다.
 
 PR 검토 후 로컬 이미지 참조를 보완했다. 실제 기존 API 이미지에서 시험 전용 레이어를 빌드하고 iidfile/inspect ID 일치를 확인한 뒤, 그 전체 ID로 network-none·UID 10001·읽기 전용 Compose 컨테이너를 실행해 통과했다. 운영 DB/키는 연결하지 않았으며 시험 컨테이너와 전용 태그를 정리했다. 현재 daemon은 RepoDigest도 1개 제공하므로 이 실행을 다른 Docker 저장 방식에서의 기존 오류 재현이라고 주장하지 않는다. 단위 회귀는 축약 ID 거절·전체 ID 보존·candidate manifest의 앱 내 정책 호환·CVD 승격 후 정확한 이미지 ID를 확인한다. 실제 CVD 다운로드와 운영 승격 전체는 이 작은 참조 시험과 구분한다.
+
+
+### CVD 보존/백업 제한 후속 검증 (2026-10-18)
+
+- 백업 전체 제한은 2700초이며 worker의 1800초 외에 git/네트워크/이미지/helper/ack/실패 정리 시간을
+  포함하는 회귀 시험을 추가했다. 생성된 systemd service에도 `TimeoutStartSec=2700`을 확인했다.
+- 합성 단위 시험은 정확한 자체 tag 삭제, 기준/현재/직전 및 다른 manifest 참조 보호, 공유 태그,
+  정지 컨테이너, 소유 label 불일치, 파일 변조·symlink·hardlink·미완료 기록 보존, untag 불확실성,
+  6세대 제한과 build/daemon 공간 부족 차단을 확인한다.
+- 실제 Docker의 새 scratch 이미지 2개와 private 시험 디렉터리로 자체 tag/tree 정리를 확인했다.
+  외부 시험 tag 또는 정지 시험 컨테이너가 붙어 있으면 보존했고, 그 시험 참조를 제거한 뒤에만 정리했다.
+  image ID rm, force, 전역 prune은 호출하지 않았다. 모든 시험 tag/컨테이너를 정리했다.
+- 별도 실제 API v4 이미지의 network-none/read-only/UID 10001 컨테이너에서 새 `storage` worker가
+  daemon 파일시스템 여유 약 632GiB를 반환했다. 새 helper 파일의 hash를 묶은 합성 bundle 시험이며,
+  운영 예약 활성화나 CVD 다운로드·승격 전체의 증거는 아니다. 운영 DB·백업·키는 접근하지 않았다.

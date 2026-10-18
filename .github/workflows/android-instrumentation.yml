@@ -1,0 +1,334 @@
+name: Android instrumentation
+
+# One disposable hosted VM; no production credentials, APK publication or local WSL changes.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/android-instrumentation.yml'
+      - 'apps/client/**'
+      - 'packages/api-client/**'
+      - 'services/api/**'
+      - 'scripts/*android*.py'
+      - 'scripts/setup_dev.py'
+      - 'scripts/test_database.py'
+      - 'infra/compose.dev.yaml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+
+permissions:
+  contents: read
+
+# At most one emulator job for this repository; a newer request supersedes the old one.
+concurrency:
+  group: sallimbook-android-instrumentation
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: 'true'
+  UV_FROZEN: 'true'
+
+jobs:
+  api36:
+    name: API 36 KVM and native instrumentation
+    if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    # Explicit step limits total 121m; reserve 14m for action post steps/runner overhead.
+    timeout-minutes: 135
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - name: Select isolated temporary paths
+        timeout-minutes: 1
+        run: |
+          printf '%s\n' \
+            "ANDROID_HOME=$RUNNER_TEMP/sallimbook-android-sdk" \
+            "ANDROID_SDK_ROOT=$RUNNER_TEMP/sallimbook-android-sdk" \
+            "ANDROID_USER_HOME=$RUNNER_TEMP/sallimbook-android-user" \
+            "GRADLE_USER_HOME=$RUNNER_TEMP/sallimbook-android-gradle" \
+            "SALLIMBOOK_ANDROID_PROBE=$RUNNER_TEMP/sallimbook-android-probe" \
+            "SALLIMBOOK_ANDROID_EVIDENCE=$RUNNER_TEMP/sallimbook-android-evidence" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        timeout-minutes: 5
+        with:
+          node-version: '24.18.0'
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        timeout-minutes: 5
+        with:
+          version: '9.15.9'
+          run_install: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        timeout-minutes: 5
+        with:
+          version: '0.12.5'
+          python-version: '3.14.7'
+          enable-cache: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        timeout-minutes: 5
+        with:
+          distribution: temurin
+          # setup-java normalizes OpenJDK 21.0.12.1+1 to this SemVer build notation.
+          java-version: '21.0.12+1.1'
+          check-latest: false
+          overwrite-settings: false
+      - name: Prepare private disposable paths and require KVM
+        timeout-minutes: 2
+        run: |
+          umask 077
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -c /dev/kvm
+          # Only this disposable GitHub VM is affected; retain the node's existing owner.
+          sudo setfacl -m "u:$(id -u):rw" /dev/kvm
+          python3 - <<'PY'
+          import fcntl, os
+          from pathlib import Path
+          descriptor = os.open('/dev/kvm', os.O_RDWR | os.O_CLOEXEC)
+          try:
+              if fcntl.ioctl(descriptor, 0xAE00, 0) != 12:
+                  raise SystemExit('KVM API check failed')
+          finally:
+              os.close(descriptor)
+          for name in ('ANDROID_USER_HOME', 'GRADLE_USER_HOME', 'SALLIMBOOK_ANDROID_EVIDENCE'):
+              Path(os.environ[name]).mkdir(mode=0o700, parents=True, exist_ok=False)
+          print('KVM API 12 is accessible on this disposable runner')
+          PY
+      - name: Check reviewed SDK revisions and official archive checksums
+        timeout-minutes: 2
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, xml.etree.ElementTree as ET
+          from pathlib import Path
+          pinned = {
+              'platforms;android-36': ['2.0.0', 'platform-36_r02.zip', 65878410, '2c1a80dd4d9f7d0e6dd336ec603d9b5c55a6f576'],
+              'build-tools;36.0.0': ['36.0.0', 'build-tools_r36_linux.zip', 63737259, 'b0b6376977657e8ad9b969bacf4093601da2c6fb'],
+              'platform-tools': ['37.0.1', 'platform-tools_r37.0.1-linux.zip', 9054187, '477254aa5f903c15cf51001717bdf347fb6b53e0'],
+              'emulator': ['37.2.12', 'emulator-linux_x64-16428233.zip', 349654171, 'cd7362ea55dfb86a418958138dc396e74165dd01'],
+              'system-images;android-36;google_apis;x86_64': ['7.0.0', 'x86_64-36_r07.zip', 1895447397, 'c6bf44bdcd885bb902b4ba752d111a073ad7a817'],
+          }
+          found = {}
+          for address in (
+              'https://dl.google.com/android/repository/repository2-3.xml',
+              'https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-3.xml',
+          ):
+              with urllib.request.urlopen(address, timeout=30) as response:
+                  root = ET.fromstring(response.read(16 * 1024 * 1024))
+              for package in root.findall('remotePackage'):
+                  name = package.get('path')
+                  channel = package.find('channelRef')
+                  if name not in pinned or channel is not None and channel.get('ref') != 'channel-0':
+                      continue
+                  revision = package.find('revision')
+                  version = '.'.join(revision.findtext(key, '0') for key in ('major', 'minor', 'micro'))
+                  archives = [item.find('complete') for item in package.findall('./archives/archive')
+                              if item.findtext('host-os') in (None, 'linux')]
+                  if len(archives) != 1:
+                      raise SystemExit('SDK archive platform is ambiguous')
+                  archive = archives[0]
+                  found[name] = [version, archive.findtext('url'), int(archive.findtext('size')),
+                                 archive.findtext('checksum')]
+          if found != pinned:
+              raise SystemExit('SDK metadata changed; review the pinned revision/checksum before updating')
+          Path(os.environ['SALLIMBOOK_ANDROID_EVIDENCE'], 'sdk.json').write_text(
+              json.dumps({'reviewed_packages': pinned, 'published_checksum_algorithm': 'sha1'}, sort_keys=True))
+          print('Five SDK package revisions and published archive checksums match the reviewed pins')
+          PY
+      - name: Install dedicated checksum-pinned command line tools and reviewed SDK
+        timeout-minutes: 15
+        run: |
+          uv run --no-project python scripts/setup_android_sdk.py --sdk-root "$ANDROID_HOME" --accept-licenses
+          python3 - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          sdk = Path(os.environ['ANDROID_HOME'])
+          subprocess.run([str(sdk / 'cmdline-tools/15859902/bin/sdkmanager'), '--sdk_root=' + str(sdk),
+                          '--channel=0', 'emulator', 'platform-tools',
+                          'system-images;android-36;google_apis;x86_64'],
+                         input='y\n' * 100, text=True, check=True, timeout=780)
+          PY
+      - name: Verify installed package revisions and actual acceleration
+        timeout-minutes: 2
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, xml.etree.ElementTree as ET
+          from pathlib import Path
+          sdk = Path(os.environ['ANDROID_HOME'])
+          evidence = Path(os.environ['SALLIMBOOK_ANDROID_EVIDENCE'], 'sdk.json')
+          report = json.loads(evidence.read_text())
+          installed = {}
+          for name, expected in report['reviewed_packages'].items():
+              root = ET.parse(sdk.joinpath(*name.split(';'), 'package.xml')).getroot()
+              packages = [node for node in root.iter() if node.tag.rsplit('}', 1)[-1] == 'localPackage']
+              if len(packages) != 1 or packages[0].get('path') != name:
+                  raise SystemExit('Installed SDK package identity differs')
+              revision = packages[0].find('revision')
+              version = '.'.join(revision.findtext(key, '0') for key in ('major', 'minor', 'micro'))
+              if version != expected[0]:
+                  raise SystemExit('Installed SDK revision differs')
+              installed[name] = version
+          report['installed_revisions'] = installed
+          report['tool_sha256'] = {
+              name: hashlib.file_digest((sdk / name).open('rb'), 'sha256').hexdigest()
+              for name in ('emulator/emulator', 'platform-tools/adb')
+          }
+          evidence.write_text(json.dumps(report, sort_keys=True))
+          PY
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+      - name: Install frozen dependencies and prepare synthetic Android fixture
+        timeout-minutes: 10
+        run: |
+          umask 077
+          pnpm install --frozen-lockfile
+          uv sync --project services/api --frozen
+          test ! -e .env
+          uv run --project services/api python scripts/setup_dev.py
+          pnpm android:sync
+      - name: Run native suites on one owned KVM AVD
+        id: instrument
+        timeout-minutes: 45
+        run: |
+          umask 077
+          # Keep raw emulator/Gradle diagnostics private on the disposable VM.
+          uv run --no-project python scripts/probe_android_avd.py --sdk-root "$ANDROID_HOME" \
+            --image 'system-images;android-36;google_apis;x86_64' \
+            --output "$SALLIMBOOK_ANDROID_PROBE" --boot-timeout 600 --command-timeout 1800 \
+            --port 5580 --adb-port 5049 \
+            --command uv run --project services/api python scripts/test_android_cloud.py \
+            > "$RUNNER_TEMP/sallimbook-android-command.log" 2>&1
+      - name: Inspect normal unsigned release isolation after fixture execution
+        id: release
+        timeout-minutes: 10
+        env:
+          ORG_GRADLE_PROJECT_sallimbookApiOrigin: ''
+        run: |
+          umask 077
+          apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=1 :app:assembleRelease \
+            > "$RUNNER_TEMP/sallimbook-android-release.log" 2>&1
+          python3 scripts/inspect_android_cloud_apks.py --output "$SALLIMBOOK_ANDROID_EVIDENCE/apks.json"
+      - name: Remove only this runner's synthetic database and verify no device listeners remain
+        id: cleanup
+        if: always()
+        timeout-minutes: 2
+        run: |
+          python3 - <<'PY'
+          import os, socket, subprocess
+          from pathlib import Path
+          if os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
+              raise SystemExit('Cleanup is restricted to this disposable hosted runner')
+          root = Path(os.environ['GITHUB_WORKSPACE'])
+          if (root / '.env').is_file():
+              # Fresh hosted VM, dedicated project; no development DB/volume was started.
+              command = ['docker', 'compose', '--env-file', str(root / '.env'), '-f',
+                         str(root / 'infra/compose.dev.yaml'), '-p', 'sallimbook-dev']
+              subprocess.run(command + ['stop', 'db-test'], check=True, timeout=30,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+              subprocess.run(command + ['rm', '--force', 'db-test'], check=True, timeout=30,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+              (root / '.env').unlink()
+          for port in (5049, 5580, 5581, 18745):
+              with socket.socket() as probe:
+                  probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                  try:
+                      probe.bind(('127.0.0.1', port))
+                  except OSError:
+                      raise SystemExit('An owned Android/DB listener remains after cleanup') from None
+          print('Owned AVD/ADB/DB listeners are absent')
+          PY
+      - name: Create redacted evidence and enforce exact native suite outcomes
+        if: always()
+        env:
+          SALLIMBOOK_CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
+          SALLIMBOOK_RELEASE_OUTCOME: ${{ steps.release.outcome }}
+        timeout-minutes: 2
+        run: |
+          python3 - <<'PY'
+          import json, os, re, xml.etree.ElementTree as ET
+          from pathlib import Path
+          from scripts.android_cloud_results import failure_stage
+          output = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-evidence'
+          output.mkdir(mode=0o700, parents=True, exist_ok=True)
+          probe = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-probe'
+          raw = json.loads((probe / 'result.json').read_text()) if (probe / 'result.json').is_file() else {}
+          summary = {'source_commit': os.environ['GITHUB_SHA'], 'run_id': os.environ['GITHUB_RUN_ID'],
+                     'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'status': 'FAIL', 'suites': {}}
+          for name in ('boot_completed', 'emulator_stopped'):
+              summary[name] = raw.get(name) is True
+          summary['command_passed'] = raw.get('command_status') == 'PASS'
+          summary['adb_stopped'] = raw.get('adb_stop_exit_code') == 0
+          summary['kvm_acceleration'] = raw.get('acceleration', {}).get('exit_code') == 0
+          summary['device_matches'] = raw.get('api') == '36' and raw.get('abi') == 'x86_64'
+          summary['cleanup_verified'] = os.environ['SALLIMBOOK_CLEANUP_OUTCOME'] == 'success'
+          summary['release_isolation_verified'] = os.environ['SALLIMBOOK_RELEASE_OUTCOME'] == 'success'
+          valid = all(summary[name] for name in ('boot_completed', 'emulator_stopped', 'command_passed',
+                                                'adb_stopped', 'kvm_acceleration', 'device_matches',
+                                                'cleanup_verified', 'release_isolation_verified'))
+          seen = set()
+          permitted_skip = 'ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization'
+          total_skips = 0
+          for label, expected in (('existing', 12), ('onboarding', 1)):
+              counts = dict(tests=0, failures=0, errors=0, skipped=0)
+              clean = ET.Element('testsuite', name=label)
+              source = probe / 'tests' / (label + '.xml')
+              cases = list(ET.parse(source).getroot().iter('testcase')) if source.is_file() else []
+              for case in cases:
+                  name, classname = case.get('name', ''), case.get('classname', '')
+                  if not re.fullmatch(r'[A-Za-z0-9_]+', name) or not re.fullmatch(r'[A-Za-z0-9_.$]+', classname):
+                      raise SystemExit('Unexpected test identity; diagnostics withheld')
+                  if (classname, name) in seen:
+                      valid = False
+                  seen.add((classname, name))
+                  node = ET.SubElement(clean, 'testcase', name=name, classname=classname)
+                  counts['tests'] += 1
+                  for tag, counter in (('failure', 'failures'), ('error', 'errors'), ('skipped', 'skipped')):
+                      if case.find(tag) is not None:
+                          counts[counter] += 1
+                          problem = ET.SubElement(node, tag, message='Native test reported ' + tag + '; details withheld')
+                          stage = failure_stage(classname, name, case.find(tag))
+                          if stage is not None:
+                              problem.set('stage', stage)
+                          if tag == 'skipped' and (label != 'existing' or name != permitted_skip):
+                              valid = False
+              for name, count in counts.items():
+                  clean.set(name, str(count))
+              ET.ElementTree(clean).write(output / (label + '.xml'), encoding='utf-8', xml_declaration=True)
+              summary['suites'][label] = counts
+              total_skips += counts['skipped']
+              valid = valid and counts['tests'] == expected and not counts['failures'] and not counts['errors']
+          summary['totals'] = {key: sum(counts[key] for counts in summary['suites'].values())
+                               for key in ('tests', 'failures', 'errors', 'skipped')}
+          summary['totals']['passed'] = summary['totals']['tests'] - sum(
+              summary['totals'][key] for key in ('failures', 'errors', 'skipped'))
+          valid = valid and total_skips <= 1
+          summary['status'] = ('PARTIAL_DEVICE' if total_skips else 'PASS') if valid else 'FAIL'
+          (output / 'summary.json').write_text(json.dumps(summary, sort_keys=True))
+          print(json.dumps(summary, sort_keys=True))
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as stream:
+              stream.write('Android API 36: **' + summary['status'] + '**. ')
+              stream.write('Native biometric/physical-device acceptance remains separate.\n')
+          if not valid:
+              raise SystemExit('Android boot, cleanup or native suite outcome failed')
+          PY
+      - name: Upload only redacted evidence, never APKs or raw logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        timeout-minutes: 5
+        with:
+          name: android-api36-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/sallimbook-android-evidence/summary.json
+            ${{ runner.temp }}/sallimbook-android-evidence/sdk.json
+            ${{ runner.temp }}/sallimbook-android-evidence/apks.json
+            ${{ runner.temp }}/sallimbook-android-evidence/existing.xml
+            ${{ runner.temp }}/sallimbook-android-evidence/onboarding.xml
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: false

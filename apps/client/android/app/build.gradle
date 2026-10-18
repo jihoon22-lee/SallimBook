@@ -45,6 +45,20 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Keep raw device diagnostics in a fresh private directory owned by the harness.
+    def cloudResults = providers.gradleProperty("sallimbookCloudResults").orNull
+    if (cloudResults != null) {
+        testOptions.resultsDir = "${cloudResults}/results"
+        testOptions.reportDir = "${cloudResults}/reports"
+    }
+    // Opt-in disposable cloud fixture. The directory is generated outside the
+    // checkout and contains only a debug manifest and a public test CA.
+    // Release never reads this source set; ordinary debug builds are unchanged.
+    def cloudFixture = providers.gradleProperty("sallimbookCloudFixture").orNull
+    if (cloudFixture != null) {
+        sourceSets.debug.manifest.srcFile("${cloudFixture}/AndroidManifest.xml")
+        sourceSets.debug.res.srcDir("${cloudFixture}/res")
+    }
 }
 
 repositories {

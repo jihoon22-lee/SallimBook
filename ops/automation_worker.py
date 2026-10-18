@@ -273,6 +273,10 @@ def run(job):
     verify_operator_bundle(Path(__file__).parent, job["operator_source_commit"])
     verify_image_source(job["app_source_commit"])
     action = job["action"]
+    if action == "storage":
+        # The image root is backed by the daemon image filesystem, even when
+        # Docker Desktop keeps that filesystem outside the host mount namespace.
+        return {"status": "storage-checked", "disk_free_bytes": shutil.disk_usage("/").free}
     if action == "image-check":
         return verify_candidate_deployment(job)
     if action == "backup":

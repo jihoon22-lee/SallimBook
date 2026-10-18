@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="onboarding" tests="1" failures="1" errors="0" skipped="0"><testcase name="firstStartCancelInvalidInputThenRealSessionAndHome" classname="io.github.jihoon22lee.sallimbook.AndroidCloudOnboardingTest"><failure message="Native test reported failure; details withheld" /></testcase></testsuite>

@@ -1,0 +1,17 @@
+{
+  "image": "system-images;android-36;google_apis;x86_64",
+  "boot_timeout_seconds": 600,
+  "software": true,
+  "status": "BLOCKED_ENV",
+  "boot_completed": false,
+  "command_status": "NOT_RUN",
+  "acceleration": {
+    "exit_code": 3,
+    "output": "accel:\n3\nKVM requires a CPU that supports vmx or svm\naccel"
+  },
+  "emulator_version": "Android emulator version 37.2.12.0 (build_id 16428233) (CL:N/A)",
+  "boot_seconds": 602.11,
+  "reason": "Boot deadline exceeded",
+  "emulator_stopped": true,
+  "adb_stop_exit_code": 0
+}

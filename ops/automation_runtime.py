@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ops.automation import (
+    BACKUP_WORKER_TIMEOUT,
     AutomationError,
     atomic_json,
     read_json,
@@ -328,6 +329,7 @@ class Runtime:
         try:
             result = self.worker(
                 "backup",
+                timeout=BACKUP_WORKER_TIMEOUT,
                 network=self.database_network(),
                 mounts=[
                     self.mount(
@@ -429,13 +431,17 @@ class Runtime:
         if age < -300 or age > 26 * 3600:
             raise AutomationError("BACKUP_STALE")
         free = shutil.disk_usage(self.config["state_directory"]).free
-        if min(free, storage["disk_free_bytes"]) < 1024**3:
+        build_free = shutil.disk_usage(self.config["build_directory"]).free
+        docker_free = self.worker("storage", timeout=60)["disk_free_bytes"]
+        if min(free, build_free, docker_free, storage["disk_free_bytes"]) < 1024**3:
             raise AutomationError("DISK_SPACE_LOW")
         return {
             "services": services,
             "scanner": scanner,
             "backup_age_seconds": int(age),
             "state_disk_free_bytes": free,
+            "build_disk_free_bytes": build_free,
+            "docker_disk_free_bytes": docker_free,
             "backup_disk_free_bytes": storage["disk_free_bytes"],
             "backup_hash_rechecked": False,
         }
@@ -679,6 +685,10 @@ class Runtime:
         current = self.scanner()
         if current.get("fresh") and not current.get("refresh_due"):
             return {"status": "refresh-not-due", "scanner": current}
+        from ops.cvd_retention import Retention
+
+        retention = Retention(self)
+        retention.prepare()
         root = private_directory(self.config["build_directory"]) / self.journal.run_id
         root.mkdir(mode=0o700)
         app_commit = self.manifest["source_commit"]
@@ -711,6 +721,9 @@ class Runtime:
         )
         self.docker(
             "build",
+            *self.labels(),
+            "--label",
+            "io.sallimbook.automation.kind=cvd",
             "--platform",
             "linux/amd64",
             "--build-arg",
@@ -732,7 +745,9 @@ class Runtime:
         directory = root / "deployment"
         write_config(candidate, directory)
         self.worker(
-            "image-check", image=image, timeout=60,
+            "image-check",
+            image=image,
+            timeout=60,
             mounts=[self.mount(directory / "deployment.json", "/run/candidate-deployment.json")],
         )
         candidate_scanner = self.candidate_scanner(image)
@@ -748,6 +763,7 @@ class Runtime:
             "source_run": self.journal.run_id,
         }
         self.preflight(binding)
+        retention.seal(root, tag, image_id)
         self.journal.phase(
             "candidate-verified",
             directory=str(directory),

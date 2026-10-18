@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="0.480"><testcase classname="tests.test_identity" name="test_bootstrap_cli_rejects_public_directory_and_symlink_destination" time="0.005" /></testsuite></testsuites>

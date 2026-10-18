@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.154"><testcase classname="tests.test_identity" name="test_bootstrap_cli_rejects_public_directory_and_symlink_destination" time="0.014"><failure message="Recorded original status; raw diagnostics withheld" /></testcase></testsuite></testsuites>
