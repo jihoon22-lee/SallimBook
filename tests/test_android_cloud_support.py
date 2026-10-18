@@ -229,7 +229,8 @@ class CloudSupportTests(unittest.TestCase):
                 message=(
                     "java.lang.AssertionError: SALLIMBOOK_CLOUD_STAGE: FILL_PASSWORD; "
                     "REASON: ACTION_FAILED; PRE: 1110; POST: 1110; "
-                    "FLOW: 000; STATUS: REQUEST_PENDING; TAP: 11110; TAP_STATUS: REQUEST_PENDING"
+                    "FLOW: 000; STATUS: REQUEST_PENDING; TAP: 11110; TAP_STATUS: REQUEST_PENDING; "
+                    "HOME: 1111000111"
                 ),
             )
             failure.text = "synthetic-sensitive stack and view snapshot"
@@ -253,6 +254,7 @@ class CloudSupportTests(unittest.TestCase):
                     "status": "REQUEST_PENDING",
                     "tap": "11110",
                     "tap_status": "REQUEST_PENDING",
+                    "home": "1111000111",
                 },
             )
             self.assertEqual(
@@ -332,6 +334,7 @@ class CloudSupportTests(unittest.TestCase):
                 status="NETWORK_UNAVAILABLE",
                 tap="11110",
                 tap_status="REQUEST_PENDING",
+                home="1111000111",
                 message="synthetic-sensitive",
             )
             problem.text = "synthetic-sensitive trace"
@@ -363,6 +366,7 @@ class CloudSupportTests(unittest.TestCase):
             self.assertIn('status="NETWORK_UNAVAILABLE"', safe)
             self.assertIn('tap="11110"', safe)
             self.assertIn('tap_status="REQUEST_PENDING"', safe)
+            self.assertIn('home="1111000111"', safe)
             self.assertEqual(json.loads((output / "summary.json").read_text())["status"], "FAIL")
 
     def test_reason_and_boolean_diagnostics_are_bounded_and_never_copy_dynamic_text(self):
@@ -533,6 +537,54 @@ class CloudSupportTests(unittest.TestCase):
             "failure", stage="SESSION_CREATED", tap="10000", tap_status="INPUT_INVALID"
         )
         self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+
+    def test_home_diagnostic_accepts_only_ten_bits_after_complete_metadata(self):
+        attributes = dict(
+            stage="AUTHENTICATED_HOME",
+            reason="ASSERTION",
+            pre="----",
+            post="----",
+            flow="---",
+            status="NOT_CHECKED",
+            tap="11110",
+            tap_status="REQUEST_PENDING",
+        )
+        prefix = (
+            "SALLIMBOOK_CLOUD_STAGE: AUTHENTICATED_HOME; REASON: ASSERTION; PRE: ----; POST: ----; "
+            "FLOW: ---; STATUS: NOT_CHECKED; TAP: 11110; TAP_STATUS: REQUEST_PENDING; HOME: "
+        )
+        for bits in ("1111000111", "1000000000", "0000000000", "----------"):
+            expected = {**attributes, "home": bits}
+            for node in (
+                ET.Element("failure", **expected),
+                ET.Element("failure", message=prefix + bits),
+            ):
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), expected
+                )
+        for value in (
+            "111100011",
+            "11110001111",
+            "1---------",
+            "true",
+            "1111000111 synthetic-sensitive",
+        ):
+            for node in (
+                ET.Element("failure", **attributes, home=value),
+                ET.Element("failure", message=prefix + value),
+            ):
+                self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        for missing in attributes:
+            if missing == "stage":
+                continue
+            partial = {**attributes, "home": "1111000111"}
+            del partial[missing]
+            self.assertEqual(
+                failure_details(
+                    ONBOARDING_CLASS, ONBOARDING_METHOD, ET.Element("failure", **partial)
+                ),
+                {},
+            )
 
     def test_stage_allowlist_exactly_matches_native_test_enum(self):
         source = Path(__file__).resolve().parents[1] / (

@@ -4,6 +4,7 @@ import { homeComparison, mockHomecare } from "./support/homecare";
 import { mockNativeOnboarding } from "./support/onboarding";
 
 const predicate = readFileSync(new URL("../android/app/src/androidTest/assets/sallimbook_cloud_authenticated_home.js", import.meta.url), "utf8");
+const homeState = readFileSync(new URL("../android/app/src/androidTest/assets/sallimbook_cloud_home_state.js", import.meta.url), "utf8");
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
 for (const mode of ["signed-out", "loading", "error", "ready"] as const) {
@@ -40,10 +41,12 @@ for (const mode of ["signed-out", "loading", "error", "ready"] as const) {
         document.body.innerText.includes("자산") && document.body.innerText.includes("소모품"))).toBe(true);
       if (mode === "ready") {
         await expect.poll(() => page.evaluate(predicate)).toBe(true);
+        expect(await page.evaluate(homeState)).toBe("1111000111");
       } else {
         if (mode === "error") await expect(page.getByRole("alert").first()).toBeVisible();
         if (mode === "signed-out") await expect(page.getByText("로그인하면 우리 가계의 공용 재고와 기기별 교체 상태를 확인할 수 있어요.")).toBeVisible();
         expect(await page.evaluate(predicate)).toBe(false);
+        expect(await page.evaluate(homeState)).toMatch(/^[01]{10}$/);
       }
     } finally {
       release();
@@ -60,6 +63,7 @@ test("cloud initial native lock has no finance headings and cannot satisfy the h
   await expect(page.getByRole("status")).toContainText("앱이 잠겨 있어요");
   await expect(page.locator("#assets-title, #consumables-title")).toHaveCount(0);
   expect(await page.evaluate(predicate)).toBe(false);
+  expect(await page.evaluate(homeState)).toBe("1000000000");
   expect(state.http).toHaveLength(0);
   expect(state.calls.every((call) => call.method === "getSession")).toBe(true);
 });

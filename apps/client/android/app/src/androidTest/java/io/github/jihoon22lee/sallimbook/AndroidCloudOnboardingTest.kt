@@ -94,6 +94,7 @@ class AndroidCloudOnboardingTest {
     )
     // Flow bits: native session exists, app unlocked, original MainActivity resumed.
     private class FlowFailure(val flow: String, val status: CloudStatus) : RuntimeException()
+    private class WebFailure(val home: String) : AssertionError()
     // Last tap only: name preserved, password empty, confirmation empty, status updated,
     // window focus lost. A normal successful departure can also lose window focus.
     private data class TapState(val bits: String, val status: CloudStatus)
@@ -124,12 +125,13 @@ class AndroidCloudOnboardingTest {
         catch (error: Throwable) {
             val detail = error as? InteractionFailure
             val outcome = error as? FlowFailure
-            val code = detail?.reason ?: if (outcome != null) CloudReason.ASSERTION else reason(error)
+            val code = detail?.reason ?: if (outcome != null || error is WebFailure) CloudReason.ASSERTION else reason(error)
             val before = detail?.before?.bits() ?: "----"
             val after = detail?.after?.bits() ?: "----"
             val flow = outcome?.flow ?: "---"
             val status = outcome?.status ?: CloudStatus.NOT_CHECKED
-            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after; FLOW: $flow; STATUS: ${status.name}; TAP: ${tapState.bits}; TAP_STATUS: ${tapState.status.name}")
+            val home = (error as? WebFailure)?.home ?: "----------"
+            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after; FLOW: $flow; STATUS: ${status.name}; TAP: ${tapState.bits}; TAP_STATUS: ${tapState.status.name}; HOME: $home")
                 .apply { stackTrace = emptyArray() }
         }
     }
@@ -423,12 +425,30 @@ class AndroidCloudOnboardingTest {
         return value
     }
 
-    private fun awaitWebState(label: String, main: MainActivity, script: String) {
+    private fun homeState(main: MainActivity): String {
+        val latch = CountDownLatch(1)
+        var bits = "----------"
+        return try {
+            val script = instrumentation.context.assets.open("sallimbook_cloud_home_state.js").bufferedReader().use { it.readText() }
+            instrumentation.runOnMainSync {
+                try {
+                    main.findViewById<WebView>(com.getcapacitor.android.R.id.webview)?.evaluateJavascript(script) { result ->
+                        if (result != null && Regex("\"[01]{10}\"").matches(result)) bits = result.substring(1, 11)
+                        latch.countDown()
+                    }
+                } catch (_: Throwable) { latch.countDown() }
+            }
+            if (latch.await(2, TimeUnit.SECONDS)) bits else "----------"
+        } catch (_: Throwable) { "----------" } // Diagnostics cannot replace the original timeout.
+    }
+
+    private fun awaitWebState(label: String, main: MainActivity, script: String, diagnose: Boolean = false) {
         val deadline = SystemClock.elapsedRealtime() + 30_000
         while (SystemClock.elapsedRealtime() < deadline) {
             if (evaluateBoolean(main, script)) return
             SystemClock.sleep(200)
         }
+        if (diagnose) throw WebFailure(homeState(main))
         throw AssertionError("Cloud onboarding timed out: $label")
     }
 
@@ -516,7 +536,7 @@ class AndroidCloudOnboardingTest {
                 if (state.flow != "111") throw state
             }
             at(CloudStage.BRIDGE_READY) { assertTrue(main.secureBridgeReady) }
-            at(CloudStage.AUTHENTICATED_HOME) { awaitWebState("authenticated home API data", main, authenticatedHome) }
+            at(CloudStage.AUTHENTICATED_HOME) { awaitWebState("authenticated home API data", main, authenticatedHome, diagnose = true) }
         } finally {
             at(CloudStage.FINISH_MAIN) { instrumentation.runOnMainSync { main.finish() } }
         }
