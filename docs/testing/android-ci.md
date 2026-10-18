@@ -15,13 +15,12 @@ HTTPS 온보딩 1개를 실행한다. 기존 `.github/workflows/ci.yml`의 JVM/�
   존재해야 한다. 임의 명령이나 고객 계정을 입력하는 dispatch 인자는 없다.
 - 고정 concurrency group으로 이 workflow의 AVD job은 저장소 전체에서 하나만 실행한다.
   새 요청은 이전 실행을 취소한다. API/ABI matrix, 다른 기기 fallback, 소프트웨어 CPU 에뮬레이션은 없다.
-- 전체 job은 135분으로 제한한다. 모든 step에도 명시적 제한을 두며 합계는 121분이다.
-  checkout/도구 설정 25분 + 경로 설정 1분 + KVM/SDK/의존성 준비 31분 + AVD 45분 + release 검사
+- 전체 job은 150분으로 제한한다. 모든 step에도 명시적 제한을 두며 합계는 136분이다.
+  checkout/도구 설정 25분 + 경로 설정 1분 + KVM/SDK/의존성 준비 31분 + AVD 60분 + release 검사
   10분 + 정리 2분 + 정제 증거 생성 2분 + artifact 업로드 5분을 합산했다. 나머지 14분은 action의
-  post 단계와 runner 전환 여유다. 준비가 길어져도 job의 60분 제한이 시험·정리·업로드를 먼저
-  중단할 수 있던 문제를 수정한 것이며, 각 시험 자체의 제한을 늘리지는 않았다.
+  post 단계와 runner 전환 여유다. 아래 실행기의 전체 시간 예산을 포함한다.
 - AVD 단계 안의 부팅은 600초, 시험 명령은 1800초이며 fixture/자식 정리와 AVD/ADB 종료를 포함한
-  실행기 제한을 45분 안에 둔다. 취소/호스팅 강제 종료로 정리 증거가 없으면 완료로 표시하지 않는다.
+  실행기 제한을 60분 안에 둔다. 취소/호스팅 강제 종료로 정리 증거가 없으면 완료로 표시하지 않는다.
 
 GitHub는 Linux 호스팅 실행기의 Android 하드웨어 가속을 지원한다고 명시한다. 공개 저장소의 표준
 `ubuntu-24.04`는 x64 4 CPU/16GB VM이며 소형 컨테이너 실행기와 구분된다.
@@ -118,9 +117,46 @@ CA/키, 비밀번호·세션 body는 업로드하지 않는다. `always()`로 �
 실제 실행 후 run URL·정확한 source SHA·boot 시간·suite별 수·정리 결과로 기록한다. workflow 파일이 존재하거나
 이전 JVM 컴파일이 통과했다는 사실만으로 Android 계측 성공을 주장하지 않는다.
 
-시간 예산 후속 검증에서는 모든 16개 step의 명시적 제한 합계 121분과 job 제한 135분의 관계를
-검사하고, actionlint 및 Android 결과 정제 회귀 시험을 다시 실행했다. 이 변경은 이미 진행 중인
-원격 실행의 제한을 바꾸지 않으며, 새 workflow로 시작한 실행부터 적용된다.
+시간 예산 회귀 시험은 모든 16개 step의 명시적 제한 합계 136분과 job 제한 150분의 관계를 검사한다.
+기존 원격 실행의 제한은 바뀌지 않으며 새 workflow로 시작한 실행부터 적용된다.
+
+## AVD 단계의 전체 시간 예산
+
+[probe 실행기](../../scripts/probe_android_avd.py)의 `run()` 기본 제한은 30초이며, timeout 뒤에도
+[프로세스 정리 helper](../../scripts/android_cloud_process.py)의 `stop_group()`이 실행된다.
+기본 정리는 SIGINT 10초 + SIGTERM 5초 + SIGKILL 5초이고 0.05초 polling의 마지막 sleep까지
+올림해 호출당 21초를 예산에 넣는다. 시험 자식의 `grace=120`은 같은 방식으로 131초다.
+
+| 구간 | 코드에 대응하는 보수적 상한 | 초 |
+| --- | --- | --- |
+| AVD 준비 | accel-check 30 + version 30 + avdmanager 60 + ADB start 30 + 각 호출의 정리 4 × 21 | 234 |
+| 부팅 | 600초 deadline + 마지막 getprop 5 + 해당 호출 정리 21 + poll sleep 2 | 628 |
+| 상태 조회 | API/ABI/WebView 3 × (run 30 + 정리 21) | 153 |
+| 시험 명령 | `child.wait(timeout=1800)` | 1800 |
+| 최종 정리 | 시험 자식 131 + emulator 21 + ADB kill 15 + kill 명령 timeout 뒤 정리 21 | 188 |
+| 합계 | 모든 bounded 호출의 합 | **3003** |
+
+준비나 상태 호출이 실패하면 뒤의 시험을 생략하지만, 예산은 각 호출의 timeout 정리 비용까지 모두
+더해 보수적으로 계산한다. 부팅 loop는 deadline 직전에 시작한 마지막 ADB 호출의 제한·정리·sleep만큼
+넘길 수 있다. 최종 ADB kill도 timeout이면 자체 프로세스 그룹 정리가 추가되므로 이를 빼지 않는다.
+
+AVD step의 3600초에서 위 합계를 빼면 597초가 남는다. 이는 uv/프로세스 시작, 임시 AVD 파일 생성·삭제,
+결과 파일 기록과 runner의 실행 지연에 둔 여유다. 파일 I/O 자체를 별도 hard deadline으로 제한했다는
+뜻은 아니다. 실제 boot 600초와 시험 명령 1800초 제한은 그대로이며, 시험 실패를 성공/skip으로 바꾸지 않는다.
+
+[시간 예산 회귀 시험](../../tests/test_android_workflow_deadline.py)은 실행기 AST의 모든 `run()` 호출,
+기본/명시적 timeout, 상태 조회 개수, boot polling, 자식 정리 grace를 대조한다. 실제 `stop_group()`은
+가상 시계로 끝까지 실행해 polling 초과분을 포함한다. AVD step이 계산 상한에 최소 5분 여유를 더한 값보다
+짧거나, 전체 job에 모든 step과 14분 여유가 들어가지 않으면 실패한다. 기존 45분 AVD 제한, 여유 없는
+job 제한, timeout 없는 setup step도 거절하는 회귀를 포함한다.
+
+```sh
+python -m unittest tests.test_android_workflow_deadline tests.test_android_avd_probe tests.test_android_cloud_support -v
+actionlint .github/workflows/android-instrumentation.yml
+```
+
+이 검증은 SDK·Docker·실제 Android 기기를 실행하지 않는 시간 예산/프로세스/정제 결과 시험이다.
+실제 원격 계측의 성공 여부는 별도 실행 증거로 판단한다.
 
 ## 실제 KVM 실행 기록 — 2026-10-18
 
