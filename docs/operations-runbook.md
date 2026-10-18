@@ -22,7 +22,7 @@
 
 ## 2. 이미지와 공개 배포 manifest
 
-이미지는 버전과 SHA-256 digest로 고정한다. `latest` 또는 digest 없는 애플리케이션 이미지는 거절한다. 공식 registry에서 확인한 기본값은 Caddy 2.11.7, Tailscale 1.104.1, PostgreSQL 18.6이다. Python 3.14.7, 날짜 고정 Debian 패키지 및 ClamAV 1.4.6은 기존 문서 검사 도구의 검증 입력을 재사용한다. age 1.3.2는 공식 release SHA-256을 검사한다.
+이미지는 저장소의 버전+SHA-256 digest 또는 로컬 빌드의 전체 `sha256:` 이미지 ID(64자리 hex)로 고정한다. `latest`, 변경 가능한 태그 단독, 축약 ID는 거절한다. 로컬 image ID를 저장소 digest처럼 태그 뒤에 붙이지 않는다. 로컬 ID는 해당 Docker daemon에 이미지가 있어야 사용 가능하며 preflight가 실제 플랫폼·소스·역할을 확인한다. 공식 registry에서 확인한 기본값은 Caddy 2.11.7, Tailscale 1.104.1, PostgreSQL 18.6이다. Python 3.14.7, 날짜 고정 Debian 패키지 및 ClamAV 1.4.6은 기존 문서 검사 도구의 검증 입력을 재사용한다. age 1.3.2는 공식 release SHA-256을 검사한다.
 
 새 공개 JSON manifest는 다음 필드를 모두 가져야 한다. 실제 노드와 서명 인증서가 확정된 후 값을 입력한다. 아래 값은 형식 설명이며 운영 주소·서명 인증서가 아니다.
 

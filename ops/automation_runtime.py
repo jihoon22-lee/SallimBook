@@ -725,12 +725,17 @@ class Runtime:
         image_id = self.image(tag)
         if (root / "image-id").read_text().strip() != image_id:
             raise AutomationError("CANDIDATE_IMAGE_ID")
-        image = tag + "@" + image_id
-        self.worker("image-check", image=image, timeout=60)
-        candidate_scanner = self.candidate_scanner(image)
+        # --iidfile identifies the locally built image, not a registry manifest.
+        # Run and pin that full ID directly; tag@image-id can be unresolvable.
+        image = image_id
         candidate = {**self.manifest, "api_image": image}
         directory = root / "deployment"
         write_config(candidate, directory)
+        self.worker(
+            "image-check", image=image, timeout=60,
+            mounts=[self.mount(directory / "deployment.json", "/run/candidate-deployment.json")],
+        )
+        candidate_scanner = self.candidate_scanner(image)
         old_apk = Path(self.binding["directory"]) / "downloads/SallimBook.apk"
         if old_apk.exists():
             destination = directory / "downloads/SallimBook.apk"

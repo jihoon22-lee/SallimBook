@@ -84,6 +84,19 @@ class Boundaries(unittest.TestCase):
                 self.fail("symlink accepted")
         self.assertEqual(target.read_text(), "unchanged")
 
+    def test_candidate_manifest_is_accepted_by_the_deployed_backup_policy(self):
+        value = {**deployment_config(), "api_image": "sha256:" + "f" * 64}
+        path = private(self.root / "candidate.json", value)
+        job = {"app_source_commit": value["source_commit"]}
+        self.assertEqual(
+            worker.verify_candidate_deployment(job, path)["status"], "image-source-verified"
+        )
+        with patch("ops.deploy.validate", side_effect=ValueError("older image policy")):
+            with self.assertRaisesRegex(ValueError, "older image policy"):
+                worker.verify_candidate_deployment(job, path)
+        with self.assertRaisesRegex(backup.OperationError, "source differs"):
+            worker.verify_candidate_deployment({"app_source_commit": "e" * 40}, path)
+
     def test_journal_records_failure_and_keeps_recovery_marker_pending(self):
         item = auto.Journal(self.config, "restore-check", "d" * 64)
         self.assertEqual(len(auto.unfinished_runs(self.config)), 1)
@@ -577,6 +590,7 @@ class RuntimeBoundaries(unittest.TestCase):
         with self.prepared_cvd(item) as compose, patch.object(item, "services", return_value={}):
             result = item.cvd_refresh()
         candidate = compose.call_args.kwargs["binding"]["manifest"]
+        self.assertEqual(candidate["api_image"], "sha256:" + "f" * 64)
         self.assertEqual(
             {k: v for k, v in candidate.items() if k != "api_image"},
             {k: v for k, v in item.manifest.items() if k != "api_image"},

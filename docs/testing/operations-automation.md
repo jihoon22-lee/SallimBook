@@ -167,6 +167,8 @@ python -m ops.automation run /PRIVATE/automation.json --sha256 CONFIG_SHA256 --t
 않는다. candidate 이미지의 실제 소스 marker와 별도 network-none scanner PING/VERSIONCOMMANDS,
 고정 엔진·INSTREAM·4일 미만 CVD를 확인한다.
 
+`docker build --iidfile` 결과는 저장소 digest가 아닌 로컬 image ID이므로 전체 `sha256:` ID를 직접 고정한다. 저장소 이름과 합성하지 않는다. candidate worker는 이미지 안에 포함된 `ops.deploy.validate`로 새 manifest를 검증하여, 이후 그 이미지의 `ops.backup`이 같은 manifest를 처리할 수 있는지도 승격 전에 확인한다. 전체 로컬 ID를 지원하지 않는 과거 앱 소스는 여기서 거절되며, 해당 지원을 포함한 앱을 먼저 배포해야 한다. 운영 helper가 과거 이미지의 백업 구현이나 정책을 몰래 교체하지 않는다. [Docker build의 iidfile 정의](https://docs.docker.com/reference/cli/docker/buildx/build/#iidfile)를 따른다.
+
 새 manifest에서는 API 이미지 참조만 바꾼다. 웹·APK·앱 소스·서명·origin은 그대로 유지하며 APK를 복사한
 새 배포 디렉터리도 preflight한다. 이후 전용 scanner/API만 갱신하고 실제 health/신선도를 확인한 다음
 state/active-deployment.json을 atomic rename+fsync한다. 실패하면 이전 scanner/API로 복귀한다. pointer
@@ -220,3 +222,5 @@ python3 -m tests.operations.automation_integration \
 이 harness는 명시적 실행만 허용하며 일반 단위 시험 discovery에 포함되지 않는다. source DB도 새로운
 내부 네트워크와 tmpfs에서 만들고, 실제 운영 Compose를 호출하지 않는다. helper가 성공 후 남기는
 `integration-result.json`과 각 run의 private 장부를 검토한다. 실패한 restore 볼륨은 자동 삭제하지 않는다.
+
+PR 검토 후 로컬 이미지 참조를 보완했다. 실제 기존 API 이미지에서 시험 전용 레이어를 빌드하고 iidfile/inspect ID 일치를 확인한 뒤, 그 전체 ID로 network-none·UID 10001·읽기 전용 Compose 컨테이너를 실행해 통과했다. 운영 DB/키는 연결하지 않았으며 시험 컨테이너와 전용 태그를 정리했다. 현재 daemon은 RepoDigest도 1개 제공하므로 이 실행을 다른 Docker 저장 방식에서의 기존 오류 재현이라고 주장하지 않는다. 단위 회귀는 축약 ID 거절·전체 ID 보존·candidate manifest의 앱 내 정책 호환·CVD 승격 후 정확한 이미지 ID를 확인한다. 실제 CVD 다운로드와 운영 승격 전체는 이 작은 참조 시험과 구분한다.

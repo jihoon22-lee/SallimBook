@@ -46,6 +46,17 @@ def verify_image_source(expected_revision):
         raise backup.OperationError("Actual image source identity differs")
 
 
+def verify_candidate_deployment(job, path=Path("/run/candidate-deployment.json")):
+    # Use the deployed image's policy, just as its ops.backup will. An older app
+    # that cannot back up a local-ID manifest must fail before service promotion.
+    from ops.deploy import validate
+
+    candidate = validate(read_json(path, private=False))
+    if candidate["source_commit"] != job["app_source_commit"]:
+        raise backup.OperationError("Candidate deployment source differs")
+    return {"status": "image-source-verified", "source_commit": job["app_source_commit"]}
+
+
 def validate_service_file(path, database="sallimbook_prod"):
     """Both ConfigParser and libpq must accept the same exact key=value file."""
     path = backup.private_file(path)
@@ -263,7 +274,7 @@ def run(job):
     verify_image_source(job["app_source_commit"])
     action = job["action"]
     if action == "image-check":
-        return {"status": "image-source-verified", "source_commit": job["app_source_commit"]}
+        return verify_candidate_deployment(job)
     if action == "backup":
         return make_backup(job)
     if action in {"backup-stat", "backup-result", "backup-verify"}:
