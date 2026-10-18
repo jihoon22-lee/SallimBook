@@ -135,7 +135,7 @@ internal object InsurancePolicy {
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
         val route = routes[operation] ?: invalid()
         val args = obj(value)
-        val ids = Regex("\\{([^}]+)}").findAll(route.path).map { it.groupValues[1] }.toSet()
+        val ids = Regex("\\{([^}]+)\\}").findAll(route.path).map { it.groupValues[1] }.toSet()
         val required = ids + (if (route.input.isNotEmpty()) setOf("input") else emptySet()) + (if (route.version) setOf("ifMatch") else emptySet())
         if (!args.keys.containsAll(required) || !(required + if (route.query) setOf("query") else emptySet()).containsAll(args.keys)) invalid()
         var path = route.path

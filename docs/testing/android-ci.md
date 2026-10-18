@@ -262,3 +262,127 @@ focus 비트만으로 실패를 단정하지 않는다. listener는 관찰 직�
 진단은 stage 36개/reason 14개/status 20개 및 고정 비트만 허용하며, 새 tap 비트와 tap_status는 함께 있어야
 보존한다. 두 차례 정제 이후에도 같은 규칙을 적용하고, 잘못된 비트·부분 필드·동적 문자열은 제거한다.
 기존 세션 생성/잠금 해제/main 복귀의 총 30초 기한, 최종 동시 상태와 실제 API 홈 검증을 유지한다.
+
+
+## 취소 후 상태 재조회와 시험 서버 연결 수명
+
+PR #95 head `5a869aa`의 [39100098328](https://github.com/jihoon22-lee/SallimBook/actions/runs/39100098328)
+실행 1회와 코드 변경 없는 재실행 1회는 모두 `SECOND_SETUP_AVAILABLE / ASSERTION`으로
+실패했다. 실제 checkout은 `67ef59af585a49e558e18c44f01bc5af0a0dd391`이며 각각 13건 중
+11 PASS / 1 FAIL / 1 조건부 SKIP이다. 닫기 후 원래 Main의 resumed/focus는 한 차례 확인했지만,
+그 뒤 시작 버튼 준비가 30초 안에 확인되지 않았다. 최종 제출에는 도달하지 않았으며
+`TAP=-----`, `TAP_STATUS=NOT_CHECKED`다. KVM·부팅·기기·정리는 통과했고 release 검사는 생략됐다.
+[1차 요약](evidence/android-kvm-20261018/run-39100098328/summary.json),
+[1차 가입 XML](evidence/android-kvm-20261018/run-39100098328/onboarding.xml),
+[2차 요약](evidence/android-kvm-20261018/run-39100098328-attempt2/summary.json),
+[2차 가입 XML](evidence/android-kvm-20261018/run-39100098328-attempt2/onboarding.xml)을 보존했다.
+코드 검토만으로 정상 취소의 lifecycle race를 확정하지 않았다.
+
+별도 로컬 재현은 실제 컴파일한 `accountHttpClient()`와 고정 OkHttp 5.4.0/Okio 3.17.0,
+Uvicorn 0.54.0, 합성 HTTPS CA 및 정상 hostname 검증을 사용했다. 두 GET을 6.5초 간격으로
+보내면 기본 서버에서는 첫 요청만 성공하고 두 번째는 네트워크 실패였다. 접속 시도/서버 수신은
+각각 1회였다. 같은 시험에서 수정된 proxy가 HTTP/1 응답에 `Connection: close`를 명시하자
+접속과 서버 수신이 각각 2회였으며 두 요청 모두 성공했다. 두 경우 모두 자동 재시도는 false였다.
+[고정 결과 비교](evidence/android-kvm-20261018/fixture-connection-comparison.jsonl)를 보존했다.
+
+근거는 [Uvicorn 0.54.0 기본 유휴 5초](https://github.com/Kludex/uvicorn/blob/0.54.0/uvicorn/config.py)와
+[OkHttp 5.4.0 GET 연결 검사 선택](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealRoutePlanner.kt),
+[소켓 상태 검사](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnection.kt)다.
+스크롤 안정화로 사용자 동작 간격이 길어지면 시험 서버의 유휴 종료와 겹칠 수 있다.
+이 로컬 재현은 실패 경로를 설명하지만, 기존 KVM 실행의 실제 소켓 상태를 소급해 확인한 것은 아니다.
+
+수정은 일회용 loopback fixture의 HTTP/1.0·1.1 응답만 명시적으로 닫는다. 응답 body/status와
+합성 신원·실제 peer 검증은 유지한다. HTTP/2와 lifespan에는 연결 헤더를 넣지 않는다.
+제품 네이티브·운영 서버·재전송 금지·인증서/hostname·시간 제한은 바꾸지 않는다.
+실제 wrapper를 실행하는 stdlib ASGI 회귀는 streaming body, 기존 connection 헤더 교체,
+원본 message/headers 보존과 프로토콜 분기를 확인한다. 새 KVM 가입 성공 여부는 별도 결과로 판단한다.
+
+
+수정 fixture의 [39101934253](https://github.com/jihoon22-lee/SallimBook/actions/runs/39101934253)은
+`c1004c7a2e8db67e958b96ff9d81c66a9ace2356`을 workflow_dispatch로 실행했다.
+두 번째 시작 조회·유효 제출·네이티브 세션 생성·잠금 해제·원래 Main 복귀의 동시 `111`과
+bridge 준비를 통과했다. 마지막 `AUTHENTICATED_HOME / ASSERTION`에서 실패했고,
+`TAP=11110`, `TAP_STATUS=REQUEST_PENDING`이었다. 이는 실제 가입/세션 진행의 근거지만,
+웹 홈 API 표시까지 성공했다는 뜻은 아니다. 총 13건은 11 PASS / 1 FAIL / 1 조건부 SKIP이며
+KVM·부팅·기기·정리는 통과했다. release 격리 검사는 이전 실패 때문에 실행되지 않았다.
+[요약](evidence/android-kvm-20261018/run-39101934253/summary.json),
+[가입 XML](evidence/android-kvm-20261018/run-39101934253/onboarding.xml),
+[기존 XML](evidence/android-kvm-20261018/run-39101934253/existing.xml),
+[SDK](evidence/android-kvm-20261018/run-39101934253/sdk.json)를 보존했다.
+
+후속 진단은 기존 홈 성공 판정과 30초 기한을 바꾸지 않는다. 시간 초과 뒤 시험 APK 전용 script로
+경로가 홈인지/main/assets/care/login 링크/자산 alert/소모품 alert/빈 월/select/빈 소모품 여부의
+10비트만 관찰한다. 정상 빈 홈은 `1111000111`, 진단 불가·2초 callback 제한 초과는 `----------`다.
+HTML·입력값·DOM 원문·API 데이터는 반환하지 않으며, 진단 자체가 실패해도 원래 실패를 유지한다.
+엄격한 고정 길이 검증을 두 차례 적용하고 부분 하이픈·임의 문자열·접미사를 거절한다.
+공유 성공 판정의 브라우저 10개, 도구 회귀 27개 및 Kotlin 계측 컴파일이 통과했다.
+
+
+[39103942933](https://github.com/jihoon22-lee/SallimBook/actions/runs/39103942933)의
+`HOME=1111001100`은 로그인 복구·자산 빈 월 표시는 성공하고 오늘 소모품 영역에 오류가
+있음을 보여 준다. 선택 상자와 빈 소모품 문구가 없으므로 단순 보증 목록 오류만으로는
+설명되지 않는다. 13건은 11 PASS / 1 FAIL / 1 조건부 SKIP, 정리 완료이며 release 검사는
+실행되지 않았다. PR head는 `d495ff83211b71688a404611dc5880c1ba7738f8`, 실제 PR merge source는
+`23b952fff3693db8ca0340d1a5f101d79cced1f0`이다.
+[요약](evidence/android-kvm-20261018/run-39103942933/summary.json),
+[가입 XML](evidence/android-kvm-20261018/run-39103942933/onboarding.xml),
+[기존 XML](evidence/android-kvm-20261018/run-39103942933/existing.xml),
+[SDK](evidence/android-kvm-20261018/run-39103942933/sdk.json)를 보존했다.
+
+후속 시험 전용 진단은 시간 초과 뒤 오늘 소모품의 직접 오류 메시지를 고정 enum으로 분류한다.
+보증 영역의 오류 및 알려지지 않은 문자열은 원문으로 내보내지 않는다. 이어서 동일한
+`getHomecareStatus(limit=200)`를 네이티브 세션으로 한 번 읽고 성공/고정 오류 분류만 남긴다.
+이 조회는 이미 실패한 홈 판정을 통과로 바꾸지 않는다. 원래 오류와 두 진단을 구분하고,
+기한 초과 또는 예상 밖 결과도 임의 값을 내보내지 않는다. 제품 코드·API 계약은 변경하지 않는다.
+브라우저 12개, 정제 도구 19개 및 계측 Kotlin 컴파일이 통과했다. 별도 진단 브랜치에서
+workflow_dispatch로 실행해 PR 자동 리뷰는 최종 수정에 남겨 둔다.
+
+
+[39104931074](https://github.com/jihoon22-lee/SallimBook/actions/runs/39104931074)은
+`9e9fdccb0ad8dba39f34599a756c07f42b452226`의 별도 진단 실행이다. 같은 홈 실패에
+`CARE=NATIVE_UNAVAILABLE`, `NATIVE_CARE=NATIVE_UNAVAILABLE`가 확인됐다. 11 PASS / 1 FAIL /
+1 조건부 SKIP이며 release 검사는 미실행, 정리는 완료됐다.
+[요약](evidence/android-kvm-20261018/run-39104931074/summary.json),
+[가입 XML](evidence/android-kvm-20261018/run-39104931074/onboarding.xml),
+[기존 XML](evidence/android-kvm-20261018/run-39104931074/existing.xml),
+[SDK](evidence/android-kvm-20261018/run-39104931074/sdk.json)를 보존했다.
+
+원인은 6개 정책의 경로 템플릿 추출 정규식에서 닫는 중괄호를 이스케이프하지 않은 것이다.
+JDK 21은 이를 허용하지만 [Android Pattern의 ICU 구현](https://android.googlesource.com/platform/libcore/+/refs/heads/master/ojluni/src/main/java/java/util/regex/Pattern.java)은
+리터럴 `}`의 이스케이프를 요구한다. 소모품뿐 아니라 Cashflow/FixedCost/Document/Insurance/
+InsuranceEvent 경로도 같은 표현식을 사용했다. 요청 준비의 PatternSyntaxException이 일반
+`AUTH_UNAVAILABLE`로 처리되어 서버에 요청하기 전에 조회를 막는다. Compare 정책은 해당
+표현식을 사용하지 않아 자산 요약만 성공한 관측과 일치한다.
+
+[로컬 ICU 78 재현](evidence/android-kvm-20261018/route-icu-reproduction.json)은 제품 Kotlin의
+정적 정규식 90개를 검사했다. 수정 전 위 6개에서 `U_REGEX_RULE_SYNTAX`, 수정 후 90개 모두
+컴파일 성공이다. 이는 Android API 36 자체의 실행 증명을 대체하지 않는다. 제품 변경은
+6개 표현식의 닫는 중괄호 이스케이프뿐이며 경로·권한·입력·응답 계약을 유지한다.
+새 NativeRoutePolicyTest 3개는 실제 Android에서 여섯 도메인의 목록/다중 변수 경로,
+빈 소모품 응답과 잘못된 ID·추가 인자 거절을 검증한다. 기존 보안 12개와 합쳐 정확히 15개,
+가입 1개를 별도로 요구하며, 원래 생체인증 조건부 skip만 허용한다.
+
+수정 후 로컬 JVM 356개(실패/skip 0), 새 경로 회귀 시나리오 3개의 호스트 실행과
+Android 계측 Kotlin 컴파일이 통과했다. 도구 189개, 문서 75개·로컬 링크 457개,
+Ruff와 diff 검사도 통과했다. 실제 Android 회귀/가입 통과는 후속 KVM 결과로 기록한다.
+
+
+수정 후 [39105652681](https://github.com/jihoon22-lee/SallimBook/actions/runs/39105652681)은
+`9bbb67e9275260d4d1f190463edfb2eb67714969`에서 **workflow 성공 / PARTIAL_DEVICE**다.
+기존 보안+경로 15개 중 14 PASS·1 조건부 SKIP, 가입 1개 PASS로 전체 **15 PASS / 0 FAIL /
+1 SKIP(16개)**다. 새 여섯 도메인 경로 회귀 3개와 실제 취소→빈 입력 거절→등록→세션 저장→
+잠금 해제→Main/bridge 복귀→인증된 빈 월·오늘 소모품 홈 표시를 통과했다. 기존 홈 성공 조건과
+시간 제한을 유지한 결과다. API 36/x86_64 KVM 부팅·기기 확인·AVD/ADB/DB 정리 및 정상
+unsigned release의 시험 CA/loopback origin/debug marker 격리 검사도 통과했다.
+[요약](evidence/android-kvm-20261018/run-39105652681/summary.json),
+[가입 XML](evidence/android-kvm-20261018/run-39105652681/onboarding.xml),
+[보안·경로 XML](evidence/android-kvm-20261018/run-39105652681/existing.xml),
+[SDK](evidence/android-kvm-20261018/run-39105652681/sdk.json),
+[APK 메타데이터·격리 결과](evidence/android-kvm-20261018/run-39105652681/apks.json)를 보존했다.
+
+SKIP은 강력한 생체 인증 등록이 필요한 기존 Keystore 시나리오 하나다. 실제 Galaxy 2대의
+보안·업데이트·접근성·전체 A01~A13 인수를 완료한 것으로 보지 않는다. 후속 최종 소스에서는
+격리 검사 목록에 새 NativeRoutePolicyTest 클래스명도 명시하며, 그 판정은 최종 CI에서 확인한다.
+같은 9bbb67e의 서명 0.1.5/code6 APK와 source-bound API/웹 이미지를 준비했고 SDK 검사 및
+실제 DB 역할 사전 검사, 격리 API/웹 런타임 시험을 통과했다. 실제 운영 전환은
+[SB-040](https://github.com/jihoon22-lee/SallimBook/issues/49)의 배포 기록으로 별도 확인한다.

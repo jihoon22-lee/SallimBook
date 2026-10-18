@@ -1,5 +1,6 @@
 """Synthetic subprocesses and XML only; no Android SDK, Docker or DB access."""
 
+import ast
 import contextlib
 import io
 import json
@@ -26,6 +27,124 @@ from scripts.android_cloud_results import (
     failure_stage,
     save_instrumentation,
 )
+
+
+class CloudFixtureHttpTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def proxy_type():
+        # Execute the actual dependency-free ASGI wrapper, without importing the
+        # fixture's PostgreSQL/SDK orchestration into the standard-library suite.
+        source = Path(__file__).resolve().parents[1] / "scripts/test_android_cloud.py"
+        module = ast.parse(source.read_text(), filename=str(source))
+        wrapper = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.ClassDef) and node.name == "SyntheticIdentityProxy"
+        )
+        identity = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "IDENTITY" for target in node.targets
+            )
+        )
+        namespace = {}
+        exec(
+            compile(ast.Module(body=[identity, wrapper], type_ignores=[]), str(source), "exec"),
+            namespace,
+        )
+        return namespace["SyntheticIdentityProxy"], namespace["IDENTITY"]
+
+    async def test_http1_response_closes_connection_without_changing_payload_or_identity_checks(
+        self,
+    ):
+        proxy, identity = self.proxy_type()
+        for version in ("1.0", "1.1"):
+            with self.subTest(version=version):
+                request = {"type": "http.request", "body": b"synthetic-request"}
+                scope = {
+                    "type": "http",
+                    "http_version": version,
+                    "headers": [
+                        (b"x-synthetic", b"preserved"),
+                        (b"Tailscale-User-Login", b"ignored"),
+                    ],
+                    "client": ("127.0.0.1", 12345),
+                }
+                start = {
+                    "type": "http.response.start",
+                    "status": 202,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"Connection", b"keep-alive"),
+                    ],
+                }
+                first = {"type": "http.response.body", "body": b'{"available":', "more_body": True}
+                last = {"type": "http.response.body", "body": b"true}"}
+                received, sent = [], []
+
+                async def receive(request=request):
+                    return request
+
+                async def send(message, sent=sent):
+                    sent.append(message)
+
+                async def app(
+                    inner,
+                    incoming,
+                    outgoing,
+                    received=received,
+                    request=request,
+                    messages=(start, first, last),
+                ):
+                    received.append(inner)
+                    self.assertIs(await incoming(), request)
+                    for message in messages:
+                        await outgoing(message)
+
+                await proxy(app)(scope, receive, send)
+                self.assertEqual(received[0]["client"], scope["client"])
+                self.assertEqual(
+                    received[0]["headers"],
+                    [(b"x-synthetic", b"preserved"), (b"tailscale-user-login", identity)],
+                )
+                self.assertEqual(scope["headers"][-1], (b"Tailscale-User-Login", b"ignored"))
+                self.assertEqual(sent[0]["status"], 202)
+                self.assertEqual(
+                    sent[0]["headers"],
+                    [(b"content-type", b"application/json"), (b"connection", b"close")],
+                )
+                self.assertEqual(start["headers"][-1], (b"Connection", b"keep-alive"))
+                self.assertIs(sent[1], first)
+                self.assertIs(sent[2], last)
+
+    async def test_non_http_and_http2_do_not_receive_a_connection_header(self):
+        proxy, _ = self.proxy_type()
+        for scope in ({"type": "lifespan"}, {"type": "http", "http_version": "2", "headers": []}):
+            sent = []
+            message = (
+                {"type": "lifespan.startup.complete"}
+                if scope["type"] == "lifespan"
+                else {"type": "http.response.start", "status": 200, "headers": []}
+            )
+
+            async def receive():
+                return {"type": "lifespan.startup"}
+
+            async def send(outgoing, sent=sent):
+                sent.append(outgoing)
+
+            async def app(inner, incoming, outgoing, scope=scope, message=message):
+                if inner["type"] != "http":
+                    self.assertIs(inner, scope)
+                    self.assertIs(incoming, receive)
+                    self.assertIs(outgoing, send)
+                await outgoing(message)
+
+            await proxy(app)(scope, receive, send)
+            self.assertEqual(sent, [message])
+            self.assertIs(sent[0], message)
 
 
 class CloudSupportTests(unittest.TestCase):
@@ -110,7 +229,8 @@ class CloudSupportTests(unittest.TestCase):
                 message=(
                     "java.lang.AssertionError: SALLIMBOOK_CLOUD_STAGE: FILL_PASSWORD; "
                     "REASON: ACTION_FAILED; PRE: 1110; POST: 1110; "
-                    "FLOW: 000; STATUS: REQUEST_PENDING; TAP: 11110; TAP_STATUS: REQUEST_PENDING"
+                    "FLOW: 000; STATUS: REQUEST_PENDING; TAP: 11110; TAP_STATUS: REQUEST_PENDING; "
+                    "HOME: 1111000111"
                 ),
             )
             failure.text = "synthetic-sensitive stack and view snapshot"
@@ -134,6 +254,7 @@ class CloudSupportTests(unittest.TestCase):
                     "status": "REQUEST_PENDING",
                     "tap": "11110",
                     "tap_status": "REQUEST_PENDING",
+                    "home": "1111000111",
                 },
             )
             self.assertEqual(
@@ -195,7 +316,7 @@ class CloudSupportTests(unittest.TestCase):
             source = root / "sallimbook-android-probe/tests"
             source.mkdir(parents=True)
             suite = ET.Element("testsuite")
-            for index in range(12):
+            for index in range(15):
                 ET.SubElement(suite, "testcase", classname="SyntheticTest", name=f"case{index}")
             ET.ElementTree(suite).write(source / "existing.xml")
             suite = ET.Element("testsuite")
@@ -213,6 +334,7 @@ class CloudSupportTests(unittest.TestCase):
                 status="NETWORK_UNAVAILABLE",
                 tap="11110",
                 tap_status="REQUEST_PENDING",
+                home="1111000111",
                 message="synthetic-sensitive",
             )
             problem.text = "synthetic-sensitive trace"
@@ -244,6 +366,7 @@ class CloudSupportTests(unittest.TestCase):
             self.assertIn('status="NETWORK_UNAVAILABLE"', safe)
             self.assertIn('tap="11110"', safe)
             self.assertIn('tap_status="REQUEST_PENDING"', safe)
+            self.assertIn('home="1111000111"', safe)
             self.assertEqual(json.loads((output / "summary.json").read_text())["status"], "FAIL")
 
     def test_reason_and_boolean_diagnostics_are_bounded_and_never_copy_dynamic_text(self):
@@ -414,6 +537,113 @@ class CloudSupportTests(unittest.TestCase):
             "failure", stage="SESSION_CREATED", tap="10000", tap_status="INPUT_INVALID"
         )
         self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+
+    def test_care_diagnostic_is_only_fixed_enums_after_complete_home_metadata(self):
+        attributes = dict(
+            stage="AUTHENTICATED_HOME",
+            reason="ASSERTION",
+            pre="----",
+            post="----",
+            flow="---",
+            status="NOT_CHECKED",
+            tap="11110",
+            tap_status="REQUEST_PENDING",
+            home="1111001100",
+        )
+        prefix = (
+            "SALLIMBOOK_CLOUD_STAGE: AUTHENTICATED_HOME; REASON: ASSERTION; PRE: ----; POST: ----; "
+            "FLOW: ---; STATUS: NOT_CHECKED; TAP: 11110; TAP_STATUS: REQUEST_PENDING; "
+            "HOME: 1111001100"
+        )
+        for care, native in (
+            ("NETWORK", "OK"),
+            ("VALIDATION", "FORBIDDEN"),
+            ("OTHER", "TIMEOUT"),
+            ("NOT_CHECKED", "NOT_CHECKED"),
+        ):
+            expected = {**attributes, "care": care, "native_care": native}
+            for node in (
+                ET.Element("failure", **expected),
+                ET.Element("failure", message=f"{prefix}; CARE: {care}; NATIVE_CARE: {native}"),
+            ):
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), expected
+                )
+        for care, native in (
+            ("synthetic-sensitive", "OK"),
+            ("NETWORK extra", "OK"),
+            ("NETWORK", "OK extra"),
+            ("NETWORK", None),
+            (None, "OK"),
+        ):
+            attrs = {**attributes}
+            if care is not None:
+                attrs["care"] = care
+            if native is not None:
+                attrs["native_care"] = native
+            self.assertEqual(
+                failure_details(
+                    ONBOARDING_CLASS, ONBOARDING_METHOD, ET.Element("failure", **attrs)
+                ),
+                {},
+            )
+        for missing in attributes:
+            attrs = {**attributes, "care": "NETWORK", "native_care": "OK"}
+            del attrs[missing]
+            self.assertEqual(
+                failure_details(
+                    ONBOARDING_CLASS, ONBOARDING_METHOD, ET.Element("failure", **attrs)
+                ),
+                {},
+            )
+
+    def test_home_diagnostic_accepts_only_ten_bits_after_complete_metadata(self):
+        attributes = dict(
+            stage="AUTHENTICATED_HOME",
+            reason="ASSERTION",
+            pre="----",
+            post="----",
+            flow="---",
+            status="NOT_CHECKED",
+            tap="11110",
+            tap_status="REQUEST_PENDING",
+        )
+        prefix = (
+            "SALLIMBOOK_CLOUD_STAGE: AUTHENTICATED_HOME; REASON: ASSERTION; PRE: ----; POST: ----; "
+            "FLOW: ---; STATUS: NOT_CHECKED; TAP: 11110; TAP_STATUS: REQUEST_PENDING; HOME: "
+        )
+        for bits in ("1111000111", "1000000000", "0000000000", "----------"):
+            expected = {**attributes, "home": bits}
+            for node in (
+                ET.Element("failure", **expected),
+                ET.Element("failure", message=prefix + bits),
+            ):
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), expected
+                )
+        for value in (
+            "111100011",
+            "11110001111",
+            "1---------",
+            "true",
+            "1111000111 synthetic-sensitive",
+        ):
+            for node in (
+                ET.Element("failure", **attributes, home=value),
+                ET.Element("failure", message=prefix + value),
+            ):
+                self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        for missing in attributes:
+            if missing == "stage":
+                continue
+            partial = {**attributes, "home": "1111000111"}
+            del partial[missing]
+            self.assertEqual(
+                failure_details(
+                    ONBOARDING_CLASS, ONBOARDING_METHOD, ET.Element("failure", **partial)
+                ),
+                {},
+            )
 
     def test_stage_allowlist_exactly_matches_native_test_enum(self):
         source = Path(__file__).resolve().parents[1] / (

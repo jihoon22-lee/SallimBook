@@ -75,7 +75,7 @@ def existing_instrumentation():
     env.pop("ORG_GRADLE_PROJECT_sallimbookCloudFixture", None)
     instrument(
         "existing",
-        12,
+        15,
         [
             str(ANDROID / "gradlew"),
             "-p",
@@ -86,7 +86,8 @@ def existing_instrumentation():
             (
                 "-Pandroid.testInstrumentationRunnerArguments.class="
                 "io.github.jihoon22lee.sallimbook.SecureBridgeWebViewTest,"
-                "io.github.jihoon22lee.sallimbook.NativeVaultCvcAcceptanceTest"
+                "io.github.jihoon22lee.sallimbook.NativeVaultCvcAcceptanceTest,"
+                "io.github.jihoon22lee.sallimbook.NativeRoutePolicyTest"
             ),
         ],
         env,
@@ -94,7 +95,7 @@ def existing_instrumentation():
 
 
 class SyntheticIdentityProxy:
-    """Loopback-only test proxy input; actual ASGI peer validation stays enabled."""
+    """Loopback test identity and explicit HTTP/1 connection lifetime."""
 
     def __init__(self, app):
         self.app = app
@@ -107,6 +108,22 @@ class SyntheticIdentityProxy:
                 for key, value in scope["headers"]
                 if not key.lower().startswith(b"tailscale-")
             ] + [(b"tailscale-user-login", IDENTITY)]
+            if scope.get("http_version") in {"1.0", "1.1"}:
+                # The fixture's 5s idle close can strand a pooled native GET while
+                # the user edits the form. Tell the no-retry client to open a new
+                # connection, without changing production transport or timeouts.
+                async def send_closed(message):
+                    if message["type"] == "http.response.start":
+                        message = dict(message)
+                        message["headers"] = [
+                            (key, value)
+                            for key, value in message.get("headers", [])
+                            if key.lower() != b"connection"
+                        ] + [(b"connection", b"close")]
+                    await send(message)
+
+                await self.app(scope, receive, send_closed)
+                return
         await self.app(scope, receive, send)
 
 
@@ -334,7 +351,8 @@ def main():
         "--build-only", action="store_true", help="Build fixture APKs without device acceptance"
     )
     mode.add_argument(
-        "--existing-only", action="store_true", help="Run the original 12 instrumented tests only"
+        "--existing-only", action="store_true",
+        help="Run the 15 security and route-policy instrumented tests only",
     )
     args = parser.parse_args()
     if not (args.host_only or args.build_only) and not os.environ.get(
