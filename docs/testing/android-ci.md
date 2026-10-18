@@ -296,3 +296,23 @@ Uvicorn 0.54.0, 합성 HTTPS CA 및 정상 hostname 검증을 사용했다. 두 
 제품 네이티브·운영 서버·재전송 금지·인증서/hostname·시간 제한은 바꾸지 않는다.
 실제 wrapper를 실행하는 stdlib ASGI 회귀는 streaming body, 기존 connection 헤더 교체,
 원본 message/headers 보존과 프로토콜 분기를 확인한다. 새 KVM 가입 성공 여부는 별도 결과로 판단한다.
+
+
+수정 fixture의 [39101934253](https://github.com/jihoon22-lee/SallimBook/actions/runs/39101934253)은
+`c1004c7a2e8db67e958b96ff9d81c66a9ace2356`을 workflow_dispatch로 실행했다.
+두 번째 시작 조회·유효 제출·네이티브 세션 생성·잠금 해제·원래 Main 복귀의 동시 `111`과
+bridge 준비를 통과했다. 마지막 `AUTHENTICATED_HOME / ASSERTION`에서 실패했고,
+`TAP=11110`, `TAP_STATUS=REQUEST_PENDING`이었다. 이는 실제 가입/세션 진행의 근거지만,
+웹 홈 API 표시까지 성공했다는 뜻은 아니다. 총 13건은 11 PASS / 1 FAIL / 1 조건부 SKIP이며
+KVM·부팅·기기·정리는 통과했다. release 격리 검사는 이전 실패 때문에 실행되지 않았다.
+[요약](evidence/android-kvm-20261018/run-39101934253/summary.json),
+[가입 XML](evidence/android-kvm-20261018/run-39101934253/onboarding.xml),
+[기존 XML](evidence/android-kvm-20261018/run-39101934253/existing.xml),
+[SDK](evidence/android-kvm-20261018/run-39101934253/sdk.json)를 보존했다.
+
+후속 진단은 기존 홈 성공 판정과 30초 기한을 바꾸지 않는다. 시간 초과 뒤 시험 APK 전용 script로
+경로가 홈인지/main/assets/care/login 링크/자산 alert/소모품 alert/빈 월/select/빈 소모품 여부의
+10비트만 관찰한다. 정상 빈 홈은 `1111000111`, 진단 불가·2초 callback 제한 초과는 `----------`다.
+HTML·입력값·DOM 원문·API 데이터는 반환하지 않으며, 진단 자체가 실패해도 원래 실패를 유지한다.
+엄격한 고정 길이 검증을 두 차례 적용하고 부분 하이픈·임의 문자열·접미사를 거절한다.
+공유 성공 판정의 브라우저 10개, 도구 회귀 27개 및 Kotlin 계측 컴파일이 통과했다.
