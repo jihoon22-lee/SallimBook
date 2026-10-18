@@ -165,6 +165,7 @@ actionlint .github/workflows/android-instrumentation.yml
 | [39095425156](https://github.com/jihoon22-lee/SallimBook/actions/runs/39095425156) | `91e8b286b39c49d8fcb65cc2762cec86c68cdcf1` | 11 PASS / 1 SKIPPED | 1 FAIL, 정제 증거로 세부 단계 확인 불가 | FAIL |
 | [39096333533](https://github.com/jihoon22-lee/SallimBook/actions/runs/39096333533) | `a7b56fb89154c120d13f670f33a750a3ec411351` | 11 PASS / 1 SKIPPED | 1 FAIL, `CANCEL_FORM` | FAIL |
 | [39096963060](https://github.com/jihoon22-lee/SallimBook/actions/runs/39096963060) | `d4ed676d63829500013b3d80a0047ff9b3a4198f` | 11 PASS / 1 SKIPPED | 1 FAIL, `CANCEL_SCROLL` | FAIL |
+| [39097997409](https://github.com/jihoon22-lee/SallimBook/actions/runs/39097997409) | `5f555bd067f96f2205d801eaff348a155fafadf8` | 11 PASS / 1 SKIPPED | 1 FAIL, `SESSION_AND_MAIN` / `ASSERTION` | FAIL |
 
 두 checkout SHA는 GitHub가 만든 PR merge ref이며 각각 PR head `3ca1bd3`, `39adb28`에 해당한다.
 두 실행 모두 KVM 가속, API 36/x86_64 부팅, AVD/ADB 종료와 합성 DB·포트 정리를 확인했다.
@@ -211,3 +212,21 @@ Espresso `ScrollToAction`에서 실패했다. KVM·부팅·정리는 통과했�
 예외 원문·스택·UI tree·입력값은 읽어 진단에 넣지 않는다. 결과 도구와 workflow는 동일 helper로
 재검증하며 허용 형식 밖의 값은 버린다. 정제/실행기 22건, Kotlin 계측 컴파일, typecheck/build/sync,
 Ruff/actionlint가 통과했다. 실제 swipe와 가입 성공은 다음 원격 실행으로 확인한다.
+
+네 번째 실행(PR head `7be7dde`)에서는 실제 swipe를 포함한 취소·복귀, 빈 입력 거절, 필드 입력과
+유효 제출 클릭을 지나 최종 세션/잠금/화면 복귀 결합 대기가 30초에 만료됐다. `pre/post=----`는
+그 단계에서 표시 상태를 측정하지 않았다는 뜻이다. 등록 성공이나 특정 제품 결함으로 단정하지 않는다.
+[요약](evidence/android-kvm-20261018/run-39097997409/summary.json),
+[SDK](evidence/android-kvm-20261018/run-39097997409/sdk.json),
+[기존 XML](evidence/android-kvm-20261018/run-39097997409/existing.xml),
+[가입 XML](evidence/android-kvm-20261018/run-39097997409/onboarding.xml)을 보존했다.
+KVM·부팅·정리는 통과했지만 release 검사는 앞선 실패 때문에 실행되지 않았다.
+
+후속 진단은 각 입력 후와 마지막 스크롤/IME 닫기 후의 값 보존·정책 유효·owner 준비 상태를
+네이티브 시험 메모리에서 boolean으로 확인한다. 값을 출력하지 않는다. 원래 30초 총기한을 공유해
+세션 생성·잠금 해제·main 복귀를 나눠 확인하고, 완료 시 세 조건이 동시에 참임을 다시 요구한다.
+마지막 실제 API 홈 판정도 유지한다. 고정 stage 36개, reason 13개, 표시 상태 4비트에 더해
+세션/잠금/main의 flow 3비트와 공개 고정 상태 문구에 대응하는 status 20개만 진단에 허용한다.
+상태 분류는 EditText를 제외하며 입력과 닮은 문자열도 상태로 수집하지 않는다.
+정제 도구·workflow 이중 정제와 부정 사례, Kotlin 계측 컴파일이 통과했다.
+제품 코드·기기 인증 조건·보안 가드는 변경하지 않았고, 가입 성공은 새 원격 결과로 판정한다.
