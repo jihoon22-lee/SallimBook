@@ -10,12 +10,15 @@ import android.widget.TextView
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.*
 import androidx.test.espresso.matcher.ViewMatchers.*
+import androidx.test.espresso.matcher.RootMatchers.withDecorView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import io.github.jihoon22lee.sallimbook.auth.AppLockController
 import io.github.jihoon22lee.sallimbook.auth.NativeAuthSession
+import io.github.jihoon22lee.sallimbook.auth.NativeOnboardingActivity
+import org.hamcrest.Matchers.sameInstance
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -36,8 +39,9 @@ class AndroidCloudOnboardingTest {
 
     // Public fixed labels only. Never attach Throwable, view hierarchy, ID or input to failure.
     private enum class CloudStage {
-        FIXTURE_ORIGIN, EMPTY_SESSION, MAIN_LAUNCH, PREDICATE_ASSET, SIGNED_OUT_HOME,
-        ANONYMOUS_REJECTED, SETUP_AVAILABLE, OPEN_CANCEL_FORM, CANCEL_FORM,
+        FIXTURE_ORIGIN, EMPTY_SESSION, MAIN_LAUNCH, PREDICATE_ASSET, INITIAL_CURTAIN, INITIAL_DOCUMENT,
+        ANONYMOUS_REJECTED, SETUP_AVAILABLE, OPEN_CANCEL_FORM, CANCEL_FORM, CANCEL_SCROLL, CANCEL_CLICK,
+        CANCEL_RETURN, SECOND_SETUP_AVAILABLE,
         CANCELLED_SESSION_EMPTY, OPEN_SETUP_FORM, SUBMIT_EMPTY, INVALID_INPUT,
         INVALID_SESSION_EMPTY, FILL_NAME, FILL_PASSWORD, FILL_CONFIRMATION,
         SUBMIT_VALID, SESSION_AND_MAIN, BRIDGE_READY, AUTHENTICATED_HOME, FINISH_MAIN
@@ -69,17 +73,38 @@ class AndroidCloudOnboardingTest {
         return null
     }
 
-    private fun click(text: String) {
-        onView(withText(text)).perform(scrollTo(), click())
+    private fun awaitActivity(type: Class<out Activity>): Activity {
+        var found: Activity? = null
+        awaitState("focused native activity") {
+            found = resumed()?.takeIf { type.isInstance(it) && it.hasWindowFocus() && !it.isFinishing }
+            found != null
+        }
+        return found!!
     }
 
-    private fun fill(caption: String, value: String) {
-        var id = View.NO_ID
-        instrumentation.runOnMainSync {
-            id = resumed()?.window?.decorView?.let { label(it, caption)?.labelFor } ?: View.NO_ID
+    private fun readyControl(owner: Activity, text: String): View {
+        var found: View? = null
+        awaitState("native control ready") {
+            found = if (resumed() === owner && owner.hasWindowFocus())
+                label(owner.window.decorView, text)?.takeIf { it.isShown && it.isEnabled } else null
+            found != null
         }
-        assertTrue(id != View.NO_ID)
-        onView(withId(id)).perform(scrollTo(), replaceText(value), closeSoftKeyboard())
+        return found!!
+    }
+
+    private fun target(owner: Activity, view: View) = onView(sameInstance(view))
+        .inRoot(withDecorView(sameInstance(owner.window.decorView)))
+
+    private fun click(owner: Activity, text: String) {
+        target(owner, readyControl(owner, text)).perform(scrollTo(), click())
+    }
+
+    private fun fill(owner: Activity, caption: String, value: String) {
+        val captionView = readyControl(owner, caption)
+        var field: View? = null
+        instrumentation.runOnMainSync { field = owner.findViewById(captionView.labelFor) }
+        assertTrue(field != null)
+        target(owner, field!!).perform(scrollTo(), replaceText(value), closeSoftKeyboard())
     }
 
     private fun evaluateBoolean(main: MainActivity, script: String): Boolean {
@@ -118,22 +143,33 @@ class AndroidCloudOnboardingTest {
             val authenticatedHome = at(CloudStage.PREDICATE_ASSET) {
                 instrumentation.context.assets.open("sallimbook_cloud_authenticated_home.js").bufferedReader().use { it.readText() }
             }
-            at(CloudStage.SIGNED_OUT_HOME) {
-                awaitWebState("signed-out home shell", main,
-                    "Boolean(location.pathname === '/' && document.querySelector('#assets-title') && " +
-                        "document.querySelector('#consumables-title'))")
-            }
-            at(CloudStage.ANONYMOUS_REJECTED) { assertFalse(evaluateBoolean(main, authenticatedHome)) }
-            at(CloudStage.SETUP_AVAILABLE) {
-                awaitState("setup available") {
-                    label(main.window.decorView, "처음 시작하기")?.let { it.isShown && it.isEnabled } == true
+            at(CloudStage.INITIAL_CURTAIN) {
+                awaitState("locked native initial curtain") {
+                    resumed() === main && main.hasWindowFocus() && main.secureBridgeReady &&
+                        AppLockController.get(context).locked && !NativeAuthSession.get(context).hasLocalSession() &&
+                        label(main.window.decorView, "SallimBook · 시작")?.isShown == true
                 }
             }
-            at(CloudStage.OPEN_CANCEL_FORM) { click("처음 시작하기") }
-            at(CloudStage.CANCEL_FORM) { click("닫기") }
+            at(CloudStage.INITIAL_DOCUMENT) {
+                awaitWebState("bundled initial document", main,
+                    "Boolean(document.readyState === 'complete' && location.pathname === '/')")
+            }
+            at(CloudStage.ANONYMOUS_REJECTED) { assertFalse(evaluateBoolean(main, authenticatedHome)) }
+            at(CloudStage.SETUP_AVAILABLE) { readyControl(main, "처음 시작하기") }
+            val firstForm = at(CloudStage.OPEN_CANCEL_FORM) {
+                click(main, "처음 시작하기"); awaitActivity(NativeOnboardingActivity::class.java)
+            }
+            val close = at(CloudStage.CANCEL_FORM) { readyControl(firstForm, "닫기") }
+            at(CloudStage.CANCEL_SCROLL) { target(firstForm, close).perform(scrollTo()) }
+            at(CloudStage.CANCEL_CLICK) { target(firstForm, close).perform(click()) }
+            at(CloudStage.CANCEL_RETURN) { assertTrue(awaitActivity(MainActivity::class.java) === main) }
             at(CloudStage.CANCELLED_SESSION_EMPTY) { assertFalse(NativeAuthSession.get(context).hasLocalSession()) }
-            at(CloudStage.OPEN_SETUP_FORM) { click("처음 시작하기") }
-            at(CloudStage.SUBMIT_EMPTY) { click("가계 만들고 시작") }
+            // Returning to MainActivity refreshes setup status asynchronously.
+            at(CloudStage.SECOND_SETUP_AVAILABLE) { readyControl(main, "처음 시작하기") }
+            val form = at(CloudStage.OPEN_SETUP_FORM) {
+                click(main, "처음 시작하기"); awaitActivity(NativeOnboardingActivity::class.java)
+            }
+            at(CloudStage.SUBMIT_EMPTY) { click(form, "가계 만들고 시작") }
             at(CloudStage.INVALID_INPUT) {
                 awaitState("invalid input rejected") {
                     resumed()?.window?.decorView?.let {
@@ -144,10 +180,10 @@ class AndroidCloudOnboardingTest {
             at(CloudStage.INVALID_SESSION_EMPTY) { assertFalse(NativeAuthSession.get(context).hasLocalSession()) }
             // Generated solely in native test memory; never an argument, log or fixture file.
             val password = UUID.randomUUID().toString() + UUID.randomUUID().toString()
-            at(CloudStage.FILL_NAME) { fill("표시 이름", "Synthetic Android Owner") }
-            at(CloudStage.FILL_PASSWORD) { fill("새 비밀번호 · 15~128자", password) }
-            at(CloudStage.FILL_CONFIRMATION) { fill("새 비밀번호 확인", password) }
-            at(CloudStage.SUBMIT_VALID) { click("가계 만들고 시작") }
+            at(CloudStage.FILL_NAME) { fill(form, "표시 이름", "Synthetic Android Owner") }
+            at(CloudStage.FILL_PASSWORD) { fill(form, "새 비밀번호 · 15~128자", password) }
+            at(CloudStage.FILL_CONFIRMATION) { fill(form, "새 비밀번호 확인", password) }
+            at(CloudStage.SUBMIT_VALID) { click(form, "가계 만들고 시작") }
             at(CloudStage.SESSION_AND_MAIN) {
                 awaitState("real session and unlocked main") {
                     NativeAuthSession.get(context).hasLocalSession() &&

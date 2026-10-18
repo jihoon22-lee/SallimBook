@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { homeComparison, mockHomecare } from "./support/homecare";
+import { mockNativeOnboarding } from "./support/onboarding";
 
 const predicate = readFileSync(new URL("../android/app/src/androidTest/assets/sallimbook_cloud_authenticated_home.js", import.meta.url), "utf8");
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -49,3 +50,16 @@ for (const mode of ["signed-out", "loading", "error", "ready"] as const) {
     }
   });
 }
+
+// Native cold start is locked, unlike the ordinary signed-out browser shell.
+// This verifies the initial proof premise; it does not simulate Android focus.
+test("cloud initial native lock has no finance headings and cannot satisfy the home proof", async ({ page }) => {
+  const state = await mockNativeOnboarding(page);
+  state.locked = true;
+  await page.goto("/");
+  await expect(page.getByRole("status")).toContainText("앱이 잠겨 있어요");
+  await expect(page.locator("#assets-title, #consumables-title")).toHaveCount(0);
+  expect(await page.evaluate(predicate)).toBe(false);
+  expect(state.http).toHaveLength(0);
+  expect(state.calls.every((call) => call.method === "getSession")).toBe(true);
+});
