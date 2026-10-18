@@ -188,3 +188,35 @@ ruff check --config services/api/pyproject.toml ops/automation.py ops/automation
 부분 활성화 실패를 확인한다. 외부 DB/Docker/systemctl 변경은 mock으로 차단한다. 이 단위 시험 통과가
 실제 예약 활성화·새 이미지 빌드·장기 운영·호스트 재부팅 성공을 뜻하지 않는다. 실제 운영 실행은 최종
 배포 소스/manifest/config SHA, 시각, 명령 결과, 장부 경로를 별도 인수 기록에 남긴다.
+
+### 2026-10-18 구현 검증 기록
+
+- 실제 `systemd-analyze --user verify`: 생성된 service 5개/timer 4개, exit 0. 설치·활성화는 실행하지 않았다.
+- 실제 배포 앱 소스 `f017d8f61bfeae2304f0109d6f62c9fd13643212`의 git archive와 frozen uv export:
+  umask 0077에서 API context 파일 144개 생성, 모든 파일/하위 디렉터리의 읽기·탐색 권한과 소스 marker 확인.
+  웹 빌드와 이미지 빌드는 수행하지 않았다.
+- 운영 코드 `f2f7f14ef0bc4c47d6037d4dd79f3f74df8e12a1`과 위 앱 소스의 기존 API 이미지로
+  `tests.operations.automation_integration` 실행: 실제 worker 백업·archive hash·호스트 장부·ack·
+  `Runtime.restore_check` 성공, 총 12.564초. 스키마/테이블 수/첨부/필드 암호문 검사가 모두 통과했다.
+- 합성 DB는 백업과 무결성 helper가 읽는 5개 테이블과 계좌번호·보험번호·첨부 각 1건으로 구성했다.
+  실제 앱의 암호화 함수를 사용했으며, 전체 앱 마이그레이션·API 권한·보관함·두 기기 복구 시험은 아니다.
+- 최초 시험은 새 fixture 소유권을 UID 10001로 넘긴 뒤 불필요하게 chmod해 준비 단계에서 실패했다.
+  이미 설정한 private 권한을 유지하도록 harness를 수정한 다음 새 디렉터리에서 전체 시험이 통과했다.
+  두 시도의 project/run label별 컨테이너·네트워크·볼륨 목록이 모두 비어 있음을 실제 확인했다.
+- 운영 프로젝트·DB·키는 읽거나 변경하지 않았다. 시험 산출물은 저장소 밖 private 디렉터리에 보존했다.
+  로컬 검증은 원격 CI, 예약 활성화, 장기 운영 또는 재부팅 성공을 대체하지 않는다.
+
+재현할 때는 깨끗한 운영 checkout, 검증된 앱 이미지/소스 쌍, 공식 age-keygen 1.3.2와 새 저장소 밖
+디렉터리를 지정하고 다른 Docker/DB 시험과 실행 구간을 조율한다. 기존 경로를 덮어쓰지 않는다.
+
+```sh
+python3 -m tests.operations.automation_integration \
+  --image API_TAG_AT_SHA256 \
+  --app-source APP_COMMIT_SHA \
+  --age-keygen /TOOLS/age-keygen \
+  --output /PRIVATE/new-synthetic-automation-check
+```
+
+이 harness는 명시적 실행만 허용하며 일반 단위 시험 discovery에 포함되지 않는다. source DB도 새로운
+내부 네트워크와 tmpfs에서 만들고, 실제 운영 Compose를 호출하지 않는다. helper가 성공 후 남기는
+`integration-result.json`과 각 run의 private 장부를 검토한다. 실패한 restore 볼륨은 자동 삭제하지 않는다.
