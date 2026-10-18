@@ -341,11 +341,38 @@ PC 웹에서는 별도 vault adapter가 암호문을 복호화하며 일반 Quer
 
 ## 6. 첨부
 
-v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을 명시적으로 변경한다.
-확장자·선언 MIME만 믿지 않고 실제 포맷·크기와 악성 내용을 검사한다.
-다운로드는 권한 확인 후 스트림 또는 매우 짧은 만료의 목적 제한 링크를 사용한다.
-치료명이나 실제 이름을 object storage key에 포함하지 않는다.
-카드 앞뒷면 이미지 첨부는 secret 경계를 우회하므로 지원하지 않는다.
+SB-023은 PDF/JPEG/PNG 원본을 파일당 **20MiB(20,971,520바이트)**까지 지원한다.
+`POST /documents`에 파일명·MIME·실제 크기·SHA-256·typed target·`contains_no_card_data: true`를
+제출하면 pending 문서와 최초 연결을 같은 트랜잭션으로 만든다. 생성은 Idempotency-Key를 요구하고
+201 Location 및 불변 `{id, version}` 참조를 반환한다. 파일명은 경로·제어문자·방향 제어문자를
+허용하지 않으며 확장자도 선언 MIME과 일치해야 한다. 카드 사진·번호·CVC 첨부는 지원하지 않는다.
+
+`PUT /documents/{id}/content`는 `application/octet-stream` 원본과 문서 If-Match/Idempotency-Key를
+받는다. 크기·해시·실제 형식·악성 내용·카드 정보 검사를 모두 통과한 원본만 암호화해 ready로 전환한다.
+본문을 읽기 전부터 프로세스당 업로드 한 개로 제한하며 초과는 503 `DOCUMENT_UPLOAD_BUSY`다.
+HTTP 취소 후에도 시작한 worker가 끝날 때까지 처리 슬롯을 유지한다. 본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
+503이다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
+검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
+
+| 동작 | 경로·버전 기준 |
+|---|---|
+| 목록/상세 | GET /documents, GET /documents/{id}; 목록은 target_kind와 target_id를 함께 지정 가능 |
+| 원본 다운로드 | GET /documents/{id}/download; 현재 가계 권한과 ready 상태 확인 후 인증 응답으로 전달 |
+| 문서 삭제 | POST /documents/{id}/delete; 사유·문서 If-Match·멱등키, 연결도 함께 종료 |
+| 연결 추가 | POST /document-links; document_id/target·문서 If-Match·멱등키 |
+| 연결 이력 | GET /documents/{id}/links; 활성·종료 이력을 모두 반환 |
+| 연결 종료 | POST /document-links/{id}/end; 사유·연결 If-Match·멱등키, 문서 버전도 증가 |
+
+target.kind는 policy/case/medical_node/expense/claim/appliance/asset 중 하나이며 같은 가계의
+실제 대상을 검증한다. 카드 대상은 없다. 목록은 UUID cursor와 limit 1~200을 사용한다.
+응답에는 저장소 경로·암호화 키·nonce가 없으며 다운로드는 no-store/nosniff/CSP sandbox와
+attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만들지 않는다.
+pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
+업로드 저장 전에 가계·전체 byte/count 한도를 영속 예약하며 한도 초과는
+413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유 부족은 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
+예약에는 암호문 tag·실패 업로드·삭제 후 유예 파일도 포함하며 물리 정리 확인 뒤 용량을 반환한다.
+정리 명령·기본 한도·설정·검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
+7개 부모 상세의 공유 패널·원본 전송·응답 유실 재시도·Android 보호 화면 연결은 [첨부 UI 검증](testing/documents-client.md)을 따른다.
 
 
 기존 금융 자산에 새 계좌를 연결할 때는 사용 중인 자산만 허용한다. 자산 선택 뒤 다른 기기에서 종료해도 저장 시 잠금 안에서 다시 확인하며 422 `ASSET_UNAVAILABLE`을 반환한다. 기존에 연결된 계좌의 종료 이력은 유지한다.
@@ -432,3 +459,65 @@ v1 허용 타입은 PDF/JPEG/PNG, 파일당 기본 20MB, 필요 시 설정값을
 `replacement_due`는 날짜 미확인일 때 null, `purchase_needed`는 공용 재고가 기기별 교체 수량보다 적을 때 true이며
 `low_stock`은 별도의 재고 부족 임계와 비교한다. 자산의 선택 월은 입력으로 받지 않는다. 모든 목록은 UUID cursor와 최대 200개 limit로 나눈다.
 첨부파일의 연결·다운로드는 SB-023의 별도 typed 문서 계약을 사용한다.
+
+가전·재고·교체 24개 계약의 웹/Android 화면 연결과 홈의 월/오늘 분리는 [가전·재고 UI 검증](testing/homecare-client.md)을 따른다.
+
+
+### SB-028~SB-032 보관함 서버
+
+보관함은 클라이언트가 암호화한 opaque envelope만 받는다. 일반 카드 응답에 `has_secret`을 추가하며,
+현재 키의 미폐기 비밀 존재 여부를 나타낸다. PAN·유효기간·CVC 평문은 입력/응답 계약에 없다.
+정확한 포맷·AAD·KDF와 길이는 [보관함 v1 결정](adr/vault-format-v1.md)을 따른다.
+
+| `/api/v1` 아래 경로 | 동작·버전 기준 |
+|---|---|
+| `/vault/status` | GET 가계 상태·본인 권한·구성원·회전 필요 여부 |
+| `/vault/initialize` | POST 초기 key check/member/recovery bundle; If-Match 없음 |
+| `/vault/wrappings/me` | GET 현재 본인 wrapping+key check, PUT 본인 암호 변경; wrapping version |
+| `/vault/recovery-wrap` | GET 현재 복구 wrapping+key check; 최근 인증 필요 |
+| `/vault/recover` | POST 본인 wrapping+복구 wrapping 동시 교체; vault status version |
+| `/vault/members/{member_id}/revoke` | POST 구성원 권한 철회; membership version |
+| `/vault/shares` | GET 본인 관련 공유 이력/cursor, POST 공유 생성; vault status version |
+| `/vault/shares/{offer_id}/wrapping` | GET 대상 본인만 미만료 wrapping 조회; 최근 인증 필요 |
+| `/vault/shares/{offer_id}/accept`, `/cancel` | POST 수락/취소; offer version |
+| `/cards/{card_id}/secret-envelope` | GET 현재 암호문, PUT 새 비밀, DELETE 모든 온라인 버전 비밀 폐기; card version |
+| `/vault/rotations` | POST 새 버전/원본 manifest 예약; vault status version |
+| `/vault/rotations/{rotation_id}` | GET 준비 상태·카드/구성원 manifest |
+| `/vault/rotations/{rotation_id}/prepare` | POST 새 key check/전체 member/recovery bundle; rotation version |
+| `/vault/rotations/{rotation_id}/cards/{card_id}` | PUT 원본 ID/revision에 해당하는 새 암호문, GET 준비된 암호문; rotation version |
+| `/vault/rotations/{rotation_id}/wrappings/me` | GET 준비된 본인 wrapping+key check |
+| `/vault/rotations/{rotation_id}/finalize`, `/abort` | POST 전체 원자 전환/회전 중단; rotation version |
+
+모든 mutation은 Idempotency-Key를 요구하며 재전송 응답은 당시 `{id,version}` 참조다.
+If-Match는 표의 해당 metadata version을 사용하며 key_version이나 카드 secret revision과 다르다.
+공유·복구·rewrap·철회·회전은 최근 5분의 계정 인증 또는 목적/대상에 묶인 일회성 step-up을 요구한다.
+구성원 관리는 `vault.membership`과 대상 member ID, 회전은 `vault.key_rotation`과 household ID다.
+토큰과 평문 비밀을 멱등 해시·감사 원문에 넣지 않는다. 모든 응답은 no-store이며 일반 가계 가입이
+보관함 권한을 주지 않는다. `key_check_confirmed`는 client 동의 기록이며 서버 인증 증거가 아니다.
+
+회전은 종료 카드까지 현재 모든 미폐기 비밀과 활성 구성원을 고정한다. 진행 중인 공유는 종료하고
+준비 중 비밀/권한/rewrap 변경을 동결한다. 현재 키 읽기는 가능하며 모든 새 암호문과 wrapping이
+완성된 뒤 DB에서 current를 한 번에 전환한다. abort 버전과 nonce는 다시 쓰지 않는다.
+철회된 구성원은 즉시 opaque 조회가 막히고, 남은 구성원도 새 비밀 쓰기/재공유 전에 HVK 회전이 필요하다.
+비밀 DELETE는 현재·retired·aborted 암호문을 NULL로 폐기하지만 nonce·원본 참조·감사·카드 metadata는 남긴다.
+온라인 폐기가 이전 백업/기기 사본까지 회수하지는 않는다. 실제 검증 범위는 [서버 기록](testing/vault-server.md)에 있다.
+
+## SB-037 사용자 내보내기·감사 조회 구현 계약 (R20)
+
+`POST /api/v1/exports`는 현재 공동 가계의 JSON/CSV와 선택 문서 원본을 하나의 ZIP 응답으로 반환한다. 요청 예시는 `{"formats":["json","csv"],"document_ids":[]}`이며 각 목록은 중복을 허용하지 않는다. `formats` 생략 시 두 형식을 모두 생성한다. 임의 가계 ID, SQL, 저장 경로, 출력 파일명은 받지 않는다. 전체 운영 백업과 서버 복원은 별도 작업이다.
+
+현재 세션의 5분 이내 로그인/재인증 또는 `X-Step-Up-Token`의 `data.export` 증명이 필요하다. 증명 target은 현재 `household_id`이고 사용자·세션·기기·자격증명까지 바인딩한다. 웹 쿠키 요청에는 기존 Origin/CSRF 검증이 적용된다. 먼저 증명을 소비 없이 검사하고, ZIP 준비 이후 새 트랜잭션에서 현재 권한과 선택 문서를 다시 확인한다. 성공 발급과 감사 기록에 한해 같은 트랜잭션에서 증명을 한 번 소비한다. 준비 실패 시 증명은 소비하지 않는다. 각 POST는 새 export ID와 새 스냅샷을 생성하며, 재사용 가능한 다운로드 URL이나 서버 작업 레코드를 만들지 않는다.
+
+데이터 조회는 첫 조회 전에 PostgreSQL `REPEATABLE READ READ ONLY`를 설정한다. 자산·월별 모든 revision/값, 계좌·카드 일반정보, 수입과 현금 원본/정정 이력, 고정비 규칙/회차/분할 납부, 보험 계약/진료 트리/비용/청구/지급/배분/반환, 가전·소모품·재고/교체, 문서 메타데이터/연결 이력을 포함한다. 화면의 200행 페이지 제한으로 잘라내지 않는다. 기록된 null/0/미확인 상태와 연결 ID를 그대로 유지하고 합계를 다시 만들거나 잔액을 자동 가감하지 않는다. 현금 원본은 한 행씩, 청구·배분 등은 참조 행으로 내보낸다. 구성원 이름은 member ID와 연결하며 계정 로그인 ID는 제외한다.
+
+명시적 필드 목록은 `services/api/src/sallimbook/exports/catalog.py`이며 새 테이블/컬럼은 공개 또는 비공개 분류 검사를 통과해야 한다. 보관함 전체, 카드 비밀 envelope/wrapping, 인증·세션·초대·grant·멱등 레코드, 전체 계좌/증권번호 및 암호문·nonce·키 버전, 비공개 파일 경로/암호화 키/예약 저장량은 내보내지 않는다. 선택 문서는 동일 가계의 ready 상태와 유효 연결을 요구하며 최종 발급 직전에 버전·checksum·크기·연결을 다시 확인한다. 파일명은 UUID와 검증된 MIME 확장자로 생성한다. 문서 원본과 업무 메모는 사용자가 입력한 내용을 유지하므로 그 안에 포함된 민감한 텍스트를 자동 삭제한다고 보장하지 않는다.
+
+ZIP의 `manifest.json`은 형식 버전 `sallimbook-user-export-v1`, export ID, 가계 ID, 스냅샷 시각, 발급 시한, KRW/Asia-Seoul 기준, 제외 범주, 각 파일의 크기/SHA-256/행 수를 담는다. 테이블 경로는 `json/{table}.json`, `csv/{table}.csv`, 문서 경로는 `documents/{uuid}.{pdf|png|jpg}`다. ZIP은 메모리에서 완성한 뒤 발급하며 평문 임시 파일을 디스크에 쓰지 않는다. 응답은 `application/zip`, `Content-Disposition: attachment`, `Cache-Control: no-store`, `Pragma: no-cache`, `X-Content-Type-Options: nosniff`, `X-Export-ID`, `X-Export-SHA256`, `Content-Length`를 제공한다.
+
+JSON 금액은 정밀한 십진 문자열, 월은 `YYYY-MM`, 날짜는 ISO 날짜, timestamp는 UTC다. CSV는 UTF-8·CRLF·전체 셀 인용 형식이며 **모든 문자열 앞에 눈에 보이는 `text:`를 붙인다**. 금액도 문자열이므로 이 규칙을 따른다. null은 접두사가 없는 `\N`, 빈 문자열은 `text:`, 실제 문자열 `\N`은 `text:\N`이다. 숫자형 개수와 bool만 접두사 없이 출력한다. 복원 시 문자열 접두사를 정확히 한 번 제거한다. 수식 기호·탭·줄바꿈·전각 기호를 포함한 문자열도 원래 값의 첫 문자로 시작하지 않도록 한다. 다른 CSV 처리기의 임의 재가공까지 보장하지 않으며 원본 문자열 교환에는 JSON을 사용한다.
+
+기본 한도는 전체 100,000행, JSON+CSV+manifest 합산 16MiB, 선택 문서 10개/합산 40MiB, ZIP 64MiB다. 초과 시 413으로 전체 실패하며 일부 자료를 성공 응답으로 내보내지 않는다. 준비/발급 시한은 30초이며 세션·재인증·grant가 먼저 만료되면 먼저 거부한다. 전송은 최대 120초다. API 프로세스당 준비와 전송을 합쳐 한 요청만 허용하고 중복 작업은 503을 반환한다. 취소돼도 실제 동기 작업이 끝나기 전에는 슬롯을 풀지 않는다. 발급 시한은 서버에서 새 파일을 발급할 수 있는 시한이며 이미 저장된 로컬 파일을 만료·회수하지 않는다.
+
+`GET /api/v1/audit-events`는 현재 가계의 감사 메타데이터만 반환한다. `limit` 1..200, `cursor`, `entity_type`, `entity_id`, `actor_member_id`, `action`, timezone을 포함한 `since`/`until` 필터를 지원한다. 기간은 `[since, until)`이다. 시각 내림차순·UUID 내림차순 keyset cursor에 가계/필터 바인딩을 검사한다. 삭제된 엔티티의 감사 이력도 조회할 수 있다. 응답은 ID, actor member ID, 엔티티/동작, 요청 ID, 전후 버전, UTC 시각, 알려진 변경 필드 이름만 제공한다. 원본 `safe_diff`나 전후 값은 반환하지 않으며 잘못된 메타데이터는 503으로 실패한다. 여러 HTTP 페이지 전체를 하나의 DB 스냅샷으로 보장하지 않는다.
+
+`user_export/export` 감사는 완성된 파일의 **서버 발급**을 뜻하며 클라이언트 저장 완료를 뜻하지 않는다. 선택 문서 열람 감사도 같은 요청 ID로 기록한다. 일반 audit API에는 최근 재인증을 추가로 요구하지 않지만 현재 세션·기기·활성 가계 구성원 권한은 검사한다. 이 API PR은 Android/웹 내보내기 화면, 운영 백업 스케줄과 실제 새 서버 복원 완료를 의미하지 않는다.

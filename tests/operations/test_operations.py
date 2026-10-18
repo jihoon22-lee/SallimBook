@@ -1,0 +1,502 @@
+"""Synthetic operation boundaries; never starts a service or accesses a real account."""
+
+import io
+import json
+import os
+import subprocess
+import tarfile
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from ops import backup, build_context, deploy, health, preflight, recovery, release
+
+
+def config():
+    return {
+        "format": 1,
+        "project": "sallimbook-staging",
+        "fqdn": "synthetic.example.ts.net",
+        "certificate_sha256": ":".join(["AB"] * 32),
+        "api_image": "example.invalid/sallimbook/api:0.1.0@sha256:" + "1" * 64,
+        "web_image": "example.invalid/sallimbook/web:0.1.0@sha256:" + "2" * 64,
+        "runtime_directory": "/srv/sallimbook/sallimbook-staging",
+        "version_code": 2,
+        "version_name": "0.1.1",
+        "source_commit": "a" * 40,
+    }
+
+
+class DeploymentTests(unittest.TestCase):
+    def test_image_source_revision_and_role_must_match_manifest(self):
+        for role in ("api", "web"):
+            labels = {build_context.REVISION_LABEL: "a" * 40, build_context.ROLE_LABEL: role}
+            details = [{"Architecture": "amd64", "Os": "linux", "Config": {"Labels": labels}}]
+            preflight.verify_image_details(details, revision="a" * 40, role=role)
+            for invalid in (
+                {},
+                {**labels, build_context.REVISION_LABEL: "b" * 40},
+                {**labels, build_context.ROLE_LABEL: "web" if role == "api" else "api"},
+            ):
+                with self.subTest(role=role, labels=invalid), self.assertRaises(
+                    backup.OperationError
+                ):
+                    preflight.verify_image_details(
+                        [{**details[0], "Config": {"Labels": invalid}}],
+                        revision="a" * 40, role=role,
+                    )
+
+    def test_source_revision_is_literal_in_both_generated_image_contexts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            template = root / "template"
+            template.write_text("FROM synthetic.invalid/base:fixed\n")
+            for role in ("api", "web"):
+                directory = root / role
+                directory.mkdir()
+                build_context.write_image_source(directory, template, "a" * 40, role)
+                self.assertEqual(
+                    json.loads((directory / "source-revision.json").read_text()),
+                    {"source_commit": "a" * 40, "image_role": role},
+                )
+                dockerfile = (directory / "Dockerfile").read_text()
+                self.assertIn(f'{build_context.REVISION_LABEL}="' + "a" * 40 + '"', dockerfile)
+                self.assertIn(f'{build_context.ROLE_LABEL}="{role}"', dockerfile)
+                self.assertNotIn("ARG", dockerfile)
+
+    def test_container_health_requires_scanner_and_database_readiness(self):
+        with patch.object(health, "scanner_ready") as scanner, patch.object(
+            health.urllib.request, "urlopen"
+        ) as http:
+            response = MagicMock(status=200)
+            http.return_value.__enter__.return_value = response
+            health.check("scanner")
+            http.assert_not_called()
+            health.check("api")
+            http.assert_called_once()
+            for reason in ("scanner-down", "scanner-stale"):
+                scanner.side_effect = RuntimeError(reason)
+                http.reset_mock()
+                for mode in ("scanner", "api"):
+                    with self.subTest(reason=reason, mode=mode), self.assertRaises(RuntimeError):
+                        health.check(mode)
+                http.assert_not_called()
+            scanner.side_effect = None
+            response.status = 503
+            with self.assertRaises(RuntimeError):
+                health.check("api")
+
+    def test_no_host_resources_or_public_api_upstream(self):
+        rendered = deploy.render(config())
+        compose = rendered["compose.json"]
+        self.assertEqual(compose["services"]["node"]["logging"], {"driver": "none"})
+        self.assertEqual(
+            compose["services"]["api"]["depends_on"]["scanner"]["condition"], "service_healthy"
+        )
+        for role in ("api", "scanner"):
+            self.assertEqual(
+                compose["services"][role]["healthcheck"]["test"],
+                ["CMD", "python", "-m", "ops.health", role],
+            )
+        for service in compose["services"].values():
+            self.assertNotIn("ports", service)
+            self.assertNotIn("container_name", service)
+            self.assertNotEqual(service.get("network_mode"), "host")
+            self.assertNotIn("privileged", service)
+            self.assertNotIn("cap_add", service)
+            self.assertNotIn("devices", service)
+        self.assertEqual(compose["networks"]["database"], {"internal": True})
+        self.assertNotIn("reverse_proxy", rendered["public.Caddyfile"])
+        public = compose["services"]["public"]
+        self.assertEqual(len(public["volumes"]), 2)
+        self.assertNotIn("env_file", public)
+        self.assertEqual(
+            rendered["node/serve.json"]["AllowFunnel"],
+            {"synthetic.example.ts.net:443": True},
+        )
+
+    def test_public_identity_is_consistent(self):
+        rendered = deploy.render(config())
+        public = rendered["android-public.json"]
+        env = rendered["compose.json"]["services"]["api"]["environment"]
+        self.assertEqual(
+            json.loads(env["SALLIMBOOK_WEBAUTHN_WEB_ORIGINS"]), [public["api_origin"]]
+        )
+        self.assertEqual(
+            json.loads(env["SALLIMBOOK_WEBAUTHN_NATIVE_ORIGINS"]),
+            [public["native_origin"]],
+        )
+        self.assertEqual(public["rp_id"], config()["fqdn"])
+        self.assertEqual(public["application_id"], deploy.APP_ID)
+        self.assertNotIn("=", public["native_origin"])
+
+    def test_invalid_deployments_rejected(self):
+        cases = [
+            ("api_image", "api:latest"),
+            ("web_image", "web:latest@sha256:" + "a" * 64),
+            ("fqdn", "https://example.ts.net"),
+            ("fqdn", "host.tail.ts.net:8443"),
+            ("project", "existing-project"),
+            ("runtime_directory", "/srv/../sallimbook-staging"),
+            ("version_code", True),
+            ("certificate_sha256", "placeholder"),
+            ("source_commit", "HEAD"),
+            ("unknown", "secret"),
+        ]
+        for key, value in cases:
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                deploy.render({**config(), key: value})
+
+    def test_output_is_new_and_checksums_cover_generated_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "rendered"
+            deploy.write_config(config(), output)
+            checks = json.loads((output / "checksums.json").read_text())
+            self.assertEqual(set(checks), set(deploy.render(config())))
+            for name, expected in checks.items():
+                self.assertEqual(backup.digest(output / name), expected)
+            with self.assertRaises(FileExistsError):
+                deploy.write_config(config(), output)
+
+
+def archive_bytes(members):
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w") as tar:
+        for name, data, kind in members:
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            member.type = kind
+            tar.addfile(member, io.BytesIO(data))
+    output.seek(0)
+    return output
+
+
+class BackupTests(unittest.TestCase):
+    def test_backup_rejects_overlapping_paths_before_any_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            documents = root / "documents"
+            documents.mkdir(mode=0o700)
+            nested = documents / "backups"
+            nested.mkdir(mode=0o700)
+            sibling = root / "backups"
+            sibling.mkdir(mode=0o700)
+            manifest = root / "deployment.json"
+            manifest.write_text(json.dumps(config()))
+            before = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
+            with (
+                patch.object(backup, "verify_tools"),
+                patch.object(backup, "service_environment") as service,
+                patch.object(backup.tempfile, "TemporaryDirectory") as workspace,
+            ):
+                for destination in (documents, nested, root, sibling / ".."):
+                    with self.subTest(destination=destination), self.assertRaisesRegex(
+                        backup.OperationError, "separate from document storage"
+                    ):
+                        backup.backup(
+                            root / "unused-service", documents, destination,
+                            "age1" + "a" * 58, "a" * 40, manifest,
+                        )
+                service.assert_not_called()
+                workspace.assert_not_called()
+                self.assertEqual(
+                    sorted(str(path.relative_to(root)) for path in root.rglob("*")), before
+                )
+                # Valid siblings pass the separation boundary. The existing real
+                # PostgreSQL/age integration exercises their complete backup path.
+                service.side_effect = RuntimeError("valid sibling boundary reached")
+                with self.assertRaisesRegex(RuntimeError, "valid sibling boundary reached"):
+                    backup.backup(
+                        root / "unused-service", documents, sibling,
+                        "age1" + "a" * 58, "a" * 40, manifest,
+                    )
+                workspace.assert_not_called()
+
+    def test_maximum_object_manifest_roundtrips_above_one_megabyte(self):
+        import hashlib
+
+        payload = b"synthetic opaque!"
+        objects = {
+            f"{index:032x}.sbdoc": {
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+            for index in range(backup.MAX_ENTRIES)
+        }
+        manifest = {
+            "format": 1,
+            "postgres_major": 18,
+            "objects": objects,
+            "database": {
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            },
+        }
+        encoded = backup.encode_manifest(manifest)
+        self.assertGreater(len(encoded), 1024 * 1024)
+        self.assertLessEqual(len(encoded), backup.MAX_MANIFEST_BYTES)
+        entries = [
+            ("manifest.json", encoded, tarfile.REGTYPE),
+            ("database.dump.age", payload, tarfile.REGTYPE),
+        ] + [("objects/" + name, payload, tarfile.REGTYPE) for name in objects]
+        with tempfile.TemporaryDirectory() as tmp:
+            backup.unpack_stream(archive_bytes(entries), Path(tmp))
+            self.assertEqual(backup.verify_inventory(Path(tmp)), manifest)
+        with self.assertRaises(backup.OperationError):
+            backup.encode_manifest({"too_large": "x" * backup.MAX_MANIFEST_BYTES})
+
+    def test_completion_receipt_is_exclusive_and_no_partial_survives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "receipt.json"
+            backup.publish_json(path, {"complete": True})
+            with self.assertRaises(FileExistsError):
+                backup.publish_json(path, {"complete": False})
+            self.assertEqual(json.loads(path.read_text()), {"complete": True})
+            self.assertEqual(list(Path(tmp).glob("*.partial")), [])
+
+    def test_reverification_receipts_preserve_previous_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            first = recovery.write_verification_receipt(directory, {"observed": "first"})
+            original = (directory / first["receipt"]).read_bytes()
+            second = recovery.write_verification_receipt(directory, {"observed": "second"})
+            self.assertNotEqual(first["verification_id"], second["verification_id"])
+            self.assertEqual((directory / first["receipt"]).read_bytes(), original)
+            self.assertEqual(json.loads((directory / second["receipt"]).read_text()), second)
+            self.assertEqual(len(list(directory.glob("recovery-check-*.json"))), 2)
+            self.assertEqual(list(directory.glob("*.partial")), [])
+
+    def test_tar_rejects_traversal_links_duplicate_unexpected_and_incomplete(self):
+        cases = [
+            [("../escape", b"x", tarfile.REGTYPE)],
+            [("objects/" + "a" * 32 + ".sbdoc", b"x", tarfile.SYMTYPE)],
+            [("manifest.json", b"{}", tarfile.REGTYPE)] * 2,
+            [("field-keyring.json", b"x", tarfile.REGTYPE)],
+            [("manifest.json", b"{}", tarfile.REGTYPE)],
+        ]
+        for members in cases:
+            with self.subTest(members=members), tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaises(backup.OperationError):
+                    backup.unpack_stream(archive_bytes(members), Path(tmp))
+
+    def test_unpack_and_verify_rejects_ciphertext_corruption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            dump = b"age-encryption.org/v1 synthetic encrypted payload"
+            obj = b"x" * 20
+            name = "a" * 32 + ".sbdoc"
+            import hashlib
+
+            manifest = {
+                "format": 1,
+                "postgres_major": 18,
+                "database": {
+                    "sha256": hashlib.sha256(dump).hexdigest(),
+                    "bytes": len(dump),
+                },
+                "objects": {
+                    name: {"sha256": hashlib.sha256(obj).hexdigest(), "bytes": len(obj)}
+                },
+            }
+            entries = [
+                ("manifest.json", json.dumps(manifest).encode(), tarfile.REGTYPE),
+                ("database.dump.age", dump, tarfile.REGTYPE),
+                ("objects/" + name, obj, tarfile.REGTYPE),
+            ]
+            backup.unpack_stream(archive_bytes(entries), work)
+            self.assertEqual(backup.verify_inventory(work), manifest)
+            (work / "objects" / name).write_bytes(b"y" * 20)
+            with self.assertRaises(backup.OperationError):
+                backup.verify_inventory(work)
+
+    def test_service_rejects_non_restore_database_and_injected_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "service.conf"
+            for contents in (
+                "[sallimbook]\ndbname=existing_prod\n",
+                "[sallimbook]\ndbname=sallimbook_prod\n",
+                "[sallimbook]\ndbname=sallimbook_a_restorecheck\noptions=-c search_path=public\n",
+            ):
+                path.write_text(contents)
+                path.chmod(0o600)
+                with self.assertRaises(backup.OperationError):
+                    backup.service_environment(path, restore=True)
+            path.write_text("[sallimbook]\ndbname=sallimbook_a_restorecheck\n")
+            with patch.dict(
+                os.environ, {"PGHOST": "unrelated-host", "PGOPTIONS": "malicious"}
+            ):
+                env, dbname = backup.service_environment(path, restore=True)
+            self.assertEqual(dbname, "sallimbook_a_restorecheck")
+            self.assertNotIn("PGHOST", env)
+            self.assertNotIn("PGOPTIONS", env)
+
+    def test_private_paths_refuse_symlink_hardlink_and_public_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "secret"
+            path.write_bytes(b"synthetic")
+            with self.assertRaises(backup.OperationError):
+                backup.private_file(path)
+            path.chmod(0o600)
+            link = Path(tmp) / "link"
+            link.symlink_to(path)
+            with self.assertRaises(backup.OperationError):
+                backup.private_file(link)
+            link.unlink()
+            os.link(path, link)
+            with self.assertRaises(backup.OperationError):
+                backup.private_file(path)
+
+    def test_copy_objects_rejects_unexpected_and_preserves_ciphertext(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            source = base / "source"
+            source.mkdir(mode=0o700)
+            name = "a" * 32 + ".sbdoc"
+            (source / name).write_bytes(b"opaque ciphertext" * 2)
+            (source / name).chmod(0o600)
+            inventory = backup.copy_objects(source, base / "target")
+            self.assertEqual(
+                (source / name).read_bytes(), (base / "target" / name).read_bytes()
+            )
+            self.assertEqual(inventory[name]["sha256"], backup.digest(source / name))
+            (source / "unexpected.key").write_bytes(b"synthetic")
+            with self.assertRaises(backup.OperationError):
+                backup.copy_objects(source, base / "other")
+
+
+class ReleaseTests(unittest.TestCase):
+    def test_source_snapshot_excludes_ignored_private_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+
+            def git(*args):
+                return subprocess.check_output(
+                    ["git", *args], cwd=root, stderr=subprocess.DEVNULL
+                )
+
+            git("init", "-q")
+            git("config", "user.email", "synthetic@example.invalid")
+            git("config", "user.name", "Synthetic")
+            (root / ".gitignore").write_text("private.env\n")
+            (root / "code.txt").write_text("reviewed source")
+            (root / "private.env").write_text("SYNTHETIC_PRIVATE_NOT_FOR_BUILD")
+            git("add", ".")
+            git("commit", "-qm", "synthetic")
+            commit = git("rev-parse", "HEAD").decode().strip()
+            with patch.object(build_context, "ROOT", root):
+                with build_context.source_snapshot(commit, Path(tmp)) as checkout:
+                    self.assertEqual(
+                        (checkout / "code.txt").read_text(), "reviewed source"
+                    )
+                    self.assertFalse((checkout / "private.env").exists())
+            with patch.dict(os.environ, {"VITE_PRIVATE_TOKEN": "synthetic"}):
+                self.assertNotIn(
+                    "VITE_PRIVATE_TOKEN", build_context.build_environment()
+                )
+
+    def make_apk(self, path, capacitor=None, dex=None):
+        with zipfile.ZipFile(path, "w") as zip:
+            zip.writestr("assets/capacitor.config.json", json.dumps(capacitor or {}))
+            zip.writestr(
+                "classes.dex",
+                dex
+                or (
+                    "https://"
+                    + config()["fqdn"]
+                    + ":8443 "
+                    + config()["certificate_sha256"]
+                    + " NativeVaultAcceptanceGate"
+                ).encode(),
+            )
+
+    def tool_output(self, command, **kwargs):
+        if command[1:3] == ["manifest", "application-id"]:
+            return deploy.APP_ID
+        if command[1:3] == ["manifest", "version-code"]:
+            return "2"
+        if command[1:3] == ["manifest", "version-name"]:
+            return "0.1.1"
+        if command[1:3] == ["manifest", "debuggable"]:
+            return "false"
+        if command[1:3] == ["manifest", "print"]:
+            return '<application android:allowBackup="false" android:usesCleartextTraffic="false"/>'
+        if command[1] == "verify":
+            return "Signer #1 certificate SHA-256 digest: " + "ab" * 32
+        return ""
+
+    def test_release_inspection_forbids_remote_navigation_proof_and_wrong_certificate(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as tmp:
+            apk = Path(tmp) / "synthetic.apk"
+            with (
+                patch.object(
+                    release,
+                    "tools",
+                    return_value={
+                        key: key for key in ("apksigner", "zipalign", "apkanalyzer")
+                    },
+                ),
+                patch.object(release, "run", side_effect=self.tool_output),
+            ):
+                self.make_apk(apk)
+                self.assertTrue(
+                    release.inspect_apk(apk, config(), tmp, signed=True)["signed"]
+                )
+                with zipfile.ZipFile(apk) as archive:
+                    valid_identity = archive.read("classes.dex")
+                for marker in (
+                    b"debugproof",
+                    b"SecurityProofActivity",
+                    b"CvcAcceptanceActivity",
+                    b"CvcAcceptanceFixtures",
+                    b"NativeVaultAcceptanceGate$Owner",
+                    b"SALLIMBOOK DEBUG CVC ACCEPTANCE V1",
+                    b"beginSyntheticCvcAcceptance",
+                    b"armSyntheticCvcWriteFailure",
+                    b"NativeVaultCvcAcceptanceTest",
+                ):
+                    with self.subTest(proof_marker=marker):
+                        self.make_apk(apk, dex=valid_identity)
+                        with zipfile.ZipFile(apk, "a") as archive:
+                            archive.writestr("classes2.dex", marker)
+                        with self.assertRaisesRegex(
+                            backup.OperationError, "proof-class exclusion"
+                        ):
+                            release.inspect_apk(apk, config(), tmp, signed=True)
+                for capacitor, dex in (
+                    ({"server": {"url": "https://remote.invalid"}}, None),
+                    ({"server": {"allowNavigation": ["*"]}}, None),
+                    ({"android": {"allowMixedContent": True}}, None),
+                ):
+                    self.make_apk(apk, capacitor, dex)
+                    with self.assertRaises(backup.OperationError):
+                        release.inspect_apk(apk, config(), tmp, signed=True)
+                self.make_apk(apk)
+                with self.assertRaises(backup.OperationError):
+                    release.inspect_apk(
+                        apk,
+                        {**config(), "certificate_sha256": ":".join(["CD"] * 32)},
+                        tmp,
+                        signed=True,
+                    )
+
+    def test_version_cannot_be_reused(self):
+        with self.assertRaises(backup.OperationError):
+            release.build(
+                config(),
+                Path("/none"),
+                Path("/none"),
+                Path("/none"),
+                Path("/none"),
+                "alias",
+                Path("/none"),
+                2,
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

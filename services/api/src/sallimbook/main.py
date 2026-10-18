@@ -11,6 +11,7 @@ from sallimbook.accounts.router import router as accounts_router
 from sallimbook.assets.comparison_router import router as asset_comparison_router
 from sallimbook.assets.month_router import router as asset_months_router
 from sallimbook.assets.router import router as assets_router
+from sallimbook.audit.router import router as audit_router
 from sallimbook.cards.router import router as cards_router
 from sallimbook.cashflow.payment_link_router import router as payment_links_router
 from sallimbook.cashflow.recurring_router import router as recurring_router
@@ -19,11 +20,14 @@ from sallimbook.config import Settings
 from sallimbook.core.database import REQUIRED_SCHEMA_REVISION, make_engine
 from sallimbook.core.errors import DomainError, ErrorResponse
 from sallimbook.core.http import install_http_contract
+from sallimbook.documents.router import router as documents_router
+from sallimbook.exports.router import router as exports_router
 from sallimbook.homecare.router import router as homecare_router
 from sallimbook.identity.passkeys.router import router as passkey_router
 from sallimbook.identity.router import router as identity_router
 from sallimbook.insurance.event_router import router as insurance_events_router
 from sallimbook.insurance.router import router as insurance_router
+from sallimbook.vault.router import router as vault_router
 
 
 class HealthResponse(BaseModel):
@@ -71,7 +75,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "X-CSRF-Token",
             "X-Step-Up-Token",
         ],
-        expose_headers=["X-Request-ID", "ETag", "Location"],
+        expose_headers=[
+            "X-Request-ID",
+            "ETag",
+            "Location",
+            "Content-Disposition",
+            "X-Export-ID",
+            "X-Export-SHA256",
+        ],
     )
 
     @app.get("/api/v1/health", response_model=HealthResponse, operation_id="getHealth")
@@ -113,6 +124,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(insurance_router)
     app.include_router(insurance_events_router)
     app.include_router(homecare_router)
+    app.include_router(audit_router)
+    app.include_router(exports_router)
+    app.include_router(documents_router)
+    app.include_router(vault_router)
 
     app.include_router(payment_links_router)
     return app

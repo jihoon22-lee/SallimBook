@@ -22,10 +22,35 @@ from sallimbook.core.errors import DomainError
 from sallimbook.core.types import SEOUL
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.service import utcnow
+from sallimbook.vault.models import CardSecretEnvelope, VaultState
+
+
+def has_current_secret(session: Session, card: Card) -> bool:
+    return (
+        session.scalar(
+            select(CardSecretEnvelope.id)
+            .join(
+                VaultState,
+                (VaultState.household_id == CardSecretEnvelope.household_id)
+                & (VaultState.current_key_version == CardSecretEnvelope.key_version),
+            )
+            .where(
+                CardSecretEnvelope.household_id == card.household_id,
+                CardSecretEnvelope.card_id == card.id,
+                CardSecretEnvelope.is_current.is_(True),
+                CardSecretEnvelope.ciphertext.is_not(None),
+            )
+        )
+        is not None
+    )
 
 
 def card_response(
-    session: Session, card: Card, *, account_statuses: Mapping[UUID, str] | None = None
+    session: Session,
+    card: Card,
+    *,
+    account_statuses: Mapping[UUID, str] | None = None,
+    secret_card_ids: set[UUID] | None = None,
 ) -> CardResponse:
     account_status = None
     if card.settlement_account_id is not None and account_statuses is not None:
@@ -48,9 +73,12 @@ def card_response(
         **{
             name: getattr(card, name)
             for name in CardResponse.model_fields
-            if name not in {"masked_number", "status", "settlement_account_status"}
+            if name not in {"masked_number", "status", "settlement_account_status", "has_secret"}
         },
         masked_number="**** " + card.last_four if card.last_four is not None else None,
+        has_secret=(card.id in secret_card_ids)
+        if secret_card_ids is not None
+        else has_current_secret(session, card),
         status="closed" if card.ended_on is not None else "active",
         settlement_account_status=account_status,
     )
@@ -116,6 +144,10 @@ def update_card(
     lock_asset_scope(session, principal)
     card = scoped_entity(session, Card, card_id, principal, for_update=True)
     require_version(card, if_match)
+    if "last_four" in payload.model_fields_set and has_current_secret(session, card):
+        raise DomainError(
+            "CARD_SECRET_PROTECTED", "카드 끝자리는 보관함에서 함께 수정해 주세요.", 409
+        )
     values = {name: getattr(card, name) for name in CardCreate.model_fields}
     try:
         candidate = CardCreate.model_validate(
@@ -213,6 +245,27 @@ def list_cards(
     if cursor is not None:
         query = query.where(Card.id < cursor)
     rows = list(session.scalars(query.order_by(Card.id.desc()).limit(limit + 1)))
+    page_ids = {row.id for row in rows[:limit]}
+    secret_card_ids = (
+        set(
+            session.scalars(
+                select(CardSecretEnvelope.card_id)
+                .join(
+                    VaultState,
+                    (VaultState.household_id == CardSecretEnvelope.household_id)
+                    & (VaultState.current_key_version == CardSecretEnvelope.key_version),
+                )
+                .where(
+                    CardSecretEnvelope.household_id == principal.household_id,
+                    CardSecretEnvelope.card_id.in_(page_ids),
+                    CardSecretEnvelope.is_current.is_(True),
+                    CardSecretEnvelope.ciphertext.is_not(None),
+                )
+            )
+        )
+        if page_ids
+        else set()
+    )
     account_ids = {
         row.settlement_account_id for row in rows[:limit] if row.settlement_account_id is not None
     }
@@ -235,7 +288,10 @@ def list_cards(
         }
     result = CardListResponse(
         items=[
-            card_response(session, row, account_statuses=account_statuses) for row in rows[:limit]
+            card_response(
+                session, row, account_statuses=account_statuses, secret_card_ids=secret_card_ids
+            )
+            for row in rows[:limit]
         ],
         next_cursor=rows[limit - 1].id if len(rows) > limit else None,
     )

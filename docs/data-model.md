@@ -181,11 +181,21 @@ stock_quantity는 movement 합계의 트랜잭션 내 캐시다. 정기 검증�
 | audit_events | actor_id, entity_type, entity_id, action, request_id, before_version?, after_version?, safe_diff, occurred_at | 비밀/토큰/문서 원문 제외; 일반 금액 정정은 권한 보호 |
 | idempotency_records | actor_id, operation, key, request_hash, response_reference, state, expires_at | unique(actor_id,operation,key); 다른 payload 재사용=409 |
 
-파일 업로드는 pending → 검증 → committed, 연결 도중 실패한 orphan은 보존 기간 뒤 정리한다.
+파일 업로드 상태는 pending → ready → deleted이며 검증 실패 시 pending을 유지한다.
+24시간이 지난 pending에는 업로드할 수 없다. 연결 없는 ready 문서는 명시적 삭제 전까지 보존하며,
+DB 참조 없는 암호문이나 삭제 뒤 24시간이 지난 암호문만 정리 명령의 대상이다.
 현재 감사 helper는 자원 ID·작업·행 버전·변경 필드명만 저장하며 사용자 입력값을 임의 dict로 받지 않는다.
 자산 생성·수정·종료·삭제와 감사 기록을 같은 트랜잭션에서 저장한다. FK 충돌 등으로 실패하면 감사 추가도 롤백한다.
 감사 행의 actor_id는 해당 가계의 사용자 복합 FK로 제한한다. 감사 조회 API는 후속 화면 연결에서 추가한다.
 가계가 다른 parent와 document를 연결할 수 없다.
+
+`0013_documents`는 documents/document_links와 같은 가계의 typed 복합 FK를 추가한다.
+문서 metadata·저장 완료 envelope는 변경할 수 없고 물리 삭제는 차단한다. 링크는 정확히 하나의
+대상만 가지며 같은 활성 연결은 유일하다. 링크 삽입은 문서 행을 잠가 동시 삭제와 직렬화한다.
+ready 전환에는 활성 링크가 필요하고 deleted 문서는 활성 링크를 가질 수 없다.
+링크 종료와 삭제 사유·시각은 보존하며 soft delete가 감사·원본 연결 이력을 없애지 않는다.
+저장소의 불투명 UUID 파일명, 키 버전, nonce, checksum과 저장 시각은 DB에서 관리한다.
+암호문 파일 생성과 DB commit 사이 장애는 전역 advisory lock을 쓰는 정리 작업으로 회수한다.
 
 ## 9. 핵심 관계도
 
@@ -286,3 +296,22 @@ consumable_replacements 다섯 테이블을 추가한다. 가전/소모품/동�
 가전·소모품·기기별 연결의 참조 없는 오등록 삭제는 허용한다. `0012_homecare`의 metadata
 trigger는 identity/version 갱신을 보호하고, 삭제 시 모든 참조를 RESTRICT FK로 검증한다.
 재고 원장과 교체 이력의 UPDATE/DELETE 금지는 유지하며 취소된 이력도 참조로 남는다.
+
+
+`0013_documents`의 `document_storage_reservations`는 파일 쓰기 전에 별도 commit하는
+가계·문서 복합 FK의 저장 용량 예약이다. API 트랜잭션 rollback 뒤에도 암호문 크기/개수는 유지된다.
+파일이 실제 제거된 뒤에만 released_at을 한 번 기록한다. 식별자/크기 변경과 예약 삭제는 금지하며
+현재 ready 문서는 해제되지 않은 동일 문서·크기의 예약을 반드시 참조한다.
+
+
+`0014_vault`는 vault_states/versions/memberships/nonce_reservations/key_checks/member_wrappings/
+recovery_wrappings/share_offers/rotation_cards/rotation_members와 card_secret_envelopes 11개 테이블을 추가한다.
+모든 연결은 가계 복합 FK이며 nonce는 가계·키 버전·용도를 보존하는 append-only 원장이다.
+각 암호문은 목적별 원장 FK와 유일 제약을 함께 가지며 salt 재사용도 가계 범위에서 거부한다.
+원본 manifest와 암호문 identity를 덮어쓰거나 삭제할 수 없다. 카드 비밀의 명시 폐기만 ciphertext=NULL,
+purged_at 기록을 허용하며 복구되지 않는다. 다른 이력/nonce는 유지한다.
+
+BEFORE guard는 가계 잠금과 수명주기/동결을 검사하고 deferred trigger는 commit 시 현재 key check,
+복구 wrapping, 1~2명 활성 구성원의 wrapping, 카드 last4 및 회전 원본 전체를 대조한다.
+불완전한 준비를 current로 바꾸는 SQL이나 공유 수락 없이 구성원을 활성화하는 SQL도 실패한다.
+카드의 일반 alias 편집은 가능하지만 비밀이 있는 카드의 last4는 비밀 저장과 원자적으로만 바뀐다.

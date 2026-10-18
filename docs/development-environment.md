@@ -14,16 +14,18 @@ Android UI 디버깅과 실기기 연결은 Windows Android Studio/ADB 또는 �
 | UI | React + TypeScript + Vite | Android/PC UI와 업무 로직 공유 |
 | 모바일 | Capacitor 8.x | 공통 UI에 네이티브 보안 기능 연결 |
 | 네이티브 | Kotlin, AndroidX Biometric, Keystore, Credential Manager | 시스템 인증과 암호키 접근 분리/결합 |
-| UI 도구 | Tailwind CSS, shadcn/ui | 반응형 폼·표·다이얼로그 |
-| 서버 상태 | TanStack Query | 조회·갱신·메모리 캐시 |
-| 입력 | React Hook Form, Zod | 일관된 입력 처리, 서버 검증과 계약 대조 |
-| 차트 | Recharts | 자산 추이, 접근 가능한 표 병행 |
+| UI 도구 | 공통 CSS·semantic HTML | 반응형 폼·표·다이얼로그 |
+| 서버 상태 | React hooks·공통 resource/command adapter | 현재 화면 조회·취소·버전 충돌 처리 |
+| 입력 | React 입력·생성 API 타입·도메인 검증 함수 | 서버가 최종 검증, 공통 fixture 대조 |
+| 차트 | SVG·금액 표 | 자산 추이와 정확한 원 단위 값 병행 |
 | API | FastAPI, SQLAlchemy 2, Alembic | 관계형 도메인과 버전 있는 DB |
 | DB | PostgreSQL | 정확한 금액·관계·트랜잭션 |
-| 패키지 도구 | pnpm, uv 제안 | JS/Python lockfile와 반복 가능한 설치 |
+| 패키지 도구 | pnpm, uv | JS/Python lockfile와 반복 가능한 설치 |
 | 배포 | Docker Compose + Caddy | 개인용 상시 서버의 단일 운영 구성 |
 
 프레임워크 이름은 확정 방향, 패치 버전은 구현 검증 후 고정이다.
+초기 문서의 UI 라이브러리 후보는 현재 manifest에 설치되지 않았다. 실제 구현과 검증 근거는
+[클라이언트 구현 결정](adr/client-implementation-and-tests.md)을 따른다.
 Capacitor 8 공식 자료는 Node 22 이상과 Android Studio 2025.2.1 이상을 안내하며,
 8.0 이행 예시에는 compile/target SDK 36이 제시되어 있다([S01, S02](references.md)).
 이를 '작성일 현재 모든 구성요소의 최신 버전'이라고 확대 해석하지 않는다.
@@ -88,6 +90,9 @@ Windows의 별도 checkout이 필요하면 Git으로 동기화하고 생성 파�
 SB-001은 기본 화면·프로세스 health·웹/Android 빌드, SB-002는 PostgreSQL·migration·공통 계약을 포함한다.
 개발 포트는 API 18741, Vite 18742, 웹 E2E 18743, 개발 DB 18744, 일회용 시험 DB 18745다.
 시험 DB는 데이터·WAL을 tmpfs에 두므로 확장된 migration/이력 회귀의 메모리 사용을 포함해 한도를 1 GiB로 둔다. 개발 DB 한도는 384 MiB로 유지한다.
+시험 DB에만 shared_buffers=64MB, max_wal_size=128MB, min_wal_size=32MB, checkpoint_timeout=30s를 적용한다.
+전체 migration 시험에서 기본 WAL 목표 1GiB가 컨테이너 메모리를 채워 backend OOM과 연결 종료를 일으킨 결과를 반영했다.
+fsync 등 내구성 설정은 유지한다. [PostgreSQL 18 WAL 설정](https://www.postgresql.org/docs/18/runtime-config-wal.html#RUNTIME-CONFIG-WAL-CHECKPOINTS)의 max_wal_size는 강제 상한이 아니므로 전체 실행에서 메모리와 OOM 여부도 확인한다.
 기존 서버를 종료하거나 점유 포트를 빼앗지 않는다.
 `scripts/setup_dev.py`는 기존 `.env`를 덮어쓰지 않고 새 파일에만 난수 개발 비밀번호를 저장한다(mode 0600).
 `pnpm db:up`과 `db:stop`은 Compose 프로젝트 `sallimbook-dev`의 `db` 서비스만 제어한다.
@@ -218,11 +223,34 @@ SB-019/SB-020 보험 서버의 합성 계약·암호화20개, API/권한/동시�
 키링은 증권번호 서버 필드 보호 시험에만 사용하며 기존 키나 신뢰 저장소를 바꾸지 않는다.
 구체적인 범위와 결과는 [보험 UI 검증 기록](testing/insurance-client.md)을 따른다.
 
-진료 트리 정렬 보완 뒤 보험 API27개와 Alembic drift/왕복 검사를 통과했다. 페이지 크기1·2·3에서 부모/자식·동순위 UUID·다른 사건 cursor·부모 이동을 확인하며 기존 계약/암호화20개·DB 보존4개와 함께 유지한다.
+SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 직접 DB 제약19, 기존 보험 API27·계약/암호화20·보존4). 실제 PostgreSQL에서 T-12~T-19/T-22, 금전 정정 중 실패의 전체 rollback, 동시 반환 한도, 멱등 재전송, 현재 청구 근거 정정과 과거 이력, 다른 가계/사건 차단, 읽기 전용 소득 투영과 스냅샷 불변을 확인했다. `uv run --project services/api python scripts/test_database.py services/api/tests/test_insurance_events.py services/api/tests/test_insurance_event_storage.py services/api/tests/test_insurance_core.py services/api/tests/test_insurance_contract.py services/api/tests/test_insurance_storage.py -q` 및 Alembic drift/왕복을 통과했고 전용 DB를 정지했다. 생성 API client·타입·전체 Ruff·문서 검사도 통과했다. 보험 화면은 별도 client 검증을 따르며 실기기 검증은 남아 있다.
 
-SB-021/SB-022의 보험 검증은 108개 통과했다(API/계산38, 이벤트 직접 DB 제약19, 기존 보험 API27·계약/암호화20·보존4). 실제 PostgreSQL에서 T-12~T-19/T-22, 금전 정정 중 실패의 전체 rollback, 동시 반환 한도, 멱등 재전송, 현재 청구 근거 정정과 과거 이력, 다른 가계/사건 차단, 읽기 전용 소득 투영과 스냅샷 불변을 확인했다. `uv run --project services/api python scripts/test_database.py services/api/tests/test_insurance_events.py services/api/tests/test_insurance_event_storage.py services/api/tests/test_insurance_core.py services/api/tests/test_insurance_contract.py services/api/tests/test_insurance_storage.py -q` 및 Alembic drift/왕복을 통과했고 전용 DB를 정지했다. 생성 API client·타입·전체 Ruff·문서 검사도 통과했다. 실기기 검증은 전체 기능 구현 뒤 수행한다.
+진료 트리 정렬 보완 뒤 보험 API27개와 Alembic drift/왕복 검사를 통과했다. 페이지 크기1·2·3에서 부모/자식·동순위 UUID·다른 사건 cursor·부모 이동을 확인하며 기존 계약/암호화20개·DB 보존4개와 함께 유지한다.
 
 SB-024~SB-027의 가전·재고 API 24개와 `0012_homecare`를 구현했다.
 관련 순수 계산/스키마 33개, 실제 PostgreSQL API 34개와 DB 불변식 15개, 총 82개 검사와
 migration drift 및 전체 downgrade/upgrade가 통과했다. 상세 범위는 [가전·재고 검증](testing/homecare-server.md)을 참고한다.
-웹·Android 화면과 가전 구매 문서 연결은 후속 통합 범위다.
+웹·Android 가전·재고·홈 화면은 별도 client 검증을 따르며 가전 구매 문서는 공통 첨부 패널에 연결했다.
+
+### 첨부 저장과 검사
+
+SB-023은 `SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY`의 절대 경로와 기존 외부 필드 keyring을 사용한다.
+검사 설정은 `SALLIMBOOK_DOCUMENT_SCANNER_SOCKET`, `SALLIMBOOK_DOCUMENT_TESSERACT_PATH`,
+`SALLIMBOOK_DOCUMENT_PDFTOPPM_PATH`이며 기본 미설정 상태는 업로드 503으로 실패한다.
+호스트에 도구를 임의 설치하거나 운영 키를 생성하지 않았다. 격리된 [실제 검사 도구 이미지](../infra/documents/README.md)와
+[서버 150개 검증](testing/documents-server.md)을 별도로 실행했다. 원문은 모두 합성 데이터다.
+정리 명령 `uv run --project services/api python scripts/cleanup_documents.py`는 기본 dry-run이다.
+검토 후 `--apply`를 명시하면 24시간이 지난 DB 미참조/삭제 암호문만 제거하며 metadata 이력은 유지한다.
+
+### 가전·재고·홈 화면 검증
+
+`pnpm --filter @sallimbook/client exec playwright test --config playwright.homecare.config.ts`는 전용 18755 포트를 사용한다.
+`uv run --project services/api python scripts/test_web_auth.py --homecare`는 기존 격리 HTTPS harness에서 실제 가전/재고/교체와 홈을 검사한다.
+Docker 시험 DB 시작·중지와 브라우저 검사를 병행하지 않는다. 구체적인 실행 결과는 [가전·재고 UI 검증](testing/homecare-client.md)을 따른다.
+
+### 첨부 문서 화면 검증
+
+`playwright.documents.config.ts`는 전용 18756 포트를 사용한다.
+`uv run --project services/api python scripts/test_web_auth.py --documents`는 실제 ClamAV/Poppler/Tesseract 고정 이미지와
+생산 parser를 사용하는 임시 검사 환경 및 실제 HTTPS API로 문서를 검증한다.
+도구 image를 미리 준비하고 DB/문서 도구 잠금을 조정한다. 실행 경계·결과는 [첨부 UI 검증](testing/documents-client.md)을 따른다.

@@ -194,6 +194,25 @@ internal object AuthPolicy {
     fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
         if (requestId == null || !uuid.matches(requestId)) return null
         val messages = mapOf(
+            "INVALID_CURSOR" to (400 to "페이지 기준을 다시 확인해 주세요."),
+            "INVALID_AUDIT_FILTER" to (422 to "감사 조회 조건과 기간을 확인해 주세요."),
+            "AUDIT_METADATA_INVALID" to (503 to "감사 기록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+            "INVALID_HOMECARE_DATE" to (422 to "실제 기록 날짜와 취소 날짜를 확인해 주세요."),
+            "APPLIANCE_IN_USE" to (409 to "연결 또는 사용 이력이 있는 가전입니다. 사용 종료로 보관해 주세요."),
+            "CONSUMABLE_IN_USE" to (409 to "연결 또는 재고 이력이 있는 소모품입니다. 사용 종료로 보관해 주세요."),
+            "APPLIANCE_CONSUMABLE_IN_USE" to (409 to "교체 이력이 있는 연결입니다. 연결을 비활성화해 보관해 주세요."),
+            "INVALID_HOMECARE_INPUT" to (422 to "가전·소모품의 입력 항목과 날짜·주기를 확인해 주세요."),
+            "APPLIANCE_UNAVAILABLE" to (422 to "사용 중인 가전을 선택해 주세요."),
+            "CONSUMABLE_UNAVAILABLE" to (422 to "사용 중인 소모품을 선택해 주세요."),
+            "APPLIANCE_CONSUMABLE_UNAVAILABLE" to (422 to "사용 중인 기기별 소모품 연결을 선택해 주세요."),
+            "CONSUMABLE_SKU_EXISTS" to (409 to "이미 등록된 규격입니다. 공용 재고를 확인해 주세요."),
+            "CONSUMABLE_UNIT_IN_USE" to (409 to "재고 이력이 있어 단위를 바꿀 수 없습니다."),
+            "APPLIANCE_CONSUMABLE_EXISTS" to (409 to "이미 연결된 소모품입니다. 기존 연결을 확인해 주세요."),
+            "INSUFFICIENT_STOCK" to (409 to "공용 재고가 부족합니다. 현재 재고를 확인해 주세요."),
+            "STOCK_LIMIT_EXCEEDED" to (422 to "허용 재고 수량을 초과합니다."),
+            "INVALID_STOCK_REVERSAL" to (422 to "취소 기록을 다시 취소할 수 없습니다."),
+            "STOCK_MOVEMENT_ALREADY_REVERSED" to (409 to "이미 취소된 재고 기록입니다."),
+            "REPLACEMENT_CANCEL_REQUIRED" to (409 to "기기별 교체 기록에서 취소해 주세요."),
             "RETURN_EXCEEDS_ALLOCATION" to (409 to "반환 합계가 원래 배분 금액을 초과합니다."),
             "INSURANCE_PAYOUT_HAS_RETURNS" to (409 to "활성 반환을 먼저 확인해 주세요."),
             "CLAIM_ALLOCATION_MISMATCH" to (422 to "청구와 같은 사건·보험계약을 선택해 주세요."),
@@ -290,7 +309,7 @@ internal object AuthPolicy {
             "ACCOUNT_NUMBER_NOT_SET" to (409 to "등록된 계좌번호가 없습니다."),
             "FIELD_ENCRYPTION_UNAVAILABLE" to (503 to "계좌번호 보호 설정을 확인해 주세요."),
             "ACCOUNT_NUMBER_UNAVAILABLE" to (503 to "계좌번호를 열 수 없습니다."),
-        )
+        ) + NativeDocumentPolicy.errorMessages
         val serverError = (body as? Map<*, *>)?.get("error") as? Map<*, *>
         val suppliedCode = serverError?.get("code") as? String
         val knownCode = suppliedCode?.takeIf { messages[it]?.first == status }
@@ -320,7 +339,8 @@ internal object AuthPolicy {
 /** Cancellation controls request lifetime only; it is not authentication evidence. */
 internal class ForegroundRequest {
     private var active = true
-    private var cancelNetwork: (() -> Unit)? = null
+    private val networkOwner = Any()
+    private val cancellation = mutableMapOf<Any, () -> Unit>()
     private var lockPolicy: AppLockPolicy? = null
     private var lockTicket: AppLockTicket? = null
     private var deviceUnlocked: (() -> Boolean)? = null
@@ -352,16 +372,23 @@ internal class ForegroundRequest {
         if (lockPolicy?.httpAllowed(ticket, method, path) != true) throw AuthFailure(AuthCode.APP_LOCKED)
     }
 
-    @Synchronized fun cancel() {
-        active = false
-        cancelNetwork?.invoke()
-        cancelNetwork = null
+    fun cancel() {
+        val actions = synchronized(this) {
+            active = false
+            cancellation.values.toList().also { cancellation.clear() }
+        }
+        actions.forEach { try { it() } catch (_: Exception) { /* Continue cancelling other owners. */ } }
     }
     @Synchronized fun isActive(): Boolean = active
-    @Synchronized fun bindNetworkCancellation(cancel: () -> Unit) {
-        if (active) cancelNetwork = cancel else cancel()
+    fun bindCancellation(owner: Any, cancel: () -> Unit) {
+        val cancelled = synchronized(this) {
+            if (active) { cancellation[owner] = cancel; false } else true
+        }
+        if (cancelled) cancel()
     }
-    @Synchronized fun releaseNetworkCancellation() { cancelNetwork = null }
+    @Synchronized fun releaseCancellation(owner: Any) { cancellation.remove(owner) }
+    fun bindNetworkCancellation(cancel: () -> Unit) = bindCancellation(networkOwner, cancel)
+    fun releaseNetworkCancellation() = releaseCancellation(networkOwner)
 
     @Synchronized fun <T> whileActive(action: () -> T): T {
         if (!active) throw AuthFailure(AuthCode.AUTH_CANCELLED)

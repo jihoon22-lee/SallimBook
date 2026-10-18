@@ -36,8 +36,8 @@ export const householdScreens: PlannedScreen[] = [
   {
     id: "UI-26", path: "/settings", title: "설정", group: "more",
     description: "두 계정이 함께 사용하는 가계와 기기를 관리하는 공간이에요.",
-    upcoming: "계정과 등록 기기는 아래 메뉴에서 관리할 수 있어요. 잠금·내보내기와 감사 이력은 준비하고 있어요.",
+    upcoming: "계정·기기·공동 가계·잠금·자료 내보내기·감사 이력과 클라이언트 버전을 확인해요.",
     parent: { to: "/more", label: "더보기" },
-    links: [{ to: "/settings/auth", label: "계정과 기기" }, { to: "/login", label: "로그인" }, { to: "/onboarding", label: "초대 등록" }, { to: "/vault", label: "보관함 안내" }],
+    links: [{ to: "/settings/auth", label: "계정과 기기" }, { to: "/exports", label: "자료 내보내기", description: "JSON·CSV와 선택 문서 ZIP" }, { to: "/settings/audit", label: "감사 이력", description: "현재 가계의 작업 기록" }, { to: "/login", label: "로그인" }, { to: "/onboarding", label: "초대 등록" }, { to: "/vault", label: "보관함 안내" }],
   },
 ];

@@ -9,6 +9,7 @@ import org.json.JSONTokener
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.Base64
+import java.util.UUID
 import java.util.concurrent.Executors
 
 /** This value is delivered exclusively to NativeAuthActivity, never an AuthOutcome or Intent. */
@@ -45,6 +46,11 @@ internal class NativeAuthSession private constructor(context: Context) {
 
     private val store by lazy { RefreshStore(app, origin.orEmpty()) }
     private val http by lazy { NativeAuthHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val auditHttp by lazy { NativeAuditHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val vaultHttp by lazy { NativeVaultHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val vaultLocal by lazy { NativeVaultStore.get(app) }
+    private val documentHttp by lazy { NativeDocumentHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
+    private val exportHttp by lazy { NativeExportHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     @Volatile private var accessToken: String? = null
     private var accessExpiresAt = 0L
 
@@ -67,10 +73,14 @@ internal class NativeAuthSession private constructor(context: Context) {
         if (!available) throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
     }
 
+    @Volatile var vaultGeneration = 0L
+        private set
+
     private fun clearLocal() {
+        vaultGeneration += 1
         accessToken = null
         accessExpiresAt = 0L
-        store.clear()
+        try { vaultLocal.clearAll() } finally { try { store.clear() } finally { appLock.lock() } }
     }
 
     private fun acceptTokens(body: Any?, gate: ForegroundRequest) {
@@ -91,10 +101,10 @@ internal class NativeAuthSession private constructor(context: Context) {
         }
     }
 
-    private fun access(gate: ForegroundRequest): String {
+    private fun access(gate: ForegroundRequest, requiredMillis: Long = 0): String {
         requireAvailable()
         gate.check()
-        accessToken?.let { if (SystemClock.elapsedRealtime() < accessExpiresAt) return it }
+        accessToken?.let { if (NativeAccessLifetime.usable(SystemClock.elapsedRealtime(),accessExpiresAt,requiredMillis)) return it }
         accessToken = null
         accessExpiresAt = 0L
         val refresh = store.takeForRotation() ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
@@ -104,12 +114,14 @@ internal class NativeAuthSession private constructor(context: Context) {
             val response = http.send("POST", "/api/v1/auth/native/refresh", gate, body = payload)
             if (response.status != 200) throw AuthFailure(AuthCode.SESSION_EXPIRED)
             acceptTokens(response.body, gate)
-            return accessToken ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
         } catch (failure: Exception) {
             clearLocal()
             if (failure is AuthFailure) throw failure
             throw AuthFailure(AuthCode.SESSION_EXPIRED)
         } finally { payload.remove("refresh_token") }
+        // A valid but unusually short server lease is retained, not mistaken for session revocation.
+        if (!NativeAccessLifetime.usable(SystemClock.elapsedRealtime(),accessExpiresAt,requiredMillis)) throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
+        return accessToken ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
     }
 
     fun getSession(gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) = execute(gate, callback) {
@@ -168,7 +180,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 authorize(gate, AppRequestKind.REAUTHENTICATE)
                 requireAvailable()
                 gate.check()
-                val token = access(gate)
+                val token = access(gate, NativeVaultAccess.REQUIRED_MILLIS)
                 payload = JSONObject().put("password", String(password))
                 password.fill('\u0000')
                 val response = http.send("POST", "/api/v1/auth/native/reauthenticate", gate,
@@ -316,6 +328,155 @@ internal class NativeAuthSession private constructor(context: Context) {
             else AuthPolicy.safeError(response.status, response.body, response.requestId)
                 ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         AuthOutcome.success(mapOf("status" to response.status, "body" to safe))
+    }
+
+    /** Fixed current-household audit read; raw audit values and credentials never enter bridge data. */
+    fun auditMetadata(arguments: JSONObject, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) = execute(gate, callback) {
+        requireAvailable()
+        val request=NativeAuditWire.prepare(http.jsonValue(arguments))
+        fun read(path:String):NativeHttpResponse {
+            val response=http.send("GET",path,gate,accessToken=access(gate))
+            if(response.status==401) clearLocal()
+            return response
+        }
+        fun failure(response:NativeHttpResponse)=AuthOutcome.success(mapOf("status" to response.status,"body" to
+            (AuthPolicy.safeError(response.status,response.body,response.requestId) ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE))))
+        val me=read("/api/v1/me")
+        if(me.status!=200) return@execute failure(me)
+        val before=NativeAuditWire.identity(me.body)
+        val response=auditHttp.send(request,access(gate,20_000L),gate)
+        if(response.status==401) clearLocal()
+        if(response.status!=200) return@execute failure(response)
+        val safe=NativeAuditWire.response(request,response.status,response.body)
+        val after=read("/api/v1/me")
+        if(after.status!=200) return@execute failure(after)
+        if(before!=NativeAuditWire.identity(after.body)) throw AuthFailure(AuthCode.ACCESS_DENIED)
+        AuthOutcome.success(mapOf("status" to 200,"body" to safe))
+    }
+
+    fun vaultMetadata(operation: VaultOperation, arguments: JSONObject, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) {
+        val command = try { NativeVaultUiPolicy.metadata(operation, http.jsonValue(arguments)) }
+            catch (_: Exception) { callback(AuthOutcome.failure(AuthCode.INVALID_REQUEST)); return }
+        vault(gate, {}, { connection ->
+            val snapshot = connection.snapshot()
+            val row = when (operation) {
+                VaultOperation.STATUS -> snapshot.status
+                VaultOperation.ROTATION_GET -> connection.rotation(snapshot, command.id!!)
+                VaultOperation.SHARES -> connection.call(command).also { page ->
+                    if ((page["items"] as List<*>).any { (it as Map<*, *>)["household_id"] != snapshot.householdId }) throw NativeVaultFailure("ACCESS_DENIED")
+                }
+                else -> throw NativeVaultFailure("INVALID_REQUEST")
+            }
+            // Re-project only these safe response types at the bridge boundary.
+            NativeVaultWire.response(command, 200, row)
+        }) { outcome ->
+            val value = outcome.value
+            if (outcome.code == null && value != null) callback(AuthOutcome.success(mapOf("status" to 200, "body" to value)))
+            else callback(AuthOutcome.failure(AuthCode.entries.firstOrNull { it.name == outcome.code } ?: AuthCode.ACCESS_DENIED))
+        }
+    }
+
+    /** Native-only task scope. Generic values never become a bridge AuthOutcome. */
+    fun <T> vault(gate: ForegroundRequest, discard: (T) -> Unit, task: (NativeVaultConnection) -> T,
+        callback: (NativeVaultOutcome<T>) -> Unit) {
+        executor.execute {
+            var result: T? = null
+            try {
+                authorize(gate); requireAvailable(); gate.check()
+                val connection = NativeVaultConnection(app.packageName, origin!!, { required -> access(gate,required) }, http, vaultHttp, gate, vaultLocal)
+                result = task(connection)
+                gate.check()
+                callback(NativeVaultOutcome(value = result))
+                result = null
+            } catch (failure: NativeVaultFailure) {
+                if (failure.code == "SESSION_EXPIRED") try { clearLocal() } catch (_: Exception) { }
+                callback(NativeVaultOutcome(code = failure.code))
+            } catch (failure: AuthFailure) { callback(NativeVaultOutcome(code = failure.code.name)) }
+            catch (failure: VaultCryptoFailure) { callback(NativeVaultOutcome(code = failure.code.name)) }
+            catch (_: Exception) { callback(NativeVaultOutcome(code = "ACCESS_DENIED")) }
+            finally { result?.let(discard) }
+        }
+    }
+
+    /** Native export response ownership never passes through AuthOutcome or the plugin bridge. */
+    fun exportArchive(selection: NativeExportSelection, gate: ForegroundRequest, callback: (NativeExportResponse) -> Unit) {
+        executor.execute {
+            var response: NativeExportResponse? = null
+            try {
+                authorize(gate); requireAvailable(); gate.check()
+                response = exportHttp.create(selection,access(gate,NativeExportBytes.TRANSFER_MILLIS+5_000),gate)
+                if(response.code=="SESSION_EXPIRED") { clearLocal(); throw AuthFailure(AuthCode.SESSION_EXPIRED) }
+                gate.check(); callback(response); response=null
+            } catch(failure:AuthFailure) { callback(NativeExportResponse(code=failure.code.name)) }
+            catch(_:Exception) { callback(NativeExportResponse(code="ACCESS_DENIED")) }
+            finally { response?.archive?.close() }
+        }
+    }
+
+    /** Native Activity alone supplies the confirmed file; never serialized into an AuthOutcome. */
+    fun uploadDocument(name: String, mime: String, target: Map<String, Any?>, confirmed: Boolean,
+        content: NativeDocumentBytes, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) {
+        executor.execute {
+            val outcome = try {
+                authorize(gate); requireAvailable(); gate.check()
+                val create = NativeDocumentPolicy.create(mapOf("original_name" to name, "mime_type" to mime,
+                    "size_bytes" to content.size, "checksum_sha256" to content.checksum, "target" to target,
+                    "contains_no_card_data" to confirmed), UUID.randomUUID().toString())
+                val created = http.send(create.method, create.path, gate, body = JSONObject(create.body!!), accessToken = access(gate),
+                    idempotencyKey = create.idempotencyKey, nativeDocumentCreate = true)
+                if (created.status != 201) documentFailure(created)
+                else {
+                    val reference = NativeDocumentPolicy.reference(created.body)
+                    val documentId = reference["id"] as String
+                    val uploaded = documentHttp.upload(documentId, "\"${reference["version"]}\"", UUID.randomUUID().toString(), content, access(gate), gate)
+                    if (uploaded.status != 200) documentFailure(uploaded)
+                    else {
+                        NativeDocumentPolicy.reference(uploaded.body, documentId)
+                        gate.check()
+                        AuthOutcome.success(mapOf("status" to "uploaded"))
+                    }
+                }
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.NETWORK_UNAVAILABLE) }
+            finally { content.close() }
+            callback(outcome)
+        }
+    }
+
+    /** Revalidates current metadata before authenticated download; content goes only to native UI. */
+    fun downloadDocument(expected: NativeDocumentInfo, gate: ForegroundRequest, callback: (AuthOutcome, NativeDocumentBytes?) -> Unit) {
+        executor.execute {
+            var content: NativeDocumentBytes? = null
+            val outcome = try {
+                authorize(gate); requireAvailable(); gate.check()
+                val documentId = expected.id
+                val request = FinancePolicy.prepare(FinanceOperation.GET_DOCUMENT, mapOf("documentId" to documentId))
+                val metadata = http.send(request.method, request.path, gate, accessToken = access(gate))
+                if (metadata.status != 200) documentFailure(metadata)
+                else {
+                    val info = NativeDocumentPolicy.info(FinancePolicy.response(FinanceOperation.GET_DOCUMENT, request, 200, metadata.body), documentId)
+                    if (info.name != expected.name || info.mime != expected.mime || info.size != expected.size || info.checksum != expected.checksum)
+                        throw AuthFailure(AuthCode.VERSION_CONFLICT)
+                    val result = documentHttp.download(info, access(gate), gate)
+                    if (result.response.status != 200) documentFailure(result.response)
+                    else {
+                        content = result.content ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
+                        gate.check()
+                        AuthOutcome.success(mapOf("status" to "downloaded"))
+                    }
+                }
+            } catch (failure: AuthFailure) { content?.close(); content = null; AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { content?.close(); content = null; AuthOutcome.failure(AuthCode.NETWORK_UNAVAILABLE) }
+            try { callback(outcome, content) } catch (_: Exception) { content?.close() }
+        }
+    }
+
+    private fun documentFailure(response: NativeHttpResponse): AuthOutcome {
+        if (response.status == 401) clearLocal()
+        val safe = AuthPolicy.safeError(response.status, response.body, response.requestId)
+            ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+        val error = safe["error"] as Map<*, *>
+        return AuthOutcome.success(mapOf("status" to "failed", "error_code" to error["code"]))
     }
 
     private fun accountNumberFailure(response: NativeHttpResponse): Nothing {

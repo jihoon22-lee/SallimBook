@@ -32,7 +32,55 @@ export type NativeAccountCreate = Omit<components["schemas"]["AccountCreate"], "
 export type NativeAccountPatch = Omit<components["schemas"]["AccountPatch"], "account_number">;
 export type NativeFinanceResponse<T> = { status: number; body: T | components["schemas"]["ErrorResponse"] | null };
 
+/** IDs and an action only; every protected input and result is native-owned. */
+export type NativeVaultEntry =
+  | { action: "manage" | "setup" | "register-device" | "change-password" | "recover" | "rotate" }
+  | { action: "view" | "edit" | "purge" | "cvc-view" | "cvc-edit" | "cvc-delete"; cardId: string }
+  | { action: "share" | "revoke-member"; memberId: string }
+  | { action: "accept-share" | "cancel-share"; offerId: string }
+  | { action: "resume-rotation" | "abort-rotation"; rotationId: string };
+
 export interface SallimBookAuth {
+  listAuditEvents(options: { query?: NonNullable<operations["listAuditEvents"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AuditListResponse"]>>>;
+  openVaultUI(options: NativeVaultEntry): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
+  getVaultStatus(): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultStatusResponse"]>>>;
+  listVaultShares(options: { query?: NonNullable<operations["listVaultShares"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultShareListResponse"]>>>;
+  getVaultRotation(options: { rotationId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultRotationResponse"]>>>;
+  deleteAppliance(options: { applianceId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  deleteConsumable(options: { consumableId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  deleteApplianceConsumable(options: { linkId: string; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  /** File bytes/URIs stay in native UI; createDocument is deliberately not a bridge command. */
+  createDocumentLink(options: { input: components["schemas"]["DocumentLinkCreate"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentMutationReference"]>>>;
+  endDocumentLink(options: { linkId: string; input: components["schemas"]["DocumentReason"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentMutationReference"]>>>;
+  listDocuments(options: { query?: NonNullable<operations["listDocuments"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentListResponse"]>>>;
+  getDocument(options: { documentId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentResponse"]>>>;
+  deleteDocument(options: { documentId: string; input: components["schemas"]["DocumentReason"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentMutationReference"]>>>;
+  listDocumentLinks(options: { documentId: string; query?: NonNullable<operations["listDocumentLinks"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DocumentLinkListResponse"]>>>;
+  uploadDocumentUI(options: { target: components["schemas"]["DocumentTarget"] }): Promise<NativeAuthResult<{ status: "uploaded" | "cancelled" }>>;
+  downloadDocumentUI(options: { documentId: string }): Promise<NativeAuthResult<{ status: "downloaded" | "cancelled" }>>;
+  exportArchiveUI(options: { input: components["schemas"]["ExportRequest"] }): Promise<NativeAuthResult<{ status: "exported" | "cancelled" }>>;
+  /** Homecare metadata; stock If-Match and immutable receipt versions belong to the consumable. */
+  listApplianceConsumables(options: { query?: NonNullable<operations["listApplianceConsumables"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableListResponse"]>>>;
+  createApplianceConsumable(options: { input: components["schemas"]["ApplianceConsumableCreate"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableResponse"]>>>;
+  getApplianceConsumable(options: { linkId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableResponse"]>>>;
+  updateApplianceConsumable(options: { linkId: string; input: components["schemas"]["ApplianceConsumablePatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceConsumableResponse"]>>>;
+  listConsumableReplacements(options: { linkId: string; query?: NonNullable<operations["listConsumableReplacements"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ReplacementListResponse"]>>>;
+  createConsumableReplacement(options: { linkId: string; input: components["schemas"]["ReplacementCreate"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  getConsumableReplacement(options: { linkId: string; replacementId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ReplacementResponse"]>>>;
+  cancelConsumableReplacement(options: { linkId: string; replacementId: string; input: components["schemas"]["StockCancellation"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  listAppliances(options: { query?: NonNullable<operations["listAppliances"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceListResponse"]>>>;
+  createAppliance(options: { input: components["schemas"]["ApplianceInput"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceResponse"]>>>;
+  getAppliance(options: { applianceId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceResponse"]>>>;
+  updateAppliance(options: { applianceId: string; input: components["schemas"]["AppliancePatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ApplianceResponse"]>>>;
+  listConsumables(options: { query?: NonNullable<operations["listConsumables"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableListResponse"]>>>;
+  createConsumable(options: { input: components["schemas"]["ConsumableInput"] }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableResponse"]>>>;
+  getConsumable(options: { consumableId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableResponse"]>>>;
+  updateConsumable(options: { consumableId: string; input: components["schemas"]["ConsumablePatch"]; ifMatch: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableResponse"]>>>;
+  listStockMovements(options: { consumableId: string; query?: NonNullable<operations["listStockMovements"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMovementListResponse"]>>>;
+  createStockMovement(options: { consumableId: string; input: components["schemas"]["StockMovementCreate"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  getStockMovement(options: { consumableId: string; movementId: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMovementResponse"]>>>;
+  cancelStockMovement(options: { consumableId: string; movementId: string; input: components["schemas"]["StockCancellation"]; ifMatch: string; idempotencyKey: string }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>>;
+  getHomecareStatus(options: { query?: NonNullable<operations["getHomecareStatus"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["HomecareStatusResponse"]>>>;
   /** Safe status only. Unlock is controlled exclusively by the native screen. */
   getAppLock(): Promise<NativeAuthResult<{ locked: boolean }>>;
   lockApp(): Promise<NativeAuthResult<{ locked: true }>>;

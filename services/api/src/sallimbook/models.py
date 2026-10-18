@@ -16,6 +16,7 @@ from sallimbook.cashflow.recurring_models import (
 )
 from sallimbook.core.audit import AuditEvent
 from sallimbook.core.idempotency import IdempotencyRecord
+from sallimbook.documents.models import Document, DocumentLink, DocumentStorageReservation
 from sallimbook.homecare.models import (
     Appliance,
     ApplianceConsumable,
@@ -55,8 +56,33 @@ from sallimbook.insurance.models import (
     MedicalNode,
     PolicyPremiumLink,
 )
+from sallimbook.vault.models import (
+    CardSecretEnvelope,
+    VaultKeyCheck,
+    VaultMembership,
+    VaultMemberWrapping,
+    VaultNonceReservation,
+    VaultRecoveryWrapping,
+    VaultRotationCard,
+    VaultRotationMember,
+    VaultShareOffer,
+    VaultState,
+    VaultVersion,
+)
 
 __all__ = [
+    "CardSecretEnvelope",
+    "VaultKeyCheck",
+    "VaultMemberWrapping",
+    "VaultMembership",
+    "VaultNonceReservation",
+    "VaultRecoveryWrapping",
+    "VaultRotationCard",
+    "VaultRotationMember",
+    "VaultShareOffer",
+    "VaultState",
+    "VaultVersion",
+
     "Appliance",
     "Consumable",
     "ApplianceConsumable",
@@ -90,6 +116,9 @@ __all__ = [
     "Card",
     "CashRecord",
     "CashRecordRevision",
+    "Document",
+    "DocumentLink",
+    "DocumentStorageReservation",
     "FinancialAccount",
     "FixedSettlement",
     "Household",

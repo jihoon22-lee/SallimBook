@@ -2,11 +2,11 @@
 
 **부부가 함께 관리하는 자산과 생활의 기록. Android 앱을 중심으로, 같은 내용을 PC 웹에서도.**
 
-문서 기준일: **2026-10-17** · 목표 릴리스: **v1.0.0** · 현재 상태: **M1 공동 인증 구현 진행**
+문서 기준일: **2026-10-18** · 목표 릴리스: **v1.0.0** · 현재 상태: **전체 기능 통합·운영 검증 진행, 0.x 개발 빌드**
 
-> React 웹·Android 개발 빌드, FastAPI health/readiness API, PostgreSQL 기반과 생성 TS client가 추가되었습니다.
-> 26개 화면 경로와 모바일 탭·PC 사이드바, 부부 계정·초대·세션·기기 관리가 추가되었습니다. 금융·보험·재고·보관함의 업무 동작은 후속 Issue에서 구현합니다.
-> 개발 APK와 기본 빌드 성공은 v1 기능·보안·실기기 인수 완료를 뜻하지 않습니다.
+> 자산·계좌·카드·수입·고정 납부·보험·가전/소모품의 수동 입력과 이력, 비공개 문서, 보관함, 사용자 내보내기, 설정·감사 조회를 웹/Android에 연결했습니다.
+> 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. [최종 통합 검증 기록](docs/testing/final-integration.md)과 [요구사항 추적표](docs/requirements-traceability.md)에 근거를 연결합니다.
+> 두 Galaxy의 보안·업데이트 인수와 실제 사설망 운영은 남아 있습니다. CVC는 실기기 보안 검증과 사용자 선택 전까지 비활성화하며, v1.0.0 출시로 표시하지 않습니다.
 
 ## 무엇을 만드는가
 
@@ -42,13 +42,14 @@
 |---|---|
 | 공통 화면 | React + TypeScript + Vite |
 | Android | Capacitor 8 계열 + Kotlin 네이티브 보안 모듈 |
-| UI/상태/입력 | Tailwind CSS, shadcn/ui, TanStack Query, React Hook Form, Zod, Recharts |
+| UI/상태/입력 | 공통 CSS·React hooks·생성 API 타입, SVG 추이와 접근 가능한 표 |
 | API | Python + FastAPI, SQLAlchemy 2, Alembic |
 | 데이터 | PostgreSQL, 인증된 비공개 첨부파일 저장소 |
 | 운영 | Docker Compose + Caddy + HTTPS |
-| 검증 | pytest, Vitest, Playwright, Android 단위·계측·실기기 테스트 |
+| 검증 | pytest, Python unittest, Playwright, Kotlin JVM·Android 계측/실기기 인수 |
 
 정확한 패치 버전은 호환성을 검증한 후 lockfile에 고정합니다.
+초기 UI 도구 후보와 실제 설치된 구현의 차이는 [클라이언트 구현 결정](docs/adr/client-implementation-and-tests.md)에 기록합니다.
 선정 근거와 현재 공식 문서는 [기술·환경 문서](docs/development-environment.md)와 [참고 자료](docs/references.md)에 있습니다.
 
 ## 문서 읽는 순서
@@ -67,6 +68,7 @@
 | [보험 사건 흐름](docs/insurance-workflows.md) | 진료 트리와 청구·지급 정산 예시 |
 | [테스트·인수 기준](docs/testing-and-acceptance.md) | 계산 예제와 보안 실패 테스트 |
 | [운영·백업](docs/deployment-backup-operations.md) | 배포, 복구, APK 서명·업데이트 |
+| [운영 도구 실행](docs/operations-runbook.md) | 격리 배포 설정, 암호화 백업·복원, 서명 APK 도구 |
 | [마일스톤](docs/roadmap-and-milestones.md) | v1 개발 순서와 완료 조건 |
 | [전체 문서 안내](docs/README.md) | 나머지 설계·결정·추적표 |
 
@@ -102,6 +104,13 @@ pnpm --filter @sallimbook/client exec playwright install chromium
 pnpm test:web  # 전용 시험 포트 18743, 다른 실행 중인 서버를 재사용하지 않음
 uv run --project services/api python scripts/test_web_auth.py  # 실제 HTTPS + 격리 PostgreSQL 인증
 ```
+
+실제 HTTPS 업무 검증은 같은 명령에 `--passkeys`, `--finance`, `--months`, `--comparison`,
+`--cashflow`, `--insurance`, `--homecare`, `--documents`, `--exports`, `--audit`, `--vault` 중
+하나를 붙여 실행합니다. 각 명령은 합성 계정·일회용 schema를 만들고 종료 시 제거합니다.
+문서·내보내기는 고정 이미지의 파일 검사 도구도 실행합니다. 공유 테스트 DB는 동시 실행을
+거부합니다. 브라우저 시험 중 다른 Docker 네트워크를 만들거나 제거하면 Chromium의 네트워크
+변경 오류가 발생할 수 있으므로 전체 웹 시험과 컨테이너 시작·종료를 순차로 실행합니다.
 
 Android는 WSL의 SDK와 JDK를 명시적으로 선택합니다.
 
