@@ -283,3 +283,30 @@ python -m unittest discover -s tests/operations -v
 
 이 회귀 자체는 실제 Docker나 고객 DB를 실행하지 않는다. 운영 고정 checkout/config는 제자리 수정하지
 않고 검토된 새 운영 소스로 전환해야 한다. 이전 실패의 격리 볼륨과 장부는 보존한다.
+
+### 실제 명령행 재검증 — 2026-10-18
+
+앱 배포 소스 `fb16191f2613bf757aadb2e50a651f5be08fdb61`(0.1.3/versionCode 4)은 유지하고,
+운영 코드는 새 고정 checkout `a69d3abc5557b7140f193b86ae12c8b63b4d9f0a`로 분리했다.
+새 설정의 SHA-256은 `d028dd57d3004589049be7cd572c81220dee58d3b1740330560d5a82a0e5790d`다.
+기존 자격 파일을 사용했으며 새 state/backup/restore/build 경로를 준비했다. 기존 백업·실패 볼륨·
+장부·운영 checkout을 덮어쓰지 않았다. 모든 작업은 실제 `python -m ops.automation`으로 실행했다.
+
+| 작업 | UTC 완료 시각 | 결과·소요 시간 |
+| --- | --- | --- |
+| startup | 04:50:51 | 6개 서비스와 실제 scanner 정상, 6.486초 |
+| backup | 04:50:53 | 암호화 archive 재해시·별도 장부·ack 완료, 1.821초 |
+| restore-check | 04:50:58 | 실제 백업의 새 격리 DB 복원·무결성 확인, 5.543초 |
+| health | 04:51:00 | 서비스·scanner·최근 백업·저장소 여유 확인, 2.218초 |
+| cvd-refresh | 04:51:06 | 실제 서명 DB가 4일 미만이므로 `refresh-not-due`, 5.514초 |
+
+복원 run `b06d18e4-df9f-4bf3-8642-55cbfc5b17f8`의 별도 `restore-integrity.json`에서 schema,
+table_counts, objects, field_ciphertexts 네 검사가 모두 true임을 재확인했다. 원문 데이터·행 수·
+복호화 값은 보고하지 않았다. 완료한 임시 DB 볼륨·컨테이너·네트워크는 소유를 대조해 정리했다.
+이는 서버 백업 무결성 확인이며 사용자의 보관함 키 복구나 실제 두 기기 인수를 뜻하지 않는다.
+
+수정 전 표준 CLI의 두 실패와 import형 진단의 성공은 함께 보존했다. 첫 DB 준비 실패에서 종료되는
+증상을 실제 subprocess 회귀로 재현한 뒤 수정했으므로 단순 재시도로 해결됐다고 기록하지 않는다.
+CVD 갱신 경로의 이번 실행은 신선도에 따른 보류 확인이며 새 다운로드·이미지 승격 성공이 아니다.
+이 표는 수동 명령행 검증 기록이다. 예약 활성화와 재시작의 최신 운영 기록은
+[최종 추적 Issue #49](https://github.com/jihoon22-lee/SallimBook/issues/49)에 연결한다.
