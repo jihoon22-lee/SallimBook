@@ -375,6 +375,37 @@ class RuntimeBoundaries(unittest.TestCase):
             item.remove_container("existing-server")
         docker.assert_not_called()
 
+    def test_lost_backup_response_is_recoverable_even_after_container_cleanup(self):
+        item = self.make_runtime()
+        item.journal.task = "backup"
+        started = auto.read_json(item.journal.directory / "started.json")
+        started["task"] = "backup"
+        private(item.journal.directory / "started.json", started)
+        with (
+            patch.object(item, "database_network", return_value="synthetic-network"),
+            patch.object(item, "worker", side_effect=auto.AutomationError("COMMAND_TIMEOUT")),
+        ):
+            with self.assertRaisesRegex(auto.AutomationError, "COMMAND_TIMEOUT"):
+                item.backup()
+        item.journal.finish(status="failed", error="COMMAND_TIMEOUT")
+        pending = auto.unfinished_runs(self.config)
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0][1]["run_id"], item.journal.run_id)
+        recovery = self.make_runtime()
+        with (
+            patch.object(
+                recovery,
+                "worker",
+                return_value={"status": "backup-verified", "backup": {"id": "synthetic"}},
+            ),
+            patch.object(recovery, "register_backup") as register,
+            patch.object(recovery, "acknowledge_backup") as ack,
+        ):
+            recovery.recover(pending)
+        register.assert_called_once_with({"id": "synthetic"})
+        ack.assert_called_once_with({"id": "synthetic"}, run_id=item.journal.run_id)
+        self.assertTrue((item.journal.directory / "recovered.json").exists())
+
     def test_cleanup_failure_keeps_recovery_marker(self):
         item = self.make_runtime()
         with (

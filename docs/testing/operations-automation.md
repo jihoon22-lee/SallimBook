@@ -96,7 +96,9 @@ python -m ops.schedule activate /PRIVATE/schedule-v001
 `install`은 사용자 unit 검색 경로의 기존 같은 이름 파일/drop-in/활성 링크가 있으면 거부한다. 새 9개
 파일만 배타적으로 생성하고 `daemon-reload`한다. 서비스나 타이머를 시작하지 않는다. `activate`는 설치
 파일이 그대로인지 다시 확인하고 전용 startup 1개와 timer 4개만 `enable --now`한다. 부분 실패 시 이번에
-시도한 전용 unit만 disable/stop하며 Compose 데이터·볼륨·이미지를 삭제하지 않는다.
+시도한 전용 unit만 disable/stop하며 한 unit의 정리가 실패해도 나머지 모두 정리를 시도한다.
+`activation-failed.json`에 각 정리 결과와 남은 unit을 기록한다. 원인을 해결한 뒤 명시적 `activate`를
+재시도할 수 있다. Compose 데이터·볼륨·이미지를 삭제하지 않는다.
 
 startup의 SDK/APK preflight를 통과해야 나머지 예약 서비스가 시작된다. 이미 준비한 앱 배포가 바뀌면
 기존 baseline 설정과 충돌하므로 최종 배포 후 해당 manifest에 연결한다. 새 앱 소스로 운영 설정을
@@ -151,7 +153,8 @@ python -m ops.automation run /PRIVATE/automation.json --sha256 CONFIG_SHA256 --t
 ```
 
 복구는 장부에 기록된 소유 컨테이너/네트워크만 정리하며 실패 복원 볼륨을 지우지 않는다. 백업 완료
-표시가 있으면 실제 archive 해시를 재검증해 장부를 보완한다. 표시가 없거나 partial 파일만 있으면 성공
+표시가 있으면 실제 archive 해시를 재검증해 장부를 보완한다. worker가 완료 표시를 쓴 뒤 응답을
+잃은 경우도 복구 대상으로 유지하며, 컨테이너 정리 성공만으로 백업 미생성을 추정하지 않는다. 표시가 없거나 partial 파일만 있으면 성공
 백업으로 기록하지 않고 새 백업은 새 UUID를 사용한다. 형식/해시가 틀린 표시는 자동 무시하지 않는다.
 명령 실패 로그에는 고정 오류 코드만 출력한다. journal 원문에 비밀이 포함된 외부 명령 stderr를 남기지
 않는다. 비정상 설치로 남은 unit은 byte hash를 대조해 운영자가 정리해야 하며 재설치가 덮어쓰지 않는다.

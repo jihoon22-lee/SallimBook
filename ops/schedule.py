@@ -11,8 +11,10 @@ from ops.automation import (
     ROOT,
     AutomationError,
     Runner,
+    atomic_json,
     canonical_path,
     load_config,
+    now_text,
     read_json,
     verify_operator_source,
 )
@@ -139,7 +141,12 @@ def validate(directory, *, runner=None):
     ):
         raise AutomationError("SCHEDULE_IDENTITY")
     expected = units(config, record["configuration"], record["configuration_sha256"])
-    allowed = set(expected) | {"schedule.json", "installation.json", "activation.json"}
+    allowed = set(expected) | {
+        "schedule.json",
+        "installation.json",
+        "activation.json",
+        "activation-failed.json",
+    }
     if (
         set(record["files"]) != set(expected)
         or set(path.name for path in directory.iterdir()) - allowed
@@ -271,8 +278,28 @@ def activate(directory, *, runner=None):
             },
         )
     except Exception:
+        failed, completed = [], []
         for name in reversed(enabled):
-            runner.run(["/usr/bin/systemctl", "--user", "disable", "--now", name], timeout=30)
+            try:
+                runner.run(["/usr/bin/systemctl", "--user", "disable", "--now", name], timeout=30)
+                completed.append(name)
+            except Exception:
+                failed.append(name)
+        atomic_json(
+            directory / "activation-failed.json",
+            {
+                "format": 1,
+                "status": "activation-failed",
+                "project": config["project"],
+                "recorded_at": now_text(),
+                "attempted_units": enabled,
+                "rollback_completed": completed,
+                "rollback_failed": failed,
+                "installation_sha256": digest(directory / "installation.json"),
+            },
+        )
+        if failed:
+            raise AutomationError("ACTIVATION_ROLLBACK_INCOMPLETE") from None
         raise
     return {"status": "activated", "units": active}
 

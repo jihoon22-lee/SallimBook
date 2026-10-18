@@ -125,6 +125,33 @@ class ScheduleTests(unittest.TestCase):
         )
         self.assertFalse((self.directory / "activation.json").exists())
 
+    def test_failed_disable_does_not_skip_remaining_rollback_and_is_recorded(self):
+        schedule.install(self.directory, runner=self.runner)
+        original = self.runner.run.side_effect
+
+        def command(args, **kwargs):
+            if ("enable" in args and "health.timer" in args[-1]) or (
+                "disable" in args and "health.timer" in args[-1]
+            ):
+                self.calls.append(args)
+                raise automation.AutomationError("COMMAND_FAILED")
+            return original(args, **kwargs)
+
+        self.runner.run.side_effect = command
+        with self.assertRaisesRegex(automation.AutomationError, "ACTIVATION_ROLLBACK_INCOMPLETE"):
+            schedule.activate(self.directory, runner=self.runner)
+        disabled = [call[-1] for call in self.calls if "disable" in call]
+        prefix = self.config["project"] + "-"
+        self.assertEqual(
+            disabled, [prefix + "health.timer", prefix + "backup.timer", prefix + "startup.service"]
+        )
+        failure = automation.read_json(self.directory / "activation-failed.json")
+        self.assertEqual(failure["rollback_failed"], [prefix + "health.timer"])
+        self.assertEqual(
+            failure["rollback_completed"], [prefix + "backup.timer", prefix + "startup.service"]
+        )
+        self.assertFalse((self.directory / "activation.json").exists())
+
     def test_manifest_cannot_introduce_arbitrary_unit(self):
         path = self.directory / "schedule.json"
         value = json.loads(path.read_text())

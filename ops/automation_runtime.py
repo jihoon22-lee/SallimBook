@@ -325,28 +325,33 @@ class Runtime:
 
     def backup(self):
         runtime = Path(self.manifest["runtime_directory"])
-        result = self.worker(
-            "backup",
-            network=self.database_network(),
-            mounts=[
-                self.mount(self.config["backup_service_file"], "/run/private/backup-service.conf"),
-                self.mount(
-                    self.config["backup_recipient_file"], "/run/private/backup-recipient.txt"
-                ),
-                self.mount(runtime / "documents", "/srv/documents"),
-                self.mount(self.config["backup_directory"], "/srv/backups", readonly=False),
-                self.mount(
-                    Path(self.binding["directory"]) / "deployment.json", "/run/deployment.json"
-                ),
-            ],
-        )
-        if result.get("status") != "backup-verified":
-            raise AutomationError("BACKUP_FAILED")
         try:
+            result = self.worker(
+                "backup",
+                network=self.database_network(),
+                mounts=[
+                    self.mount(
+                        self.config["backup_service_file"], "/run/private/backup-service.conf"
+                    ),
+                    self.mount(
+                        self.config["backup_recipient_file"], "/run/private/backup-recipient.txt"
+                    ),
+                    self.mount(runtime / "documents", "/srv/documents"),
+                    self.mount(self.config["backup_directory"], "/srv/backups", readonly=False),
+                    self.mount(
+                        Path(self.binding["directory"]) / "deployment.json", "/run/deployment.json"
+                    ),
+                ],
+            )
+            if result.get("status") != "backup-verified":
+                raise AutomationError("BACKUP_FAILED")
             self.register_backup(result["backup"])
             self.acknowledge_backup(result["backup"])
         except Exception:
-            self.journal.phase("needs-recovery", reason="backup-anchor-ack")
+            # A worker can finish the archive/marker and lose its response.
+            # Successful container cleanup does not prove that no backup exists.
+            if not (self.journal.directory / "needs-recovery.json").exists():
+                self.journal.phase("needs-recovery", reason="backup-outcome-or-ack-uncertain")
             raise
         return result
 
