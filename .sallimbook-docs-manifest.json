@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "45823ed8c5feefbdcf26d192189d9b21ca793a3223821dded83a2e61e50ce0d1",
-      "git_sha1": "a838efff848c201c1240c3fbfc24b2b197d3dace"
+      "sha256": "056080fa2c38af01c13128a0ff06db5a78b8929a996340fc89f06bc1f8164c54",
+      "git_sha1": "bbdf27c7f2833f9fdb91384445759e54bb360289"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -126,8 +126,8 @@
       "git_sha1": "55259ff24ebf33dd439b2d646f59771442602058"
     },
     "docs/README.md": {
-      "sha256": "0c83aa9d09c39402e33bea238e73982f73a731683819155673bc021fd8f79f2c",
-      "git_sha1": "d90a82ccc8b8ab8535c3763bbf5e1631b9027514"
+      "sha256": "1cca27d3caa8791595cef79746e3df57907aafb868f6b1b03268a03457f3f4d0",
+      "git_sha1": "f07153275ade38a953c439d285f65fecd249d622"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -356,6 +356,14 @@
     "docs/testing/mobile-onboarding.md": {
       "sha256": "f36d245dcebcf2c1e42f82283512f3ac77b8b34aa0f97ca38ffea548f393b45b",
       "git_sha1": "4f6016a381cf181ba0930f5811d7bec8c2ec3a94"
+    },
+    "docs/testing/android-cloud-handoff.md": {
+      "sha256": "9445067e8e52839a670aae0bb1e34a283e95cccb24d8ece524c8791d6742bd92",
+      "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
+    },
+    "docs/v1-completion-plan.md": {
+      "sha256": "5f9678ba1f5b9f53498ee7c3795f9bd05e80a02e83985a297969e910ea24c224",
+      "git_sha1": "75c0f606bca14ce28200fe0f90c5920415094313"
     }
   }
 }

@@ -8,6 +8,9 @@
 > 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. [최종 통합 검증 기록](docs/testing/final-integration.md)과 [요구사항 추적표](docs/requirements-traceability.md)에 근거를 연결합니다.
 > 두 Galaxy의 보안·업데이트와 운영 백업/복원·재시작 인수는 남아 있습니다. CVC는 실기기 보안 검증과 사용자 선택 전까지 비활성화하며, v1.0.0 출시로 표시하지 않습니다.
 
+남은 작업은 [v1 잔여 실행 계획](docs/v1-completion-plan.md), 클라우드 검증 작업은
+[Android 테스트 전달문](docs/testing/android-cloud-handoff.md)에 정리합니다.
+
 ## 무엇을 만드는가
 
 월말에 부부가 자산의 잔액·평가액을 확인하고, 수입과 정기 납부를 정리하며,
