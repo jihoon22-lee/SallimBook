@@ -68,3 +68,6 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 
 모바일 직접 시작과 배우자 연결은 [통합 검증](testing/mobile-onboarding.md)과
 [Android 검증](testing/native-onboarding.md)을 참고합니다.
+
+남은 운영·보안·출시 작업의 순서는 [v1 잔여 실행 계획](v1-completion-plan.md)에 있습니다.
+새 클라우드 세션에는 [Android 테스트 전달문](testing/android-cloud-handoff.md)을 전달합니다.
