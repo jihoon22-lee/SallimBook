@@ -22,6 +22,7 @@ Pretendard Variable v1.3.9 원본 WOFF2와 OFL을 앱에 포함했다. 출처·�
 | 홈 상세 설명·오류 탐색 수정 후 자산/비교/홈/경로/디자인 | 86건 통과, 1.7분 |
 | 확대 배치·fixture 타입 정정 후 디자인/비교/고정비/보험 이벤트 | 108건 통과, 1.0분 |
 | 최종 자산 재시도·디자인·자산 | 40건 통과, 21.8초 |
+| 첫 달 작성/정정 상태·설정 버튼 크기 보완 후 디자인·홈 | 30건 통과, 18.5초. `pnpm typecheck`, `pnpm build`, 해당 테스트 명시적 TypeScript 검사도 통과 |
 | 변경 UI 테스트와 HTTPS integration spec 명시적 TypeScript 검사 | 통과 |
 | 변경 문서의 로컬 링크 검사 | 3개 통과 |
 | `git diff --check` | 통과 |
@@ -30,7 +31,7 @@ Pretendard Variable v1.3.9 원본 WOFF2와 OFL을 앱에 포함했다. 출처·�
 
 위 브라우저 수치는 단계별 재검증을 포함하므로 서로 더한 값을 서로 다른 테스트 수로 해석하지 않는다. 모든 fixture는 합성 데이터다. 브라우저 범위는 인증·가계 시작·native adapter·앱 잠금·자산·계좌·카드·월 비교·고정비·보험·가전/재고·첨부·26개 직접 경로를 포함한다.
 
-최종 번들은 JS 924.12 kB(gzip 237.86 kB), CSS 37.72 kB(gzip 8.38 kB), 로컬 폰트 2,057.68 kB다. 기존 500 kB 이상 JS 번들 경고는 남는다.
+최종 번들은 JS 924.27 kB(gzip 237.91 kB), CSS 37.72 kB(gzip 8.38 kB), 로컬 폰트 2,057.68 kB다. 기존 500 kB 이상 JS 번들 경고는 남는다.
 
 ## 최종 시각 확인
 
@@ -46,6 +47,10 @@ Chromium의 실제 렌더 글꼴 조회에서 `Pretendard Variable`, `isCustomFo
 
 시각 검토에서는 확대 시 월 입력 내부 잘림과 필터 안에 있던 오류 재시도 동선을 수정했다. 코드 대조에서는 홈의 증감률 미계산 이유·작성본 설명을 기존 비교 설명과 공통화했다. 별도 TypeScript 검사에서 발견한 기존 support fixture의 규칙 변경 입력 타입, 보험 응답의 사유 제외 구성, `no_previous_month` enum을 생성 계약에 맞게 정정했다. 해당 fixture를 사용하는 비교·고정비·보험 이벤트 시험을 다시 통과했다.
 
+통합 재검토에서 첫 달의 모든 금액이 확인됐어도 월 자체는 작성 중·정정 중일 수 있음을 확인했다. 비교 결과가 `no_previous_month`여도 현재 월 상태를 독립적인 배지로 항상 표시하도록 수정하고 두 상태를 PC·Android 크기에서 검사했다. 좁은 화면의 설정 링크도 최소 48×48px로 맞췄다.
+
+별도 원격 기준 `d8585dc`의 2-worker 전체 회귀는 1,072건 중 1,070건 통과·홈 2건 실패였다. 가계 시작 안내까지 포함한 전체 h2 locator가 원인이며, setup fixture 누락으로 Vite 연결 거부도 3회 발생했다. 이번 변경의 `home.spec.ts`는 `.dashboard-grid`의 두 핵심 제목만 검사하고 `/api/v1/household/setup`을 명시적으로 응답한다. 위 30건 실행에 해당 홈 검사를 포함했다.
+
 ## 한계
 
 통합 단계에서 첫 시작·배우자 연결, 금융 자산·재인증, 가전/소모품, 보험의 실제 HTTPS API·PostgreSQL 흐름을 재실행해 통과했다. 모두 합성 계정과 일회용 schema를 사용했으며 HTTP route mock을 사용하지 않았다. 금융 시험은 가상 인증기의 실제 WebAuthn 서명도 확인했다. 시험 schema·서버를 정리하고 전용 시험 DB를 중지했다.
@@ -59,6 +64,7 @@ pnpm typecheck
 pnpm build
 pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts --workers 2 tests/design-refresh.spec.ts tests/home.spec.ts tests/routing.spec.ts tests/assets.spec.ts tests/accounts.spec.ts tests/comparison.spec.ts tests/insurance-core.spec.ts tests/insurance-events.spec.ts tests/homecare-ui.spec.ts tests/auth.spec.ts tests/auth-native.spec.ts tests/onboarding.spec.ts tests/onboarding-native.spec.ts tests/passkeys.spec.ts tests/app-lock-native.spec.ts tests/cards.spec.ts tests/documents-ui.spec.ts tests/documents-pagination.spec.ts tests/homecare-delete-snapshot.spec.ts
 pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts --workers 2 tests/design-refresh.spec.ts tests/comparison.spec.ts tests/fixed.spec.ts tests/insurance-events.spec.ts
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts --workers 2 tests/design-refresh.spec.ts tests/home.spec.ts
 ```
 
 명시적 테스트 타입 검사는 `apps/client`에서 다음을 실행했다.

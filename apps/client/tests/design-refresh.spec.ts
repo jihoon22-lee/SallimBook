@@ -34,7 +34,29 @@ test("390px home presents consumable attention count and first status above the 
   const nav = await page.getByRole("navigation", { name: "주 메뉴", exact: true }).boundingBox();
   expect(today!.y + today!.height).toBeLessThan(nav!.y);
   for (const link of await page.locator(".asset-detail-actions > a").all()) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+  const settings = await page.getByRole("link", { name: "설정", exact: true }).boundingBox();
+  expect(settings!.width).toBeGreaterThanOrEqual(48);
+  expect(settings!.height).toBeGreaterThanOrEqual(48);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+for (const currentState of ["draft", "reopened"] as const) test(`first month shows its ${currentState} state even when every amount is verified`, async ({ page }) => {
+  const state = await homeData(page); state.mode = "no_previous_month";
+  await page.route("**/api/v1/asset-comparison?*", route => {
+    const data = state.response(new URL(route.request().url()).searchParams);
+    data.current.state = currentState; data.current.confirmed_at = null;
+    data.previous = null; data.from_month = null;
+    expect(data.current.totals!.provisional).toBe(false);
+    expect(data.current.totals!.verified_count).toBe(data.current.totals!.item_count);
+    return route.fulfill({ json: data });
+  });
+  await page.goto("/");
+  const assets = page.getByRole("region", { name: "자산의 변화", exact: true });
+  await expect(assets.locator("details")).not.toHaveAttribute("open", "");
+  await expect(assets.getByText(currentState === "draft" ? "확인 월 작성 중" : "확인 월 정정 중", { exact: true })).toBeVisible();
+  await expect(assets.getByText("이전 월 기록 없음", { exact: true })).toBeVisible();
+  await expect(assets.getByRole("status")).toHaveText("확인한 합계 · 확인 4/4개 · 미입력 0개 · 전월값 미확인 0개");
+  await expect(assets.getByText("비교할 수 없음", { exact: true }).first()).toBeVisible();
 });
 
 for (const available of [false, true]) test(`login starts within the mobile viewport and keeps onboarding available (${available})`, async ({ page }) => {
