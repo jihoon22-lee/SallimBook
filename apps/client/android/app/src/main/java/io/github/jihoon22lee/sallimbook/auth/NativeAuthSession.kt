@@ -140,6 +140,84 @@ internal class NativeAuthSession private constructor(context: Context) {
         } else throw AuthFailure(AuthCode.ACCESS_DENIED)
     }
 
+    fun getSetupStatus(gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) {
+        executor.execute {
+            val outcome = try {
+                authorize(gate, AppRequestKind.SETUP_STATUS)
+                requireAvailable(); gate.check()
+                val response = http.send("GET", NativeOnboardingPolicy.STATUS_PATH, gate, nativeOnboarding = true)
+                val value = NativeOnboardingPolicy.setupStatus(response.status, response.body)
+                gate.check()
+                AuthOutcome.success(value)
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            callback(outcome)
+        }
+    }
+
+    fun enrollHousehold(displayName: String, password: CharArray, connectionCode: CharArray?,
+        gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) {
+        val attempt = NativeOnboardingAttempt(SystemClock::elapsedRealtime)
+        executor.execute {
+            var payload: JSONObject? = null
+            val outcome = try {
+                // Registration cannot replace a usable or locked account on this device.
+                requireAvailable()
+                if (hasLocalSession()) throw AuthFailure(AuthCode.ACCESS_DENIED)
+                authorize(gate, AppRequestKind.ONBOARDING)
+                gate.check(); attempt.check()
+                if (!NativeOnboardingPolicy.name(displayName) || !NativeOnboardingPolicy.password(password) ||
+                    connectionCode != null && !NativeOnboardingPolicy.code(connectionCode))
+                    throw AuthFailure(AuthCode.INVALID_REQUEST)
+                val connecting = connectionCode != null
+                payload = JSONObject().put("display_name", displayName).put("password", String(password)).put("device_label", "Android")
+                if (connectionCode != null) payload.put("code", String(connectionCode))
+                password.fill('\u0000'); connectionCode?.fill('\u0000')
+                val response = http.send("POST", if (connecting) NativeOnboardingPolicy.CONNECT_PATH else NativeOnboardingPolicy.SETUP_PATH,
+                    gate, body = payload, nativeOnboarding = true)
+                val access = NativeOnboardingPolicy.enrollmentAccess(response.status, response.body)
+                gate.check(); attempt.check()
+                // Verify the new server session before publishing any durable local login.
+                val me = http.send("GET", "/api/v1/me", gate, accessToken = access)
+                if (me.status != 200) throw AuthFailure(NativeOnboardingPolicy.error(me.status, me.body))
+                val member = AuthPolicy.metadataBody("GET", "/api/v1/me", 200, me.body) as Map<*, *>
+                if (member["role"] != if (connecting) "member" else "owner") throw AuthFailure(AuthCode.ACCESS_DENIED)
+                attempt.install(gate, save = { acceptTokens(response.body, gate) },
+                    unlock = { appLock.finishServerAuthentication(gate) },
+                    rollback = {
+                        accessToken = null; accessExpiresAt = 0L
+                        try { store.clear() } finally { appLock.lock() }
+                    })
+                AuthOutcome.success(mapOf("status" to "authenticated"))
+            } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            finally {
+                payload?.remove("password"); payload?.remove("code")
+                password.fill('\u0000'); connectionCode?.fill('\u0000')
+            }
+            callback(outcome)
+        }
+    }
+
+    /** Code and expiry are delivered only to the protected native display, never the bridge. */
+    fun createConnectionCode(gate: ForegroundRequest, callback: (AuthOutcome, NativeConnectionCode?) -> Unit) {
+        val attempt = NativeOnboardingAttempt(SystemClock::elapsedRealtime)
+        executor.execute {
+            var code: NativeConnectionCode? = null
+            val outcome = try {
+                authorize(gate); requireAvailable(); gate.check(); attempt.check()
+                val response = http.send("POST", NativeOnboardingPolicy.CODE_PATH, gate,
+                    accessToken = access(gate, NativeVaultAccess.REQUIRED_MILLIS), nativeOnboarding = true)
+                if (response.status == 401) { clearLocal(); throw AuthFailure(AuthCode.SESSION_EXPIRED) }
+                code = NativeOnboardingPolicy.connectionCode(response.status, response.body)
+                gate.check(); attempt.check()
+                AuthOutcome.success(mapOf("status" to "created"))
+            } catch (failure: AuthFailure) { code?.discard(); code = null; AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { code?.discard(); code = null; AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            callback(outcome, code)
+        }
+    }
+
     fun login(
         loginName: String, password: CharArray, deviceLabel: String,
         gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,

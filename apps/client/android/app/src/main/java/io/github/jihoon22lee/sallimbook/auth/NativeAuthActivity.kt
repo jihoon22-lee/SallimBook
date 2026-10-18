@@ -135,6 +135,22 @@ class NativeAuthActivity : AppCompatActivity() {
             else -> "SallimBook · 초대 수락"
         }, 24f)
         label("이 화면을 벗어나면 입력한 비밀번호와 초대 코드를 지웁니다.")
+        if (mode == LOGIN) {
+            label("처음 시작에서 만든 계정은 아래에서 선택하세요. 기존 계정은 로그인 이름을 직접 입력할 수 있어요.")
+            column.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                for ((caption, login) in listOf("처음 시작한 사람" to "owner", "연결한 배우자" to "partner")) {
+                    addView(Button(this@NativeAuthActivity).apply {
+                        text = caption; minimumHeight = 48.dp(); filterTouchesWhenObscured = true
+                        setOnClickListener {
+                            if (this@NativeAuthActivity.foreground && this@NativeAuthActivity.hasWindowFocus() && pending == null) {
+                                identity.setText(login); password.requestFocus()
+                            }
+                        }
+                    }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                }
+            })
+        }
         if (mode != REAUTHENTICATE) identity = field(when (mode) {
             LOGIN -> "로그인 이름"
             CREATE_INVITATION -> "초대할 구성원의 로그인 이름"
