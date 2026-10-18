@@ -91,3 +91,51 @@ pending 재개·업로드 409·늦은 웹 취소·pagehide·웹 세션 소실·q
 Android 실기기 SAF/picker·앱 전환·프로세스 종료 검증과 운영 검사 도구 배포는 남아 있다.
 최종 프로덕션 빌드(144모듈, JS 807.06KB)는 성공했으며 기존 단일 JS chunk 크기 경고가 남는다.
 실제 HTTPS 전체 검증 후 변경한 것은 이 모바일 폭 제한과 안내/검증 문서이며, 파일/API 동작은 같다.
+
+
+## PR #85 연결 이력 페이지 회귀 보완
+
+SB-023 / Issue #32 / R-13·R-15·R-20의 [첫 검토 지적](https://github.com/jihoon22-lee/SallimBook/pull/85#discussion_r4305053013)을 보완했다.
+UUID 순서로 읽는 연결 이력의 첫 50개가 종료 이력이고 현재 대상의 활성 연결이
+51번째에 있으면, 기존 화면은 다음 페이지를 읽기 전에 새 연결을 허용했다.
+
+현재는 이력 조회 중이거나 오류가 있거나 다음 cursor가 남으면 연결 버튼과 실행 경로를
+함께 막는다. 기존 수동 더 보기 동작을 유지하며 남은 이력을 모두 확인하라는 안내를 표시한다.
+모든 페이지를 확인한 뒤 현재 대상의 활성 연결이 없을 때만 새 연결을 허용한다.
+조회 실패 후 명시적으로 다시 확인해도 첫 페이지 성공만으로 제한을 풀지 않는다.
+API·생성 계약·DB·권한 정책·버전/멱등성 계약 변경은 없다.
+
+신규 `documents-pagination.spec.ts`는 합성 종료 이력 50개와 마지막 활성 연결 1개를 사용한다.
+웹 요청과 typed native bridge 각각에 대해 PC/Android 화면 크기에서 아래를 확인한다.
+
+- 다음 페이지를 읽기 전과 응답 대기 중에는 연결이 비활성화된다.
+- 51번째가 현재 대상의 활성 연결이면 전체 조회 후에도 중복 요청을 보내지 않는다.
+- 51번째가 다른 대상이면 전체 조회 후 현재 대상에 정확히 한 번 연결한다.
+- 두 번째 페이지 503 후 오류를 표시하고 제한을 유지한다. 다시 확인한 첫 페이지에서도
+  제한을 유지하며 마지막 페이지까지 성공해야 연결 여부를 판단한다.
+- native 경로는 일반 HTTP fallback을 사용하지 않으며 오류 원문은 표시하지 않는다.
+
+재현 명령:
+
+```bash
+# 수정 전 ca67c5a의 DocumentDetail에 신규 시험을 적용하여 음성 대조
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/documents-pagination.spec.ts --project desktop --grep 'web document history page two blocks duplicate$' --workers=1 --trace=off
+# 수정 후 신규 및 기존 문서 회귀
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/documents-pagination.spec.ts --workers=1 --trace=off
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/documents-ui.spec.ts tests/documents-native-ui.spec.ts tests/documents-model.spec.ts tests/documents-pagination.spec.ts --workers=1 --trace=off
+pnpm typecheck
+pnpm build
+python3 scripts/validate_docs.py
+git diff --check
+```
+
+수정 전 음성 대조는 첫 50개 조회 뒤 `toBeDisabled()`에서 실제 enabled로 실패했다.
+수정 후 신규 16개는 모두 통과했다(23.5초).
+기존 76개와 신규 16개를 함께 실행한 최종 **92개 전체도 통과**했다(1.7분).
+최초 타입 검사는 다른 worktree를 가리키던 공유 의존성 링크 때문에 실패했으며,
+이 worktree에서 `pnpm install --offline --frozen-lockfile`로 기존 캐시만 사용해 설치한 뒤
+최종 typecheck와 build가 통과했다. lockfile 변경과 패키지 다운로드는 없다.
+빌드는 165모듈, JS 894.41KB/gzip 231.22KB이며 기존 500KB chunk 경고가 남는다.
+문서/manifest 검사와 `git diff --check`도 통과했다. 시험 종료 후 전용 Vite 18756을 해제했다.
+이 보완에서는 전체 앱 982개, 실제 HTTPS/API/DB, Android 실기기 검증을 다시 실행하지 않았다.
+위 모의 화면 검증을 서버 권한이나 네이티브 저장·암호화의 검증으로 간주하지 않는다.
