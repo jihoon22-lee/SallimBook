@@ -23,6 +23,7 @@ FORBIDDEN = (
     b"debugproof/",
     b"SecureBridgeWebViewTest",
     b"NativeVaultCvcAcceptanceTest",
+    b"NativeRoutePolicyTest",
 )
 
 

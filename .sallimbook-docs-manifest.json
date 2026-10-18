@@ -342,8 +342,8 @@
       "git_sha1": "0d44ef17c5426e1f95b513607c3f2802dc3be25a"
     },
     "docs/testing/final-integration.md": {
-      "sha256": "0e354331ea349cada87da934d283354af4b296d14da7c4a39ad2c8ab9ef5f395",
-      "git_sha1": "ce58e5813c516b2d631edaf570b250958ae7028f"
+      "sha256": "702774fe32125ea8e0ddbcae35833e36074a737659ff4c21a58c5ad326011f52",
+      "git_sha1": "0dbd4c6dc5e5e353349309a868673b63de63816c"
     },
     "docs/adr/mobile-first-start.md": {
       "sha256": "8d11b14255d18b61265b0ae97501afbfb0d359c909906b4715a01ff9d0ccc273",
@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "ef825f81795dfac7696a0e4a045bdeb511df6b5bf7a63c196a6169db37c5676e",
-      "git_sha1": "da254cdbb7dcfcbcaf589080e99b420d737a27b5"
+      "sha256": "008e65d0e4269b12bb02a5dfaf247e127d4c5a5d1cc79b3a12571523ca1f66b7",
+      "git_sha1": "eae666c8f9fd066b429bf784a6389472418de450"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
@@ -382,12 +382,12 @@
       "git_sha1": "425b939a4e128e7aa08b92bd6fe487feb99b0870"
     },
     "docs/testing/android-ci.md": {
-      "sha256": "8216a0a296a79a34c50e4c256c9828ed3afc9d91710f778bc2e4b24d93d19879",
-      "git_sha1": "6319785d21dd996bbd5461f1b0fa73c5b9549412"
+      "sha256": "f7db991f52d15e3642cb4255e4a9d41630fcba34d5902d5f5c7d17305abf41d9",
+      "git_sha1": "cd09b7d22a8fda000435b72ed61382c9534e8a06"
     },
     "docs/testing/android-cloud-results.md": {
-      "sha256": "b97c40aae567a07b6e27d6d5a7bc65cbe9502991e589b2555fa739f045f334a0",
-      "git_sha1": "828efcbb9aabbad0cde68adcc0ae21ed3e6ad9de"
+      "sha256": "738ccc2a9de11a8e12ba124392aa7211329af489b3501448a4bed581e0fdb602",
+      "git_sha1": "26f1dc6e74359ee5673ed2ee8d5db18231821ad8"
     },
     "docs/testing/threat-model-review.md": {
       "sha256": "42903acd4dc4c62bd6a51cde0c59fc1ddafc0a95141c6bbf508f9cc64f25c17c",

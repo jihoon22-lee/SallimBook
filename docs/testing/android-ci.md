@@ -365,3 +365,24 @@ InsuranceEvent 경로도 같은 표현식을 사용했다. 요청 준비의 Patt
 수정 후 로컬 JVM 356개(실패/skip 0), 새 경로 회귀 시나리오 3개의 호스트 실행과
 Android 계측 Kotlin 컴파일이 통과했다. 도구 189개, 문서 75개·로컬 링크 457개,
 Ruff와 diff 검사도 통과했다. 실제 Android 회귀/가입 통과는 후속 KVM 결과로 기록한다.
+
+
+수정 후 [39105652681](https://github.com/jihoon22-lee/SallimBook/actions/runs/39105652681)은
+`9bbb67e9275260d4d1f190463edfb2eb67714969`에서 **workflow 성공 / PARTIAL_DEVICE**다.
+기존 보안+경로 15개 중 14 PASS·1 조건부 SKIP, 가입 1개 PASS로 전체 **15 PASS / 0 FAIL /
+1 SKIP(16개)**다. 새 여섯 도메인 경로 회귀 3개와 실제 취소→빈 입력 거절→등록→세션 저장→
+잠금 해제→Main/bridge 복귀→인증된 빈 월·오늘 소모품 홈 표시를 통과했다. 기존 홈 성공 조건과
+시간 제한을 유지한 결과다. API 36/x86_64 KVM 부팅·기기 확인·AVD/ADB/DB 정리 및 정상
+unsigned release의 시험 CA/loopback origin/debug marker 격리 검사도 통과했다.
+[요약](evidence/android-kvm-20261018/run-39105652681/summary.json),
+[가입 XML](evidence/android-kvm-20261018/run-39105652681/onboarding.xml),
+[보안·경로 XML](evidence/android-kvm-20261018/run-39105652681/existing.xml),
+[SDK](evidence/android-kvm-20261018/run-39105652681/sdk.json),
+[APK 메타데이터·격리 결과](evidence/android-kvm-20261018/run-39105652681/apks.json)를 보존했다.
+
+SKIP은 강력한 생체 인증 등록이 필요한 기존 Keystore 시나리오 하나다. 실제 Galaxy 2대의
+보안·업데이트·접근성·전체 A01~A13 인수를 완료한 것으로 보지 않는다. 후속 최종 소스에서는
+격리 검사 목록에 새 NativeRoutePolicyTest 클래스명도 명시하며, 그 판정은 최종 CI에서 확인한다.
+같은 9bbb67e의 서명 0.1.5/code6 APK와 source-bound API/웹 이미지를 준비했고 SDK 검사 및
+실제 DB 역할 사전 검사, 격리 API/웹 런타임 시험을 통과했다. 실제 운영 전환은
+[SB-040](https://github.com/jihoon22-lee/SallimBook/issues/49)의 배포 기록으로 별도 확인한다.

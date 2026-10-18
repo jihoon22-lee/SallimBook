@@ -4,6 +4,10 @@
 운영 계정·데이터·API origin·Tailscale·서명키·필드 암호화 키를 사용하지 않았다.
 일반 CVC gate는 false로 유지했다.
 
+후속 GitHub KVM의 `39105652681`은 실제 가입→인증된 홈과 경로 회귀를 포함해
+15 PASS / 0 FAIL / 1 조건부 생체 SKIP(16개), 정상 release 격리·정리까지 통과했다.
+아래 최초 실행 결과와 구분하며 최신 근거는 [계측 CI 기록](android-ci.md)을 따른다.
+
 ## 기준과 변경
 
 - 시작 기준: `origin/main` **173213ab2057216e6358f78606bcf2a8bbebdf9c**, clean clone.
