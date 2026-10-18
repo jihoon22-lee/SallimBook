@@ -20,7 +20,7 @@ SB-034~040 · R-01~R-22 · 2026-10-18 WSL Ubuntu.
 | 저장소·운영 도구 | `python3 -m unittest discover -s tests -q` | 운영 19개 포함 **59 통과** |
 | 운영 컨테이너 | `python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE` | `2fbe39e`: migration/readiness, runtime DB 역할, 11가지 권한 변조 거부, 감사 UPDATE/DELETE의 42501 및 정상 INSERT/조회, UID10001, 한국어 OCR·ClamAV 업로드, AEAD 저장·다운로드, 익명 차단 통과. scanner 미준비·stale 거부, 중단→unhealthy→복구 통과 |
 | 암호화 백업·복원 | 검증한 age/PostgreSQL client 경로에서 `uv run --project services/api python -m ops.test_recovery` | 실제 새 합성 DB 복원, manifest·전체 테이블 행 수·첨부 AEAD, 기존 인증 폐기와 pending/new rotation gate 통과 |
-| 배포 설정 | `python3 -m ops.test_deployment` | 고정 Caddy/Tailscale Compose, 공개 JSON/다른 경로 404 통과. 실제 tailnet 노드 등록은 미실행 |
+| 배포 설정 | `python3 -m ops.test_deployment --web-image LOCALLY_BUILT_WEB_IMAGE` | 고정 Caddy/Tailscale Compose, 공개 JSON/다른 경로 404 통과. 실제 tailnet 노드 등록은 미실행 |
 | APK 서명 도구 | JDK 21·고정 SDK에서 `python3 -m ops.test_release --sdk /DEDICATED_ANDROID_SDK` | `fc297d2`: 합성 키로 release v2/v3 실제 빌드·서명, manifest/native 설정·zipalign·인증서·증가 versionCode·이전 APK·변조 거부 통과. 시험 키/APK 제거 |
 
 API 전체 시험은 `013fa19`의 테스트 DB 설정으로 시작했다. 이후 통합한 보관함 재인증·내보내기
@@ -107,6 +107,10 @@ PR #85 첫 통합 리뷰 후 문서 이력의 다음 페이지가 남아 있을 
 GitHub Actions는 기존 PR부터 runner·step이 시작되기 전에 종료되는 상태를 관찰했다.
 조회 권한 때문에 일부 상태/로그 API도 거절됐다. 로컬 동등 명령 결과와 원격 CI 성공을
 구분하며, 원격 실패의 정확한 계정/결제 원인은 확인되지 않았다.
+
+PR #86의 재현 명령 후속 정정은 필수 `--web-image` 인자를 문서에 보완한 변경이다.
+배포 이미지와 APK의 구현 소스는 `d9eb6e245022c9d8f6502339437140880ec44d71`로 유지하며,
+이 문서 정정으로 실행 코드·이미지·APK를 변경하거나 다시 빌드하지 않았다.
 
 ## 남은 출시 인수
 

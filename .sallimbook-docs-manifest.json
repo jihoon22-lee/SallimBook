@@ -342,8 +342,8 @@
       "git_sha1": "0d44ef17c5426e1f95b513607c3f2802dc3be25a"
     },
     "docs/testing/final-integration.md": {
-      "sha256": "cfa3b053299d8705316dbe0edafd66db9ae04e353bcc5ec5c89fa2ada869da72",
-      "git_sha1": "07bc2efe03affa272a641b0c9af8a1a23c263f59"
+      "sha256": "754992a710f9c04f3336524739553f977f0e8c606483eeb0b63caef61c00c715",
+      "git_sha1": "11bf2b9f96de7f1ead2f9e0d37f36e8340f73c0d"
     }
   }
 }
