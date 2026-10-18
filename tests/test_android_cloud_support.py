@@ -19,7 +19,9 @@ from scripts.android_cloud_process import CloudCommandError, checked, stop_group
 from scripts.android_cloud_results import (
     ONBOARDING_CLASS,
     ONBOARDING_METHOD,
+    ONBOARDING_REASONS,
     ONBOARDING_STAGES,
+    failure_details,
     failure_stage,
     save_instrumentation,
 )
@@ -104,7 +106,10 @@ class CloudSupportTests(unittest.TestCase):
             failure = ET.SubElement(
                 case,
                 "failure",
-                message="java.lang.AssertionError: SALLIMBOOK_CLOUD_STAGE: FILL_PASSWORD",
+                message=(
+                    "java.lang.AssertionError: SALLIMBOOK_CLOUD_STAGE: FILL_PASSWORD; "
+                    "REASON: ACTION_FAILED; PRE: 1110; POST: 1110"
+                ),
             )
             failure.text = "synthetic-sensitive stack and view snapshot"
             ET.SubElement(case, "system-out").text = "synthetic-sensitive"
@@ -116,6 +121,15 @@ class CloudSupportTests(unittest.TestCase):
             self.assertNotIn("java.lang", clean)
             node = ET.fromstring(clean).find("testcase/failure")
             self.assertEqual(node.get("stage"), "FILL_PASSWORD")
+            self.assertEqual(
+                failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node),
+                {
+                    "stage": "FILL_PASSWORD",
+                    "reason": "ACTION_FAILED",
+                    "pre": "1110",
+                    "post": "1110",
+                },
+            )
             self.assertEqual(
                 failure_stage(ONBOARDING_CLASS, ONBOARDING_METHOD, node), "FILL_PASSWORD"
             )
@@ -183,7 +197,13 @@ class CloudSupportTests(unittest.TestCase):
                 suite, "testcase", classname=ONBOARDING_CLASS, name=ONBOARDING_METHOD
             )
             problem = ET.SubElement(
-                case, "failure", stage="SETUP_AVAILABLE", message="synthetic-sensitive"
+                case,
+                "failure",
+                stage="SETUP_AVAILABLE",
+                reason="ROOT_NOT_FOCUSED",
+                pre="0110",
+                post="0010",
+                message="synthetic-sensitive",
             )
             problem.text = "synthetic-sensitive trace"
             ET.ElementTree(suite).write(source / "onboarding.xml")
@@ -207,7 +227,65 @@ class CloudSupportTests(unittest.TestCase):
             safe = (output / "onboarding.xml").read_text()
             self.assertNotIn("synthetic-sensitive", safe)
             self.assertIn('stage="SETUP_AVAILABLE"', safe)
+            self.assertIn('reason="ROOT_NOT_FOCUSED"', safe)
+            self.assertIn('pre="0110"', safe)
+            self.assertIn('post="0010"', safe)
             self.assertEqual(json.loads((output / "summary.json").read_text())["status"], "FAIL")
+
+    def test_reason_and_boolean_diagnostics_are_bounded_and_never_copy_dynamic_text(self):
+        for reason in ONBOARDING_REASONS:
+            for bits in ("1111", "0000", "1010", "----"):
+                marker = (
+                    f"SALLIMBOOK_CLOUD_STAGE: CANCEL_SCROLL; REASON: {reason}; "
+                    f"PRE: {bits}; POST: {bits}"
+                )
+                node = ET.Element("failure", message=marker)
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node),
+                    {
+                        "stage": "CANCEL_SCROLL",
+                        "reason": reason,
+                        "pre": bits,
+                        "post": bits,
+                    },
+                )
+        for value in (
+            "synthetic-sensitive",
+            "11111",
+            "010",
+            "0-10",
+            "TRUE",
+            "1110 synthetic-sensitive",
+        ):
+            node = ET.Element(
+                "failure", stage="CANCEL_SCROLL", reason="ACTION_FAILED", pre=value, post="1110"
+            )
+            self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        for reason in (
+            "java.lang.IllegalStateException",
+            "action_failed",
+            "ACTION_FAILED synthetic-sensitive",
+        ):
+            node = ET.Element(
+                "failure", stage="CANCEL_SCROLL", reason=reason, pre="1110", post="1110"
+            )
+            self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        node = ET.Element(
+            "failure",
+            message=(
+                "SALLIMBOOK_CLOUD_STAGE: CANCEL_SCROLL; REASON: ACTION_FAILED; "
+                "PRE: 1110; POST: 1110 "
+                "synthetic-sensitive"
+            ),
+        )
+        self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        node = ET.Element(
+            "failure", stage="CANCEL_SCROLL", reason="ACTION_FAILED", pre="1110", post="1110"
+        )
+        self.assertEqual(failure_details(ONBOARDING_CLASS + "Other", ONBOARDING_METHOD, node), {})
+        self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD + "Other", node), {})
+        node.set("post", "synthetic-sensitive")
+        self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
 
     def test_stage_allowlist_exactly_matches_native_test_enum(self):
         source = Path(__file__).resolve().parents[1] / (
@@ -217,6 +295,8 @@ class CloudSupportTests(unittest.TestCase):
         body = re.search(r"enum class CloudStage\s*\{([^}]+)\}", source.read_text())[1]
         values = {value.strip() for value in body.split(",")}
         self.assertEqual(values, ONBOARDING_STAGES)
+        reasons = re.search(r"enum class CloudReason\s*\{([^}]+)\}", source.read_text())[1]
+        self.assertEqual({value.strip() for value in reasons.split(",")}, ONBOARDING_REASONS)
         for value in values:
             for prefix in ("", "java.lang.AssertionError: "):
                 node = ET.Element("failure", message=prefix + "SALLIMBOOK_CLOUD_STAGE: " + value)

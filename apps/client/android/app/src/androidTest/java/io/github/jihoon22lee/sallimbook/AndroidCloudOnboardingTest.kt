@@ -7,7 +7,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.TextView
+import android.widget.ScrollView
+import androidx.test.espresso.Espresso
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ScrollToAction
 import androidx.test.espresso.action.ViewActions.*
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.espresso.matcher.RootMatchers.withDecorView
@@ -46,9 +49,42 @@ class AndroidCloudOnboardingTest {
         INVALID_SESSION_EMPTY, FILL_NAME, FILL_PASSWORD, FILL_CONFIRMATION,
         SUBMIT_VALID, SESSION_AND_MAIN, BRIDGE_READY, AUTHENTICATED_HOME, FINISH_MAIN
     }
+    private enum class CloudReason {
+        ASSERTION, NO_MATCHING_VIEW, AMBIGUOUS_VIEW, NO_MATCHING_ROOT, ROOT_NOT_FOCUSED,
+        DETACHED_VIEW, SCROLL_CONSTRAINT, ACTION_FAILED, UI_NOT_IDLE, INJECTION_REJECTED,
+        INTERRUPTED, SCROLL_LIMIT, UNKNOWN
+    }
+    // The order is public and fixed: focused owner, attached to that root, scroll constraint, >=90% visible.
+    private data class ControlState(val focused: Boolean, val attached: Boolean, val constraint: Boolean, val displayed: Boolean) {
+        fun bits() = listOf(focused, attached, constraint, displayed).joinToString("") { if (it) "1" else "0" }
+    }
+    private class InteractionFailure(val reason: CloudReason, val before: ControlState?, val after: ControlState?) : RuntimeException()
+    private fun reason(error: Throwable): CloudReason {
+        // Only exact public exception class names; never read message, stack or view descriptions.
+        val names = listOfNotNull(error.cause?.javaClass?.name, error.javaClass.name)
+        for (name in names) when (name) {
+            "androidx.test.espresso.NoMatchingViewException" -> return CloudReason.NO_MATCHING_VIEW
+            "androidx.test.espresso.AmbiguousViewMatcherException" -> return CloudReason.AMBIGUOUS_VIEW
+            "androidx.test.espresso.NoMatchingRootException" -> return CloudReason.NO_MATCHING_ROOT
+            "androidx.test.espresso.base.RootViewPicker\$RootViewWithoutFocusException" -> return CloudReason.ROOT_NOT_FOCUSED
+            "androidx.test.espresso.AppNotIdleException", "androidx.test.espresso.IdlingResourceTimeoutException" -> return CloudReason.UI_NOT_IDLE
+            "androidx.test.espresso.InjectEventSecurityException", "java.lang.SecurityException" -> return CloudReason.INJECTION_REJECTED
+            "java.lang.InterruptedException" -> return CloudReason.INTERRUPTED
+            "androidx.test.espresso.PerformException" -> return CloudReason.ACTION_FAILED
+            "java.lang.AssertionError" -> return CloudReason.ASSERTION
+        }
+        return CloudReason.UNKNOWN
+    }
     private fun <T> at(stage: CloudStage, action: () -> T): T {
         try { return action() }
-        catch (_: Throwable) { throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}").apply { stackTrace = emptyArray() } }
+        catch (error: Throwable) {
+            val detail = error as? InteractionFailure
+            val code = detail?.reason ?: reason(error)
+            val before = detail?.before?.bits() ?: "----"
+            val after = detail?.after?.bits() ?: "----"
+            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after")
+                .apply { stackTrace = emptyArray() }
+        }
     }
 
     private fun awaitState(label: String, condition: () -> Boolean) {
@@ -95,8 +131,69 @@ class AndroidCloudOnboardingTest {
     private fun target(owner: Activity, view: View) = onView(sameInstance(view))
         .inRoot(withDecorView(sameInstance(owner.window.decorView)))
 
+    private fun controlState(owner: Activity, view: View): ControlState? {
+        var state: ControlState? = null
+        try {
+            instrumentation.runOnMainSync {
+                state = ControlState(resumed() === owner && owner.hasWindowFocus(),
+                    view.isAttachedToWindow && view.rootView === owner.window.decorView,
+                    ScrollToAction().constraints.matches(view), isDisplayingAtLeast(90).matches(view))
+            }
+        } catch (_: Throwable) { /* Diagnostics cannot replace the interaction's failure. */ }
+        return state
+    }
+    private fun <T> interaction(owner: Activity, view: View, action: () -> T): T {
+        val before = controlState(owner, view)
+        try { return action() }
+        catch (error: Throwable) { throw InteractionFailure(reason(error), before, controlState(owner, view)) }
+    }
+    private fun checkControl(before: ControlState?, state: ControlState?) {
+        val code = when {
+            state == null -> CloudReason.UNKNOWN
+            !state.focused -> CloudReason.ROOT_NOT_FOCUSED
+            !state.attached -> CloudReason.DETACHED_VIEW
+            !state.constraint -> CloudReason.SCROLL_CONSTRAINT
+            else -> return
+        }
+        throw InteractionFailure(code, before, state)
+    }
+    private fun scrollIntoView(owner: Activity, view: View) {
+        // A user can dismiss the IME before scrolling. Do not call listeners directly,
+        // lower Espresso's visibility threshold, or assume requestRectangleOnScreen worked.
+        interaction(owner, view) { Espresso.closeSoftKeyboard() }
+        val before = controlState(owner, view)
+        checkControl(before, before)
+        if (before!!.displayed) return
+        var scroll: ScrollView? = null
+        instrumentation.runOnMainSync {
+            var ancestor = view.parent
+            while (ancestor is View) {
+                if (ancestor is ScrollView) { scroll = ancestor; break }
+                ancestor = ancestor.parent
+            }
+        }
+        val container = scroll ?: throw InteractionFailure(CloudReason.SCROLL_CONSTRAINT, before, controlState(owner, view))
+        repeat(6) {
+            val state = controlState(owner, view)
+            checkControl(before, state)
+            if (state!!.displayed) return
+            var above = false
+            instrumentation.runOnMainSync {
+                val control = IntArray(2); val viewport = IntArray(2)
+                view.getLocationOnScreen(control); container.getLocationOnScreen(viewport)
+                above = control[1] < viewport[1] + container.paddingTop
+            }
+            interaction(owner, view) { target(owner, container).perform(if (above) swipeDown() else swipeUp()) }
+        }
+        val after = controlState(owner, view)
+        checkControl(before, after)
+        if (after!!.displayed) return
+        throw InteractionFailure(CloudReason.SCROLL_LIMIT, before, after)
+    }
     private fun click(owner: Activity, text: String) {
-        target(owner, readyControl(owner, text)).perform(scrollTo(), click())
+        val view = readyControl(owner, text)
+        scrollIntoView(owner, view)
+        interaction(owner, view) { target(owner, view).perform(click()) }
     }
 
     private fun fill(owner: Activity, caption: String, value: String) {
@@ -104,7 +201,8 @@ class AndroidCloudOnboardingTest {
         var field: View? = null
         instrumentation.runOnMainSync { field = owner.findViewById(captionView.labelFor) }
         assertTrue(field != null)
-        target(owner, field!!).perform(scrollTo(), replaceText(value), closeSoftKeyboard())
+        scrollIntoView(owner, field!!)
+        interaction(owner, field!!) { target(owner, field!!).perform(replaceText(value), closeSoftKeyboard()) }
     }
 
     private fun evaluateBoolean(main: MainActivity, script: String): Boolean {
@@ -160,8 +258,8 @@ class AndroidCloudOnboardingTest {
                 click(main, "처음 시작하기"); awaitActivity(NativeOnboardingActivity::class.java)
             }
             val close = at(CloudStage.CANCEL_FORM) { readyControl(firstForm, "닫기") }
-            at(CloudStage.CANCEL_SCROLL) { target(firstForm, close).perform(scrollTo()) }
-            at(CloudStage.CANCEL_CLICK) { target(firstForm, close).perform(click()) }
+            at(CloudStage.CANCEL_SCROLL) { scrollIntoView(firstForm, close) }
+            at(CloudStage.CANCEL_CLICK) { interaction(firstForm, close) { target(firstForm, close).perform(click()) } }
             at(CloudStage.CANCEL_RETURN) { assertTrue(awaitActivity(MainActivity::class.java) === main) }
             at(CloudStage.CANCELLED_SESSION_EMPTY) { assertFalse(NativeAuthSession.get(context).hasLocalSession()) }
             // Returning to MainActivity refreshes setup status asynchronously.

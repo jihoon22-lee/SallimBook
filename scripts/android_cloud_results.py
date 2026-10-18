@@ -42,29 +42,69 @@ ONBOARDING_STAGES = frozenset(
 )
 
 
-def failure_stage(classname, method, problem):
+ONBOARDING_REASONS = frozenset(
+    {
+        "ASSERTION",
+        "NO_MATCHING_VIEW",
+        "AMBIGUOUS_VIEW",
+        "NO_MATCHING_ROOT",
+        "ROOT_NOT_FOCUSED",
+        "DETACHED_VIEW",
+        "SCROLL_CONSTRAINT",
+        "ACTION_FAILED",
+        "UI_NOT_IDLE",
+        "INJECTION_REJECTED",
+        "INTERRUPTED",
+        "SCROLL_LIMIT",
+        "UNKNOWN",
+    }
+)
+
+
+def failure_details(classname, method, problem):
     if (
         classname != ONBOARDING_CLASS
         or method != ONBOARDING_METHOD
         or problem.tag not in {"failure", "error"}
     ):
-        return None
+        return {}
+
+    def validated(stage, reason=None, before=None, after=None):
+        if stage not in ONBOARDING_STAGES:
+            return {}
+        if reason is None and before is None and after is None:
+            return {"stage": stage}
+        if reason not in ONBOARDING_REASONS or not all(
+            isinstance(bits, str) and re.fullmatch(r"(?:[01]{4}|----)", bits)
+            for bits in (before, after)
+        ):
+            return {}
+        return {"stage": stage, "reason": reason, "pre": before, "post": after}
+
     # Already-sanitized intermediate XML is checked again by the workflow.
-    stage = problem.get("stage")
-    if stage in ONBOARDING_STAGES:
-        return stage
+    if problem.get("stage") is not None:
+        return validated(
+            problem.get("stage"), problem.get("reason"), problem.get("pre"), problem.get("post")
+        )
     # Android's XmlTestRunListener may put the exception only in element text.
     # The native test removes its stack: accept one exact line, never parse a trace.
-    marker = r"(?:java\.lang\.AssertionError: )?SALLIMBOOK_CLOUD_STAGE: ([A-Z_]+)"
+    marker = (
+        r"(?:java\.lang\.AssertionError: )?SALLIMBOOK_CLOUD_STAGE: ([A-Z_]+)"
+        r"(?:; REASON: ([A-Z_]+); PRE: ([01-]{4}); POST: ([01-]{4}))?"
+    )
     candidates = [
         problem.get("message", ""),
         (problem.text or "").removesuffix("\n").removesuffix("\r"),
     ]
     for message in candidates:
         match = re.fullmatch(marker, message)
-        if match and match[1] in ONBOARDING_STAGES:
-            return match[1]
-    return None
+        if match:
+            return validated(*match.groups())
+    return {}
+
+
+def failure_stage(classname, method, problem):
+    return failure_details(classname, method, problem).get("stage")
 
 
 def save_instrumentation(label, expected, source, destination):
@@ -104,9 +144,7 @@ def save_instrumentation(label, expected, source, destination):
                             "clean synthetic Keystore namespace"
                         )
                     node = ET.SubElement(case, tag, message=reason)
-                    stage = failure_stage(classname, name, original.find(tag))
-                    if stage is not None:
-                        node.set("stage", stage)
+                    node.attrib.update(failure_details(classname, name, original.find(tag)))
     for name, count in counts.items():
         suite.set(name, str(count))
     target = destination / f"{label}.xml"
