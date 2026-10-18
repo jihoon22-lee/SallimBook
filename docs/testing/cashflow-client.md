@@ -110,3 +110,41 @@ desktop과 Android 크기 브라우저를 사용했으며 실기기 검증은 �
 ```bash
 TMPDIR=/home/jihoon/.cache/sallimbook pnpm --filter @sallimbook/client exec playwright test cards.spec.ts cashflow-model.spec.ts --config playwright.card-date.local.config.ts --workers=2
 ```
+
+## SB-016 회차 생성 중단과 재시도 인수 보완 (Issue #25)
+
+v1의 회차 생성 실행 경계는 화면의 **선택 기간 회차 생성**과
+`POST /api/v1/obligations/generate`다. 사용자가 기간과 규칙을 명시하며 별도 스케줄러
+daemon은 없다. 따라서 ‘실패 후 보충’은 이 생성 요청의 transaction 실패 후 같은 요청을
+다시 실행하거나 누락 기간을 명시해 보충하는 동작으로 검증한다. daemon 재부팅이나
+실제 네트워크 단절을 시험했다고 해석하지 않는다. 제품 API·migration·네이티브 구현은 변경하지 않았다.
+
+[서버 회귀](../../services/api/tests/test_recurring.py)에서 기존 실패 주입 시험 하나를
+강화하고 커밋 후 응답 실패 시험 하나를 추가했다.
+
+- `test_generation_failure_rolls_back_and_same_key_can_retry`: 두 회차와 두 revision이 실제
+  PostgreSQL에 flush됐고 멱등 예약이 pending인 것을 같은 transaction에서 조회한 뒤 예외를
+  발생시킨다. HTTP 500 후 별도 session에서 회차·revision·생성 batch/item·멱등 예약·회차 감사가
+  모두 0건인 것을 확인한다. 같은 키로 정상 재실행하면 1/31·2/28·3/31 회차가 각각 한 건이고,
+  같은 키를 다시 보내도 동일 응답과 배치 하나·revision 세 개를 유지한다.
+- `test_generation_committed_before_response_failure_replays_same_result`: 실제 서비스의
+  commit 직후, 성공 응답을 반환하기 전에 예외를 발생시켜 HTTP 500을 만든다. 별도 session에서
+  완료된 멱등 결과와 회차 세 건의 저장을 확인하고, 같은 키의 두 차례 재전송이 원래 batch와
+  회차 ID/version을 반환하며 revision·batch/item·감사를 추가하지 않는지 검사한다.
+
+기존 `test_t10_repeat_generation_and_failure_catchup`은 2월 생성 뒤 2~3월 범위를 반복
+재요청하여 누락 월 보충을 검사한다. 위 두 실패 경계와 함께 T-10/T-22의 반복 안전성을 확인한다.
+
+2026-10-18 실행 결과: `test_recurring.py` 전체 **78개 통과**, 66.06초, 실패·건너뜀 0건.
+이는 이번에 실행한 실제 PostgreSQL 회귀이며 위의 과거 UI/HTTPS 수치에 더한 전체 시험 수가 아니다.
+Alembic upgrade·drift 0·downgrade/upgrade, Ruff 검사·포맷 검사와 `git diff --check`도 통과했다.
+기존 Starlette TestClient deprecation warning 1개가 남는다. 합성 데이터와 전용 18745 시험 DB의
+일회용 schema만 사용했고 시험 후 schema 제거·db-test 중지·공유 시험 잠금 반환을 확인했다.
+실제 HTTPS·Android/웹 화면·실기기 시험은 이번 서버 시험에서 다시 실행하지 않았다.
+
+```bash
+uv run --project services/api --frozen python scripts/test_database.py services/api/tests/test_recurring.py -q --tb=short
+uv run --project services/api --frozen ruff check services/api/tests/test_recurring.py
+uv run --project services/api --frozen ruff format --check services/api/tests/test_recurring.py
+git diff --check
+```
