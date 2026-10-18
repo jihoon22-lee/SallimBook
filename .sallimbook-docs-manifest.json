@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "2023d97794dbb45a526a0afc534d8260b20f92da3b6afadd1a1a301258461d69",
-      "git_sha1": "f879ddde0b385607c16bf0a45590848e60e7b5e5"
+      "sha256": "ac9357dbf1aa96d42e670ae44e1b09af6b0b00ff09713c5d196fb1c8f7d3576f",
+      "git_sha1": "68cec14576fa05444cce733ab6152893f8ea2bcf"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
