@@ -1,12 +1,14 @@
 package io.github.jihoon22lee.sallimbook
 
 import android.app.Activity
+import android.app.KeyguardManager
 import android.content.Intent
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.TextView
+import android.widget.EditText
 import android.widget.ScrollView
 import androidx.test.espresso.Espresso
 import androidx.test.espresso.Espresso.onView
@@ -21,6 +23,7 @@ import androidx.test.runner.lifecycle.Stage
 import io.github.jihoon22lee.sallimbook.auth.AppLockController
 import io.github.jihoon22lee.sallimbook.auth.NativeAuthSession
 import io.github.jihoon22lee.sallimbook.auth.NativeOnboardingActivity
+import io.github.jihoon22lee.sallimbook.auth.NativeOnboardingPolicy
 import org.hamcrest.Matchers.sameInstance
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,14 +49,45 @@ class AndroidCloudOnboardingTest {
         ANONYMOUS_REJECTED, SETUP_AVAILABLE, OPEN_CANCEL_FORM, CANCEL_FORM, CANCEL_SCROLL, CANCEL_CLICK,
         CANCEL_RETURN, SECOND_SETUP_AVAILABLE,
         CANCELLED_SESSION_EMPTY, OPEN_SETUP_FORM, SUBMIT_EMPTY, INVALID_INPUT,
-        INVALID_SESSION_EMPTY, FILL_NAME, FILL_PASSWORD, FILL_CONFIRMATION,
-        SUBMIT_VALID, SESSION_AND_MAIN, BRIDGE_READY, AUTHENTICATED_HOME, FINISH_MAIN
+        INVALID_SESSION_EMPTY, FILL_NAME, NAME_PRESERVED, FILL_PASSWORD, PASSWORD_PRESERVED,
+        FILL_CONFIRMATION, CONFIRMATION_PRESERVED, PREPARE_VALID_SUBMIT,
+        PRESUBMIT_FIELDS, PRESUBMIT_POLICY, PRESUBMIT_READY, SUBMIT_VALID,
+        SESSION_CREATED, APP_UNLOCKED, MAIN_RESUMED, BRIDGE_READY, AUTHENTICATED_HOME, FINISH_MAIN
     }
     private enum class CloudReason {
         ASSERTION, NO_MATCHING_VIEW, AMBIGUOUS_VIEW, NO_MATCHING_ROOT, ROOT_NOT_FOCUSED,
         DETACHED_VIEW, SCROLL_CONSTRAINT, ACTION_FAILED, UI_NOT_IDLE, INJECTION_REJECTED,
         INTERRUPTED, SCROLL_LIMIT, UNKNOWN
     }
+    private enum class CloudStatus {
+        NOT_CHECKED, NOT_RECOGNIZED, INPUT_INVALID, REQUEST_PENDING, RESULT_DISCARDED,
+        FOCUS_INTERRUPTED, SETUP_UNAVAILABLE, SETUP_COMPLETE, INVALID_CONNECTION_CODE,
+        HOUSEHOLD_FULL, REGISTRATION_OR_LOGIN_CONFLICT, RATE_LIMITED, REAUTHENTICATION_REQUIRED,
+        AUTH_FAILED, REQUEST_INVALID, NETWORK_UNAVAILABLE, SESSION_EXPIRED, KEY_INVALIDATED,
+        CANCELLED_OR_LOCKED, AUTH_UNAVAILABLE
+    }
+    private val publicStatuses = mapOf(
+        "이름, 비밀번호 길이와 확인, 연결 코드를 확인해 주세요." to CloudStatus.INPUT_INVALID,
+        "확인하고 있어요." to CloudStatus.REQUEST_PENDING,
+        "요청 상태가 바뀌어 완료 결과를 사용하지 않았어요. 이미 가입했다면 로그인해 주세요." to CloudStatus.RESULT_DISCARDED,
+        "요청을 중단했어요. 이미 가입됐다면 로그인 화면에서 다시 확인해 주세요." to CloudStatus.FOCUS_INTERRUPTED,
+        "이 연결에서는 처음 시작할 수 없어요. 허용된 사설 연결을 확인해 주세요." to CloudStatus.SETUP_UNAVAILABLE,
+        "이미 시작한 가계가 있어요. 로그인하거나 배우자 연결을 이용해 주세요." to CloudStatus.SETUP_COMPLETE,
+        "연결 코드가 올바르지 않거나 만료됐어요. 새 코드를 확인해 주세요." to CloudStatus.INVALID_CONNECTION_CODE,
+        "이미 두 사람이 연결되어 있어요. 기존 계정으로 로그인해 주세요." to CloudStatus.HOUSEHOLD_FULL,
+        "가입 상태가 변경됐어요. 이미 가입했다면 로그인해 주세요." to CloudStatus.REGISTRATION_OR_LOGIN_CONFLICT,
+        "요청이 많아요. 잠시 후 다시 시도해 주세요." to CloudStatus.RATE_LIMITED,
+        "연결 코드를 만들려면 현재 계정 비밀번호를 다시 확인해 주세요." to CloudStatus.REAUTHENTICATION_REQUIRED,
+        "현재 비밀번호를 확인해 주세요." to CloudStatus.AUTH_FAILED,
+        "입력 항목을 확인해 주세요." to CloudStatus.REQUEST_INVALID,
+        "연결을 확인하지 못했어요. 이미 가입됐다면 로그인해 주세요. 자동 재전송은 하지 않았어요." to CloudStatus.NETWORK_UNAVAILABLE,
+        "로그인이 만료됐어요. 화면을 닫고 다시 로그인해 주세요." to CloudStatus.SESSION_EXPIRED,
+        "기기에 로그인을 안전하게 저장하지 못했어요. 로그인 화면에서 다시 확인해 주세요." to CloudStatus.KEY_INVALIDATED,
+        "요청이 취소됐어요. 결과를 확인한 후 다시 진행해 주세요." to CloudStatus.CANCELLED_OR_LOCKED,
+        "요청을 완료하지 못했어요. 연결과 현재 가계 상태를 확인해 주세요." to CloudStatus.AUTH_UNAVAILABLE
+    )
+    // Flow bits: native session exists, app unlocked, original MainActivity resumed.
+    private class FlowFailure(val flow: String, val status: CloudStatus) : RuntimeException()
     // The order is public and fixed: focused owner, attached to that root, scroll constraint, >=90% visible.
     private data class ControlState(val focused: Boolean, val attached: Boolean, val constraint: Boolean, val displayed: Boolean) {
         fun bits() = listOf(focused, attached, constraint, displayed).joinToString("") { if (it) "1" else "0" }
@@ -79,10 +113,13 @@ class AndroidCloudOnboardingTest {
         try { return action() }
         catch (error: Throwable) {
             val detail = error as? InteractionFailure
-            val code = detail?.reason ?: reason(error)
+            val outcome = error as? FlowFailure
+            val code = detail?.reason ?: if (outcome != null) CloudReason.ASSERTION else reason(error)
             val before = detail?.before?.bits() ?: "----"
             val after = detail?.after?.bits() ?: "----"
-            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after")
+            val flow = outcome?.flow ?: "---"
+            val status = outcome?.status ?: CloudStatus.NOT_CHECKED
+            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after; FLOW: $flow; STATUS: ${status.name}")
                 .apply { stackTrace = emptyArray() }
         }
     }
@@ -205,6 +242,59 @@ class AndroidCloudOnboardingTest {
         interaction(owner, field!!) { target(owner, field!!).perform(replaceText(value), closeSoftKeyboard()) }
     }
 
+    private fun field(owner: Activity, caption: String): EditText {
+        val captionView = label(owner.window.decorView, caption) ?: throw AssertionError()
+        return owner.findViewById<EditText>(captionView.labelFor) ?: throw AssertionError()
+    }
+    private fun assertFields(owner: Activity, expectedPassword: String, includePassword: Boolean, includeConfirmation: Boolean) {
+        var preserved = false
+        instrumentation.runOnMainSync {
+            preserved = field(owner, "표시 이름").text.toString() == "Synthetic Android Owner" &&
+                (!includePassword || field(owner, "새 비밀번호 · 15~128자").text.contentEquals(expectedPassword)) &&
+                (!includeConfirmation || field(owner, "새 비밀번호 확인").text.contentEquals(expectedPassword))
+        }
+        // Only the boolean escapes the UI callback. Never print actual text or lengths.
+        assertTrue(preserved)
+    }
+    private fun assertInputPolicy(owner: Activity) {
+        var valid = false
+        instrumentation.runOnMainSync {
+            val source = field(owner, "새 비밀번호 · 15~128자").text
+            val secret = CharArray(source.length).also { source.getChars(0, source.length, it, 0) }
+            try {
+                valid = NativeOnboardingPolicy.name(field(owner, "표시 이름").text.toString()) &&
+                    NativeOnboardingPolicy.password(secret) && field(owner, "새 비밀번호 확인").text.contentEquals(source)
+            } finally { secret.fill('\u0000') }
+        }
+        assertTrue(valid)
+    }
+    private fun publicStatus(view: View): CloudStatus? {
+        // Inputs are never inspected for status classification, even if their value resembles a message.
+        if (view is EditText) return null
+        if (view is TextView) publicStatuses[view.text.toString()]?.let { return it }
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            publicStatus(view.getChildAt(index))?.let { return it }
+        }
+        return null
+    }
+    private fun flowState(main: MainActivity, form: Activity): FlowFailure {
+        var result: FlowFailure? = null
+        instrumentation.runOnMainSync {
+            val bits = listOf(NativeAuthSession.get(context).hasLocalSession(),
+                !AppLockController.get(context).locked, resumed() === main)
+                .joinToString("") { if (it) "1" else "0" }
+            result = FlowFailure(bits, publicStatus(form.window.decorView) ?: CloudStatus.NOT_RECOGNIZED)
+        }
+        return result!!
+    }
+    private fun awaitFlow(main: MainActivity, form: Activity, bit: Int, deadline: Long) {
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (flowState(main, form).flow[bit] == '1') return
+            SystemClock.sleep(100)
+        }
+        throw flowState(main, form)
+    }
+
     private fun evaluateBoolean(main: MainActivity, script: String): Boolean {
         val latch = CountDownLatch(1)
         var value = false
@@ -279,15 +369,31 @@ class AndroidCloudOnboardingTest {
             // Generated solely in native test memory; never an argument, log or fixture file.
             val password = UUID.randomUUID().toString() + UUID.randomUUID().toString()
             at(CloudStage.FILL_NAME) { fill(form, "표시 이름", "Synthetic Android Owner") }
+            at(CloudStage.NAME_PRESERVED) { assertFields(form, password, false, false) }
             at(CloudStage.FILL_PASSWORD) { fill(form, "새 비밀번호 · 15~128자", password) }
+            at(CloudStage.PASSWORD_PRESERVED) { assertFields(form, password, true, false) }
             at(CloudStage.FILL_CONFIRMATION) { fill(form, "새 비밀번호 확인", password) }
-            at(CloudStage.SUBMIT_VALID) { click(form, "가계 만들고 시작") }
-            at(CloudStage.SESSION_AND_MAIN) {
-                awaitState("real session and unlocked main") {
-                    NativeAuthSession.get(context).hasLocalSession() &&
-                        !AppLockController.get(context).locked && resumed() === main
-                }
+            at(CloudStage.CONFIRMATION_PRESERVED) { assertFields(form, password, true, true) }
+            val submit = at(CloudStage.PREPARE_VALID_SUBMIT) {
+                readyControl(form, "가계 만들고 시작").also { scrollIntoView(form, it) }
             }
+            // Check AFTER the final IME/scroll interaction, immediately before the real click.
+            at(CloudStage.PRESUBMIT_FIELDS) { assertFields(form, password, true, true) }
+            at(CloudStage.PRESUBMIT_POLICY) { assertInputPolicy(form) }
+            at(CloudStage.PRESUBMIT_READY) {
+                var ready = false
+                instrumentation.runOnMainSync {
+                    ready = resumed() === form && form.hasWindowFocus() && !form.isFinishing && !form.isDestroyed &&
+                        !form.getSystemService(KeyguardManager::class.java).isDeviceLocked &&
+                        !NativeAuthSession.get(context).hasLocalSession()
+                }
+                assertTrue(ready)
+            }
+            at(CloudStage.SUBMIT_VALID) { interaction(form, submit) { target(form, submit).perform(click()) } }
+            val deadline = SystemClock.elapsedRealtime() + 30_000
+            at(CloudStage.SESSION_CREATED) { awaitFlow(main, form, 0, deadline) }
+            at(CloudStage.APP_UNLOCKED) { awaitFlow(main, form, 1, deadline) }
+            at(CloudStage.MAIN_RESUMED) { awaitFlow(main, form, 2, deadline) }
             at(CloudStage.BRIDGE_READY) { assertTrue(main.secureBridgeReady) }
             at(CloudStage.AUTHENTICATED_HOME) { awaitWebState("authenticated home API data", main, authenticatedHome) }
         } finally {

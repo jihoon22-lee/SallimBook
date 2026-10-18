@@ -21,6 +21,7 @@ from scripts.android_cloud_results import (
     ONBOARDING_METHOD,
     ONBOARDING_REASONS,
     ONBOARDING_STAGES,
+    ONBOARDING_STATUSES,
     failure_details,
     failure_stage,
     save_instrumentation,
@@ -108,7 +109,8 @@ class CloudSupportTests(unittest.TestCase):
                 "failure",
                 message=(
                     "java.lang.AssertionError: SALLIMBOOK_CLOUD_STAGE: FILL_PASSWORD; "
-                    "REASON: ACTION_FAILED; PRE: 1110; POST: 1110"
+                    "REASON: ACTION_FAILED; PRE: 1110; POST: 1110; "
+                    "FLOW: 000; STATUS: REQUEST_PENDING"
                 ),
             )
             failure.text = "synthetic-sensitive stack and view snapshot"
@@ -128,6 +130,8 @@ class CloudSupportTests(unittest.TestCase):
                     "reason": "ACTION_FAILED",
                     "pre": "1110",
                     "post": "1110",
+                    "flow": "000",
+                    "status": "REQUEST_PENDING",
                 },
             )
             self.assertEqual(
@@ -203,6 +207,8 @@ class CloudSupportTests(unittest.TestCase):
                 reason="ROOT_NOT_FOCUSED",
                 pre="0110",
                 post="0010",
+                flow="000",
+                status="NETWORK_UNAVAILABLE",
                 message="synthetic-sensitive",
             )
             problem.text = "synthetic-sensitive trace"
@@ -230,6 +236,8 @@ class CloudSupportTests(unittest.TestCase):
             self.assertIn('reason="ROOT_NOT_FOCUSED"', safe)
             self.assertIn('pre="0110"', safe)
             self.assertIn('post="0010"', safe)
+            self.assertIn('flow="000"', safe)
+            self.assertIn('status="NETWORK_UNAVAILABLE"', safe)
             self.assertEqual(json.loads((output / "summary.json").read_text())["status"], "FAIL")
 
     def test_reason_and_boolean_diagnostics_are_bounded_and_never_copy_dynamic_text(self):
@@ -287,6 +295,65 @@ class CloudSupportTests(unittest.TestCase):
         node.set("post", "synthetic-sensitive")
         self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
 
+    def test_flow_and_public_status_diagnostics_reject_unknown_or_sensitive_details(self):
+        for status in ONBOARDING_STATUSES:
+            for flow in ("000", "111", "101", "---"):
+                marker = (
+                    "SALLIMBOOK_CLOUD_STAGE: SESSION_CREATED; REASON: ASSERTION; "
+                    f"PRE: ----; POST: ----; FLOW: {flow}; STATUS: {status}"
+                )
+                node = ET.Element("failure", message=marker)
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node),
+                    {
+                        "stage": "SESSION_CREATED",
+                        "reason": "ASSERTION",
+                        "pre": "----",
+                        "post": "----",
+                        "flow": flow,
+                        "status": status,
+                    },
+                )
+        for field, value in (
+            ("flow", "1111"),
+            ("flow", "1-1"),
+            ("flow", "true"),
+            ("flow", "111 synthetic-sensitive"),
+            ("status", "unknown"),
+            ("status", "NETWORK_UNAVAILABLE synthetic-sensitive"),
+            ("status", "synthetic-sensitive"),
+        ):
+            node = ET.Element(
+                "failure",
+                stage="SESSION_CREATED",
+                reason="ASSERTION",
+                pre="----",
+                post="----",
+                flow="000",
+                status="NETWORK_UNAVAILABLE",
+            )
+            node.set(field, value)
+            self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        node = ET.Element(
+            "failure",
+            message=(
+                "SALLIMBOOK_CLOUD_STAGE: SESSION_CREATED; REASON: ASSERTION; "
+                "PRE: ----; POST: ----; "
+                "FLOW: 000; STATUS: NETWORK_UNAVAILABLE synthetic-sensitive"
+            ),
+        )
+        self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        node = ET.Element(
+            "failure",
+            stage="SESSION_CREATED",
+            reason="ASSERTION",
+            pre="----",
+            post="----",
+            flow="000",
+            status="NETWORK_UNAVAILABLE",
+        )
+        self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD + "Other", node), {})
+
     def test_stage_allowlist_exactly_matches_native_test_enum(self):
         source = Path(__file__).resolve().parents[1] / (
             "apps/client/android/app/src/androidTest/java/io/github/jihoon22lee/"
@@ -297,6 +364,17 @@ class CloudSupportTests(unittest.TestCase):
         self.assertEqual(values, ONBOARDING_STAGES)
         reasons = re.search(r"enum class CloudReason\s*\{([^}]+)\}", source.read_text())[1]
         self.assertEqual({value.strip() for value in reasons.split(",")}, ONBOARDING_REASONS)
+        statuses = re.search(r"enum class CloudStatus\s*\{([^}]+)\}", source.read_text())[1]
+        self.assertEqual({value.strip() for value in statuses.split(",")}, ONBOARDING_STATUSES)
+        # Every mapped UI message must be a public literal in the production screen.
+        production = (
+            source.parents[6]
+            / "main/java/io/github/jihoon22lee/sallimbook/auth/NativeOnboardingActivity.kt"
+        )
+        messages = re.findall(r'"([^"\n]+)" to CloudStatus\.[A-Z_]+', source.read_text())
+        self.assertGreater(len(messages), 0)
+        for message in messages:
+            self.assertIn('"' + message + '"', production.read_text())
         for value in values:
             for prefix in ("", "java.lang.AssertionError: "):
                 node = ET.Element("failure", message=prefix + "SALLIMBOOK_CLOUD_STAGE: " + value)

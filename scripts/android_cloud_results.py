@@ -31,10 +31,19 @@ ONBOARDING_STAGES = frozenset(
         "INVALID_INPUT",
         "INVALID_SESSION_EMPTY",
         "FILL_NAME",
+        "NAME_PRESERVED",
         "FILL_PASSWORD",
+        "PASSWORD_PRESERVED",
         "FILL_CONFIRMATION",
+        "CONFIRMATION_PRESERVED",
+        "PREPARE_VALID_SUBMIT",
+        "PRESUBMIT_FIELDS",
+        "PRESUBMIT_POLICY",
+        "PRESUBMIT_READY",
         "SUBMIT_VALID",
-        "SESSION_AND_MAIN",
+        "SESSION_CREATED",
+        "APP_UNLOCKED",
+        "MAIN_RESUMED",
         "BRIDGE_READY",
         "AUTHENTICATED_HOME",
         "FINISH_MAIN",
@@ -61,6 +70,32 @@ ONBOARDING_REASONS = frozenset(
 )
 
 
+ONBOARDING_STATUSES = frozenset(
+    {
+        "NOT_CHECKED",
+        "NOT_RECOGNIZED",
+        "INPUT_INVALID",
+        "REQUEST_PENDING",
+        "RESULT_DISCARDED",
+        "FOCUS_INTERRUPTED",
+        "SETUP_UNAVAILABLE",
+        "SETUP_COMPLETE",
+        "INVALID_CONNECTION_CODE",
+        "HOUSEHOLD_FULL",
+        "REGISTRATION_OR_LOGIN_CONFLICT",
+        "RATE_LIMITED",
+        "REAUTHENTICATION_REQUIRED",
+        "AUTH_FAILED",
+        "REQUEST_INVALID",
+        "NETWORK_UNAVAILABLE",
+        "SESSION_EXPIRED",
+        "KEY_INVALIDATED",
+        "CANCELLED_OR_LOCKED",
+        "AUTH_UNAVAILABLE",
+    }
+)
+
+
 def failure_details(classname, method, problem):
     if (
         classname != ONBOARDING_CLASS
@@ -69,28 +104,43 @@ def failure_details(classname, method, problem):
     ):
         return {}
 
-    def validated(stage, reason=None, before=None, after=None):
+    def validated(stage, reason=None, before=None, after=None, flow=None, status=None):
         if stage not in ONBOARDING_STAGES:
             return {}
-        if reason is None and before is None and after is None:
+        if reason is None and before is None and after is None and flow is None and status is None:
             return {"stage": stage}
         if reason not in ONBOARDING_REASONS or not all(
             isinstance(bits, str) and re.fullmatch(r"(?:[01]{4}|----)", bits)
             for bits in (before, after)
         ):
             return {}
-        return {"stage": stage, "reason": reason, "pre": before, "post": after}
+        result = {"stage": stage, "reason": reason, "pre": before, "post": after}
+        if flow is None and status is None:
+            return result
+        if (
+            status not in ONBOARDING_STATUSES
+            or not isinstance(flow, str)
+            or not re.fullmatch(r"(?:[01]{3}|---)", flow)
+        ):
+            return {}
+        return {**result, "flow": flow, "status": status}
 
     # Already-sanitized intermediate XML is checked again by the workflow.
     if problem.get("stage") is not None:
         return validated(
-            problem.get("stage"), problem.get("reason"), problem.get("pre"), problem.get("post")
+            problem.get("stage"),
+            problem.get("reason"),
+            problem.get("pre"),
+            problem.get("post"),
+            problem.get("flow"),
+            problem.get("status"),
         )
     # Android's XmlTestRunListener may put the exception only in element text.
     # The native test removes its stack: accept one exact line, never parse a trace.
     marker = (
         r"(?:java\.lang\.AssertionError: )?SALLIMBOOK_CLOUD_STAGE: ([A-Z_]+)"
         r"(?:; REASON: ([A-Z_]+); PRE: ([01-]{4}); POST: ([01-]{4}))?"
+        r"(?:; FLOW: ([01-]{3}); STATUS: ([A-Z_]+))?"
     )
     candidates = [
         problem.get("message", ""),
