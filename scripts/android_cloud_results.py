@@ -65,6 +65,7 @@ ONBOARDING_REASONS = frozenset(
         "INJECTION_REJECTED",
         "INTERRUPTED",
         "SCROLL_LIMIT",
+        "SCROLL_NOT_SETTLED",
         "UNKNOWN",
     }
 )
@@ -104,10 +105,19 @@ def failure_details(classname, method, problem):
     ):
         return {}
 
-    def validated(stage, reason=None, before=None, after=None, flow=None, status=None):
+    def validated(
+        stage,
+        reason=None,
+        before=None,
+        after=None,
+        flow=None,
+        status=None,
+        tap=None,
+        tap_status=None,
+    ):
         if stage not in ONBOARDING_STAGES:
             return {}
-        if reason is None and before is None and after is None and flow is None and status is None:
+        if all(value is None for value in (reason, before, after, flow, status, tap, tap_status)):
             return {"stage": stage}
         if reason not in ONBOARDING_REASONS or not all(
             isinstance(bits, str) and re.fullmatch(r"(?:[01]{4}|----)", bits)
@@ -115,7 +125,7 @@ def failure_details(classname, method, problem):
         ):
             return {}
         result = {"stage": stage, "reason": reason, "pre": before, "post": after}
-        if flow is None and status is None:
+        if flow is None and status is None and tap is None and tap_status is None:
             return result
         if (
             status not in ONBOARDING_STATUSES
@@ -123,7 +133,16 @@ def failure_details(classname, method, problem):
             or not re.fullmatch(r"(?:[01]{3}|---)", flow)
         ):
             return {}
-        return {**result, "flow": flow, "status": status}
+        result.update(flow=flow, status=status)
+        if tap is None and tap_status is None:
+            return result
+        if (
+            tap_status not in ONBOARDING_STATUSES
+            or not isinstance(tap, str)
+            or not re.fullmatch(r"(?:[01]{5}|-----)", tap)
+        ):
+            return {}
+        return {**result, "tap": tap, "tap_status": tap_status}
 
     # Already-sanitized intermediate XML is checked again by the workflow.
     if problem.get("stage") is not None:
@@ -134,6 +153,8 @@ def failure_details(classname, method, problem):
             problem.get("post"),
             problem.get("flow"),
             problem.get("status"),
+            problem.get("tap"),
+            problem.get("tap_status"),
         )
     # Android's XmlTestRunListener may put the exception only in element text.
     # The native test removes its stack: accept one exact line, never parse a trace.
@@ -141,6 +162,7 @@ def failure_details(classname, method, problem):
         r"(?:java\.lang\.AssertionError: )?SALLIMBOOK_CLOUD_STAGE: ([A-Z_]+)"
         r"(?:; REASON: ([A-Z_]+); PRE: ([01-]{4}); POST: ([01-]{4}))?"
         r"(?:; FLOW: ([01-]{3}); STATUS: ([A-Z_]+))?"
+        r"(?:; TAP: ([01-]{5}); TAP_STATUS: ([A-Z_]+))?"
     )
     candidates = [
         problem.get("message", ""),

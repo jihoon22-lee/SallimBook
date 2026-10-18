@@ -3,9 +3,15 @@ package io.github.jihoon22lee.sallimbook
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Intent
+import android.graphics.Rect
 import android.os.SystemClock
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.Choreographer
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.view.WindowInsets
 import android.webkit.WebView
 import android.widget.TextView
 import android.widget.EditText
@@ -57,7 +63,7 @@ class AndroidCloudOnboardingTest {
     private enum class CloudReason {
         ASSERTION, NO_MATCHING_VIEW, AMBIGUOUS_VIEW, NO_MATCHING_ROOT, ROOT_NOT_FOCUSED,
         DETACHED_VIEW, SCROLL_CONSTRAINT, ACTION_FAILED, UI_NOT_IDLE, INJECTION_REJECTED,
-        INTERRUPTED, SCROLL_LIMIT, UNKNOWN
+        INTERRUPTED, SCROLL_LIMIT, SCROLL_NOT_SETTLED, UNKNOWN
     }
     private enum class CloudStatus {
         NOT_CHECKED, NOT_RECOGNIZED, INPUT_INVALID, REQUEST_PENDING, RESULT_DISCARDED,
@@ -88,6 +94,10 @@ class AndroidCloudOnboardingTest {
     )
     // Flow bits: native session exists, app unlocked, original MainActivity resumed.
     private class FlowFailure(val flow: String, val status: CloudStatus) : RuntimeException()
+    // Last tap only: name preserved, password empty, confirmation empty, status updated,
+    // window focus lost. A normal successful departure can also lose window focus.
+    private data class TapState(val bits: String, val status: CloudStatus)
+    private var tapState = TapState("-----", CloudStatus.NOT_CHECKED)
     // The order is public and fixed: focused owner, attached to that root, scroll constraint, >=90% visible.
     private data class ControlState(val focused: Boolean, val attached: Boolean, val constraint: Boolean, val displayed: Boolean) {
         fun bits() = listOf(focused, attached, constraint, displayed).joinToString("") { if (it) "1" else "0" }
@@ -119,7 +129,7 @@ class AndroidCloudOnboardingTest {
             val after = detail?.after?.bits() ?: "----"
             val flow = outcome?.flow ?: "---"
             val status = outcome?.status ?: CloudStatus.NOT_CHECKED
-            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after; FLOW: $flow; STATUS: ${status.name}")
+            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after; FLOW: $flow; STATUS: ${status.name}; TAP: ${tapState.bits}; TAP_STATUS: ${tapState.status.name}")
                 .apply { stackTrace = emptyArray() }
         }
     }
@@ -194,13 +204,69 @@ class AndroidCloudOnboardingTest {
         }
         throw InteractionFailure(code, before, state)
     }
+    // Geometry remains only in native test memory; never format it in diagnostics.
+    private data class ScrollGeometry(
+        val scrollX: Int, val scrollY: Int, val target: Rect, val viewport: Rect,
+        val window: Rect, val focused: Boolean, val attached: Boolean,
+        val laidOut: Boolean, val displayed: Boolean, val inputFocused: Boolean, val ime: Boolean
+    )
+    private fun awaitScrollSettled(owner: Activity, view: View, container: ScrollView?) {
+        val before = controlState(owner, view)
+        val completed = CountDownLatch(1)
+        var settled = false
+        var previous: ScrollGeometry? = null
+        var stableSince = 0L
+        var quietFrames = 0
+        lateinit var callback: Choreographer.FrameCallback
+        instrumentation.runOnMainSync {
+            val choreographer = Choreographer.getInstance()
+            callback = Choreographer.FrameCallback {
+                val now = SystemClock.elapsedRealtime()
+                val position = IntArray(2)
+                view.getLocationOnScreen(position)
+                val viewport = Rect().also { (container ?: owner.window.decorView).getGlobalVisibleRect(it) }
+                val window = Rect().also { owner.window.decorView.getWindowVisibleDisplayFrame(it) }
+                val state = ScrollGeometry(container?.scrollX ?: 0, container?.scrollY ?: 0,
+                    Rect(position[0], position[1], position[0] + view.width, position[1] + view.height),
+                    viewport, window, resumed() === owner && owner.hasWindowFocus(),
+                    view.isAttachedToWindow && view.rootView === owner.window.decorView,
+                    view.isLaidOut && !view.isLayoutRequested && container?.isLayoutRequested != true &&
+                        !owner.window.decorView.isLayoutRequested,
+                    isDisplayingAtLeast(90).matches(view), view.hasFocus(),
+                    view.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true)
+                if (state != previous || !state.focused || !state.attached || !state.laidOut || state.ime) {
+                    previous = state
+                    stableSince = now
+                    quietFrames = 0
+                }
+                // Android 16 ScrollView intercepts DOWN during fling/edge effects. Glow
+                // absorb+recede can take ~800ms; stretch uses a damped spring, not that timer.
+                // Require 1s unchanged geometry and two subsequent animation frames; this
+                // is conservative test synchronization, not a claimed universal effect bound.
+                // AOSP android-16.0.0_r1: ScrollView.onInterceptTouchEvent, EdgeEffect.draw.
+                if (now - stableSince >= 1_000) quietFrames++
+                if (quietFrames >= 2) {
+                    settled = true
+                    completed.countDown()
+                } else choreographer.postFrameCallback(callback)
+            }
+            choreographer.postFrameCallback(callback)
+        }
+        try {
+            if (!completed.await(10, TimeUnit.SECONDS))
+                throw InteractionFailure(CloudReason.SCROLL_NOT_SETTLED, before, controlState(owner, view))
+        } finally {
+            instrumentation.runOnMainSync { Choreographer.getInstance().removeFrameCallback(callback) }
+        }
+        if (!settled) throw InteractionFailure(CloudReason.SCROLL_NOT_SETTLED, before, controlState(owner, view))
+        checkControl(before, controlState(owner, view))
+    }
     private fun scrollIntoView(owner: Activity, view: View) {
         // A user can dismiss the IME before scrolling. Do not call listeners directly,
         // lower Espresso's visibility threshold, or assume requestRectangleOnScreen worked.
         interaction(owner, view) { Espresso.closeSoftKeyboard() }
         val before = controlState(owner, view)
         checkControl(before, before)
-        if (before!!.displayed) return
         var scroll: ScrollView? = null
         instrumentation.runOnMainSync {
             var ancestor = view.parent
@@ -209,6 +275,8 @@ class AndroidCloudOnboardingTest {
                 ancestor = ancestor.parent
             }
         }
+        awaitScrollSettled(owner, view, scroll)
+        if (controlState(owner, view)?.displayed == true) return
         val container = scroll ?: throw InteractionFailure(CloudReason.SCROLL_CONSTRAINT, before, controlState(owner, view))
         repeat(6) {
             val state = controlState(owner, view)
@@ -221,6 +289,7 @@ class AndroidCloudOnboardingTest {
                 above = control[1] < viewport[1] + container.paddingTop
             }
             interaction(owner, view) { target(owner, container).perform(if (above) swipeDown() else swipeUp()) }
+            awaitScrollSettled(owner, view, container)
         }
         val after = controlState(owner, view)
         checkControl(before, after)
@@ -276,6 +345,52 @@ class AndroidCloudOnboardingTest {
             publicStatus(view.getChildAt(index))?.let { return it }
         }
         return null
+    }
+    private fun publicStatusView(view: View): TextView? {
+        if (view is EditText) return null
+        if (view is TextView && publicStatuses.containsKey(view.text.toString())) return view
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            publicStatusView(view.getChildAt(index))?.let { return it }
+        }
+        return null
+    }
+    private fun observeSubmit(owner: Activity, action: () -> Unit) {
+        var updated = false
+        var focusLost = false
+        lateinit var name: EditText
+        lateinit var password: EditText
+        lateinit var confirmation: EditText
+        lateinit var status: TextView
+        lateinit var observer: ViewTreeObserver
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) { updated = true }
+        }
+        val focus = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus -> if (!hasFocus) focusLost = true }
+        instrumentation.runOnMainSync {
+            name = field(owner, "표시 이름")
+            password = field(owner, "새 비밀번호 · 15~128자")
+            confirmation = field(owner, "새 비밀번호 확인")
+            status = publicStatusView(owner.window.decorView) ?: throw AssertionError()
+            observer = owner.window.decorView.viewTreeObserver
+            status.addTextChangedListener(watcher)
+            observer.addOnWindowFocusChangeListener(focus)
+        }
+        try { action() }
+        finally {
+            instrumentation.runOnMainSync {
+                try {
+                    tapState = TapState(listOf(name.text.toString() == "Synthetic Android Owner",
+                        password.text.isEmpty(), confirmation.text.isEmpty(), updated, focusLost)
+                        .joinToString("") { if (it) "1" else "0" },
+                        publicStatuses[status.text.toString()] ?: CloudStatus.NOT_RECOGNIZED)
+                } finally {
+                    status.removeTextChangedListener(watcher)
+                    if (observer.isAlive) observer.removeOnWindowFocusChangeListener(focus)
+                }
+            }
+        }
     }
     private fun flowState(main: MainActivity, form: Activity): FlowFailure {
         var result: FlowFailure? = null
@@ -389,7 +504,9 @@ class AndroidCloudOnboardingTest {
                 }
                 assertTrue(ready)
             }
-            at(CloudStage.SUBMIT_VALID) { interaction(form, submit) { target(form, submit).perform(click()) } }
+            at(CloudStage.SUBMIT_VALID) {
+                observeSubmit(form) { interaction(form, submit) { target(form, submit).perform(click()) } }
+            }
             val deadline = SystemClock.elapsedRealtime() + 30_000
             at(CloudStage.SESSION_CREATED) { awaitFlow(main, form, 0, deadline) }
             at(CloudStage.APP_UNLOCKED) { awaitFlow(main, form, 1, deadline) }

@@ -110,7 +110,7 @@ class CloudSupportTests(unittest.TestCase):
                 message=(
                     "java.lang.AssertionError: SALLIMBOOK_CLOUD_STAGE: FILL_PASSWORD; "
                     "REASON: ACTION_FAILED; PRE: 1110; POST: 1110; "
-                    "FLOW: 000; STATUS: REQUEST_PENDING"
+                    "FLOW: 000; STATUS: REQUEST_PENDING; TAP: 11110; TAP_STATUS: REQUEST_PENDING"
                 ),
             )
             failure.text = "synthetic-sensitive stack and view snapshot"
@@ -132,6 +132,8 @@ class CloudSupportTests(unittest.TestCase):
                     "post": "1110",
                     "flow": "000",
                     "status": "REQUEST_PENDING",
+                    "tap": "11110",
+                    "tap_status": "REQUEST_PENDING",
                 },
             )
             self.assertEqual(
@@ -209,6 +211,8 @@ class CloudSupportTests(unittest.TestCase):
                 post="0010",
                 flow="000",
                 status="NETWORK_UNAVAILABLE",
+                tap="11110",
+                tap_status="REQUEST_PENDING",
                 message="synthetic-sensitive",
             )
             problem.text = "synthetic-sensitive trace"
@@ -238,6 +242,8 @@ class CloudSupportTests(unittest.TestCase):
             self.assertIn('post="0010"', safe)
             self.assertIn('flow="000"', safe)
             self.assertIn('status="NETWORK_UNAVAILABLE"', safe)
+            self.assertIn('tap="11110"', safe)
+            self.assertIn('tap_status="REQUEST_PENDING"', safe)
             self.assertEqual(json.loads((output / "summary.json").read_text())["status"], "FAIL")
 
     def test_reason_and_boolean_diagnostics_are_bounded_and_never_copy_dynamic_text(self):
@@ -353,6 +359,61 @@ class CloudSupportTests(unittest.TestCase):
             status="NETWORK_UNAVAILABLE",
         )
         self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD + "Other", node), {})
+
+    def test_tap_diagnostics_reject_partial_dynamic_or_unrelated_metadata(self):
+        baseline = {
+            "stage": "SESSION_CREATED",
+            "reason": "ASSERTION",
+            "pre": "----",
+            "post": "----",
+            "flow": "000",
+            "status": "INPUT_INVALID",
+        }
+        for bits in ("10000", "11110", "01111", "-----"):
+            for status in ONBOARDING_STATUSES:
+                expected = {**baseline, "tap": bits, "tap_status": status}
+                node = ET.Element("failure", **expected)
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), expected
+                )
+                marker = (
+                    "SALLIMBOOK_CLOUD_STAGE: SESSION_CREATED; REASON: ASSERTION; "
+                    "PRE: ----; POST: ----; FLOW: 000; STATUS: INPUT_INVALID; "
+                    f"TAP: {bits}; TAP_STATUS: {status}"
+                )
+                node = ET.Element("failure", message=marker)
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), expected
+                )
+                node.set("message", marker + " synthetic-sensitive")
+                self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        for field, value in (
+            ("tap", "1111"),
+            ("tap", "1-111"),
+            ("tap", "true"),
+            ("tap", "11111 synthetic-sensitive"),
+            ("tap_status", "unknown"),
+            ("tap_status", "INPUT_INVALID synthetic-sensitive"),
+        ):
+            attributes = {
+                **baseline,
+                "tap": "10000",
+                "tap_status": "INPUT_INVALID",
+                field: value,
+            }
+            node = ET.Element("failure", **attributes)
+            self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        for missing in ("reason", "pre", "post", "flow", "status", "tap", "tap_status"):
+            attributes = {**baseline, "tap": "10000", "tap_status": "INPUT_INVALID"}
+            del attributes[missing]
+            node = ET.Element("failure", **attributes)
+            self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
+        node = ET.Element("failure", **baseline, tap="10000", tap_status="INPUT_INVALID")
+        self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD + "Other", node), {})
+        node = ET.Element(
+            "failure", stage="SESSION_CREATED", tap="10000", tap_status="INPUT_INVALID"
+        )
+        self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
 
     def test_stage_allowlist_exactly_matches_native_test_enum(self):
         source = Path(__file__).resolve().parents[1] / (
