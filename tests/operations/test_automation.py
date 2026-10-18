@@ -358,6 +358,43 @@ class RestoreIntegrity(unittest.TestCase):
 class RuntimeBoundaries(unittest.TestCase):
     setUp = Boundaries.setUp
 
+    def test_health_checks_build_and_daemon_filesystems(self):
+        item = self.make_runtime()
+        receipt = {"completed_at": datetime.now(UTC).isoformat()}
+        for state_free, build_free, docker_free in (
+            (2 * 1024**3, 2 * 1024**3, 2 * 1024**3),
+            (2 * 1024**3, 0, 2 * 1024**3),
+            (2 * 1024**3, 2 * 1024**3, 0),
+        ):
+            with (
+                self.subTest(build_free=build_free, docker_free=docker_free),
+                patch.object(item, "services", return_value={}),
+                patch.object(item, "scanner", return_value={"fresh": True}),
+                patch.object(item, "latest_backup", return_value=receipt),
+                patch.object(
+                    item,
+                    "worker",
+                    side_effect=[
+                        {"disk_free_bytes": 2 * 1024**3},
+                        {"disk_free_bytes": docker_free},
+                    ],
+                ) as worker_call,
+                patch.object(
+                    runtime.shutil,
+                    "disk_usage",
+                    side_effect=[MagicMock(free=state_free), MagicMock(free=build_free)],
+                ),
+            ):
+                if min(build_free, docker_free) == 0:
+                    with self.assertRaisesRegex(auto.AutomationError, "DISK_SPACE_LOW"):
+                        item.health()
+                else:
+                    result = item.health()
+                    self.assertEqual(result["build_disk_free_bytes"], build_free)
+                    self.assertEqual(result["docker_disk_free_bytes"], docker_free)
+                self.assertEqual(worker_call.call_args.args, ("storage",))
+                self.assertEqual(worker_call.call_args.kwargs, {"timeout": 60})
+
     def make_runtime(self):
         journal = auto.Journal(self.config, "cvd-refresh", "d" * 64)
         binding = {
@@ -486,6 +523,7 @@ class RuntimeBoundaries(unittest.TestCase):
             return ""
 
         with ExitStack() as stack:
+            stack.enter_context(patch("ops.cvd_retention.Retention.prepare"))
             stack.enter_context(patch.object(item, "preflight"))
             stack.enter_context(patch.object(item, "services"))
             stack.enter_context(
@@ -524,6 +562,7 @@ class RuntimeBoundaries(unittest.TestCase):
             return ""
 
         with ExitStack() as stack:
+            stack.enter_context(patch("ops.cvd_retention.Retention.prepare"))
             stack.enter_context(patch.object(item, "preflight"))
             stack.enter_context(
                 patch.object(

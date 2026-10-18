@@ -20,8 +20,11 @@ from ops.deploy import validate as validate_deployment
 
 ROOT = Path(__file__).resolve().parents[1]
 TASKS = {"backup", "health", "restore-check", "cvd-refresh", "startup", "recover"}
+BACKUP_WORKER_TIMEOUT = 1800
+# Source checks, network/image checks, helper extraction, ack and failed-worker cleanup.
+BACKUP_OVERHEAD_BUDGET = 900
 LIMITS = {
-    "backup": 1800,
+    "backup": BACKUP_WORKER_TIMEOUT + BACKUP_OVERHEAD_BUDGET,
     "health": 300,
     "restore-check": 7200,
     "cvd-refresh": 3600,
