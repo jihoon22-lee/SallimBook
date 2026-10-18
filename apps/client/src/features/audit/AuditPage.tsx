@@ -30,7 +30,7 @@ function AuditResults({ query, members }: { query: AuditQuery; members: Househol
   return <section className="card audit-results" aria-label="감사 기록 목록">
     <h2>감사 기록</h2><p>최신 기록부터 보여요. 추가 페이지를 읽는 동안 새 기록이 생길 수 있으므로 최신 상태는 처음부터 다시 확인해 주세요.</p>
     <AuditError error={list.error} />
-    {list.loading && <p role="status">감사 기록을 불러오고 있어요.</p>}
+    {list.loading && <p className="loading-state" role="status">감사 기록을 불러오고 있어요.</p>}
     {!list.loading && !list.error && !list.items.length && <p>이 조건에 맞는 감사 기록이 없어요.</p>}
     {!list.error && <ol className="record-list">{list.items.map((row) => <li key={row.id}>
       <h3>{entityLabels[row.entity_type] ?? row.entity_type} · {actionLabels[row.action] ?? row.action}</h3>

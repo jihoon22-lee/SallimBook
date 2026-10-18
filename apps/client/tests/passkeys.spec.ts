@@ -57,7 +57,7 @@ async function mockPasskeys(page: Page, options: { signedIn?: boolean; expired?:
 
 async function fillPasskeyLogin(page: Page) {
   await page.getByLabel("로그인 이름", { exact: true }).fill("synthetic.passkey");
-  await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 패스키 브라우저");
+  await page.getByText("기기 이름 변경", { exact: true }).click(); await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 패스키 브라우저");
 }
 async function observations(page: Page) {
   return page.evaluate(() => (window as unknown as { __passkeyUI: { calls: number; aborted: boolean; binary: boolean } }).__passkeyUI);

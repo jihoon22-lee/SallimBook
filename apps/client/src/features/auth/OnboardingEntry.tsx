@@ -21,9 +21,9 @@ export function useSetupAvailability() {
   return { available, error, retry: () => setAttempt((value) => value + 1) };
 }
 
-export function OnboardingChoices({ loginLink = false }: { loginLink?: boolean }) {
+export function OnboardingChoices({ loginLink = false, compact = false }: { loginLink?: boolean; compact?: boolean }) {
   const setup = useSetupAvailability();
-  return <section className="card" aria-labelledby="first-start-title">
+  return <section className={`card onboarding-choices${compact ? " compact" : ""}`} aria-labelledby="first-start-title">
     <h2 id="first-start-title">둘이 함께 시작해요</h2>
     {setup.available === null && !setup.error && <p role="status">가계 시작 상태를 확인하고 있어요.</p>}
     <AuthError error={setup.error} />

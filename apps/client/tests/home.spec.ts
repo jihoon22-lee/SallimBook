@@ -4,6 +4,7 @@ test("home preserves asset and consumable priority without inventing zero balanc
   page,
 }) => {
   const errors: string[] = [];
+  await page.route("**/api/v1/household/setup", (route) => route.fulfill({ json: { available: false } }));
   await page.route("**/api/v1/me", (route) => route.fulfill({
     status: 401, contentType: "application/json",
     body: JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", request_id: "synthetic" } }),
@@ -12,9 +13,9 @@ test("home preserves asset and consumable priority without inventing zero balanc
   await page.goto("/");
   await expect(page).toHaveTitle("SallimBook · 살림북");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "함께 살피는 오늘의 살림",
+    "오늘의 살림",
   );
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(page.locator(".dashboard-grid").getByRole("heading", { level: 2 })).toHaveText([
     "자산의 변화",
     "살펴볼 소모품",
   ]);

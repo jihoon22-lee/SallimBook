@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 import { useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { formatMonth, isValidMonth, MonthPicker, useMonth } from "./MonthContext";
@@ -7,7 +8,7 @@ export function RelatedLinks({ links }: { links: ScreenLink[] }) {
   return (
     <ul className="related-links">
       {links.map((link) => <li key={link.to}>
-        <Link to={link.to}><span><strong>{link.label}</strong>{link.description && <small>{link.description}</small>}</span><span aria-hidden="true">↗</span></Link>
+        <Link to={link.to}><span><strong>{link.label}</strong>{link.description && <small>{link.description}</small>}</span><Icon name="arrow-up-right" size={18} /></Link>
       </li>)}
     </ul>
   );

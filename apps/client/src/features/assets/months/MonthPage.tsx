@@ -38,7 +38,7 @@ function MonthHistory({ month, refresh }: { month: string; refresh: string }) {
     finally { if (mounted.current && current === generation.current) setLoading(false); }
   }, [api, month, mounted]);
   useEffect(() => { void load(); return () => { generation.current++; }; }, [load, refresh]);
-  return <section className="card" aria-labelledby="month-history-title"><h2 id="month-history-title">확정·정정 이력</h2><p>각 기록의 당시 범위와 금액을 별도로 확인할 수 있어요.</p><MonthError error={error} />{loading && <p role="status">기록 이력을 불러오고 있어요.</p>}
+  return <section className="card" aria-labelledby="month-history-title"><h2 id="month-history-title">확정·정정 이력</h2><p>각 기록의 당시 범위와 금액을 별도로 확인할 수 있어요.</p><MonthError error={error} />{loading && <p className="loading-state" role="status">기록 이력을 불러오고 있어요.</p>}
     <ol className="month-history">{items.map((item) => <li key={item.revision_id}><Link to={`/assets/months/${month}?revision=${item.revision_no}`}>{item.revision_no}차 기록 · {monthStates[item.state]}</Link>{item.reopened_reason && <p>정정 사유: {item.reopened_reason}</p>}{item.confirmed_at && <p className="muted">확정 {new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date(item.confirmed_at))}</p>}</li>)}</ol>
     <div className="form-actions"><button type="button" disabled={loading} onClick={() => void load()}>기록 이력 다시 불러오기</button>{cursor !== null && <button type="button" disabled={loading} onClick={() => void load(cursor)}>기록 이력 더 보기</button>}</div>
   </section>;

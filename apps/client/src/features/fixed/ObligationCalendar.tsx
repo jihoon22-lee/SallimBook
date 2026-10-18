@@ -16,7 +16,7 @@ export function ObligationCalendar({ month, refresh }: { month: string; refresh:
   return <section className="card" aria-label="월 납부 달력"><h2>{formatMonth(month)} 예정일 달력</h2>
     <p>생성된 회차의 예정일 기준이에요. 각 회차의 실제 납부 합계는 납부일과 관계없이 표시하며, 선택 월의 실제 지출은 위 월 요약에서 확인해요.</p>
     <CashflowError error={resource.error} />{resource.error && <button onClick={() => void resource.reload()}>납부 달력 다시 확인</button>}
-    {resource.loading && <p role="status">이 달의 전체 회차를 확인하고 있어요.</p>}
+    {resource.loading && <p className="loading-state" role="status">이 달의 전체 회차를 확인하고 있어요.</p>}
     {resource.data && !resource.loading && !resource.error && <>
       <p>이 달의 생성된 회차 {resource.data.length}개</p>
       <div className="payment-calendar-weekdays" aria-hidden="true">{weekdays.map((day) => <span key={day}>{day}</span>)}</div>

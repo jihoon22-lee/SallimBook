@@ -149,7 +149,7 @@ function DevicePanel() {
     <h2 id="device-list-title">내 등록 기기</h2>
     <p>내 계정으로 등록된 기기를 확인하고 연결을 해제할 수 있어요. 현재 기기를 해제하면 로그아웃돼요.</p>
     <button type="button" disabled={loading || revoking} onClick={() => { setActionError(null); void load(); }}>기기 목록 다시 불러오기</button>
-    {loading && <p role="status">기기 목록을 불러오고 있어요.</p>}
+    {loading && <p className="loading-state" role="status">기기 목록을 불러오고 있어요.</p>}
     <AuthError error={error} />
     <AuthError error={actionError} />
     {error && devices.length > 0 && <p className="muted">표시된 목록은 최신 상태가 아닐 수 있어요. 다시 불러오기 전에는 연결을 해제할 수 없어요.</p>}

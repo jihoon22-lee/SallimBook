@@ -9,7 +9,7 @@ test("real browser login restores HttpOnly Secure Strict cookie and logout revok
   await page.goto("/login");
   await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login);
   await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
-  await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 HTTPS 브라우저");
+  await page.getByText("기기 이름 변경", { exact: true }).click(); await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 HTTPS 브라우저");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
   const cookies = await context.cookies();

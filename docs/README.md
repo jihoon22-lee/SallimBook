@@ -74,3 +74,6 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 
 실제 암호화 백업의 격리 복원 결과와 미완료 운영 조건은
 [운영 백업·복원 기록](testing/operating-backup-restore.md)에 구분합니다.
+
+화면 개편의 시각 규칙과 합성 데이터 회귀 결과는 [디자인 시스템](design-system.md)과
+[화면 개편 검증](testing/design-refresh.md)에 정리합니다.

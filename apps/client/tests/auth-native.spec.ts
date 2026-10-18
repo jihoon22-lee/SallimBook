@@ -73,7 +73,7 @@ test("native login uses parameterless UI and restores only metadata", async ({ p
   await page.goto("/login");
   await page.getByRole("button", { name: "앱에서 로그인", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/auth$/);
-  await expect(page.getByText("합성 앱 구성원", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("합성 앱 구성원", { exact: true })).toBeVisible();
   await noWebCredentials(page);
   expect((await bridgeState(page)).calls.some((call) => call.method === "loginUI")).toBe(true);
 });
@@ -88,7 +88,7 @@ for (const cancelled of [false, true]) test(`native password reauthentication pr
   expect(calls.some((call) => call.method === "reauthenticateUI")).toBe(true);
   expect(calls.some((call) => call.method === "loginUI")).toBe(false);
   await page.goto("/settings/auth");
-  await expect(page.getByText("합성 앱 구성원", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("합성 앱 구성원", { exact: true })).toBeVisible();
   await noWebCredentials(page);
 });
 
