@@ -30,6 +30,8 @@ def write_image_source(context, template, commit, role):
         "COPY source-revision.json /usr/share/sallimbook/source-revision.json\n"
         f'LABEL {REVISION_LABEL}="{commit}" {ROLE_LABEL}="{role}"\n'
     )
+    for name in ("source-revision.json", "Dockerfile"):
+        (context / name).chmod(0o644)
 
 
 @contextmanager
@@ -60,6 +62,7 @@ def source_snapshot(commit, parent):
                     target = checkout / name
                     if member.isdir():
                         target.mkdir(parents=True, exist_ok=True)
+                        target.chmod(member.mode & 0o777)
                     else:
                         target.parent.mkdir(parents=True, exist_ok=True)
                         with (
@@ -103,15 +106,14 @@ def stage(output, commit):
         stage_snapshot(output, commit, checkout)
 
 
-def stage_snapshot(output, commit, checkout):
-    api, web = output / "api", output / "web"
-    api.mkdir()
-    web.mkdir()
+def stage_api_snapshot(api, commit, checkout, *, uv="uv"):
+    """Stage only the API from an already verified exact source archive."""
+    api.mkdir(exist_ok=False)
     lock = checkout / "services/api/uv.lock"
     lock_hash = hashlib.sha256(lock.read_bytes()).hexdigest()
     requirements = subprocess.check_output(
         [
-            "uv",
+            uv,
             "export",
             "--project",
             "services/api",
@@ -122,6 +124,8 @@ def stage_snapshot(output, commit, checkout):
             "requirements-txt",
         ],
         cwd=checkout,
+        timeout=180,
+        stderr=subprocess.DEVNULL,
     )
     if (
         b"--hash=sha256:" not in requirements
@@ -147,6 +151,17 @@ def stage_snapshot(output, commit, checkout):
         "/run/sallimbook/clamd.sock", "/run/scanner/clamd.sock"
     ).replace("/run/sallimbook/spool", "/tmp")
     (api / "clamd.conf").write_text(scanner)
+    # The scheduler uses umask 077. These are public build inputs copied into an
+    # image that runs as UID 10001, not operator secrets.
+    for name in ("requirements.txt", "alembic.ini", "freshclam.conf", "clamd.conf"):
+        (api / name).chmod(0o644)
+    return lock_hash
+
+
+def stage_snapshot(output, commit, checkout):
+    api, web = output / "api", output / "web"
+    lock_hash = stage_api_snapshot(api, commit, checkout)
+    web.mkdir()
     subprocess.run(
         ["pnpm", "install", "--frozen-lockfile"],
         cwd=checkout,
