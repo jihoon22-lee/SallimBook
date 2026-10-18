@@ -97,9 +97,7 @@ def check(config_directory, verify_database=False, sdk=None):
     environment_file = private_file(runtime / "api.env")
     password_file = private_file(runtime / "app-db-password")
     administrator_file = private_file(runtime / "db-admin-password")
-    password = password_file.read_text()
-    if password.endswith("\n"):
-        password = password[:-1]
+    password = password_file.read_text().removesuffix("\n")
     if "\n" in password or "\r" in password:
         raise OperationError("DB password file must contain one line")
     administrator_password = administrator_file.read_text().removesuffix("\n")
@@ -141,7 +139,7 @@ def check(config_directory, verify_database=False, sdk=None):
     inspected_images = {}
     for image in images:
         result = subprocess.run(
-            ["docker", "image", "inspect", image], capture_output=True, timeout=15
+            ["docker", "image", "inspect", image], check=False, capture_output=True, timeout=15
         )
         if result.returncode:
             raise OperationError("A verified deployment image is missing locally")
@@ -156,7 +154,7 @@ def check(config_directory, verify_database=False, sdk=None):
     if verify_database:
         network = config["project"] + "_database"
         result = subprocess.run(
-            ["docker", "network", "inspect", network], capture_output=True, timeout=15
+            ["docker", "network", "inspect", network], check=False, capture_output=True, timeout=15
         )
         if result.returncode:
             raise OperationError("Dedicated database network is not ready")
@@ -192,6 +190,7 @@ def check(config_directory, verify_database=False, sdk=None):
                 "ops.database",
                 "verify-runtime",
             ],
+            check=False,
             capture_output=True,
             timeout=30,
         )
@@ -224,7 +223,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         report = check(args.configuration, args.verify_database, args.sdk)
-    except Exception:
+    except Exception:  # noqa: BLE001 — redact subprocess/config errors at the CLI boundary.
         raise SystemExit(
             "Preflight failed. No service or existing host configuration was changed."
         ) from None
