@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "22fa1009784494b156f9bbea6b9cee60f138f107ff4f63f0016ff6ba12e68569",
-      "git_sha1": "1641a3946277172f2f3deadbd41a9f53a48cc1ba"
+      "sha256": "7acbc9072cbe7ff13444ab0d3223f243d6864045bd05e2599c370ede4cd8155a",
+      "git_sha1": "203669636dd2f9cbe0510a972118905683a02cd9"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "008e65d0e4269b12bb02a5dfaf247e127d4c5a5d1cc79b3a12571523ca1f66b7",
-      "git_sha1": "eae666c8f9fd066b429bf784a6389472418de450"
+      "sha256": "ac9357dbf1aa96d42e670ae44e1b09af6b0b00ff09713c5d196fb1c8f7d3576f",
+      "git_sha1": "68cec14576fa05444cce733ab6152893f8ea2bcf"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
