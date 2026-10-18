@@ -45,6 +45,14 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Opt-in disposable cloud fixture. The directory is generated outside the
+    // checkout and contains only a debug manifest and a public test CA.
+    // Release never reads this source set; ordinary debug builds are unchanged.
+    def cloudFixture = providers.gradleProperty("sallimbookCloudFixture").orNull
+    if (cloudFixture != null) {
+        sourceSets.debug.manifest.srcFile("${cloudFixture}/AndroidManifest.xml")
+        sourceSets.debug.res.srcDir("${cloudFixture}/res")
+    }
 }
 
 repositories {
