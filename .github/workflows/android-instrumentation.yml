@@ -40,12 +40,15 @@ jobs:
     name: API 36 KVM and native instrumentation
     if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Explicit step limits total 121m; reserve 14m for action post steps/runner overhead.
+    timeout-minutes: 135
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
           persist-credentials: false
       - name: Select isolated temporary paths
+        timeout-minutes: 1
         run: |
           printf '%s\n' \
             "ANDROID_HOME=$RUNNER_TEMP/sallimbook-android-sdk" \
@@ -55,19 +58,23 @@ jobs:
             "SALLIMBOOK_ANDROID_PROBE=$RUNNER_TEMP/sallimbook-android-probe" \
             "SALLIMBOOK_ANDROID_EVIDENCE=$RUNNER_TEMP/sallimbook-android-evidence" >> "$GITHUB_ENV"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        timeout-minutes: 5
         with:
           node-version: '24.18.0'
           package-manager-cache: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        timeout-minutes: 5
         with:
           version: '9.15.9'
           run_install: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        timeout-minutes: 5
         with:
           version: '0.12.5'
           python-version: '3.14.7'
           enable-cache: false
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        timeout-minutes: 5
         with:
           distribution: temurin
           # setup-java normalizes OpenJDK 21.0.12.1+1 to this SemVer build notation.
@@ -313,6 +320,7 @@ jobs:
       - name: Upload only redacted evidence, never APKs or raw logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        timeout-minutes: 5
         with:
           name: android-api36-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
