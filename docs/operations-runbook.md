@@ -53,6 +53,8 @@ uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/NEW_RENDER
 
 `build-inputs.json`은 commit, 원본 API lock SHA와 모든 빌드 입력 해시를 기록한다. 두 이미지 context에는 같은 clean archive SHA와 api/web 역할을 담은 `source-revision.json`을 추가하고 생성 Dockerfile에 literal OCI revision/역할 label을 넣는다. 운영자가 revision build-arg를 따로 입력하지 않는다. `preflight`는 digest로 선택한 실제 로컬 API/웹 이미지의 label이 manifest의 source_commit 및 해당 역할과 모두 같은지 검사하며, 누락·다른 revision·API/웹 바꿔치기는 거부한다. API와 웹은 같은 검토 commit에서 함께 빌드한다. 이 metadata 확인은 이미지 게시자의 암호학적 서명 검증을 의미하지 않는다. API는 `uv export --frozen --no-dev --no-emit-project`의 hash-pinned requirements를 사용한다. 이미지/APK 빌드는 임시 `git archive` checkout에서 수행하므로 원래 작업 트리의 ignored `.env`, 키, 첨부, public 디렉터리의 미추적 파일을 가져가지 않는다. 운영자 환경의 `VITE_*`도 상속하지 않는다. 최종 Docker context에는 필요한 API/웹 빌드 입력만 넣는다. API 이미지의 PostgreSQL client는 같은 공식 이미지의 loader/공유 라이브러리와 함께 격리하여 API Python의 시스템 라이브러리를 덮어쓰지 않는다.
 
+`write_config`는 운영자 전용 최상위 출력 디렉터리를 0700으로 유지한다. 컨테이너에 mount하는 공개 설정의 `node/`, `public/`, `public/.well-known/`, `downloads/`는 0755, 생성 설정 파일은 0644로 명시하여 `umask 077`에서도 cap-drop된 node와 UID 10001 Caddy가 읽을 수 있게 한다. 비밀번호·keyring·서명키 등 비밀 파일은 이 출력 디렉터리에 생성하지 않으며 기존 owner-only 권한을 유지한다.
+
 ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검사에 실패한다. scanner와 API의 Compose healthcheck는 실제 Unix PING과 VERSIONCOMMANDS, 고정 엔진·INSTREAM 지원·DB freshness를 기존 업로드 검사와 같은 함수로 확인한다. API healthcheck는 DB HTTP readiness도 확인하며, scanner가 healthy가 된 뒤 API를 시작하고 API가 healthy가 된 뒤 웹을 시작한다. 실행 중 scanner 중단·stale 상태는 API container를 unhealthy로 바꾼다. 기존 `/api/v1/ready`의 DB 검사 계약은 유지하며 운영 준비 상태는 Compose health를 기준으로 확인한다. unhealthy 표시는 서비스를 자동 중지시키는 기능이 아니며 첨부 업로드는 기존 검사에서도 실패 시 거부한다. `SALLIMBOOK_CVD_REFRESH`를 실제 갱신일로 바꿔 새 이미지로 배포한다. 오래된 이미지의 태그만 다시 붙여 검사 실패를 우회하지 않는다.
 
 ## 3. 전용 네트워크와 비밀 주입
@@ -61,8 +63,8 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy 두 프로세스가 이 노드의 network namespace를 공유하고 각각 loopback 8080/8081만 수신한다. Tailscale Serve가 지원하는 loopback HTTP upstream과 일치한다.
 
-- 사설 HTTPS `https://FQDN:8443`: 웹/API. RP ID는 포트 없는 FQDN이다.
-- 공개 HTTPS `https://FQDN:443`: `/.well-known/assetlinks.json`의 GET/HEAD만 제공한다. 다른 경로는 404다. 공개 Caddy에는 API upstream, DB·첨부·비밀 mount가 없다.
+- 사설 HTTPS `https://FQDN:8443`: 웹/API와 `GET/HEAD /downloads/SallimBook.apk`만 허용하는 APK 다운로드. RP ID는 포트 없는 FQDN이다.
+- 공개 HTTPS `https://FQDN:443`: `/.well-known/assetlinks.json`의 GET/HEAD만 제공한다. 다른 경로는 404다. 공개 Caddy에는 API upstream, DB·첨부·비밀 mount가 없다. 사설·공개 Caddy는 같은 source-bound 웹 이미지를 사용하되 공개 설정은 DAL 경로만 제공한다. 이 이미지는 고정된 Caddy base의 불필요한 cap_net_bind_service 파일 capability를 빌드 시 제거한다. 8080/8081 고포트만 사용하므로 런타임 UID 10001·cap_drop ALL·no-new-privileges는 그대로 유지한다.
 - TLS는 전용 노드의 Serve/Funnel에서 종료한다. Caddy는 같은 격리 namespace의 HTTP proxy다. 이전 문서의 “Caddy만 외부 HTTPS” 설명은 이 배치에서는 적용되지 않는다.
 - 외부에서 들어온 `Forwarded`/`X-Forwarded-For`는 API에 전달하지 않고, API의 proxy header 해석도 끈다. 내부 HTTP가 인증 쿠키를 비보안 쿠키로 바꾸지 않는다.
 
@@ -217,20 +219,22 @@ python3 -m ops.release \
 
 깨끗한 source commit, JDK 21, 고정 SDK/build-tools 36.0.0을 요구한다. `ops/release.init.gradle`은 이 실행에만 versionCode/versionName과 debuggable=false를 적용한다. 이전 배포 versionCode보다 커야 하며 이전 APK의 실제 앱 ID·버전·서명 인증서도 확인한다. 최초 배포만 `--previous-version 0`과 previous-apk 생략이 가능하다. 검사 항목은 release 앱 ID, manifest backup/cleartext/debug 설정, bundled WebView URL/allowNavigation/mixed-content 부재, native 공개 설정 값, debug proof class 부재, zipalign, apksigner 서명과 인증서 지문이다.
 
+검증된 최종 signed release APK만 생성 설정의 `downloads/SallimBook.apk`에 운영자가 0644로 복사한다. 이 디렉터리는 사설 Caddy에만 읽기 전용으로 mount하며 다른 파일·디렉터리·trailing-slash 경로는 404다. 다운로드 주소는 `https://FQDN:8443/downloads/SallimBook.apk`이고 허용된 tailnet 기기만 접근한다. APK는 첨부 다운로드 형식과 no-store 응답으로 제공하며, 공개 443에는 mount나 경로를 추가하지 않는다. 서명키·비밀번호 파일·debug/unsigned APK를 이 디렉터리에 넣지 않는다.
+
 서명 검사와 실제 업데이트는 별개다. S25 Ultra/S24 Ultra에서 이전 **같은 인증서의 release APK** 위에 새 APK를 설치하여 DB·로그인·Keystore·보관함/로컬 CVC 동작을 확인한다. 다른 인증서/낮은 versionCode 설치 거부도 확인한다. debug APK를 정식 배포하거나 일반 빌드 artifact에 signing material을 넣지 않는다. private 배포 경로에 대한 인증은 APK 밖에 두며 GitHub token을 앱에 내장하지 않는다.
 
 ## 8. 검증 명령과 남은 운영 인수
 
 ```bash
 python3 -m unittest discover -s tests/operations -v
-python3 -m ops.test_deployment
+python3 -m ops.test_deployment --web-image LOCALLY_BUILT_WEB_IMAGE
 python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE
 JAVA_HOME=/SELECTED_JDK_21 python3 -m ops.test_release --sdk /DEDICATED_ANDROID_SDK
 PATH=/VERIFIED_AGE_AND_POSTGRES_TOOL_DIRECTORY:$PATH \
   uv run --project services/api python -m ops.test_recovery
 ```
 
-`test_deployment`는 network-none 단발 컨테이너로 Compose/Caddy 설정·공개 JSON/404와 이미지 버전만 검사한다. 실제 tailnet 노드를 만들지 않는다. `test_recovery`는 공통 DB 시험 lock과 `sallimbook-dev`의 `db-test`만 사용하고 새 UUID 이름의 합성 source/restore DB를 만든다. 종료 시 자신이 만든 DB만 제거하고 test 컨테이너를 중지한다. 임시 합성 age/field key는 시험 종료 후 제거하며 실제 키를 사용하지 않는다. vault rotation fixture는 서버 metadata/상태전이를 검사하는 opaque fixture이며 클라이언트 암호학 증거가 아니다.
+`test_deployment`는 새로 빌드한 웹 이미지와 network-none 단발 컨테이너로 Compose/Caddy 설정·이미지 버전·파일 capability 제거·umask 077에서의 cap-drop root 설정 읽기·UID 10001 설정 읽기를 검사한다. 공개 JSON/404 및 사설 APK의 GET/HEAD·내용·다운로드 header·그 외 경로/POST 거부도 확인한다. API나 실제 APK 서명 검사를 대신하지 않는다. 실제 tailnet 노드를 만들지 않는다. `test_recovery`는 공통 DB 시험 lock과 `sallimbook-dev`의 `db-test`만 사용하고 새 UUID 이름의 합성 source/restore DB를 만든다. 종료 시 자신이 만든 DB만 제거하고 test 컨테이너를 중지한다. 임시 합성 age/field key는 시험 종료 후 제거하며 실제 키를 사용하지 않는다. vault rotation fixture는 서버 metadata/상태전이를 검사하는 opaque fixture이며 클라이언트 암호학 증거가 아니다.
 
 `test_runtime`은 새 `sallimbook-ops-smoke-*` Compose 프로젝트·내부 네트워크·합성 볼륨에서 migration, 제한된 DB 역할, UID10001/scanner socket/tmpfs, 실제 한국어 OCR/ClamAV 업로드와 암호화 저장·다운로드를 검사하고 그 프로젝트만 제거한다. 호스트 포트/노드를 만들지 않는다. `test_release`는 임시 합성 서명키로 연속 두 release를 만들고 서명/버전/변조 거부를 검사한 뒤 키·APK를 제거한다. 실제 서명키나 기기 설치는 사용하지 않는다. Docker 네트워크를 생성/제거하는 시험과 Chromium 전체 검사는 순차 실행하여 `ERR_NETWORK_CHANGED` 간섭을 피한다.
 

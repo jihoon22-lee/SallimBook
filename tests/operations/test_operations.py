@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import stat
 import subprocess
 import tarfile
 import tempfile
@@ -30,6 +31,33 @@ def config():
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_public_mounts_remain_readable_under_strict_umask(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "rendered"
+            previous = os.umask(0o077)
+            try:
+                deploy.write_config(config(), output)
+            finally:
+                os.umask(previous)
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o700)
+            self.assertEqual(list((output / "downloads").iterdir()), [])
+            for path in output.rglob("*"):
+                self.assertEqual(
+                    stat.S_IMODE(path.stat().st_mode), 0o755 if path.is_dir() else 0o644
+                )
+
+    def test_apk_download_exists_only_on_private_exact_route(self):
+        files = deploy.render(config())
+        self.assertIn("path /downloads/SallimBook.apk", files["private.Caddyfile"])
+        self.assertIn("method GET HEAD", files["private.Caddyfile"])
+        self.assertIn("@other_downloads path /downloads /downloads/*", files["private.Caddyfile"])
+        self.assertNotIn("downloads", files["public.Caddyfile"])
+        services = files["compose.json"]["services"]
+        self.assertIn("./downloads:/srv/downloads:ro", services["web"]["volumes"])
+        for name, service in services.items():
+            if name != "web":
+                self.assertFalse(any("downloads" in path for path in service.get("volumes", [])))
+
     def test_image_source_revision_and_role_must_match_manifest(self):
         for role in ("api", "web"):
             labels = {build_context.REVISION_LABEL: "a" * 40, build_context.ROLE_LABEL: role}
@@ -110,6 +138,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(compose["networks"]["database"], {"internal": True})
         self.assertNotIn("reverse_proxy", rendered["public.Caddyfile"])
         public = compose["services"]["public"]
+        self.assertEqual(public["image"], config()["web_image"])
         self.assertEqual(len(public["volumes"]), 2)
         self.assertNotIn("env_file", public)
         self.assertEqual(

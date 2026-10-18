@@ -131,6 +131,22 @@ http://:8080 {{
     respond @wrong_host 421
     header X-Content-Type-Options nosniff
     header Referrer-Policy no-referrer
+    @apk {{
+        method GET HEAD
+        path /downloads/SallimBook.apk
+    }}
+    handle @apk {{
+        root * /srv/downloads
+        rewrite * /SallimBook.apk
+        header Content-Type application/vnd.android.package-archive
+        header Content-Disposition "attachment; filename=SallimBook.apk"
+        header Cache-Control no-store
+        file_server
+    }}
+    @other_downloads path /downloads /downloads/*
+    handle @other_downloads {{
+        respond 404
+    }}
     handle /api/* {{
         reverse_proxy api:8000 {{
             header_up Host {fqdn}:8443
@@ -184,7 +200,7 @@ http://:8080 {{
         },
         "public": {
             **common,
-            "image": CADDY,
+            "image": c["web_image"],
             "network_mode": "service:node",
             "user": "10001:10001",
             "read_only": True,
@@ -205,7 +221,10 @@ http://:8080 {{
             "network_mode": "service:node",
             "user": "10001:10001",
             "read_only": True,
-            "volumes": ["./private.Caddyfile:/etc/caddy/Caddyfile:ro"],
+            "volumes": [
+                "./private.Caddyfile:/etc/caddy/Caddyfile:ro",
+                "./downloads:/srv/downloads:ro",
+            ],
             "tmpfs": [
                 "/config:mode=0700,uid=10001,gid=10001",
                 "/data:mode=0700,uid=10001,gid=10001",
@@ -372,6 +391,13 @@ http://:8080 {{
 def write_config(config, output):
     files = render(config)
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
+    output.chmod(0o700)
+    # These mounted inputs are public configuration, not credentials. Explicit
+    # modes let UID 10001 and cap-dropped root read them even under umask 077.
+    for name in ("node", "public", "public/.well-known", "downloads"):
+        directory = output / name
+        directory.mkdir(mode=0o755, parents=True, exist_ok=True)
+        directory.chmod(0o755)
     checksums = {}
     for name, value in files.items():
         content = (
@@ -380,8 +406,10 @@ def write_config(config, output):
         path = output / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
+        path.chmod(0o644)
         checksums[name] = hashlib.sha256(content.encode()).hexdigest()
     (output / "checksums.json").write_text(json.dumps(checksums, indent=2) + "\n")
+    (output / "checksums.json").chmod(0o644)
 
 
 def main():
