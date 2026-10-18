@@ -40,8 +40,8 @@ jobs:
     name: API 36 KVM and native instrumentation
     if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
-    # Explicit step limits total 121m; reserve 14m for action post steps/runner overhead.
-    timeout-minutes: 135
+    # Explicit step limits total 136m; reserve 14m for action post steps/runner overhead.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
@@ -194,7 +194,8 @@ jobs:
           pnpm android:sync
       - name: Run native suites on one owned KVM AVD
         id: instrument
-        timeout-minutes: 45
+        # Probe bounded calls total 3003s; leave 597s for process/file/runner overhead.
+        timeout-minutes: 60
         run: |
           umask 077
           # Keep raw emulator/Gradle diagnostics private on the disposable VM.
@@ -253,7 +254,7 @@ jobs:
           python3 - <<'PY'
           import json, os, re, xml.etree.ElementTree as ET
           from pathlib import Path
-          from scripts.android_cloud_results import failure_stage
+          from scripts.android_cloud_results import failure_details
           output = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-evidence'
           output.mkdir(mode=0o700, parents=True, exist_ok=True)
           probe = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-probe'
@@ -292,9 +293,7 @@ jobs:
                       if case.find(tag) is not None:
                           counts[counter] += 1
                           problem = ET.SubElement(node, tag, message='Native test reported ' + tag + '; details withheld')
-                          stage = failure_stage(classname, name, case.find(tag))
-                          if stage is not None:
-                              problem.set('stage', stage)
+                          problem.attrib.update(failure_details(classname, name, case.find(tag)))
                           if tag == 'skipped' and (label != 'existing' or name != permitted_skip):
                               valid = False
               for name, count in counts.items():

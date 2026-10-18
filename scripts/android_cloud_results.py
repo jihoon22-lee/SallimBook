@@ -31,10 +31,19 @@ ONBOARDING_STAGES = frozenset(
         "INVALID_INPUT",
         "INVALID_SESSION_EMPTY",
         "FILL_NAME",
+        "NAME_PRESERVED",
         "FILL_PASSWORD",
+        "PASSWORD_PRESERVED",
         "FILL_CONFIRMATION",
+        "CONFIRMATION_PRESERVED",
+        "PREPARE_VALID_SUBMIT",
+        "PRESUBMIT_FIELDS",
+        "PRESUBMIT_POLICY",
+        "PRESUBMIT_READY",
         "SUBMIT_VALID",
-        "SESSION_AND_MAIN",
+        "SESSION_CREATED",
+        "APP_UNLOCKED",
+        "MAIN_RESUMED",
         "BRIDGE_READY",
         "AUTHENTICATED_HOME",
         "FINISH_MAIN",
@@ -42,29 +51,132 @@ ONBOARDING_STAGES = frozenset(
 )
 
 
-def failure_stage(classname, method, problem):
+ONBOARDING_REASONS = frozenset(
+    {
+        "ASSERTION",
+        "NO_MATCHING_VIEW",
+        "AMBIGUOUS_VIEW",
+        "NO_MATCHING_ROOT",
+        "ROOT_NOT_FOCUSED",
+        "DETACHED_VIEW",
+        "SCROLL_CONSTRAINT",
+        "ACTION_FAILED",
+        "UI_NOT_IDLE",
+        "INJECTION_REJECTED",
+        "INTERRUPTED",
+        "SCROLL_LIMIT",
+        "SCROLL_NOT_SETTLED",
+        "UNKNOWN",
+    }
+)
+
+
+ONBOARDING_STATUSES = frozenset(
+    {
+        "NOT_CHECKED",
+        "NOT_RECOGNIZED",
+        "INPUT_INVALID",
+        "REQUEST_PENDING",
+        "RESULT_DISCARDED",
+        "FOCUS_INTERRUPTED",
+        "SETUP_UNAVAILABLE",
+        "SETUP_COMPLETE",
+        "INVALID_CONNECTION_CODE",
+        "HOUSEHOLD_FULL",
+        "REGISTRATION_OR_LOGIN_CONFLICT",
+        "RATE_LIMITED",
+        "REAUTHENTICATION_REQUIRED",
+        "AUTH_FAILED",
+        "REQUEST_INVALID",
+        "NETWORK_UNAVAILABLE",
+        "SESSION_EXPIRED",
+        "KEY_INVALIDATED",
+        "CANCELLED_OR_LOCKED",
+        "AUTH_UNAVAILABLE",
+    }
+)
+
+
+def failure_details(classname, method, problem):
     if (
         classname != ONBOARDING_CLASS
         or method != ONBOARDING_METHOD
         or problem.tag not in {"failure", "error"}
     ):
-        return None
+        return {}
+
+    def validated(
+        stage,
+        reason=None,
+        before=None,
+        after=None,
+        flow=None,
+        status=None,
+        tap=None,
+        tap_status=None,
+    ):
+        if stage not in ONBOARDING_STAGES:
+            return {}
+        if all(value is None for value in (reason, before, after, flow, status, tap, tap_status)):
+            return {"stage": stage}
+        if reason not in ONBOARDING_REASONS or not all(
+            isinstance(bits, str) and re.fullmatch(r"(?:[01]{4}|----)", bits)
+            for bits in (before, after)
+        ):
+            return {}
+        result = {"stage": stage, "reason": reason, "pre": before, "post": after}
+        if flow is None and status is None and tap is None and tap_status is None:
+            return result
+        if (
+            status not in ONBOARDING_STATUSES
+            or not isinstance(flow, str)
+            or not re.fullmatch(r"(?:[01]{3}|---)", flow)
+        ):
+            return {}
+        result.update(flow=flow, status=status)
+        if tap is None and tap_status is None:
+            return result
+        if (
+            tap_status not in ONBOARDING_STATUSES
+            or not isinstance(tap, str)
+            or not re.fullmatch(r"(?:[01]{5}|-----)", tap)
+        ):
+            return {}
+        return {**result, "tap": tap, "tap_status": tap_status}
+
     # Already-sanitized intermediate XML is checked again by the workflow.
-    stage = problem.get("stage")
-    if stage in ONBOARDING_STAGES:
-        return stage
+    if problem.get("stage") is not None:
+        return validated(
+            problem.get("stage"),
+            problem.get("reason"),
+            problem.get("pre"),
+            problem.get("post"),
+            problem.get("flow"),
+            problem.get("status"),
+            problem.get("tap"),
+            problem.get("tap_status"),
+        )
     # Android's XmlTestRunListener may put the exception only in element text.
     # The native test removes its stack: accept one exact line, never parse a trace.
-    marker = r"(?:java\.lang\.AssertionError: )?SALLIMBOOK_CLOUD_STAGE: ([A-Z_]+)"
+    marker = (
+        r"(?:java\.lang\.AssertionError: )?SALLIMBOOK_CLOUD_STAGE: ([A-Z_]+)"
+        r"(?:; REASON: ([A-Z_]+); PRE: ([01-]{4}); POST: ([01-]{4}))?"
+        r"(?:; FLOW: ([01-]{3}); STATUS: ([A-Z_]+))?"
+        r"(?:; TAP: ([01-]{5}); TAP_STATUS: ([A-Z_]+))?"
+    )
     candidates = [
         problem.get("message", ""),
         (problem.text or "").removesuffix("\n").removesuffix("\r"),
     ]
     for message in candidates:
         match = re.fullmatch(marker, message)
-        if match and match[1] in ONBOARDING_STAGES:
-            return match[1]
-    return None
+        if match:
+            return validated(*match.groups())
+    return {}
+
+
+def failure_stage(classname, method, problem):
+    return failure_details(classname, method, problem).get("stage")
 
 
 def save_instrumentation(label, expected, source, destination):
@@ -104,9 +216,7 @@ def save_instrumentation(label, expected, source, destination):
                             "clean synthetic Keystore namespace"
                         )
                     node = ET.SubElement(case, tag, message=reason)
-                    stage = failure_stage(classname, name, original.find(tag))
-                    if stage is not None:
-                        node.set("stage", stage)
+                    node.attrib.update(failure_details(classname, name, original.find(tag)))
     for name, count in counts.items():
         suite.set(name, str(count))
     target = destination / f"{label}.xml"
