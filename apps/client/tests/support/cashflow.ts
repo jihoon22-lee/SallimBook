@@ -92,7 +92,7 @@ export async function mockCashflow(page: Page) {
       if (!id) { const row = ruleRow(state.nextId++, { ...body, id: uid(state.nextId++), reason: null }); row.ended_on = body.effective_until ?? null; row.end_reason = body.end_reason ?? null; state.rules.push(row); return finish(response({ id: row.id, version: row.version }, 201)); }
       const row = state.rules.find((r) => r.id === id); if (!row) return error("NOT_FOUND", 404); if (state.conflict) { state.conflict = false; row.version++; row.versions.at(-1)!.note = "배우자 합성 규칙 메모"; } if (version !== `"${row.version}"`) return error("VERSION_CONFLICT");
       if (action === "end") { row.ended_on = body.effective_on; row.end_reason = body.reason; row.versions.at(-1)!.effective_until = body.effective_on; }
-      else { if (body.effective_from <= row.versions.at(-1)!.effective_from || row.ended_on && body.effective_from >= row.ended_on) return error("RULE_PERIOD_OVERLAP"); row.versions.at(-1)!.effective_until = body.effective_from; row.versions.push({ ...body, id: uid(state.nextId++), created_at: timestamp, effective_until: row.ended_on }); }
+      else { if (body.effective_from <= row.versions.at(-1)!.effective_from || row.ended_on && body.effective_from >= row.ended_on) return error("RULE_PERIOD_OVERLAP"); row.versions.at(-1)!.effective_until = body.effective_from; row.versions.push({ ...(body as S["RuleChange"]), id: uid(state.nextId++), created_at: timestamp, effective_until: row.ended_on }); }
       row.version++; return finish(response({ id: row.id, version: row.version }));
     }
     if (domain === "obligations") {

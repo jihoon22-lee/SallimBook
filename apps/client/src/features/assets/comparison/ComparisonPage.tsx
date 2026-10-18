@@ -25,7 +25,7 @@ export function ComparisonItemCard({ item, data, members }: { item: ComparisonIt
     {item.scope_reason && <p className="month-warning">{scopeReasons[item.scope_reason]}</p>}
     <dl className="metadata-grid"><div><dt>항목 보유금액 변화</dt><dd>{item.amount_delta_krw === null ? "비교할 수 없음" : signedKrw(item.amount_delta_krw)}</dd></div><div><dt>순자산에 반영된 변화</dt><dd>{item.net_assets_effect_krw === null ? "비교할 수 없음" : signedKrw(item.net_assets_effect_krw)}</dd></div></dl>
     {item.membership === "added" || item.membership === "removed" ? <p className="muted">범위의 포함·제외에 따른 영향이에요. 신규 저축이나 소비 금액으로 추정하지 않아요.</p> : item.before?.kind === "liability" && <p className="muted">부채 잔액 감소는 순자산에 반대로 반영돼요.</p>}
-    <div className="comparison-observations"><section><h4>{data.from_month ? formatMonth(data.from_month) : "이전 비교월 없음"}</h4><SnapshotObservation row={item.before} members={members} /></section><section><h4>{formatMonth(data.to_month)}</h4><SnapshotObservation row={item.after} members={members} /></section></div>
+    <details className="record-details comparison-detail"><summary>두 월 기록 비교</summary><div className="comparison-observations"><section><h4>{data.from_month ? formatMonth(data.from_month) : "이전 비교월 없음"}</h4><SnapshotObservation row={item.before} members={members} /></section><section><h4>{formatMonth(data.to_month)}</h4><SnapshotObservation row={item.after} members={members} /></section></div></details>
   </li>;
 }
 
@@ -56,7 +56,7 @@ function ComparisonWorkspace() {
     </div><p className="muted">필터는 각 월 당시의 소유 관계와 분류에 적용돼요. 가계 지분을 중복해서 곱하지 않아요.</p>{assetId && <p>선택한 자산 한 건을 비교하고 있어요.</p>}
     <MemberLoadError error={members.error} retry={members.retry} /><div className="form-actions"><button type="button" onClick={() => { pending.current = new URLSearchParams({ to }); setParams(pending.current); }}>비교 필터 초기화</button><button type="button" disabled={loading || !valid} onClick={() => setRetry((value) => value + 1)}>비교 다시 불러오기</button></div></section>
     {!valid && <p role="alert">올바른 월과 자산을 선택해 주세요. 이전 비교월은 확인할 월보다 앞서야 해요.</p>}
-    <ComparisonError error={error} />{loading && <p role="status">월별 자산을 비교하고 있어요.</p>}
+    <ComparisonError error={error} />{loading && <p className="loading-state" role="status">월별 자산을 비교하고 있어요.</p>}
     {data && <><section className="card" aria-labelledby="comparison-summary-title"><h2 id="comparison-summary-title">월간 자산 변화</h2><PeriodLabels data={data} /><ComparisonStatus data={data} /><ComparisonNumbers data={data} /><ScopeWarning data={data} /><ComparisonDates data={data} /><div className="form-actions"><Link to={`/assets/months/${to}`}>확인 월 기록</Link>{from && <Link to={`/assets/months/${from}`}>이전 비교월 기록</Link>}</div></section>
       <section aria-labelledby="comparison-items-title"><h2 id="comparison-items-title">항목별 변화</h2><p className="muted">금액과 기준일은 각 월 기록의 값이에요. 현재 자산 기본정보로 과거 기록을 바꾸지 않아요.</p>{data.items.length === 0 ? <p>선택한 비교 범위에 항목이 없어요.</p> : <ul className="finance-list">{data.items.map((item) => <ComparisonItemCard key={item.asset_id} item={item} data={data} members={members.members} />)}</ul>}</section>
     </>}

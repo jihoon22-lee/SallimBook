@@ -27,7 +27,7 @@ async function confirmReviewed(page: Page, ack: boolean) {
 }
 
 test("real monthly workflow preserves null zero copied values scope and immutable corrections across desktop and Android width", async ({ page }) => {
-  await page.goto("/login"); await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login); await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password); await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 월 기록 HTTPS"); await page.getByRole("button", { name: "로그인", exact: true }).click(); await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
+  await page.goto("/login"); await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login); await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password); await page.getByText("기기 이름 변경", { exact: true }).click(); await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 월 기록 HTTPS"); await page.getByRole("button", { name: "로그인", exact: true }).click(); await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
   const house = await asset(page, "합성 월 확인 주택", false); await asset(page, "합성 월 확인 대출", true); console.log("SAFE_PHASE=MONTH_ASSETS_CREATED");
   await page.goto("/assets/months/2025-01"); await page.getByRole("button", { name: "월 작성본 만들기", exact: true }).click(); await expect(page.locator(".month-value-card")).toHaveCount(2); await expect(page.getByRole("button", { name: "월 확정 검토", exact: true })).toBeDisabled();
   await observe(page, "합성 월 확인 주택", "100000001", "2025-01-31"); await observe(page, "합성 월 확인 대출", "30000000", "2025-01-31");
