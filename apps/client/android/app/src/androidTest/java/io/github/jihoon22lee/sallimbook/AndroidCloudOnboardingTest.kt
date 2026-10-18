@@ -393,7 +393,11 @@ class AndroidCloudOnboardingTest {
             val deadline = SystemClock.elapsedRealtime() + 30_000
             at(CloudStage.SESSION_CREATED) { awaitFlow(main, form, 0, deadline) }
             at(CloudStage.APP_UNLOCKED) { awaitFlow(main, form, 1, deadline) }
-            at(CloudStage.MAIN_RESUMED) { awaitFlow(main, form, 2, deadline) }
+            at(CloudStage.MAIN_RESUMED) {
+                awaitFlow(main, form, 2, deadline)
+                val state = flowState(main, form)
+                if (state.flow != "111") throw state
+            }
             at(CloudStage.BRIDGE_READY) { assertTrue(main.secureBridgeReady) }
             at(CloudStage.AUTHENTICATED_HOME) { awaitWebState("authenticated home API data", main, authenticatedHome) }
         } finally {
