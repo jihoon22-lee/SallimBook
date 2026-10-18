@@ -62,6 +62,7 @@ def main(web_image):
             "version_code": 2,
             "version_name": "0.1.1",
             "source_commit": "a" * 40,
+            "setup_identity_sha256": "a" * 64,
         }
         output = root / "rendered"
         previous = os.umask(0o077)
@@ -179,11 +180,47 @@ done
             "-v", str(output / "downloads") + ":/srv/downloads:ro",
             web_image, "-c", private_script,
         ])
+        # A synthetic upstream checks real Caddy forwarding, not Tailscale identity
+        # authentication. Only this network-none fixture resolves api to loopback.
+        proxy_fixture = output / "identity-proxy.Caddyfile"
+        proxy_fixture.write_text(
+            (output / "private.Caddyfile").read_text()
+            + '\nhttp://:8000 {\n    bind 127.0.0.1\n'
+            + '    respond "{http.request.header.Tailscale-User-Login}|'
+            + '{http.request.header.Forwarded}|{http.request.header.X-Forwarded-For}"\n}\n'
+        )
+        proxy_fixture.chmod(0o644)
+        identity_script = """set -eu
+caddy run --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy.log 2>&1 &
+pid=$!
+trap 'kill "$pid" 2>/dev/null || true' EXIT
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    if wget -q -O /tmp/body --header='Host: synthetic.example.ts.net' \\
+        http://127.0.0.1:8080/api/probe 2>/dev/null; then break; fi
+    sleep 0.1
+done
+test "$(cat /tmp/body)" = '||'
+for identity in allowed@synthetic.invalid wrong@synthetic.invalid; do
+    wget -q -O /tmp/body --header='Host: synthetic.example.ts.net' \\
+        --header="Tailscale-User-Login: $identity" \\
+        --header='Forwarded: for=192.0.2.123' --header='X-Forwarded-For: 192.0.2.123' \\
+        http://127.0.0.1:8080/api/probe
+    test "$(cat /tmp/body)" = "$identity||"
+done
+"""
+        command(isolated + [
+            "--read-only", "--tmpfs",
+            "/tmp:rw,nosuid,noexec,size=16m,uid=10001,gid=10001,mode=0700",
+            "--add-host", "api:127.0.0.1", "--entrypoint", "sh",
+            "-v", str(proxy_fixture) + ":/etc/caddy/Caddyfile:ro",
+            web_image, "-c", identity_script,
+        ])
         serve = json.loads((output / "node/serve.json").read_text())
         assert set(serve["AllowFunnel"]) == {manifest["fqdn"] + ":443"}
     print(
         "PASS: pinned Caddy/Tailscale versions, Compose/Caddy validation, "
-        "strict-umask UID10001/cap-drop reads, private exact APK/public 404 routing. "
+        "strict-umask UID10001/cap-drop reads, private exact APK/public 404 routing, "
+        "identity header forwarding and forwarded-IP removal. "
         "No tailnet node, installable APK, or real HTTPS tested."
     )
 

@@ -31,6 +31,83 @@ def config():
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_self_setup_is_an_explicit_manifest_opt_in(self):
+        original = config()
+        disabled = deploy.render(original)
+        identity_key = "SALLIMBOOK_SELF_SETUP_IDENTITY_SHA256"
+        proxy_key = "SALLIMBOOK_SELF_SETUP_PROXY_HOST"
+        for service in disabled["compose.json"]["services"].values():
+            self.assertNotIn(identity_key, service.get("environment", {}))
+            self.assertNotIn(proxy_key, service.get("environment", {}))
+        self.assertEqual(original, config())
+        for digest in ("ab" * 32, "AB" * 32):
+            enabled = deploy.render({**original, "setup_identity_sha256": digest})
+            services = enabled["compose.json"]["services"]
+            environment = services["api"]["environment"]
+            self.assertEqual(environment[identity_key], digest.lower())
+            self.assertEqual(environment[proxy_key], "node")
+            for name, service in services.items():
+                if name != "api":
+                    self.assertNotIn(identity_key, service.get("environment", {}))
+                    self.assertNotIn(proxy_key, service.get("environment", {}))
+            for name in ("public.Caddyfile", "private.Caddyfile", "node/serve.json",
+                         "android-public.json"):
+                self.assertEqual(enabled[name], disabled[name])
+
+    def test_self_setup_rejects_invalid_identity_and_proxy_override(self):
+        for value in (None, True, 123, [], "", "a" * 63, "a" * 65, "g" * 64,
+                      "a" * 64 + "\n", " " + "a" * 64):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                deploy.render({**config(), "setup_identity_sha256": value})
+        with self.assertRaises(ValueError):
+            deploy.render({**config(), "setup_identity_sha256": "a" * 64,
+                           "setup_proxy_host": "attacker"})
+
+    def test_self_setup_trusts_only_node_namespace_without_forwarded_ip(self):
+        rendered = deploy.render({**config(), "setup_identity_sha256": "a" * 64})
+        compose = rendered["compose.json"]
+        services = compose["services"]
+        self.assertEqual(services["web"]["network_mode"], "service:node")
+        self.assertEqual(services["public"]["network_mode"], "service:node")
+        self.assertEqual(services["node"]["networks"], ["edge", "app"])
+        self.assertEqual(services["api"]["networks"], ["app", "database"])
+        self.assertEqual(compose["networks"]["app"], {"internal": True})
+        self.assertIn("--no-proxy-headers", services["api"]["command"])
+        for service in services.values():
+            self.assertNotIn("ports", service)
+            self.assertNotIn("extra_hosts", service)
+        for name in ("public.Caddyfile", "private.Caddyfile"):
+            self.assertIn("bind 127.0.0.1", rendered[name])
+        self.assertIn("header_up -Forwarded", rendered["private.Caddyfile"])
+        self.assertIn("header_up -X-Forwarded-For", rendered["private.Caddyfile"])
+        self.assertNotIn("reverse_proxy", rendered["public.Caddyfile"])
+        self.assertEqual(rendered["node/serve.json"]["AllowFunnel"],
+                         {config()["fqdn"] + ":443": True})
+        self.assertEqual(rendered["node/serve.json"]["Web"][config()["fqdn"] + ":8443"],
+                         {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8080"}}})
+
+    def test_self_setup_environment_cannot_bypass_manifest_or_drift_check(self):
+        password = "synthetic-runtime-password-only"
+        values = {"SALLIMBOOK_DATABASE_URL":
+                  f"postgresql+psycopg://sallimbook_app:{password}@db:5432/sallimbook_prod"}
+        for key in ("SALLIMBOOK_SELF_SETUP_IDENTITY_SHA256", "SALLIMBOOK_SELF_SETUP_PROXY_HOST"):
+            with self.subTest(key=key), self.assertRaisesRegex(
+                backup.OperationError, "Unexpected runtime environment"
+            ):
+                preflight.validate_database_settings({**values, key: "forged"}, password)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "rendered"
+            deploy.write_config({**config(), "setup_identity_sha256": "a" * 64}, output)
+            path = output / "compose.json"
+            compose = json.loads(path.read_text())
+            compose["services"]["api"]["environment"]["SALLIMBOOK_SELF_SETUP_PROXY_HOST"] = "api"
+            path.write_text(json.dumps(compose))
+            with patch.object(preflight, "private_file") as secret_read, self.assertRaisesRegex(
+                backup.OperationError, "configuration drift"
+            ):
+                preflight.check(output)
+            secret_read.assert_not_called()
+
     def test_public_mounts_remain_readable_under_strict_umask(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "rendered"
