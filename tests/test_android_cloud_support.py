@@ -538,6 +538,65 @@ class CloudSupportTests(unittest.TestCase):
         )
         self.assertEqual(failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), {})
 
+    def test_care_diagnostic_is_only_fixed_enums_after_complete_home_metadata(self):
+        attributes = dict(
+            stage="AUTHENTICATED_HOME",
+            reason="ASSERTION",
+            pre="----",
+            post="----",
+            flow="---",
+            status="NOT_CHECKED",
+            tap="11110",
+            tap_status="REQUEST_PENDING",
+            home="1111001100",
+        )
+        prefix = (
+            "SALLIMBOOK_CLOUD_STAGE: AUTHENTICATED_HOME; REASON: ASSERTION; PRE: ----; POST: ----; "
+            "FLOW: ---; STATUS: NOT_CHECKED; TAP: 11110; TAP_STATUS: REQUEST_PENDING; "
+            "HOME: 1111001100"
+        )
+        for care, native in (
+            ("NETWORK", "OK"),
+            ("VALIDATION", "FORBIDDEN"),
+            ("OTHER", "TIMEOUT"),
+            ("NOT_CHECKED", "NOT_CHECKED"),
+        ):
+            expected = {**attributes, "care": care, "native_care": native}
+            for node in (
+                ET.Element("failure", **expected),
+                ET.Element("failure", message=f"{prefix}; CARE: {care}; NATIVE_CARE: {native}"),
+            ):
+                self.assertEqual(
+                    failure_details(ONBOARDING_CLASS, ONBOARDING_METHOD, node), expected
+                )
+        for care, native in (
+            ("synthetic-sensitive", "OK"),
+            ("NETWORK extra", "OK"),
+            ("NETWORK", "OK extra"),
+            ("NETWORK", None),
+            (None, "OK"),
+        ):
+            attrs = {**attributes}
+            if care is not None:
+                attrs["care"] = care
+            if native is not None:
+                attrs["native_care"] = native
+            self.assertEqual(
+                failure_details(
+                    ONBOARDING_CLASS, ONBOARDING_METHOD, ET.Element("failure", **attrs)
+                ),
+                {},
+            )
+        for missing in attributes:
+            attrs = {**attributes, "care": "NETWORK", "native_care": "OK"}
+            del attrs[missing]
+            self.assertEqual(
+                failure_details(
+                    ONBOARDING_CLASS, ONBOARDING_METHOD, ET.Element("failure", **attrs)
+                ),
+                {},
+            )
+
     def test_home_diagnostic_accepts_only_ten_bits_after_complete_metadata(self):
         attributes = dict(
             stage="AUTHENTICATED_HOME",

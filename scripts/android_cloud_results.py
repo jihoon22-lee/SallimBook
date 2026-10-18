@@ -115,11 +115,25 @@ def failure_details(classname, method, problem):
         tap=None,
         tap_status=None,
         home=None,
+        care=None,
+        native_care=None,
     ):
         if stage not in ONBOARDING_STAGES:
             return {}
         if all(
-            value is None for value in (reason, before, after, flow, status, tap, tap_status, home)
+            value is None
+            for value in (
+                reason,
+                before,
+                after,
+                flow,
+                status,
+                tap,
+                tap_status,
+                home,
+                care,
+                native_care,
+            )
         ):
             return {"stage": stage}
         if reason not in ONBOARDING_REASONS or not all(
@@ -128,7 +142,15 @@ def failure_details(classname, method, problem):
         ):
             return {}
         result = {"stage": stage, "reason": reason, "pre": before, "post": after}
-        if flow is None and status is None and tap is None and tap_status is None and home is None:
+        if (
+            flow is None
+            and status is None
+            and tap is None
+            and tap_status is None
+            and home is None
+            and care is None
+            and native_care is None
+        ):
             return result
         if (
             status not in ONBOARDING_STATUSES
@@ -137,7 +159,13 @@ def failure_details(classname, method, problem):
         ):
             return {}
         result.update(flow=flow, status=status)
-        if tap is None and tap_status is None and home is None:
+        if (
+            tap is None
+            and tap_status is None
+            and home is None
+            and care is None
+            and native_care is None
+        ):
             return result
         if (
             tap_status not in ONBOARDING_STATUSES
@@ -146,11 +174,41 @@ def failure_details(classname, method, problem):
         ):
             return {}
         result.update(tap=tap, tap_status=tap_status)
-        if home is None:
+        if home is None and care is None and native_care is None:
             return result
         if not isinstance(home, str) or not re.fullmatch(r"(?:[01]{10}|----------)", home):
             return {}
-        return {**result, "home": home}
+        result["home"] = home
+        if care is None and native_care is None:
+            return result
+        if care not in {
+            "NOT_CHECKED",
+            "NONE",
+            "NETWORK",
+            "FORBIDDEN",
+            "VALIDATION",
+            "NATIVE_UNAVAILABLE",
+            "REQUEST_FAILED",
+            "CONFLICT",
+            "CANCELLED",
+            "OTHER",
+        }:
+            return {}
+        if native_care not in {
+            "NOT_CHECKED",
+            "OK",
+            "NETWORK",
+            "VALIDATION",
+            "FORBIDDEN",
+            "NATIVE_UNAVAILABLE",
+            "CANCELLED",
+            "LOCKED",
+            "HTTP_ERROR",
+            "OTHER",
+            "TIMEOUT",
+        }:
+            return {}
+        return {**result, "care": care, "native_care": native_care}
 
     # Already-sanitized intermediate XML is checked again by the workflow.
     if problem.get("stage") is not None:
@@ -164,6 +222,8 @@ def failure_details(classname, method, problem):
             problem.get("tap"),
             problem.get("tap_status"),
             problem.get("home"),
+            problem.get("care"),
+            problem.get("native_care"),
         )
     # Android's XmlTestRunListener may put the exception only in element text.
     # The native test removes its stack: accept one exact line, never parse a trace.
@@ -173,6 +233,7 @@ def failure_details(classname, method, problem):
         r"(?:; FLOW: ([01-]{3}); STATUS: ([A-Z_]+))?"
         r"(?:; TAP: ([01-]{5}); TAP_STATUS: ([A-Z_]+))?"
         r"(?:; HOME: ([01-]{10}))?"
+        r"(?:; CARE: ([A-Z_]+); NATIVE_CARE: ([A-Z_]+))?"
     )
     candidates = [
         problem.get("message", ""),

@@ -27,7 +27,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import io.github.jihoon22lee.sallimbook.auth.AppLockController
+import io.github.jihoon22lee.sallimbook.auth.FinanceOperation
+import io.github.jihoon22lee.sallimbook.auth.ForegroundRequest
 import io.github.jihoon22lee.sallimbook.auth.NativeAuthSession
+import org.json.JSONObject
 import io.github.jihoon22lee.sallimbook.auth.NativeOnboardingActivity
 import io.github.jihoon22lee.sallimbook.auth.NativeOnboardingPolicy
 import org.hamcrest.Matchers.sameInstance
@@ -94,7 +97,7 @@ class AndroidCloudOnboardingTest {
     )
     // Flow bits: native session exists, app unlocked, original MainActivity resumed.
     private class FlowFailure(val flow: String, val status: CloudStatus) : RuntimeException()
-    private class WebFailure(val home: String) : AssertionError()
+    private class WebFailure(val home: String, val care: String, val nativeCare: String) : AssertionError()
     // Last tap only: name preserved, password empty, confirmation empty, status updated,
     // window focus lost. A normal successful departure can also lose window focus.
     private data class TapState(val bits: String, val status: CloudStatus)
@@ -131,7 +134,9 @@ class AndroidCloudOnboardingTest {
             val flow = outcome?.flow ?: "---"
             val status = outcome?.status ?: CloudStatus.NOT_CHECKED
             val home = (error as? WebFailure)?.home ?: "----------"
-            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after; FLOW: $flow; STATUS: ${status.name}; TAP: ${tapState.bits}; TAP_STATUS: ${tapState.status.name}; HOME: $home")
+            val care = (error as? WebFailure)?.care ?: "NOT_CHECKED"
+            val nativeCare = (error as? WebFailure)?.nativeCare ?: "NOT_CHECKED"
+            throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}; REASON: ${code.name}; PRE: $before; POST: $after; FLOW: $flow; STATUS: ${status.name}; TAP: ${tapState.bits}; TAP_STATUS: ${tapState.status.name}; HOME: $home; CARE: $care; NATIVE_CARE: $nativeCare")
                 .apply { stackTrace = emptyArray() }
         }
     }
@@ -442,13 +447,54 @@ class AndroidCloudOnboardingTest {
         } catch (_: Throwable) { "----------" } // Diagnostics cannot replace the original timeout.
     }
 
+    // Only after the original home assertion has failed; this read cannot make it pass.
+    private fun careError(main: MainActivity): String {
+        val latch = CountDownLatch(1)
+        var result = "NOT_CHECKED"
+        return try {
+            val script = instrumentation.context.assets.open("sallimbook_cloud_care_error.js").bufferedReader().use { it.readText() }
+            val allowed = setOf("NONE", "NETWORK", "FORBIDDEN", "VALIDATION", "NATIVE_UNAVAILABLE", "REQUEST_FAILED", "CONFLICT", "CANCELLED", "OTHER")
+            instrumentation.runOnMainSync {
+                main.findViewById<WebView>(com.getcapacitor.android.R.id.webview)?.evaluateJavascript(script) {
+                    val candidate = it?.removeSurrounding("\"")
+                    if (candidate in allowed) result = candidate!!
+                    latch.countDown()
+                }
+            }
+            if (latch.await(2, TimeUnit.SECONDS)) result else "NOT_CHECKED"
+        } catch (_: Throwable) { "NOT_CHECKED" }
+    }
+    private fun nativeCareState(): String {
+        val latch = CountDownLatch(1)
+        val gate = ForegroundRequest()
+        var result = "NOT_CHECKED"
+        return try {
+            NativeAuthSession.get(context).finance(FinanceOperation.GET_HOMECARE_STATUS,
+                JSONObject().put("query", JSONObject().put("limit", 200)), gate) { outcome ->
+                result = when (outcome.code?.name) {
+                    "NETWORK_UNAVAILABLE" -> "NETWORK"
+                    "INVALID_REQUEST" -> "VALIDATION"
+                    "ACCESS_DENIED" -> "FORBIDDEN"
+                    "AUTH_UNAVAILABLE" -> "NATIVE_UNAVAILABLE"
+                    "AUTH_CANCELLED" -> "CANCELLED"
+                    "APP_LOCKED" -> "LOCKED"
+                    null -> if (outcome.value?.get("status") == 200) "OK" else "HTTP_ERROR"
+                    else -> "OTHER"
+                }
+                latch.countDown()
+            }
+            if (latch.await(15, TimeUnit.SECONDS)) result else "TIMEOUT"
+        } catch (_: Throwable) { "OTHER" }
+        finally { gate.cancel() }
+    }
+
     private fun awaitWebState(label: String, main: MainActivity, script: String, diagnose: Boolean = false) {
         val deadline = SystemClock.elapsedRealtime() + 30_000
         while (SystemClock.elapsedRealtime() < deadline) {
             if (evaluateBoolean(main, script)) return
             SystemClock.sleep(200)
         }
-        if (diagnose) throw WebFailure(homeState(main))
+        if (diagnose) throw WebFailure(homeState(main), careError(main), nativeCareState())
         throw AssertionError("Cloud onboarding timed out: $label")
     }
 

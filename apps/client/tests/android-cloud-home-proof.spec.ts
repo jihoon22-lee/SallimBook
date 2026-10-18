@@ -67,3 +67,21 @@ test("cloud initial native lock has no finance headings and cannot satisfy the h
   expect(state.http).toHaveLength(0);
   expect(state.calls.every((call) => call.method === "getSession")).toBe(true);
 });
+
+const careError = readFileSync(new URL("../android/app/src/androidTest/assets/sallimbook_cloud_care_error.js", import.meta.url), "utf8");
+test("care diagnostics return only known public classifications, excluding warranty and arbitrary text", async ({ page }) => {
+  await page.setContent('<section aria-labelledby="consumables-title"><div role="alert"><p></p></div><details><div role="alert"><p>이 작업을 할 권한이 없어요.</p></div></details></section>');
+  const samples = [
+    ["서버 연결을 확인하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.", "NETWORK"],
+    ["입력 형식과 필수 항목을 확인해 주세요.", "VALIDATION"],
+    ["앱의 네이티브 인증을 준비하고 있어요. 지금은 앱에서 로그인할 수 없어요.", "NATIVE_UNAVAILABLE"],
+    ["synthetic-sensitive", "OTHER"],
+    ["이 작업을 할 권한이 없어요. synthetic-sensitive", "OTHER"],
+  ];
+  for (const [text, classification] of samples) {
+    await page.locator('section > [role="alert"] p').evaluate((p, text) => { p.textContent = text; }, text);
+    expect(await page.evaluate(careError)).toBe(classification);
+  }
+  await page.locator('section > [role="alert"]').evaluate((alert) => alert.remove());
+  expect(await page.evaluate(careError)).toBe("NONE");
+});
