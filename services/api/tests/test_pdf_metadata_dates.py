@@ -16,6 +16,7 @@ from pypdf.generic import (
     NameObject,
     TextStringObject,
 )
+
 from sallimbook.documents import _validation_worker as worker
 
 LUHN_DATE = "D:20261018051908Z"
