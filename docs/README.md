@@ -80,3 +80,6 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 
 화면 개편의 시각 규칙과 합성 데이터 회귀 결과는 [디자인 시스템](design-system.md)과
 [화면 개편 검증](testing/design-refresh.md)에 정리합니다.
+
+Android 클라우드의 빌드·부팅 제한과 후속 수정은 [실행 결과](testing/android-cloud-results.md),
+GitHub KVM 계측의 조건·정제 근거는 [Android CI](testing/android-ci.md)에 구분합니다.

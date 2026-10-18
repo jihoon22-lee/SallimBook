@@ -256,3 +256,5 @@ uv run --no-project python scripts/probe_android_avd.py --sdk-root "$ANDROID_HOM
 
 정제 결과 경로는 `android-results/tests/existing.xml`과 `onboarding.xml`이다. 생체 인증이 등록되지 않은
 새 AVD에서 조건부 시험이 skip되면 13개 전체 성공으로 표시하지 않는다. 실제 Galaxy 보안 게이트는 계속 남는다.
+
+통합 단계에서는 검토한 UI `7498c94`와 운영 코드 `65298d4`를 포함해 도구 전체 160개, 문서 74개·링크 365개, TypeScript 검사 및 같은 Android 홈 판정의 브라우저 회귀 8개(5.7초)를 다시 통과했다. GitHub KVM workflow를 연결했으며 실제 원격 계측 결과는 실행 후 별도로 기록한다. 이 단계의 브라우저 수치를 Android 계측 PASS로 합산하지 않는다.
