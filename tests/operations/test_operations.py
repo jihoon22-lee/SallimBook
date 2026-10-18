@@ -91,6 +91,7 @@ class DeploymentTests(unittest.TestCase):
     def test_no_host_resources_or_public_api_upstream(self):
         rendered = deploy.render(config())
         compose = rendered["compose.json"]
+        self.assertEqual(compose["services"]["node"]["logging"], {"driver": "none"})
         self.assertEqual(
             compose["services"]["api"]["depends_on"]["scanner"]["condition"], "service_healthy"
         )

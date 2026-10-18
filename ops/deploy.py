@@ -169,6 +169,9 @@ http://:8080 {{
             **common,
             "image": TAILSCALE,
             "hostname": c["project"],
+            # Initial/repeated authentication can print a login URL. Keep it in
+            # the operator's interactive terminal rather than Docker logs.
+            "logging": {"driver": "none"},
             "environment": {
                 "TS_USERSPACE": "true",
                 "TS_STATE_DIR": "/var/lib/tailscale",

@@ -68,6 +68,19 @@ Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy �
 
 운영자는 새 전용 노드의 등록과 허용 기기 ACL을 별도로 승인·구성한다. 호스트의 기존 `tailscale serve/funnel/reset/up` 명령을 실행하지 않는다. 기존 노드 상태나 다른 프로젝트의 인증키를 복사하지 않는다. 실제 FQDN/ACL/인증서가 없는 단계에서는 사설 HTTPS·패스키 인수를 통과로 표시하지 않는다.
 
+최초 등록은 아직 FQDN을 모르므로 같은 프로젝트의 `node`만 별도 bootstrap Compose로 시작할 수 있다.
+고정 Tailscale 이미지에서 기본 `containerboot` 대신 `/usr/local/bin/tailscaled --tun=userspace-networking
+--statedir=/var/lib/tailscale --socket=/tmp/tailscaled.sock`를 실행한다. 최종 설정과 같은
+`PROJECT_node_state` 볼륨·edge/app 네트워크를 사용하고 host ports·장치·capability를 추가하지 않는다.
+사용자는 로컬 비공개 터미널에서 이 container의 `tailscale --socket=/tmp/tailscaled.sock up
+--hostname=PROJECT --accept-routes=false --accept-dns=false`를 실행한다. 로그인 링크는 채팅/로그에 복사하지 않는다.
+로그인 후 `status --json`의 `BackendState`와 `Self.DNSName`만 추출한다. 전체 응답이나 인증 URL은 기록하지 않는다.
+
+확정 FQDN으로 최종 설정을 생성한 뒤 **최종 Compose 파일만** 사용해 같은 프로젝트의 node를
+재생성한다. bootstrap 파일을 함께 merge하면 raw daemon command가 남아 Serve 설정이 적용되지 않는다.
+상태 볼륨을 삭제하거나 두 daemon에 동시에 연결하지 않는다. 최종 node도 Docker logging `none`을
+유지하여 재인증 URL이 Docker 로그에 남지 않게 한다. 이는 Tailscale 자체 원격 진단 로그 설정과는 별개다.
+
 전용 runtime 디렉터리의 파일은 아래처럼 분리한다. 실제 생성과 값 입력은 운영자가 비공개 절차로 수행한다.
 
 | 경로 | 소유/권한 | 내용 |
