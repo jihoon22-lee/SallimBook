@@ -1,5 +1,6 @@
 """Synthetic subprocesses and XML only; no Android SDK, Docker or DB access."""
 
+import ast
 import contextlib
 import io
 import json
@@ -26,6 +27,124 @@ from scripts.android_cloud_results import (
     failure_stage,
     save_instrumentation,
 )
+
+
+class CloudFixtureHttpTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def proxy_type():
+        # Execute the actual dependency-free ASGI wrapper, without importing the
+        # fixture's PostgreSQL/SDK orchestration into the standard-library suite.
+        source = Path(__file__).resolve().parents[1] / "scripts/test_android_cloud.py"
+        module = ast.parse(source.read_text(), filename=str(source))
+        wrapper = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.ClassDef) and node.name == "SyntheticIdentityProxy"
+        )
+        identity = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "IDENTITY" for target in node.targets
+            )
+        )
+        namespace = {}
+        exec(
+            compile(ast.Module(body=[identity, wrapper], type_ignores=[]), str(source), "exec"),
+            namespace,
+        )
+        return namespace["SyntheticIdentityProxy"], namespace["IDENTITY"]
+
+    async def test_http1_response_closes_connection_without_changing_payload_or_identity_checks(
+        self,
+    ):
+        proxy, identity = self.proxy_type()
+        for version in ("1.0", "1.1"):
+            with self.subTest(version=version):
+                request = {"type": "http.request", "body": b"synthetic-request"}
+                scope = {
+                    "type": "http",
+                    "http_version": version,
+                    "headers": [
+                        (b"x-synthetic", b"preserved"),
+                        (b"Tailscale-User-Login", b"ignored"),
+                    ],
+                    "client": ("127.0.0.1", 12345),
+                }
+                start = {
+                    "type": "http.response.start",
+                    "status": 202,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"Connection", b"keep-alive"),
+                    ],
+                }
+                first = {"type": "http.response.body", "body": b'{"available":', "more_body": True}
+                last = {"type": "http.response.body", "body": b"true}"}
+                received, sent = [], []
+
+                async def receive(request=request):
+                    return request
+
+                async def send(message, sent=sent):
+                    sent.append(message)
+
+                async def app(
+                    inner,
+                    incoming,
+                    outgoing,
+                    received=received,
+                    request=request,
+                    messages=(start, first, last),
+                ):
+                    received.append(inner)
+                    self.assertIs(await incoming(), request)
+                    for message in messages:
+                        await outgoing(message)
+
+                await proxy(app)(scope, receive, send)
+                self.assertEqual(received[0]["client"], scope["client"])
+                self.assertEqual(
+                    received[0]["headers"],
+                    [(b"x-synthetic", b"preserved"), (b"tailscale-user-login", identity)],
+                )
+                self.assertEqual(scope["headers"][-1], (b"Tailscale-User-Login", b"ignored"))
+                self.assertEqual(sent[0]["status"], 202)
+                self.assertEqual(
+                    sent[0]["headers"],
+                    [(b"content-type", b"application/json"), (b"connection", b"close")],
+                )
+                self.assertEqual(start["headers"][-1], (b"Connection", b"keep-alive"))
+                self.assertIs(sent[1], first)
+                self.assertIs(sent[2], last)
+
+    async def test_non_http_and_http2_do_not_receive_a_connection_header(self):
+        proxy, _ = self.proxy_type()
+        for scope in ({"type": "lifespan"}, {"type": "http", "http_version": "2", "headers": []}):
+            sent = []
+            message = (
+                {"type": "lifespan.startup.complete"}
+                if scope["type"] == "lifespan"
+                else {"type": "http.response.start", "status": 200, "headers": []}
+            )
+
+            async def receive():
+                return {"type": "lifespan.startup"}
+
+            async def send(outgoing, sent=sent):
+                sent.append(outgoing)
+
+            async def app(inner, incoming, outgoing, scope=scope, message=message):
+                if inner["type"] != "http":
+                    self.assertIs(inner, scope)
+                    self.assertIs(incoming, receive)
+                    self.assertIs(outgoing, send)
+                await outgoing(message)
+
+            await proxy(app)(scope, receive, send)
+            self.assertEqual(sent, [message])
+            self.assertIs(sent[0], message)
 
 
 class CloudSupportTests(unittest.TestCase):

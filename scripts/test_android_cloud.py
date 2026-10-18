@@ -94,7 +94,7 @@ def existing_instrumentation():
 
 
 class SyntheticIdentityProxy:
-    """Loopback-only test proxy input; actual ASGI peer validation stays enabled."""
+    """Loopback test identity and explicit HTTP/1 connection lifetime."""
 
     def __init__(self, app):
         self.app = app
@@ -107,6 +107,22 @@ class SyntheticIdentityProxy:
                 for key, value in scope["headers"]
                 if not key.lower().startswith(b"tailscale-")
             ] + [(b"tailscale-user-login", IDENTITY)]
+            if scope.get("http_version") in {"1.0", "1.1"}:
+                # The fixture's 5s idle close can strand a pooled native GET while
+                # the user edits the form. Tell the no-retry client to open a new
+                # connection, without changing production transport or timeouts.
+                async def send_closed(message):
+                    if message["type"] == "http.response.start":
+                        message = dict(message)
+                        message["headers"] = [
+                            (key, value)
+                            for key, value in message.get("headers", [])
+                            if key.lower() != b"connection"
+                        ] + [(b"connection", b"close")]
+                    await send(message)
+
+                await self.app(scope, receive, send_closed)
+                return
         await self.app(scope, receive, send)
 
 
