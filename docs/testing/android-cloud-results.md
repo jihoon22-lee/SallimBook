@@ -200,3 +200,59 @@ python3 -m unittest discover -s tests -v
 - 실제 파일 제공자 권한/취소/부분 저장과 문서·내보내기 실패 처리.
 
 운영 백업/복원과 v1 전체 인수는 이 작업의 에뮬레이터/호스트 결과로 대체하지 않는다.
+
+## PR #91 후속 검토와 회귀 — 기존 클라우드 실행과 별도
+
+위 클라우드 결과와 증거 파일은 수정하지 않았다. 다음은 `1afb264` 이후 로컬 WSL에서 수행한
+harness 보강이며, 실제 AVD·계측 13개·PostgreSQL/HTTPS fixture를 새로 실행한 결과가 아니다.
+
+- A01의 홈 판정을 제목 두 개에서 인증된 새 가계의 API 응답으로 생성되는 월 기록·공용 재고 DOM으로
+  강화했다. 같은 제목이 보이는 signed-out/loading/error 상태는 거부한다. 시험 시작 전에 실제 signed-out
+  홈이 이 판정을 통과하지 않는지도 확인한다. 제목 문구나 디자인에 의존하지 않으며 production hook은 없다.
+  판정 JS는 androidTest assets에만 들어가고 WebView에서 boolean만 반환한다.
+- 같은 판정 파일을 실제 React 홈에 적용한 브라우저 회귀 8개가 통과했다. PC/Android 크기 각각의
+  signed-out/loading/error/성공 상태를 대조했다. 이전 제목 조건은 실패해야 할 세 상태에서도 true였음을
+  재현했다. 이 검사는 네이티브 인증이나 실제 Android 실행 증거가 아니다.
+- probe에 `--command-timeout`을 추가했다(기본 1800초, 1~3600초). 부팅 시한과 명령 시한을 분리하고,
+  timeout/SIGTERM/SIGINT 때 명령의 전용 프로세스 그룹에 fixture 정리 시간을 준 다음 AVD와 전용 ADB를
+  종료한다. 명령 그룹 정리는 최대 약 130초, ADB 종료는 15초다. SIGKILL·호스트 강제 종료에는 Python
+  finally 실행을 보장할 수 없으므로 CI의 일회용 VM 경계와 실패 상태를 함께 유지한다.
+- Gradle 계측은 단계별 900초, openssl/ADB/Compose 호출은 용도별 15~120초로 제한했다. DB 연결은 기존
+  5초 제한을 유지하며 schema 작업의 lock/statement 및 migration statement 시한도 지정했다.
+  한 정리 단계가 실패해도 서버 종료·schema 제거를 이어 시도하고 정리 미완료를 성공으로 출력하지 않는다.
+- `sallimbookCloudResults`를 지정한 계측은 실행마다 새 private 임시 results/report 디렉터리를 쓴다.
+  Gradle stdout/stderr는 출력하지 않으며 raw XML/logcat/HTML은 임시 디렉터리와 함께 제거한다. 새 결과가
+  없으면 0 tests로 실패하며 이전 실행의 PASS XML을 재사용하지 않는다. 공유 XML에는 testcase 이름·class·
+  시간·상태만 남고 오류 원문은 제거한다. 기존 시험의 SKIPPED는 그대로 보존하며 onboarding skip은 실패다.
+- release 검사는 모든 ZIP entry의 파일명과 내용·전체 DEX를 확인한다. 새 시험 asset과 기존 계측 클래스도
+  제외 여부에 포함한다. emulator 37.2.12에는 현재 지원되는 `swiftshader` GPU 모드를 사용한다.
+
+후속 검증:
+
+```bash
+uv run --project services/api python -m unittest tests.test_android_avd_probe tests.test_android_cloud_support -v
+pnpm --filter @sallimbook/client exec playwright test tests/android-cloud-home-proof.spec.ts --workers=2
+pnpm android:sync
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=/home/jihoon/Android/Sdk \
+  apps/client/android/gradlew -p apps/client/android --no-daemon --max-workers=1 \
+  :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease
+```
+
+순수 harness 시험 16개를 포함한 `pnpm test:docs` 84개, 브라우저 8개, typecheck/build/Android sync,
+debug·계측·unsigned release APK 조립이 통과했다. 별도 결과 경로 옵션을 켠 Gradle 설정과 수정한
+Python 파일의 Ruff 검사도 통과했다. APK 빌드는 2분 18초였으며 신규 계측 Kotlin을 컴파일했다. 실제 기기에 설치하거나 계측을
+실행하지 않았다. 실제 SDK의 debug/test 서명과 release marker 검사가 통과했고 새 predicate asset은
+계측 APK에만 존재하며 일반 debug/release APK에는 없다. 이전 JVM 356개를 재실행한 것으로 표시하지 않는다.
+
+CI에서는 Python 3.14를 선택해 다음과 같이 호출한다. KVM 사용 가능 여부는 실제 `emulator -accel-check`로
+확인하며 소프트웨어 부팅 결과와 구분한다. 설치·부팅·명령·정리 시간을 포함한 job 시한을 별도로 설정한다.
+
+```bash
+uv run --no-project python scripts/probe_android_avd.py --sdk-root "$ANDROID_HOME" \
+  --image 'system-images;android-36;google_apis;x86_64' --output "$RUNNER_TEMP/android-results" \
+  --boot-timeout 600 --command-timeout 1800 \
+  --command uv run --project services/api python scripts/test_android_cloud.py
+```
+
+정제 결과 경로는 `android-results/tests/existing.xml`과 `onboarding.xml`이다. 생체 인증이 등록되지 않은
+새 AVD에서 조건부 시험이 skip되면 13개 전체 성공으로 표시하지 않는다. 실제 Galaxy 보안 게이트는 계속 남는다.

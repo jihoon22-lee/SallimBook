@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AvdProbeTests(unittest.TestCase):
-    def exercise(self, *, boot=True, create=True, command=None):
+    def exercise(self, *, boot=True, create=True, command=None, command_timeout=10, interrupt=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             sdk = root / "sdk"
@@ -37,17 +38,47 @@ class AvdProbeTests(unittest.TestCase):
                 path.write_text(f"#!{sys.executable}\n" + source)
                 path.chmod(0o755)
             output = root / "result"
-            argv = [sys.executable, str(ROOT / "scripts/probe_android_avd.py"),
-                    "--sdk-root", str(sdk), "--image", "synthetic", "--output", str(output),
-                    "--software", "--boot-timeout", "1", "--port", "5680", "--adb-port", "15049"]
+            argv = [
+                sys.executable,
+                str(ROOT / "scripts/probe_android_avd.py"),
+                "--sdk-root",
+                str(sdk),
+                "--image",
+                "synthetic",
+                "--output",
+                str(output),
+                "--software",
+                "--boot-timeout",
+                "1",
+                "--port",
+                "5680",
+                "--adb-port",
+                "15049",
+                "--command-timeout",
+                str(command_timeout),
+            ]
             if command:
                 argv += ["--command", *command]
-            completed = subprocess.run(argv, capture_output=True, text=True, timeout=15, check=False)
+            process = subprocess.Popen(
+                argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            try:
+                if interrupt:
+                    deadline = time.monotonic() + 5
+                    while not interrupt.exists() and time.monotonic() < deadline:
+                        time.sleep(0.02)
+                    self.assertTrue(interrupt.exists(), "Synthetic command did not start")
+                    process.terminate()
+                process.communicate(timeout=15)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
             result = json.loads((output / "result.json").read_text())
             self.assertTrue(result["emulator_stopped"])
             if create:
                 self.assertEqual(result["adb_stop_exit_code"], 0)
-            return completed.returncode, result
+            return process.returncode, result
 
     def test_success_is_only_boot_evidence(self):
         code, result = self.exercise()
@@ -74,6 +105,38 @@ class AvdProbeTests(unittest.TestCase):
         self.assertEqual(result["command_status"], "FAIL")
         self.assertEqual(result["command_exit_code"], 7)
 
+    def interrupted_command(self, *, terminate):
+        with tempfile.TemporaryDirectory() as temporary:
+            entered, cleaned = Path(temporary) / "entered", Path(temporary) / "cleaned"
+            command = [
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path; import time\n"
+                    f"Path({str(entered)!r}).touch()\n"
+                    "try: time.sleep(30)\n"
+                    f"finally: Path({str(cleaned)!r}).touch()\n"
+                ),
+            ]
+            code, result = self.exercise(
+                command=command,
+                command_timeout=1 if not terminate else 10,
+                interrupt=entered if terminate else None,
+            )
+            self.assertEqual(code, 2)
+            self.assertEqual(result["command_status"], "FAIL")
+            self.assertTrue(result["command_stopped"])
+            self.assertTrue(cleaned.exists(), "Child fixture cleanup must run before stopping AVD")
+            self.assertEqual(
+                result["reason"], "Probe interrupted" if terminate else "Command deadline exceeded"
+            )
+
+    def test_command_deadline_cleans_command_emulator_and_adb(self):
+        self.interrupted_command(terminate=False)
+
+    def test_sigterm_cleans_command_emulator_and_adb_and_records_failure(self):
+        self.interrupted_command(terminate=True)
+
 
 class ReleaseIsolationTests(unittest.TestCase):
     def test_scans_secondary_dex_and_binary_resources(self):
@@ -85,8 +148,17 @@ class ReleaseIsolationTests(unittest.TestCase):
                 archive.writestr("resources.arsc", "sallimbook_cloud_ca".encode("utf-16-le"))
             result = inspect_release(apk)
             self.assertEqual(result["status"], "FAIL")
-            self.assertEqual({match["entry"] for match in result["matches"]},
-                             {"classes2.dex", "resources.arsc"})
+            self.assertEqual(
+                {match["entry"] for match in result["matches"]}, {"classes2.dex", "resources.arsc"}
+            )
+
+    def test_detects_test_only_asset_names_even_without_content_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / "synthetic.apk"
+            with zipfile.ZipFile(apk, "w") as archive:
+                archive.writestr("classes.dex", b"ordinary classes")
+                archive.writestr("assets/sallimbook_cloud_authenticated_home.js", b"true")
+            self.assertEqual(inspect_release(apk)["status"], "FAIL")
 
     def test_absent_markers_are_only_structural_evidence(self):
         with tempfile.TemporaryDirectory() as directory:

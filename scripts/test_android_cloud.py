@@ -2,7 +2,8 @@
 
 --host-only checks fixture readiness, never claims Android acceptance.
 Otherwise run from probe_android_avd.py --command so only its owned AVD is used.
-No passwords, session bodies, screenshots, logcat or UI hierarchy are collected.
+Only sanitized testcase outcomes are shared. Gradle output is discarded; raw
+device reports use a private temporary directory that is removed after each run.
 """
 
 import argparse
@@ -12,7 +13,6 @@ import os
 import shutil
 import socket
 import ssl
-import subprocess
 import tempfile
 import threading
 import time
@@ -25,51 +25,43 @@ from uuid import uuid4
 import uvicorn
 from alembic import command
 from alembic.config import Config
+from android_cloud_process import CloudCommandError, checked, interrupt_cleanup
+from android_cloud_results import save_instrumentation
 from dotenv import dotenv_values
 from sallimbook.config import Settings
 from sallimbook.core.database import make_engine
 from sallimbook.main import create_app
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from test_database import COMPOSE, ROOT, test_service_lock, validate_test_url
 
 ANDROID = ROOT / "apps/client/android"
 IDENTITY = b"synthetic-android@example.invalid"
 
 
-def save_instrumentation(label, expected):
-    """Keep testcase statuses, never Gradle's device logs or view diagnostics."""
-    destination = Path(os.environ["SALLIMBOOK_CLOUD_RESULT_DIRECTORY"])
-    destination.mkdir(parents=True, exist_ok=True)
-    suite = ET.Element("testsuite", name=label)
-    counts = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
-    for file in sorted((ANDROID / "app/build/outputs/androidTest-results/connected").rglob("TEST-*.xml")):
-        for original in ET.parse(file).getroot().iter("testcase"):
-            case = ET.SubElement(suite, "testcase", {
-                key: value for key, value in original.attrib.items() if key in {"name", "classname", "time"}
-            })
-            counts["tests"] += 1
-            for tag, counter in (("failure", "failures"), ("error", "errors"), ("skipped", "skipped")):
-                if original.find(tag) is not None:
-                    counts[counter] += 1
-                    reason = "Device runner reported " + tag + "; raw diagnostics withheld"
-                    if tag == "skipped" and case.get("name", "").startswith("ownerFlagCannot"):
-                        reason = "Requires API 33+, enrolled strong biometric and clean synthetic Keystore namespace"
-                    ET.SubElement(case, tag, message=reason)
-    for name, count in counts.items():
-        suite.set(name, str(count))
-    ET.ElementTree(suite).write(destination / f"{label}.xml", encoding="utf-8", xml_declaration=True)
-    print(json.dumps({"suite": label, **counts}), flush=True)
-    if counts["tests"] != expected or counts["failures"] or counts["errors"]:
-        raise RuntimeError("Instrumentation count or outcome failed; inspect sanitized XML")
-    if label == "onboarding" and counts["skipped"]:
-        raise RuntimeError("Onboarding was skipped, not passed")
+def instrument(label, expected, arguments, env):
+    # A new result directory prevents a failed Gradle invocation from recycling
+    # previous PASS XML. Raw XML/logcat/HTML stays private and is removed afterward.
+    with tempfile.TemporaryDirectory(prefix="sallimbook-android-instrumentation-") as temporary:
+        env = {**env, "ORG_GRADLE_PROJECT_sallimbookCloudResults": temporary}
+        try:
+            checked(arguments, env=env, label="Android instrumentation", timeout=900)
+        finally:
+            save_instrumentation(
+                label,
+                expected,
+                Path(temporary) / "results",
+                os.environ["SALLIMBOOK_CLOUD_RESULT_DIRECTORY"],
+            )
 
 
 def owned_adb():
     sdk = Path(os.environ["ANDROID_HOME"])
     serial = os.environ["ANDROID_SERIAL"]
     adb = [str(sdk / "platform-tools/adb"), "-s", serial]
-    avd = subprocess.check_output([*adb, "emu", "avd", "name"], text=True, timeout=15)
+    avd = checked(
+        [*adb, "emu", "avd", "name"], label="Owned AVD identity", timeout=15, capture=True
+    )
     if avd.splitlines()[0] != "sallimbook-probe":
         raise RuntimeError("Refusing a device not owned by the disposable probe")
     return adb
@@ -77,20 +69,28 @@ def owned_adb():
 
 def existing_instrumentation():
     adb = owned_adb()
-    subprocess.run([*adb, "shell", "input", "keyevent", "KEYCODE_WAKEUP"], check=True, timeout=15)
-    subprocess.run([*adb, "shell", "wm", "dismiss-keyguard"], check=True, timeout=15)
+    checked([*adb, "shell", "input", "keyevent", "KEYCODE_WAKEUP"], label="AVD wake", timeout=15)
+    checked([*adb, "shell", "wm", "dismiss-keyguard"], label="AVD keyguard", timeout=15)
     env = {**os.environ, "ORG_GRADLE_PROJECT_sallimbookApiOrigin": ""}
     env.pop("ORG_GRADLE_PROJECT_sallimbookCloudFixture", None)
-    try:
-        subprocess.run([
-            str(ANDROID / "gradlew"), "-p", str(ANDROID), "--no-daemon", "--max-workers=1",
+    instrument(
+        "existing",
+        12,
+        [
+            str(ANDROID / "gradlew"),
+            "-p",
+            str(ANDROID),
+            "--no-daemon",
+            "--max-workers=1",
             ":app:connectedDebugAndroidTest",
-            ("-Pandroid.testInstrumentationRunnerArguments.class="
-             "io.github.jihoon22lee.sallimbook.SecureBridgeWebViewTest,"
-             "io.github.jihoon22lee.sallimbook.NativeVaultCvcAcceptanceTest"),
-        ], env=env, check=True)
-    finally:
-        save_instrumentation("existing", 12)
+            (
+                "-Pandroid.testInstrumentationRunnerArguments.class="
+                "io.github.jihoon22lee.sallimbook.SecureBridgeWebViewTest,"
+                "io.github.jihoon22lee.sallimbook.NativeVaultCvcAcceptanceTest"
+            ),
+        ],
+        env,
+    )
 
 
 class SyntheticIdentityProxy:
@@ -103,7 +103,8 @@ class SyntheticIdentityProxy:
         if scope["type"] == "http":
             scope = dict(scope)
             scope["headers"] = [
-                (key, value) for key, value in scope["headers"]
+                (key, value)
+                for key, value in scope["headers"]
                 if not key.lower().startswith(b"tailscale-")
             ] + [(b"tailscale-user-login", IDENTITY)]
         await self.app(scope, receive, send)
@@ -124,7 +125,7 @@ def debug_resources(private, cert):
         '<network-security-config><base-config cleartextTrafficPermitted="false">'
         '<trust-anchors><certificates src="system"/></trust-anchors></base-config>'
         '<debug-overrides><trust-anchors><certificates src="@raw/sallimbook_cloud_ca"/>'
-        '</trust-anchors></debug-overrides></network-security-config>\n'
+        "</trust-anchors></debug-overrides></network-security-config>\n"
     )
     return directory
 
@@ -133,13 +134,17 @@ def run_fixture(url, host_only, build_only=False):
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
     engine = make_engine(url, schema=schema)
-    with admin.begin() as connection:
-        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     server = None
     thread = None
     reverse = None
     try:
+        with admin.begin() as connection:
+            connection.execute(text("SET LOCAL lock_timeout = '5s'"))
+            connection.execute(text("SET LOCAL statement_timeout = '30s'"))
+            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
         with engine.connect() as connection:
+            connection.execute(text("SET statement_timeout = '120s'"))
+            connection.commit()
             config = Config(str(ROOT / "services/api/alembic.ini"))
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
@@ -147,18 +152,37 @@ def run_fixture(url, host_only, build_only=False):
             private = Path(temporary)
             private.chmod(0o700)
             key, cert = private / "key.pem", private / "cert.pem"
-            subprocess.run([
-                "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                "-keyout", str(key), "-out", str(cert), "-subj", "/CN=localhost",
-                "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            checked(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-nodes",
+                    "-days",
+                    "1",
+                    "-keyout",
+                    str(key),
+                    "-out",
+                    str(cert),
+                    "-subj",
+                    "/CN=localhost",
+                    "-addext",
+                    "subjectAltName=DNS:localhost,IP:127.0.0.1",
+                ],
+                label="Disposable TLS certificate",
+                timeout=30,
+            )
             key.chmod(0o600)
             with socket.socket() as listener:
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]
                 origin = f"https://127.0.0.1:{port}"
                 settings = Settings(
-                    _env_file=None, environment="test", database_url=None,
+                    _env_file=None,
+                    environment="test",
+                    database_url=None,
                     allowed_origins=[origin],
                     self_setup_identity_sha256=hashlib.sha256(IDENTITY).hexdigest(),
                     self_setup_proxy_host="localhost",
@@ -172,11 +196,20 @@ def run_fixture(url, host_only, build_only=False):
                     yield
 
                 app.router.lifespan_context = lifespan
-                server = uvicorn.Server(uvicorn.Config(
-                    SyntheticIdentityProxy(app), ssl_keyfile=str(key), ssl_certfile=str(cert),
-                    access_log=False, proxy_headers=False, log_level="critical",
-                ))
-                thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+                server = uvicorn.Server(
+                    uvicorn.Config(
+                        SyntheticIdentityProxy(app),
+                        ssl_keyfile=str(key),
+                        ssl_certfile=str(cert),
+                        access_log=False,
+                        proxy_headers=False,
+                        log_level="critical",
+                        timeout_graceful_shutdown=5,
+                    )
+                )
+                thread = threading.Thread(
+                    target=server.run, kwargs={"sockets": [listener]}, daemon=True
+                )
                 thread.start()
                 deadline = time.monotonic() + 15
                 while not server.started and thread.is_alive() and time.monotonic() < deadline:
@@ -191,7 +224,11 @@ def run_fixture(url, host_only, build_only=False):
                 with opener.open(origin + "/api/v1/household/setup", timeout=10) as response:
                     if json.load(response) != {"available": True}:
                         raise RuntimeError("Fresh schema is not available for setup")
-                print("PASS: fresh PostgreSQL schema + real migration + hostname-verified HTTPS setup status", flush=True)
+                print(
+                    "PASS: fresh PostgreSQL schema + real migration + "
+                    "hostname-verified HTTPS setup status",
+                    flush=True,
+                )
                 try:
                     with (
                         socket.create_connection(("127.0.0.1", port), timeout=5) as raw,
@@ -204,47 +241,88 @@ def run_fixture(url, host_only, build_only=False):
                 if not host_only:
                     if not build_only:
                         adb = owned_adb()
-                        subprocess.run([*adb, "reverse", f"tcp:{port}", f"tcp:{port}"], check=True)
+                        checked(
+                            [*adb, "reverse", f"tcp:{port}", f"tcp:{port}"],
+                            label="AVD reverse",
+                            timeout=15,
+                        )
                         reverse = (adb, port)
-                    env = {**os.environ, "ORG_GRADLE_PROJECT_sallimbookApiOrigin": origin,
-                           "ORG_GRADLE_PROJECT_sallimbookCloudFixture": str(resources)}
+                    env = {
+                        **os.environ,
+                        "ORG_GRADLE_PROJECT_sallimbookApiOrigin": origin,
+                        "ORG_GRADLE_PROJECT_sallimbookCloudFixture": str(resources),
+                    }
                     gradle = [
-                        str(ANDROID / "gradlew"), "-p", str(ANDROID), "--no-daemon", "--max-workers=1",
-                        *([":app:assembleDebug", ":app:assembleDebugAndroidTest"] if build_only
-                          else [":app:connectedDebugAndroidTest"]),
+                        str(ANDROID / "gradlew"),
+                        "-p",
+                        str(ANDROID),
+                        "--no-daemon",
+                        "--max-workers=1",
+                        *(
+                            [":app:assembleDebug", ":app:assembleDebugAndroidTest"]
+                            if build_only
+                            else [":app:connectedDebugAndroidTest"]
+                        ),
                         "-Pandroid.testInstrumentationRunnerArguments.sallimbookCloudFixture=true",
-                        ("-Pandroid.testInstrumentationRunnerArguments.class="
-                         "io.github.jihoon22lee.sallimbook.AndroidCloudOnboardingTest"),
+                        (
+                            "-Pandroid.testInstrumentationRunnerArguments.class="
+                            "io.github.jihoon22lee.sallimbook.AndroidCloudOnboardingTest"
+                        ),
                     ]
-                    try:
-                        subprocess.run(gradle, env=env, check=True)
-                    finally:
-                        if not build_only:
-                            save_instrumentation("onboarding", 1)
+                    if build_only:
+                        checked(gradle, env=env, label="Fixture APK build", timeout=900)
+                    else:
+                        instrument("onboarding", 1, gradle, env)
                     if build_only:
                         # Same opt-in overlay property, but no test origin in the
                         # normal release. Inspect this APK's resources/all DEX.
-                        subprocess.run([
-                            str(ANDROID / "gradlew"), "-p", str(ANDROID), "--no-daemon",
-                            "--max-workers=1", ":app:assembleRelease",
-                        ], env={**env, "ORG_GRADLE_PROJECT_sallimbookApiOrigin": ""}, check=True)
+                        checked(
+                            [
+                                str(ANDROID / "gradlew"),
+                                "-p",
+                                str(ANDROID),
+                                "--no-daemon",
+                                "--max-workers=1",
+                                ":app:assembleRelease",
+                            ],
+                            env={**env, "ORG_GRADLE_PROJECT_sallimbookApiOrigin": ""},
+                            label="Release isolation build",
+                            timeout=900,
+                        )
                 # Finish before deleting TLS material or disposing the test schema.
                 server.should_exit = True
                 thread.join(timeout=15)
                 if thread.is_alive():
                     raise RuntimeError("TLS fixture did not stop")
     finally:
+        failed = False
         if reverse:
             adb, port = reverse
-            subprocess.run([*adb, "reverse", "--remove", f"tcp:{port}"], check=False)
+            try:
+                checked(
+                    [*adb, "reverse", "--remove", f"tcp:{port}"],
+                    label="AVD reverse cleanup",
+                    timeout=15,
+                )
+            except CloudCommandError, OSError:
+                failed = True
         if server:
             server.should_exit = True
         if thread:
             thread.join(timeout=15)
+            failed = failed or thread.is_alive()
         engine.dispose()
-        with admin.begin() as connection:
-            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        admin.dispose()
+        try:
+            with admin.begin() as connection:
+                connection.execute(text("SET LOCAL lock_timeout = '5s'"))
+                connection.execute(text("SET LOCAL statement_timeout = '30s'"))
+                connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        except SQLAlchemyError:
+            failed = True
+        finally:
+            admin.dispose()
+        if failed:
+            raise RuntimeError("Owned fixture cleanup incomplete") from None
         print("Removed owned schema and stopped owned TLS fixture.", flush=True)
 
 
@@ -252,10 +330,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--host-only", action="store_true")
-    mode.add_argument("--build-only", action="store_true", help="Build fixture APKs without device acceptance")
-    mode.add_argument("--existing-only", action="store_true", help="Run the original 12 instrumented tests only")
+    mode.add_argument(
+        "--build-only", action="store_true", help="Build fixture APKs without device acceptance"
+    )
+    mode.add_argument(
+        "--existing-only", action="store_true", help="Run the original 12 instrumented tests only"
+    )
     args = parser.parse_args()
-    if not (args.host_only or args.build_only) and not os.environ.get("ANDROID_SERIAL", "").startswith("emulator-"):
+    if not (args.host_only or args.build_only) and not os.environ.get(
+        "ANDROID_SERIAL", ""
+    ).startswith("emulator-"):
         parser.error("Run from the disposable AVD probe, or use --host-only")
     if not (args.host_only or args.build_only):
         existing_instrumentation()
@@ -266,15 +350,36 @@ def main():
         url = values.get("SALLIMBOOK_TEST_DATABASE_URL", "")
         validate_test_url(url)
         environment = {**os.environ, **values}
-        if subprocess.check_output(COMPOSE + ["ps", "--status", "running", "-q", "db-test"],
-                                   env=environment, text=True).strip():
+        if checked(
+            COMPOSE + ["ps", "--status", "running", "-q", "db-test"],
+            env=environment,
+            label="Test DB ownership",
+            timeout=30,
+            capture=True,
+        ).strip():
             raise SystemExit("Test DB is already in use; nothing changed")
         try:
-            subprocess.run(COMPOSE + ["up", "-d", "--wait", "db-test"], env=environment, check=True)
+            checked(
+                COMPOSE + ["up", "-d", "--wait", "--wait-timeout", "90", "db-test"],
+                env=environment,
+                label="Isolated test DB start",
+                timeout=120,
+            )
             run_fixture(url, args.host_only, args.build_only)
         finally:
-            subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
+            checked(
+                COMPOSE + ["stop", "db-test"],
+                env=environment,
+                label="Isolated test DB stop",
+                timeout=45,
+            )
 
 
 if __name__ == "__main__":
-    main()
+    with interrupt_cleanup():
+        try:
+            main()
+        except Exception, KeyboardInterrupt:  # noqa: BLE001 - CLI boundary must redact secrets.
+            raise SystemExit(
+                "FAIL: Android fixture command or cleanup failed; raw diagnostics withheld"
+            ) from None

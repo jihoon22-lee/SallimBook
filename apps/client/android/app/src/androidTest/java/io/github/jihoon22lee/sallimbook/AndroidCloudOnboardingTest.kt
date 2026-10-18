@@ -73,6 +73,28 @@ class AndroidCloudOnboardingTest {
         onView(withId(id)).perform(scrollTo(), replaceText(value), closeSoftKeyboard())
     }
 
+    private fun evaluateBoolean(main: MainActivity, script: String): Boolean {
+        val latch = CountDownLatch(1)
+        var value = false
+        instrumentation.runOnMainSync {
+            main.findViewById<WebView>(com.getcapacitor.android.R.id.webview).evaluateJavascript(script) {
+                value = it == "true"
+                latch.countDown()
+            }
+        }
+        assertTrue("WebView callback deadline", latch.await(5, TimeUnit.SECONDS))
+        return value
+    }
+
+    private fun awaitWebState(label: String, main: MainActivity, script: String) {
+        val deadline = SystemClock.elapsedRealtime() + 30_000
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (evaluateBoolean(main, script)) return
+            SystemClock.sleep(200)
+        }
+        throw AssertionError("Cloud onboarding timed out: $label")
+    }
+
     @Test fun firstStartCancelInvalidInputThenRealSessionAndHome() {
         assumeTrue("Requires the disposable cloud HTTPS fixture",
             InstrumentationRegistry.getArguments().getString("sallimbookCloudFixture") == "true")
@@ -82,6 +104,13 @@ class AndroidCloudOnboardingTest {
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         ) as MainActivity
         try {
+            val authenticatedHome = instrumentation.context.assets
+                .open("sallimbook_cloud_authenticated_home.js").bufferedReader().use { it.readText() }
+            awaitWebState("signed-out home shell", main,
+                "Boolean(location.pathname === '/' && document.querySelector('#assets-title') && " +
+                    "document.querySelector('#consumables-title'))")
+            assertFalse("Signed-out headings do not prove an authenticated home",
+                evaluateBoolean(main, authenticatedHome))
             awaitState("setup available") {
                 label(main.window.decorView, "처음 시작하기")?.let { it.isShown && it.isEnabled } == true
             }
@@ -107,20 +136,7 @@ class AndroidCloudOnboardingTest {
                     !AppLockController.get(context).locked && resumed() === main
             }
             assertTrue(main.secureBridgeReady)
-            val deadline = SystemClock.elapsedRealtime() + 30_000
-            var home = false
-            while (!home && SystemClock.elapsedRealtime() < deadline) {
-                val latch = CountDownLatch(1)
-                instrumentation.runOnMainSync {
-                    main.findViewById<WebView>(com.getcapacitor.android.R.id.webview).evaluateJavascript(
-                        "location.pathname === '/' && document.body.innerText.includes('소모품') && " +
-                            "document.body.innerText.includes('자산')"
-                    ) { home = it == "true"; latch.countDown() }
-                }
-                assertTrue("WebView callback deadline", latch.await(5, TimeUnit.SECONDS))
-                if (!home) SystemClock.sleep(200)
-            }
-            assertTrue("Authenticated bundled home must render", home)
+            awaitWebState("authenticated home API data", main, authenticatedHome)
         } finally {
             instrumentation.runOnMainSync { main.finish() }
         }
