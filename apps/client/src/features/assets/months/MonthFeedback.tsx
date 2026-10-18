@@ -30,7 +30,7 @@ export function MonthError({ error }: { error: ApiError | null }) {
 export function MonthSummary({ record }: { record: MonthRecord }) {
   const totals = record.totals; const titleId = useId();
   return <section className="card month-summary" aria-labelledby={titleId}><div className="item-heading"><h2 id={titleId}>이번 기록의 합계</h2><span className="status-chip">{monthStates[record.state]} · {record.revision_no}차 기록</span></div>
-    <dl className="metadata-grid"><div><dt>자산 합계</dt><dd>{totals.assets_krw === null ? "미입력 항목 있음" : formatKrw(totals.assets_krw)}</dd></div><div><dt>부채 합계</dt><dd>{totals.liabilities_krw === null ? "미입력 항목 있음" : formatKrw(totals.liabilities_krw)}</dd></div><div><dt>순자산</dt><dd>{totals.net_assets_krw === null ? "합계 확인 필요" : formatKrw(totals.net_assets_krw)}</dd></div><div><dt>확인한 포함 항목</dt><dd>{totals.verified_count} / {totals.item_count}개</dd></div></dl>
+    <dl className="metadata-grid compact-metadata"><div><dt>자산 합계</dt><dd>{totals.assets_krw === null ? "미입력 항목 있음" : formatKrw(totals.assets_krw)}</dd></div><div><dt>부채 합계</dt><dd>{totals.liabilities_krw === null ? "미입력 항목 있음" : formatKrw(totals.liabilities_krw)}</dd></div><div><dt>순자산</dt><dd>{totals.net_assets_krw === null ? "합계 확인 필요" : formatKrw(totals.net_assets_krw)}</dd></div><div><dt>확인한 포함 항목</dt><dd>{totals.verified_count} / {totals.item_count}개</dd></div></dl>
     <p className="muted">미입력 {totals.missing_count}개 · 불러온 값 미확인 {totals.carried_count}개</p>
     {totals.provisional && <p className="month-warning">임시 합계예요. 미입력 금액은 0원이 아니며, 불러온 값은 아직 확인하지 않았어요.</p>}
     {!totals.provisional && record.state !== "confirmed" && <p>포함 항목의 금액 확인을 마쳤어요. 월 확정 전 기준일과 비교 범위를 확인해 주세요.</p>}

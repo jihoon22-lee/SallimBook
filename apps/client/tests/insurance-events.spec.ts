@@ -1,3 +1,4 @@
+import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import catalog from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
@@ -34,7 +35,7 @@ test("T-12 through T-14 original medical payments stay 960000 after two contract
   const state = await mockInsuranceEvents(page); state.core.policies.push({ ...policyRow(84), product_name: "합성 정액 계약" }); await claim(page); await claim(page, uid(84), "합성 두 번째 청구"); await page.goto(`/insurance/cases/${uid(90)}`); const summary = page.getByRole("region", { name: "사건 실제 비용과 순부담", exact: true }); await expect(summary).toContainText("의료 지불금960,000원"); await expect(summary).toContainText("실제 보험금 수령800,000원"); await expect(summary).toContainText("순현금부담160,000원"); expect(state.expenses).toHaveLength(catalog.fixtures.medical_case.expenses.length); expect(state.claims.map((c) => c.expense_ids)).toEqual([[uid(1001)], [uid(1001)]]); expect(state.payouts).toHaveLength(2);
 });
 test("receipt details must exactly decompose actual payment and never add gross hospital cost", async ({ page }) => {
-  const state = await mockInsuranceEvents(page); state.expenses = []; await newExpense(page, "860000"); await page.getByLabel("병원 총진료비 참고 (원)", { exact: true }).fill("1000000"); await page.getByLabel("공단 부담액 참고 (원)", { exact: true }).fill("140000");
+  const state = await mockInsuranceEvents(page); state.expenses = []; await newExpense(page, "860000"); await openDisclosure(page, "영수증 참고 정보 (선택)"); await page.getByLabel("병원 총진료비 참고 (원)", { exact: true }).fill("1000000"); await page.getByLabel("공단 부담액 참고 (원)", { exact: true }).fill("140000");
   for (const [index, amount] of ["600000", "259999"].entries()) { await page.getByRole("button", { name: "영수증 명세 추가", exact: true }).click(); const line = page.getByRole("region", { name: `영수증 명세 ${index + 1}`, exact: true }); await line.getByLabel("명세 이름", { exact: true }).fill(`합성 설명 ${index + 1}`); await line.getByLabel("명세 금액 (원)", { exact: true }).fill(amount); }
   await expect(page.getByRole("button", { name: "실제 의료비 저장", exact: true })).toBeDisabled(); expect(state.writes).toHaveLength(0); await page.getByRole("region", { name: "영수증 명세 2", exact: true }).getByLabel("명세 금액 (원)", { exact: true }).fill("260000"); await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click(); await expect(page.getByRole("heading", { name: "의료비 상세", exact: true })).toBeVisible(); expect(state.expenses).toHaveLength(1); expect(state.expenses[0]!.cash.amount_krw).toBe("860000"); expect(state.expenses[0]!.lines.map((l) => l.amount_krw)).toEqual(["600000", "260000"]); expect(state.expenses[0]!.gross_medical_krw).toBe("1000000");
 });

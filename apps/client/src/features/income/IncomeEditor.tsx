@@ -51,6 +51,6 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
       <p>내가 바꾼 필드는 유지하고 나머지는 현재 기록을 사용해요. 반환 등으로 정정이 제한되면 현재 상세에서 확인해 주세요.</p>
       <button type="button" disabled={!latest.editable} onClick={() => { change(preserveIncomeChanges(incomeDraft(base!.period_month, base), draft, incomeDraft(latest.period_month, latest))); setBase(latest); setLatest(null); command.setError(null); }}>비교한 내 변경 유지</button><Link to={`/income/${latest.id}`}>현재 상세 보기</Link>
     </section>}
-    <SaveControls busy={command.busy} cancel={command.cancel} disabled={checking || !body || !!base && !base.editable} label={base ? "수입 정정 저장" : "수입 기록 저장"} />
+    <SaveControls backTo={base ? `/income/${base.id}` : "/income"} busy={command.busy} cancel={command.cancel} disabled={checking || !body || !!base && !base.editable} label={base ? "수입 정정 저장" : "수입 기록 저장"} />
   </form></section>;
 }

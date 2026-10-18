@@ -24,21 +24,16 @@ const routes = [
   ["/consumables/synthetic-consumable", "소모품 상세"], ["/settings", "설정"],
 ] as const;
 
-test("all 26 specified routes support direct entry and reload without inventing records", async ({ page }) => {
-  test.setTimeout(60_000);
+for (const [path, title] of routes) test(`direct entry and reload keep ${path} usable without inventing records`, async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  for (const [path, title] of routes) {
-    await test.step(path, async () => {
-      await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-      await page.reload();
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-      await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "기록 기능을 준비하고 있어요", exact: true })).toHaveCount(0);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    });
-  }
+  await page.goto(path);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+  await expect(page.getByText("기능 준비 중 · 현재는 화면 탐색만 가능해요.")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "기록 기능을 준비하고 있어요", exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -96,16 +91,16 @@ test("month selection follows monthly records while consumables remain today-bas
   await expect(page.getByLabel("확인할 월")).toHaveValue("2025-02");
   await page.getByRole("link", { name: "2025년 2월 월 기록 확인" }).click();
   await expect(page).toHaveURL(/\/assets\/months\/2025-02$/);
-  await expect(page.getByText("2025년 2월 · 서울 기준")).toBeVisible();
+  await expect(page.getByText("서울 기준 · 2025년 2월", { exact: true })).toBeVisible();
 });
 
 for (const reload of [false, true]) {
   test(`a monthly deep link synchronizes the shared selector after back${reload ? " and reload" : ""}`, async ({ page }) => {
     await page.goto("/assets/months/2025-02");
-    await expect(page.getByText("2025년 2월 · 서울 기준")).toBeVisible();
+    await expect(page.getByText("서울 기준 · 2025년 2월", { exact: true })).toBeVisible();
     if (reload) {
       await page.reload();
-      await expect(page.getByText("2025년 2월 · 서울 기준")).toBeVisible();
+      await expect(page.getByText("서울 기준 · 2025년 2월", { exact: true })).toBeVisible();
     }
     await page.getByRole("button", { name: "뒤로", exact: true }).click();
     await expect(page).toHaveURL(/\/assets$/);

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { useAuth } from "../auth/AuthProvider";
 import { SessionStatus } from "../auth/AuthFeedback";
 import { MonthError } from "../assets/months/MonthFeedback";
@@ -36,7 +37,7 @@ export function CashflowError({ error }: { error: ApiError | null }) {
   };
   return messages[error.code] ? <div className="auth-message" role="alert"><p>{messages[error.code]}</p></div> : <MonthError error={error} />;
 }
-export function SaveControls({ busy, cancel, label, disabled = false }: { busy: boolean; cancel: () => void; label: string; disabled?: boolean }) {
-  return <div className="form-actions"><button type="submit" disabled={busy || disabled}>{busy ? "결과 확인 중…" : label}</button>{busy && <button type="button" className="secondary-button" onClick={cancel}>요청 대기 중단</button>}</div>;
+export function SaveControls({ busy, cancel, label, disabled = false, backTo, onDismiss }: { busy: boolean; cancel: () => void; label: string; disabled?: boolean; backTo?: string; onDismiss?: () => void }) {
+  return <div className="form-actions save-actions"><button type="submit" disabled={busy || disabled}>{busy ? "결과 확인 중…" : label}</button>{busy ? <button type="button" className="secondary-button" onClick={cancel}>요청 대기 중단</button> : onDismiss ? <button type="button" className="secondary-button" onClick={onDismiss}>입력 취소</button> : backTo ? <Link className="button-link secondary-button" to={backTo}>입력 취소</Link> : null}</div>;
 }
 export function RecordedMoneyNotice() { return <p className="muted">직접 등록한 금전 기록이에요. 계좌 잔액과 월별 자산 평가액은 자동으로 바뀌지 않아요.</p>; }

@@ -1,3 +1,4 @@
+import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import { mockCashflow, incomeRow } from "./support/cashflow";
 import { uid } from "./support/finance";
@@ -7,7 +8,7 @@ test.beforeEach(async ({ page }) => { await page.clock.setFixedTime(new Date("20
 test("income summary separates earned and insurance inflow and filters only the record list", async ({ page }) => {
   const state = await mockCashflow(page); state.pageSize = 1; await page.goto("/income");
   const summary = page.getByRole("region", { name: "등록 수입 요약" }); await expect(summary).toContainText("3,200,000원"); await expect(summary).toContainText("800,000원"); await expect(summary).toContainText("4,000,000원");
-  await page.getByRole("combobox", { name: "수입 구성원 필터", exact: true }).selectOption(uid(2)); await expect(page).toHaveURL(/member=/); await expect(page.getByRole("link", { name: "급여 · 3,000,000원", exact: true })).toBeVisible(); await expect(summary).toContainText("4,000,000원");
+  await openDisclosure(page, "수입 기록 찾기"); await page.getByRole("combobox", { name: "수입 구성원 필터", exact: true }).selectOption(uid(2)); await expect(page).toHaveURL(/member=/); await expect(page.getByRole("link", { name: "급여 · 3,000,000원", exact: true })).toBeVisible(); await expect(summary).toContainText("4,000,000원");
   await page.reload(); await expect(page.getByRole("combobox", { name: "수입 구성원 필터", exact: true })).toHaveValue(uid(2)); await page.getByRole("button", { name: "수입 필터 초기화", exact: true }).click();
   await page.getByRole("button", { name: "수입 더 보기", exact: true }).click(); await expect(page.getByRole("link", { name: "상여 · 200,000원", exact: true })).toBeVisible(); expect(state.writes).toHaveLength(0);
 });

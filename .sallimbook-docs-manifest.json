@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "7acbc9072cbe7ff13444ab0d3223f243d6864045bd05e2599c370ede4cd8155a",
-      "git_sha1": "203669636dd2f9cbe0510a972118905683a02cd9"
+      "sha256": "727a69dddebefa1c2c0ff47d53c08244d71160977e8d1a0673a2089a0738a077",
+      "git_sha1": "f582d57a3629911f122fd324b13472faf98ee141"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -392,6 +392,10 @@
     "docs/testing/threat-model-review.md": {
       "sha256": "42903acd4dc4c62bd6a51cde0c59fc1ddafc0a95141c6bbf508f9cc64f25c17c",
       "git_sha1": "3f4b07b8d692c4a30015430c6122d4d4c36f9a43"
+    },
+    "docs/testing/scenario-ux.md": {
+      "sha256": "af764664a5bbc0ec48ee847d5934832c5ce1a39ed332dded82c73263de2e34d4",
+      "git_sha1": "8e7187c167d3a51f925399bc3c2aa52130bd435b"
     }
   }
 }

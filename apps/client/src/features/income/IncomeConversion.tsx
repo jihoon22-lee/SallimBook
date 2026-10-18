@@ -39,7 +39,7 @@ function ConversionWorkspace() {
       <p>전환 전 {formatKrw(sourceTotal)} · 전환 후 {replacementTotal === null ? "금액 확인 필요" : formatKrw(replacementTotal)}</p>{replacementTotal !== null && replacementTotal !== sourceTotal && <p role="alert">전환 전후 합계가 같아야 해요.</p>}
       <div className="form-field"><label>전환 사유<textarea maxLength={500} required value={reason} disabled={command.busy || loading} onChange={(event) => setReason(event.target.value)} /></label></div><label className="checkbox-field"><input type="checkbox" checked={ack} disabled={command.busy || loading} onChange={(event) => setAck(event.target.checked)} />원본 전체와 같은 합계의 대체 기록을 확인했어요.</label>
       {command.error?.status === 409 && <button type="button" disabled={command.busy || loading} onClick={() => void loadSources(true)}>현재 원본 다시 비교</button>}
-      <SaveControls busy={command.busy} cancel={command.cancel} disabled={loading || !ack || !reason.trim() || !payload || sourceTotal !== replacementTotal} label="합계를 유지하고 전환" />
+      <SaveControls backTo={"/income"} busy={command.busy} cancel={command.cancel} disabled={loading || !ack || !reason.trim() || !payload || sourceTotal !== replacementTotal} label="합계를 유지하고 전환" />
     </form></section>}
   </>;
 }
