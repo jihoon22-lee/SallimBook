@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { toApiError } from "../../platform/api";
@@ -10,9 +10,10 @@ import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { isDateOnly, todaySeoul } from "../finance/dates";
 import type { Income, IncomeReturn } from "./model";
 import { useIncomeApi } from "./api";
-export function IncomeCommand({ initial, action, onSaved }: { initial: Income; action: "void" | "return"; onSaved: () => void }) {
+export function IncomeCommand({ initial, action, onSaved, onBusyChange }: { initial: Income; action: "void" | "return"; onSaved: () => void; onBusyChange?: (busy: boolean) => void }) {
   const api = useIncomeApi(); const navigate = useNavigate(); const { month } = useMonth(); const command = useMonthCommand();
   const [source, setSource] = useState(initial); const [latest, setLatest] = useState<Income | null>(null); const [reason, setReason] = useState(""); const [amount, setAmount] = useState(""); const [period, setPeriod] = useState(month); const [precision, setPrecision] = useState<"day" | "month">("day"); const [date, setDate] = useState(""); const [account, setAccount] = useState(""); const [note, setNote] = useState("");
+  useEffect(() => { onBusyChange?.(command.busy); }, [command.busy, onBusyChange]);
   const parsed = parseKrw(amount); const valid = !!reason.trim() && reason.trim().length <= 500 && (action === "void" || !!parsed && parsed !== "0" && BigInt(parsed) <= BigInt(source.amount_krw) && isValidMonth(period) && (precision === "month" || isDateOnly(date) && date <= todaySeoul()));
   const body: IncomeReturn = { amount_krw: parsed ?? "", period_month: period, date_precision: precision, occurred_on: precision === "day" ? date : null, account_id: account || null, note: note.trim() || null, reason: reason.trim() };
   const payload = action === "void" ? { reason: reason.trim() } : body; const key = useIdempotencyKey(JSON.stringify([source.id, source.version, action, payload]));

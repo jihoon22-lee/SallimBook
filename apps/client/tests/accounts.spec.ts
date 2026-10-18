@@ -1,3 +1,4 @@
+import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import { mockFinance, uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -6,7 +7,7 @@ test("accounts filter by pension type and owner, and show masked metadata withou
   const state = await mockFinance(page); await page.goto("/accounts");
   await expect(page.getByRole("link", { name: "합성 개인 금융 자산", exact: true })).toHaveCount(1);
   await expect(page.getByText("••••ONLY", { exact: true })).toBeVisible();
-  await page.getByLabel("계좌 유형 필터", { exact: true }).selectOption("irp");
+  await openDisclosure(page, "계좌 찾기"); await page.getByLabel("계좌 유형 필터", { exact: true }).selectOption("irp");
   await page.getByLabel("계좌 소유자 필터", { exact: true }).selectOption(uid(5));
   await expect.poll(() => state.accountQueries.at(-1)?.get("owner_member_id")).toBe(uid(5));
   expect(state.accountQueries.at(-1)?.get("account_type")).toBe("irp");

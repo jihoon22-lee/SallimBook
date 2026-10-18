@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "7acbc9072cbe7ff13444ab0d3223f243d6864045bd05e2599c370ede4cd8155a",
-      "git_sha1": "203669636dd2f9cbe0510a972118905683a02cd9"
+      "sha256": "ec106b58c7c5349a39484545816ed9958e9e8ece4e316dcddd220db07e74a087",
+      "git_sha1": "a18f8f996665ed6371f1b662bb2740f5efb75b8c"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "ac9357dbf1aa96d42e670ae44e1b09af6b0b00ff09713c5d196fb1c8f7d3576f",
-      "git_sha1": "68cec14576fa05444cce733ab6152893f8ea2bcf"
+      "sha256": "57a006721d7680f44d1ff9314bace4c6ac6175cc05c671498674bebd14958d3e",
+      "git_sha1": "9ff4eea6f2c5a66d1580cb9ce1cbfe79cf22b149"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
@@ -392,6 +392,10 @@
     "docs/testing/threat-model-review.md": {
       "sha256": "42903acd4dc4c62bd6a51cde0c59fc1ddafc0a95141c6bbf508f9cc64f25c17c",
       "git_sha1": "3f4b07b8d692c4a30015430c6122d4d4c36f9a43"
+    },
+    "docs/testing/scenario-ux.md": {
+      "sha256": "87f8255f70ce6c01a95dc67adbc889a315496f153e3f9aac5ee90cd2f7d08c25",
+      "git_sha1": "743ecb3c6b1eb34381008b4e9916fbf1570e237d"
     }
   }
 }

@@ -6,7 +6,9 @@
 
 > 자산·계좌·카드·수입·고정 납부·보험·가전/소모품의 수동 입력과 이력, 비공개 문서, 보관함, 사용자 내보내기, 설정·감사 조회를 웹/Android에 연결했습니다.
 > 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. [최종 통합 검증 기록](docs/testing/final-integration.md)과 [요구사항 추적표](docs/requirements-traceability.md)에 근거를 연결합니다.
-> 2026-10-18 사용자 결정으로 모바일·웹 실기기 테스트는 사용자가 직접 수행하고 발견한 문제만 새 이슈로 등록합니다. 테스트 대기 이슈는 개발 차단 조건에서 해제했습니다. 백업 운영은 개발 완료 후 사용이 안정화된 단계로 미루고 정기 백업·복원 점검 예약을 중지했습니다. 기존 백업은 보존합니다. 현재 배포는 0.1.5이며, 기능상 남은 작업은 Android 로컬 CVC의 배포 활성화([#39](https://github.com/jihoon22-lee/SallimBook/issues/39))입니다.
+> 2026-10-18 사용자 결정으로 모바일·웹 실기기 테스트는 사용자가 직접 수행하고 발견한 문제만 새 이슈로 등록합니다. 테스트 대기 이슈는 개발 차단 조건에서 해제했습니다. 백업 운영은 개발 완료 후 사용이 안정화된 단계로 미루고 정기 백업·복원 점검 예약을 중지했습니다. 기존 백업은 보존합니다. 후속 UI/UX 변경과 배포 버전·검증 결과는 [#100](https://github.com/jihoon22-lee/SallimBook/issues/100)에서 추적합니다. 기능상 남은 작업은 Android 로컬 CVC의 배포 활성화([#39](https://github.com/jihoon22-lee/SallimBook/issues/39))입니다.
+
+실제 기록 작업을 기준으로 개선한 화면과 동선은 [UI/UX 검증 기록](docs/testing/scenario-ux.md)에 정리합니다.
 
 남은 작업은 [v1 잔여 실행 계획](docs/v1-completion-plan.md), 클라우드 검증 작업은
 [Android 테스트 전달문](docs/testing/android-cloud-handoff.md)에 정리합니다.
