@@ -62,6 +62,7 @@ test("real passkey registration login scoped actions and revocation keep their s
     await page.reload();
     await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
     await ageLogin(page);
+    await page.getByText("기존 로그인 이름으로 초대", { exact: true }).click();
     await page.getByLabel("초대할 로그인 이름", { exact: true }).fill("synthetic_https_partner");
     await page.getByRole("button", { name: "패스키로 확인하고 초대", exact: true }).click();
     await expect(page.getByText("초대를 만들었어요.", { exact: false })).toBeVisible();

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import type { components } from "@sallimbook/api-client";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
+import { OnboardingChoices } from "./OnboardingEntry";
 import { NativeAuthAction } from "./NativeAuthAction";
 import { supportsWebAuthn } from "../../platform/webauthn";
 import { useAuthCeremony } from "./useAuthCeremony";
@@ -19,6 +20,12 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [passwordError, setPasswordError] = useState(true);
+
+  function chooseAccount(loginName: "owner" | "partner") {
+    if (busy) return;
+    const input = formRef.current?.querySelector<HTMLInputElement>('[name="login_name"]');
+    if (input) { input.value = loginName; clearSensitiveFields(formRef.current); }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,6 +70,7 @@ function LoginForm() {
   return <section className="card">
     {state.status === "authenticated" && <p>{state.member.display_name} 님으로 로그인되어 있어요. 현재 계정의 비밀번호를 확인하면 최근 인증을 갱신해요.</p>}
     <form ref={formRef} className="auth-form" onSubmit={(event) => void submit(event)}>
+      {state.status !== "authenticated" && <div role="group" aria-label="로그인 계정 선택" className="form-actions"><button type="button" disabled={busy} onClick={() => chooseAccount("owner")}>처음 시작한 사람</button><button type="button" disabled={busy} onClick={() => chooseAccount("partner")}>연결한 배우자</button></div>}
       {state.status !== "authenticated" && <div className="form-field"><label htmlFor="login-name">로그인 이름</label>
         <input id="login-name" name="login_name" autoComplete="username" autoCapitalize="none" spellCheck={false} required minLength={3} maxLength={64} pattern="[a-zA-Z][a-zA-Z0-9_.\-]{2,63}" disabled={busy} />
       </div>}
@@ -80,7 +88,7 @@ function LoginForm() {
     </form>
     {state.status !== "authenticated" && <p className="muted">패스키 로그인에는 로그인 이름과 이 기기 이름만 필요해요. 비밀번호를 입력하지 않아도 돼요.</p>}
     {state.status !== "authenticated" && !supportsWebAuthn() && <p>이 브라우저에서는 패스키를 사용할 수 없어요. 최신 브라우저의 HTTPS 주소에서 이용해 주세요.</p>}
-    <Link to="/onboarding">초대 코드로 계정 등록</Link>
+    {state.status !== "authenticated" && <p className="muted">계정을 선택하면 로그인 이름을 채워 드려요. 기존에 쓰던 이름도 직접 입력할 수 있어요.</p>}
   </section>;
 }
 
@@ -89,6 +97,7 @@ export function LoginPage() {
   return <>
     <div className="intro"><p className="eyebrow">우리 집의 기록</p><h1>로그인</h1><p>각자의 계정으로 하나의 공동 가계를 사용해요.</p></div>
     {state.status === "signed-out" && state.remoteRevocationUnconfirmed && <p role="status">이 기기에서는 로그아웃했어요. 서버 연결을 확인하지 못해 다른 기기에서 이 기기의 연결 해제를 확인해 주세요.</p>}
+    {state.status === "signed-out" && <OnboardingChoices />}
     {state.status === "signed-out" || state.status === "authenticated" ? isNativeAuth() ? <NativeAuthAction mode="login" /> : <LoginForm /> : <SessionStatus />}
   </>;
 }

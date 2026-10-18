@@ -38,6 +38,5 @@ export function NativeAuthAction({ mode }: { mode: "login" | "accept" | "invite"
     {(mode === "invite" || (mode === "login" && state.status !== "authenticated")) && <button type="button" disabled={busy} onClick={() => void start(true)}>{mode === "login" ? "앱 패스키로 로그인" : "패스키로 확인하고 초대"}</button>}
     {done && <p role="status">{mode === "accept" ? "계정 등록을 마쳤어요. 초대받은 로그인 이름으로 로그인해 주세요." : "초대를 만들었어요. 코드 전달 여부는 초대 화면에서 확인해 주세요."}</p>}
     {mode === "accept" && done && <Link className="button-link" to="/login">로그인하기</Link>}
-    {mode === "login" && <p><Link to="/onboarding">초대 코드로 계정 등록</Link></p>}
   </section>;
 }

@@ -22,6 +22,9 @@ export function authErrorMessage(error: ApiError, login = false): string {
     case "REAUTHENTICATION_FAILED": return "현재 계정의 비밀번호를 다시 확인해 주세요. 기존 로그인은 유지돼요.";
     case "CSRF_FAILED": return "인증 상태가 다시 변경되어 요청을 완료하지 않았어요. 세션을 다시 확인한 뒤 시도해 주세요.";
     case "VERSION_CONFLICT": return "정보가 다른 곳에서 변경됐어요. 목록을 다시 불러온 뒤 확인해 주세요.";
+    case "SETUP_UNAVAILABLE": return "지금은 새 가계를 시작할 수 없어요. 이미 계정이 있다면 로그인하거나 배우자 연결 코드를 확인해 주세요.";
+    case "SETUP_COMPLETE": return "이미 가계가 시작되었어요. 만든 계정으로 로그인하거나 배우자 연결 코드를 받아 주세요.";
+    case "INVALID_CONNECTION_CODE": return "연결 코드가 맞지 않거나 만료되었어요. 배우자에게 새 코드를 확인해 주세요.";
     case "HOUSEHOLD_FULL": return "이 가계에는 이미 두 계정이 등록되어 있어요.";
     case "LOGIN_UNAVAILABLE": return "이 로그인 이름은 사용할 수 없어요. 다른 이름을 입력해 주세요.";
     case "INVALID_INVITATION": return "초대 코드가 만료되었거나 사용할 수 없어요. 새 초대를 확인해 주세요.";
