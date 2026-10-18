@@ -434,4 +434,8 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Runtime imports this module by its canonical name. Use that same Runner
+    # and AutomationError so retry handlers also catch errors from `python -m`.
+    from ops.automation import main as canonical_main
+
+    sys.exit(canonical_main())

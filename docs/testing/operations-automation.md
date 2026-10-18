@@ -257,3 +257,29 @@ PR 검토 후 로컬 이미지 참조를 보완했다. 실제 기존 API 이미�
 - 별도 실제 API v4 이미지의 network-none/read-only/UID 10001 컨테이너에서 새 `storage` worker가
   daemon 파일시스템 여유 약 632GiB를 반환했다. 새 helper 파일의 hash를 묶은 합성 bundle 시험이며,
   운영 예약 활성화나 CVD 다운로드·승격 전체의 증거는 아니다. 운영 DB·백업·키는 접근하지 않았다.
+
+### CLI 진입점의 복원 준비 재시도 수정
+
+`python -m ops.automation run ... --task restore-check`에서 PostgreSQL의 첫 `pg_isready`가
+아직 준비되지 않았음을 반환하면, 90초 동안 재시도해야 한다. 기존 모듈 실행은 `__main__`에 정의된
+`Runner`와 `AutomationError`를 사용했지만, runtime은 `ops.automation.AutomationError`를 import했다.
+이 두 클래스가 달라 초기 `COMMAND_FAILED`를 재시도 처리에서 잡지 못하고 즉시 실패했다.
+`import ops.automation; ops.automation.run(...)` 진단에서는 같은 클래스이므로 재현되지 않았다.
+
+CLI 진입점은 canonical `ops.automation.main`에 위임하여 설정 검증·Runner·runtime의 예외 타입을
+일치시킨다. PostgreSQL 준비 기한, 백업/복원 로직, 자격 mount, 소유 리소스 정리 정책은 바꾸지 않는다.
+준비 기한까지 계속 실패하면 `RESTORE_DATABASE_UNAVAILABLE`로 실패하고 격리 볼륨을 보존한다.
+
+[CLI 회귀 시험](../../tests/operations/test_automation_cli.py)은 별도 Python subprocess의 실제
+`-m ops.automation`과 import형 진입점을 모두 호출한다. 설정과 Docker 응답만 합성 값으로 대체하고
+실제 main/run/Runner/restore_check를 유지한다. 첫 준비 확인이 exit 2, 다음 확인이 exit 0일 때
+수정 전 `-m`은 한 번 만에 실패하고 import형은 성공하는 것을 재현했다. 수정 후 둘 다 재시도·복원 단계·
+성공 정리에 도달한다. 계속 준비되지 않는 경우 실패 유지, 볼륨 보존과 고정 오류 코드만의 출력을 확인한다.
+
+```sh
+python -m unittest tests.operations.test_automation_cli -v
+python -m unittest discover -s tests/operations -v
+```
+
+이 회귀 자체는 실제 Docker나 고객 DB를 실행하지 않는다. 운영 고정 checkout/config는 제자리 수정하지
+않고 검토된 새 운영 소스로 전환해야 한다. 이전 실패의 격리 볼륨과 장부는 보존한다.
