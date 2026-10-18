@@ -32,6 +32,9 @@
 [운영 도구·복원 절차](operations-runbook.md)를 연결한다. 요구사항 정의는
 [제품 요구사항](product-requirements.md), 검증 방법은 [테스트 명세](testing-and-acceptance.md)를 따른다.
 
+R-20/R-21의 실제 백업·격리 복원 근거는 [운영 백업·복원 기록](testing/operating-backup-restore.md)에 있다.
+외부 백업 위치 결정은 사용자 요청으로 운영 시작 뒤로 유예했으며, 현재 로컬 사본을 독립 보관으로 세지 않는다.
+
 실제 Galaxy 2대의 인증·Keystore/CVC·수명주기·접근성·데이터 보존 업데이트와,
 실기기의 RP/DAL·패스키 연결, 서명키 독립 보관·운영 복원 인수는 별도 증거가 필요하다. 이 항목들을
 JVM·가상 WebAuthn·브라우저 크기 모의시험으로 대체하거나 완료로 표시하지 않는다.

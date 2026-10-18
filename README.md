@@ -6,7 +6,7 @@
 
 > 자산·계좌·카드·수입·고정 납부·보험·가전/소모품의 수동 입력과 이력, 비공개 문서, 보관함, 사용자 내보내기, 설정·감사 조회를 웹/Android에 연결했습니다.
 > 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. [최종 통합 검증 기록](docs/testing/final-integration.md)과 [요구사항 추적표](docs/requirements-traceability.md)에 근거를 연결합니다.
-> 두 Galaxy의 보안·업데이트와 운영 백업/복원·재시작 인수는 남아 있습니다. CVC는 실기기 보안 검증과 사용자 선택 전까지 비활성화하며, v1.0.0 출시로 표시하지 않습니다.
+> 실제 암호화 백업과 격리 복원 무결성 확인을 완료했습니다. 두 Galaxy의 보안·업데이트, 독립 백업 보관과 전체 재시작·복구 인수는 남아 있습니다. CVC는 실기기 보안 검증과 사용자 선택 전까지 비활성화하며, v1.0.0 출시로 표시하지 않습니다.
 
 남은 작업은 [v1 잔여 실행 계획](docs/v1-completion-plan.md), 클라우드 검증 작업은
 [Android 테스트 전달문](docs/testing/android-cloud-handoff.md)에 정리합니다.
@@ -141,11 +141,12 @@ SDK 설치기는 고정된 빌드 도구만 설치하며 `platform-tools`와 ADB
 
 산출물은 `apps/client/android/app/build/outputs/apk/debug/app-debug.apk`이며 개발용입니다.
 최소 API 30, 개발 앱 ID `io.github.jihoon22lee.sallimbook.debug`입니다.
-운영 앱 ID는 접미사가 없는 `io.github.jihoon22lee.sallimbook`이며 정식 서명·배포는 SB-038에서 검증합니다.
+운영 앱 ID는 접미사가 없는 `io.github.jihoon22lee.sallimbook`입니다. 서명 release APK를 배포했으며,
+두 실제 기기의 데이터 보존 업데이트 인수는 SB-038에서 별도로 확인합니다.
 
 Android 인증 서버 주소는 빌드 시 Gradle 속성 `sallimbookApiOrigin`으로 지정한 HTTPS origin만 사용합니다.
 `ORG_GRADLE_PROJECT_sallimbookApiOrigin` 환경변수로 주입할 수 있으며 경로·쿼리·사용자정보가 없는 주소여야 합니다.
-미설정 빌드는 인증을 비활성화합니다. 운영 주소는 별도 Tailscale 노드를 마련한 뒤 확정합니다.
+미설정 빌드는 인증을 비활성화합니다. 운영 빌드는 승인된 배포 manifest의 전용 Tailscale 노드 주소를 사용합니다.
 앱의 로그인·초대 입력과 인증 토큰은 네이티브 모듈에서 처리하고 일반 웹 상태에 반환하지 않습니다.
 안전한 메시지 채널을 지원하지 않는 WebView에서는 업데이트 안내를 표시합니다.
 두 Galaxy의 실기기·백업/전송·잠금 실패 시나리오는 전체 기능 개발 뒤에 수행합니다.

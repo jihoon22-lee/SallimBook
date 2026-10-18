@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "056080fa2c38af01c13128a0ff06db5a78b8929a996340fc89f06bc1f8164c54",
-      "git_sha1": "bbdf27c7f2833f9fdb91384445759e54bb360289"
+      "sha256": "22fa1009784494b156f9bbea6b9cee60f138f107ff4f63f0016ff6ba12e68569",
+      "git_sha1": "1641a3946277172f2f3deadbd41a9f53a48cc1ba"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -118,8 +118,8 @@
       "git_sha1": "8d85b0041b74f1df30d634b0e550a5003979f692"
     },
     "docs/requirements-traceability.md": {
-      "sha256": "c238a5ecd53aeb41a1e4de28c8a442c3a27764f231323ea096ccfa6f98a82213",
-      "git_sha1": "6e06a8ab6e2232ae59a3b0f2d20711a4671b2fd2"
+      "sha256": "fb5ca549808352cd164f6690dab0f6464be0f42c1bf98c611650486cbc8dccbf",
+      "git_sha1": "ca0447d8291be935300d544b0a8670a06b1c8c0f"
     },
     "docs/native-bridge-contract.md": {
       "sha256": "b277cf8616d743aa73baefdb76cfedf586f3072ff26e43a3d5b3241a890cbede",
@@ -362,12 +362,16 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "5f9678ba1f5b9f53498ee7c3795f9bd05e80a02e83985a297969e910ea24c224",
-      "git_sha1": "75c0f606bca14ce28200fe0f90c5920415094313"
+      "sha256": "8b879ec89a5e208b98013ec7e56095350432f1f47edda1484f4a9c31ca00aaa5",
+      "git_sha1": "ee4af498ad9320f5cce1553287b6e7fe2103a332"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
       "git_sha1": "27dd4e0485a6233c9f07ee402a67a20d9201b8f8"
+    },
+    "docs/testing/backup-retention.md": {
+      "sha256": "87bc437d660d8f9aea5517bf8949567c516814ca5f8978debf4c5bcd790f5cdd",
+      "git_sha1": "e28177de8caaff08d13859d6fbe5dd5cf0647066"
     }
   }
 }
