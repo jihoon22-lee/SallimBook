@@ -1,0 +1,2 @@
+{"variant": "default_keep_alive", "uvicorn": "0.54.0", "okhttp": "5.4.0", "delay_ms": 6500, "server_requests": 1, "first": "HTTP_OK", "second": "NETWORK_FAILURE", "connect_attempts": 1, "retry_enabled": false}
+{"variant": "connection_close", "uvicorn": "0.54.0", "okhttp": "5.4.0", "delay_ms": 6500, "server_requests": 2, "first": "HTTP_OK", "second": "HTTP_OK", "connect_attempts": 2, "retry_enabled": false}

@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "76a3e98f71869a374868f5e506394c47ee8d5ee9b282437a24a0887ea48a9b7c",
-      "git_sha1": "21a30a41090bbe915d26143ea41eb2a7e4423c87"
+      "sha256": "7a32c2fafe32c86f7b058f1e5e672f73ae45159dcd700814ff5855111cd66413",
+      "git_sha1": "daa21854b7ac3e04c03f813899508dcb28a568d1"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
@@ -382,8 +382,8 @@
       "git_sha1": "425b939a4e128e7aa08b92bd6fe487feb99b0870"
     },
     "docs/testing/android-ci.md": {
-      "sha256": "8ac8e1630688e95494855deed28ed6e8156f8912d49b4dcb9149dc75f25d7f09",
-      "git_sha1": "82f65548ac3731bb7fe7457fdec4d9309886e3a6"
+      "sha256": "fb433459dcd01911a7cb305b645f0796fc5794e04e7d361c98a3fe0ae1e11145",
+      "git_sha1": "896a41a14e93ee12bc3c18f06e53076874061ff6"
     },
     "docs/testing/android-cloud-results.md": {
       "sha256": "b97c40aae567a07b6e27d6d5a7bc65cbe9502991e589b2555fa739f045f334a0",

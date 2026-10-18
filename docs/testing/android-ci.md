@@ -262,3 +262,37 @@ focus 비트만으로 실패를 단정하지 않는다. listener는 관찰 직�
 진단은 stage 36개/reason 14개/status 20개 및 고정 비트만 허용하며, 새 tap 비트와 tap_status는 함께 있어야
 보존한다. 두 차례 정제 이후에도 같은 규칙을 적용하고, 잘못된 비트·부분 필드·동적 문자열은 제거한다.
 기존 세션 생성/잠금 해제/main 복귀의 총 30초 기한, 최종 동시 상태와 실제 API 홈 검증을 유지한다.
+
+
+## 취소 후 상태 재조회와 시험 서버 연결 수명
+
+PR #95 head `5a869aa`의 [39100098328](https://github.com/jihoon22-lee/SallimBook/actions/runs/39100098328)
+실행 1회와 코드 변경 없는 재실행 1회는 모두 `SECOND_SETUP_AVAILABLE / ASSERTION`으로
+실패했다. 실제 checkout은 `67ef59af585a49e558e18c44f01bc5af0a0dd391`이며 각각 13건 중
+11 PASS / 1 FAIL / 1 조건부 SKIP이다. 닫기 후 원래 Main의 resumed/focus는 한 차례 확인했지만,
+그 뒤 시작 버튼 준비가 30초 안에 확인되지 않았다. 최종 제출에는 도달하지 않았으며
+`TAP=-----`, `TAP_STATUS=NOT_CHECKED`다. KVM·부팅·기기·정리는 통과했고 release 검사는 생략됐다.
+[1차 요약](evidence/android-kvm-20261018/run-39100098328/summary.json),
+[1차 가입 XML](evidence/android-kvm-20261018/run-39100098328/onboarding.xml),
+[2차 요약](evidence/android-kvm-20261018/run-39100098328-attempt2/summary.json),
+[2차 가입 XML](evidence/android-kvm-20261018/run-39100098328-attempt2/onboarding.xml)을 보존했다.
+코드 검토만으로 정상 취소의 lifecycle race를 확정하지 않았다.
+
+별도 로컬 재현은 실제 컴파일한 `accountHttpClient()`와 고정 OkHttp 5.4.0/Okio 3.17.0,
+Uvicorn 0.54.0, 합성 HTTPS CA 및 정상 hostname 검증을 사용했다. 두 GET을 6.5초 간격으로
+보내면 기본 서버에서는 첫 요청만 성공하고 두 번째는 네트워크 실패였다. 접속 시도/서버 수신은
+각각 1회였다. 같은 시험에서 수정된 proxy가 HTTP/1 응답에 `Connection: close`를 명시하자
+접속과 서버 수신이 각각 2회였으며 두 요청 모두 성공했다. 두 경우 모두 자동 재시도는 false였다.
+[고정 결과 비교](evidence/android-kvm-20261018/fixture-connection-comparison.jsonl)를 보존했다.
+
+근거는 [Uvicorn 0.54.0 기본 유휴 5초](https://github.com/Kludex/uvicorn/blob/0.54.0/uvicorn/config.py)와
+[OkHttp 5.4.0 GET 연결 검사 선택](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealRoutePlanner.kt),
+[소켓 상태 검사](https://github.com/square/okhttp/blob/parent-5.4.0/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/connection/RealConnection.kt)다.
+스크롤 안정화로 사용자 동작 간격이 길어지면 시험 서버의 유휴 종료와 겹칠 수 있다.
+이 로컬 재현은 실패 경로를 설명하지만, 기존 KVM 실행의 실제 소켓 상태를 소급해 확인한 것은 아니다.
+
+수정은 일회용 loopback fixture의 HTTP/1.0·1.1 응답만 명시적으로 닫는다. 응답 body/status와
+합성 신원·실제 peer 검증은 유지한다. HTTP/2와 lifespan에는 연결 헤더를 넣지 않는다.
+제품 네이티브·운영 서버·재전송 금지·인증서/hostname·시간 제한은 바꾸지 않는다.
+실제 wrapper를 실행하는 stdlib ASGI 회귀는 streaming body, 기존 connection 헤더 교체,
+원본 message/headers 보존과 프로토콜 분기를 확인한다. 새 KVM 가입 성공 여부는 별도 결과로 판단한다.
