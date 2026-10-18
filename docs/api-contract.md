@@ -19,6 +19,24 @@ DB 미설정·접속 실패·스키마 미준비는 503이며 내부 연결 정�
 
 ### 계정·세션 구현
 
+Issue #87의 기본 시작/연결 경로는 아래와 같다. `/api/v1` 접두사는 생략했다.
+
+| 메서드·경로 | 입력·응답·권한 |
+|---|---|
+| GET /household/setup | `{available: boolean}`, no-store; 실제 전용 프록시와 허용된 Serve 사용자, 미등록 설치일 때만 true |
+| POST /auth/web/setup | `display_name`, `password`, `device_label`; 허용된 사설망 사용자만, 201 WebLoginResponse+Secure 쿠키 |
+| POST /auth/native/setup | 같은 입력; native transport, 201 NativeTokenResponse |
+| POST /household/connection-code | 인증된 owner·최근 인증 또는 household.invite step-up; 201 `{code, expires_at}`, code는 8자리 |
+| POST /auth/web/connect | `code`, `display_name`, `password`, `device_label`; 201 WebLoginResponse+Secure 쿠키 |
+| POST /auth/native/connect | 같은 입력; native transport, 201 NativeTokenResponse |
+
+첫 시작은 사용자/구성원 기록이 있으면 409 SETUP_COMPLETE, 사설망 사용자/프록시 검증 실패는
+403 SETUP_UNAVAILABLE다. 기본 로그인 이름은 첫 사용자 owner, 연결한 배우자 partner다.
+새 가계 이름은 우리 가계이며 기존 빈 가계는 보존한다. 계정/구성원/기기/세션은 함께 commit한다.
+연결 코드 불일치·만료·사용·폐기는 400 INVALID_CONNECTION_CODE, 설치 단위 15분/5회 한도는
+429 RATE_LIMITED다. Origin/native transport와 두 계정 제한을 서버에서 검사한다.
+구체적인 신뢰 경계는 [모바일 직접 시작 ADR](adr/mobile-first-start.md)에 기록한다.
+
 웹은 `POST /auth/web/login`, `GET /auth/web/csrf`, `POST /auth/web/logout`을 사용한다.
 로그인은 `login_name`, `password`, `device_label`을 받고 HttpOnly/Secure/SameSite=Strict
 `__Host-sallimbook_session` 쿠키와 메모리 전용 CSRF 토큰을 발급한다. 변경 요청은 정확한 Origin과
@@ -33,7 +51,8 @@ native는 현재 access token과 전용 transport 규칙을 적용한다. 기존
 유지하고 최근 인증 시각만 갱신한다. 비밀번호 실패는 `403 REAUTHENTICATION_FAILED`, 시도 제한은 429이며
 기존 세션을 파기하지 않는다. 만료·폐기된 세션/기기는 401로 거부한다.
 
-`POST /auth/invitations/accept`는 일회성 초대 코드로 계정을 만들고 로그인은 별도로 수행한다.
+기존 `POST /auth/invitations/accept`는 긴 일회성 초대로 계정을 만들고 로그인은 별도로 수행한다.
+기존 API 계약은 유지하며 새 기본 시작/연결 경로만 등록과 로그인을 한 번에 완료한다.
 인증된 `GET /me`, `GET /household/members`, `POST /household/invitations`,
 `GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다.
 초대와 기기 폐기는 최근 5분 내 실제 로그인 또는 아래 목적·대상별 step-up 증명을 요구한다.

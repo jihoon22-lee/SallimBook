@@ -77,6 +77,9 @@ web vault에서도 secret component에만 평문을 한정하고 일반 상태�
 | 메서드 | JS 입력 | 성공 값 |
 |---|---|---|
 | `getSession` | 없음 | available, authenticated |
+| `getSetupStatus` | 없음 | available; 비로그인 상태의 고정 GET 한 개만 |
+| `createHousehold`, `connectHousehold` | 없음 | authenticated/cancelled; 입력·세션 토큰은 native 전용 |
+| `createConnectionCode` | 없음 | created/cancelled; 8자리 코드는 native에서만 표시 |
 | `loginUI`, `passkeyLoginUI` | 없음 | authenticated/cancelled |
 | `reauthenticateUI` | 없음 | authenticated/cancelled; 기존 세션·기기 유지 |
 | `registerPasskeyUI` | 없음 | registered/cancelled |
@@ -86,6 +89,11 @@ web vault에서도 secret component에만 평문을 한정하고 일반 상태�
 | `createInvitationUI`, `createInvitationWithPasskeyUI` | 없음 | created/cancelled; 초대 코드는 네이티브에 최대 30초 표시 |
 | `logout` | 없음 | signedOut, serverRevoked |
 | `request` | 허용된 method/path/ifMatch | status와 검증된 공개 메타데이터 |
+
+Issue #87의 시작/연결은 전용 네이티브 화면과 제한된 HTTP ticket을 사용한다. 비로그인 상태에서
+고정 setup/connect POST와 새 세션의 GET /me만 허용하며, 정상 서버 응답과 안전한 refresh 저장이
+끝나야 인증 상태를 갱신한다. UI가 보낸 성공 플래그로 잠금이나 서버 권한을 해제하지 않는다.
+이름·비밀번호·연결 코드를 JS 입력/반환으로 주고받지 않는다. 기존 긴 초대 명령도 유지한다.
 
 `request`는 GET `/me`, `/household/members`, `/devices`, `/auth/passkeys`와 버전을 지정한
 DELETE `/devices/{UUID}`만 허용한다(공통 `/api/v1` 접두사). 쿼리·ID·응답 필드도 제한하며,

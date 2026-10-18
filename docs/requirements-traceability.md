@@ -32,6 +32,9 @@
 [운영 도구·복원 절차](operations-runbook.md)를 연결한다. 요구사항 정의는
 [제품 요구사항](product-requirements.md), 검증 방법은 [테스트 명세](testing-and-acceptance.md)를 따른다.
 
-실제 Galaxy 2대의 인증·Keystore/CVC·수명주기·접근성·데이터 보존 업데이트와, 실제 전용
-Tailscale 노드/RP/DAL·서명키 보관·운영 복원 인수는 별도 증거가 필요하다. 이 항목들을
+실제 Galaxy 2대의 인증·Keystore/CVC·수명주기·접근성·데이터 보존 업데이트와,
+실기기의 RP/DAL·패스키 연결, 서명키 독립 보관·운영 복원 인수는 별도 증거가 필요하다. 이 항목들을
 JVM·가상 WebAuthn·브라우저 크기 모의시험으로 대체하거나 완료로 표시하지 않는다.
+
+Issue #87은 R-01/R-02의 처음 시작과 배우자 연결을 웹/Android에서 직접 수행하도록 보완한다.
+기존 CLI 전용 시작과의 요구사항 충돌 및 새 권한 경계는 [ADR 0008](adr/mobile-first-start.md)에 기록했다.

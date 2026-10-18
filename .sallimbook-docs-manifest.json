@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "8008e54bc7a9f16d74db0838f0c552fb8766560b3f652ce0aa50d304a01928f4",
-      "git_sha1": "daf3c3221a1f8e2e45765297db568b6524a53a10"
+      "sha256": "e642b49a4f5f80ca515eeff1621f9a2818abab1cd46a264c55bc8c438fef0a8d",
+      "git_sha1": "81e56f51eac912ca19dc2ddba919072c70f4a0a4"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -66,16 +66,16 @@
       "git_sha1": "7172a9f659236b69994b55b85ed30fb15f0c9029"
     },
     "docs/api-contract.md": {
-      "sha256": "e8d97d36213ef575c0796dabb84ccdb79fdacfd612d7a1f821d4a276d715446b",
-      "git_sha1": "bc9a76a276ab31b45326152cbd7bbde2454563a6"
+      "sha256": "1a8f1937e4e964da405971adcfaff8d6c8bb7b56f651a49ec9342c7d60280d76",
+      "git_sha1": "c2b6eb7531fd80334009bf30cf1618e8f8033081"
     },
     "docs/screen-specifications.md": {
-      "sha256": "8370f9774b070412c43d9cee4c53b80bbf4223da870314d9f3e03483bba60afe",
-      "git_sha1": "e0533df8bf29036ad1945a30d445469e0487a10b"
+      "sha256": "9af2f533fa5f95a071f92bac3cb17d6558c772c33aa5ee2f73ee407d5c07fd9f",
+      "git_sha1": "6962066cb0c4992a50cc7995dbc1971dde92e704"
     },
     "docs/security-authentication.md": {
-      "sha256": "a12167ff18b862df711164a63c8fe511033d97e41ff1431025349387c46b0276",
-      "git_sha1": "c95a43334ae11c095abb19e63fbc060b6a4b56bd"
+      "sha256": "e3f9db7cfbad0538e708ff1068fb0cdc82340b08f037e6a8baeb47fbb9b51182",
+      "git_sha1": "d3e14aaf28de08e7fa1223f61f6d5f3f2f467e18"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -118,16 +118,16 @@
       "git_sha1": "8d85b0041b74f1df30d634b0e550a5003979f692"
     },
     "docs/requirements-traceability.md": {
-      "sha256": "d38fdecde17d018b447e8d981e16e4522f2ae659f07997fd535ab13913a198e3",
-      "git_sha1": "b98c58e2c2135af41a718272cb3da20055533e88"
+      "sha256": "c238a5ecd53aeb41a1e4de28c8a442c3a27764f231323ea096ccfa6f98a82213",
+      "git_sha1": "6e06a8ab6e2232ae59a3b0f2d20711a4671b2fd2"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "aaf5db57bbf8db211718774edee3bf7271c1dc854f79e5ff62c3a36bb9b5318a",
-      "git_sha1": "b40313f1e02a777d755f401c7c9b71a885f16eab"
+      "sha256": "b277cf8616d743aa73baefdb76cfedf586f3072ff26e43a3d5b3241a890cbede",
+      "git_sha1": "55259ff24ebf33dd439b2d646f59771442602058"
     },
     "docs/README.md": {
-      "sha256": "f266b81c6fc3932a2fa97e68074ea9ac1e82cea05b92f328adbf1f1079c1241d",
-      "git_sha1": "1148c3a57d0536256bddbb6707c2f09957be3d69"
+      "sha256": "5a44b9199530ab1793ed31f1c099a2cb1294a7bdf4fbcb4391d1eaa399d13571",
+      "git_sha1": "66008fa838342a3f3a76cb4509ec05b28b98face"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -222,8 +222,8 @@
       "git_sha1": "b63213e8a36b200df1a993e6a865294bfc3eafca"
     },
     "scripts/test_web_auth.py": {
-      "sha256": "a89f51179366f6e36b3c7deb70755c507590907767451be94f043f5e08294d3d",
-      "git_sha1": "31821e6c78de26bd0e643896ebb238d5c0caa957"
+      "sha256": "1a88d46323808544e72922163d13d23118b3379ba467b8491da8ad5253acc722",
+      "git_sha1": "cbcee6928f9d14ff331584fa22aa3541efce2130"
     },
     "docs/testing/native-security-proof.md": {
       "sha256": "93ebc8ad098f87e2254f522b3509ff5e681ea1c426b3cb9c027f256612507a2e",
@@ -342,8 +342,12 @@
       "git_sha1": "0d44ef17c5426e1f95b513607c3f2802dc3be25a"
     },
     "docs/testing/final-integration.md": {
-      "sha256": "754992a710f9c04f3336524739553f977f0e8c606483eeb0b63caef61c00c715",
-      "git_sha1": "11bf2b9f96de7f1ead2f9e0d37f36e8340f73c0d"
+      "sha256": "12f630ecd4bd3b9d0f873fb8ef464088a794421eaab3679bc8dc41913f3ec9cb",
+      "git_sha1": "0546b36e3d1aa6ef0ac90dbe75e0ca25aceec1a2"
+    },
+    "docs/adr/mobile-first-start.md": {
+      "sha256": "8d11b14255d18b61265b0ae97501afbfb0d359c909906b4715a01ff9d0ccc273",
+      "git_sha1": "a0fd17c419450e649c476748e96032b2e312c17e"
     }
   }
 }
