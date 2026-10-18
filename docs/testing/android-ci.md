@@ -164,6 +164,7 @@ actionlint .github/workflows/android-instrumentation.yml
 | --- | --- | --- | --- | --- |
 | [39095425156](https://github.com/jihoon22-lee/SallimBook/actions/runs/39095425156) | `91e8b286b39c49d8fcb65cc2762cec86c68cdcf1` | 11 PASS / 1 SKIPPED | 1 FAIL, 정제 증거로 세부 단계 확인 불가 | FAIL |
 | [39096333533](https://github.com/jihoon22-lee/SallimBook/actions/runs/39096333533) | `a7b56fb89154c120d13f670f33a750a3ec411351` | 11 PASS / 1 SKIPPED | 1 FAIL, `CANCEL_FORM` | FAIL |
+| [39096963060](https://github.com/jihoon22-lee/SallimBook/actions/runs/39096963060) | `d4ed676d63829500013b3d80a0047ff9b3a4198f` | 11 PASS / 1 SKIPPED | 1 FAIL, `CANCEL_SCROLL` | FAIL |
 
 두 checkout SHA는 GitHub가 만든 PR merge ref이며 각각 PR head `3ca1bd3`, `39adb28`에 해당한다.
 두 실행 모두 KVM 가속, API 36/x86_64 부팅, AVD/ADB 종료와 합성 DB·포트 정리를 확인했다.
@@ -193,3 +194,20 @@ actionlint .github/workflows/android-instrumentation.yml
 빈 세션·bridge 준비로 교정했고, 마지막 실제 등록 세션과 API 응답 홈 판정은 유지했다.
 제품의 잠금/세션 로직은 변경하지 않았다. Kotlin 계측 컴파일, 정제 도구 12건, 실제 React 브라우저
 홈 판정 10건이 통과했다. 수정 후 원격 계측 성공은 별도 실행 결과로 확인해야 한다.
+
+세 번째 실행은 PR head `fb16191`에 해당하며 실제 Activity 준비와 닫기 버튼 조회를 통과하고
+Espresso `ScrollToAction`에서 실패했다. KVM·부팅·정리는 통과했고, release 검사는 앞선 실패로
+실행되지 않았다. [요약](evidence/android-kvm-20261018/run-39096963060/summary.json),
+[SDK](evidence/android-kvm-20261018/run-39096963060/sdk.json),
+[기존 XML](evidence/android-kvm-20261018/run-39096963060/existing.xml),
+[가입 XML](evidence/android-kvm-20261018/run-39096963060/onboarding.xml)을 보존했다.
+이 증거만으로 constraint/root/표시 면적 중 어느 조건이 원인인지 단정하지 않는다.
+
+후속 `b865709`의 시험 helper는 IME를 닫고 해당 Activity·root·ScrollView 제약을 확인한다.
+버튼이나 입력 칸이 이미 90% 이상 보이면 동작하고, 아니면 실제 `swipeUp`/`swipeDown`을 최대 6회
+수행한 뒤 같은 90% 기준을 요구한다. 리스너 직접 호출이나 표시 기준 하향, 실패 무시는 없다.
+닫기·입력·제출에 같은 경로를 적용한다. 실패 시 고정 stage 27개, reason 13개와 전/후 상태 4비트만
+보존한다. 비트는 owner focus/해당 root에 부착/scroll 제약/90% 표시 순서이고, 미측정은 `----`다.
+예외 원문·스택·UI tree·입력값은 읽어 진단에 넣지 않는다. 결과 도구와 workflow는 동일 helper로
+재검증하며 허용 형식 밖의 값은 버린다. 정제/실행기 22건, Kotlin 계측 컴파일, typecheck/build/sync,
+Ruff/actionlint가 통과했다. 실제 swipe와 가입 성공은 다음 원격 실행으로 확인한다.
