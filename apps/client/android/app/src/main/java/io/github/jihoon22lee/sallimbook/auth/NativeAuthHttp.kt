@@ -60,6 +60,7 @@ internal class NativeAuthHttp(private val origin: String) {
         nativeInsurancePolicyNumber: Boolean = false,
         idempotencyKey: String? = null,
         nativeDocumentCreate: Boolean = false,
+        nativeOnboarding: Boolean = false,
     ): NativeHttpResponse {
         gate.checkHttp(method, path)
         if (AuthPolicy.apiOrigin(origin) == null) {
@@ -74,6 +75,10 @@ internal class NativeAuthHttp(private val origin: String) {
             "/api/v1/auth/step-up/options", "/api/v1/auth/step-up/verify",
             "/api/v1/auth/native/reauthenticate",
         ) && method == "POST" && ifMatch == null
+        val onboarding = nativeOnboarding && !nativeAccountNumber && !nativeInsurancePolicyNumber && !nativeDocumentCreate &&
+            NativeOnboardingPolicy.httpAllowed(method, path, body?.let { jsonValue(it) }, accessToken != null,
+                ifMatch, stepUpToken, idempotencyKey)
+        if (nativeOnboarding && !onboarding) throw AuthFailure(AuthCode.INVALID_REQUEST)
         val internalRevoke = method == "DELETE" && PasskeyPolicy.revokePath(path) &&
             PasskeyPolicy.target(path.substringAfterLast('/'), ifMatch) && body == null
         val metadata = FinancePolicy.metadataHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch, idempotencyKey)
@@ -92,7 +97,7 @@ internal class NativeAuthHttp(private val origin: String) {
         val policyNumber = nativeInsurancePolicyNumber && !nativeAccountNumber && stepUpToken == null &&
             InsurancePolicy.numberHttpAllowed(method, path, body?.let { jsonValue(it) }, ifMatch)
         if (nativeInsurancePolicyNumber && !policyNumber || nativeAccountNumber && nativeInsurancePolicyNumber) throw AuthFailure(AuthCode.INVALID_REQUEST)
-        if (!internalAuthPath && !internalRevoke && !metadata && !numberMutation && !numberReveal && !policyNumber && !documentCreate &&
+        if (!onboarding && !internalAuthPath && !internalRevoke && !metadata && !numberMutation && !numberReveal && !policyNumber && !documentCreate &&
             (body != null || !AuthPolicy.requestAllowed(method, path, ifMatch))) {
             throw AuthFailure(AuthCode.INVALID_REQUEST)
         }
@@ -103,7 +108,10 @@ internal class NativeAuthHttp(private val origin: String) {
         }
         var requestBytes: ByteArray? = null
         try {
-            requestBytes = body?.toString()?.toByteArray(Charsets.UTF_8)
+            // OkHttp requires a RequestBody for POST. A zero-byte one-shot body implements
+            // the no-payload connection-code endpoint without serializing an extra JSON value.
+            requestBytes = if (onboarding && path == NativeOnboardingPolicy.CODE_PATH) byteArrayOf()
+                else body?.toString()?.toByteArray(Charsets.UTF_8)
             val request = Request.Builder()
                 .url(origin + path)
                 .method(method, requestBytes?.let { OneShotAuthBody(it) { gate.checkHttp(method, path) } })

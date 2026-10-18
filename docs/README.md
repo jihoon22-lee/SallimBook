@@ -46,6 +46,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [ADR: authoritative server online first](adr/authoritative-server-online-first.md) | 서버 기준·온라인 우선·충돌 처리 |
 | [ADR: auth domains and recovery](adr/auth-domains-and-recovery.md) | 계정 인증·앱 잠금·암호키 복구 분리 |
 | [ADR: private network and app identity](adr/private-network-and-app-identity.md) | 사용자 승인 앱 식별자·API 30·기존 WSL 서버 격리·전용 Tailscale 노드 |
+| [ADR: mobile first start](adr/mobile-first-start.md) | 웹/Android 직접 시작·배우자 연결·최초 등록의 사설망 신뢰 경계 |
 
 ## 문서 유지 규칙
 
@@ -64,3 +65,6 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 - [사용자 내보내기 화면 검증](testing/exports-client.md) — JSON·CSV·선택 문서 ZIP과 플랫폼별 저장 경계
 
 설정과 감사 이력 화면·26개 경로 확인은 [설정·감사 UI 검증](testing/settings-audit.md)을 참고합니다.
+
+모바일 직접 시작과 배우자 연결은 [통합 검증](testing/mobile-onboarding.md)과
+[Android 검증](testing/native-onboarding.md)을 참고합니다.

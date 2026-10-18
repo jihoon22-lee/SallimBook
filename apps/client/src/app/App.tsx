@@ -10,6 +10,8 @@ import { AssetListPage, AssetNewPage, AssetDetailPage } from "../features/assets
 import { authScreens } from "../features/auth/screens";
 import { AuthProvider } from "../features/auth/AuthProvider";
 import { InvitationAcceptPage } from "../features/auth/InvitationAcceptPage";
+import { OnboardingPage } from "../features/auth/OnboardingPage";
+import { SignedOutWelcome } from "../features/auth/OnboardingEntry";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SessionSettings } from "../features/auth/SessionSettings";
 import { CardListPage, CardNewPage, CardDetailPage } from "../features/cards/CardPages";
@@ -39,7 +41,7 @@ import { RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
 const screens = [
-  { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <Dashboard /> },
+  { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><SignedOutWelcome /><Dashboard /></> },
   { path: "/more", title: "더보기", group: "more" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><div className="intro"><h1>더보기</h1><p>우리 집 물건과 공동 가계의 설정을 관리해요.</p></div><RelatedLinks links={householdScreens.find((screen) => screen.path === "/more")!.links ?? []} /></> },
   { path: "/appliances", title: "가전 관리", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <ApplianceListPage /> },
   { path: "/appliances/new", title: "가전 등록", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceNewPage /> },
@@ -56,7 +58,9 @@ const screens = [
   { path: "/appliance-consumables/:id/replacements/:replacementId", title: "교체 기록 상세", group: "more" as NavigationGroup, parent: { to: "/consumables", label: "소모품 목록" }, live: true, element: <ReplacementDetailPage /> },
   { path: "/exports", title: "자료 내보내기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <ExportsPage /> },
   { path: "/vault", title: "보관함", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <VaultPage /> },
-  ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <InvitationAcceptPage /> })),
+  ...authScreens.map((screen) => ({ ...screen, live: true, element: screen.path === "/login" ? <LoginPage /> : <OnboardingPage /> })),
+  { path: "/onboarding/connect", title: "배우자 연결", group: "more" as NavigationGroup, parent: { to: "/login", label: "로그인" }, live: true, element: <OnboardingPage connect /> },
+  { path: "/onboarding/invitation", title: "기존 초대로 등록", group: "more" as NavigationGroup, parent: { to: "/onboarding", label: "공동 가계 시작" }, live: true, element: <InvitationAcceptPage /> },
   { path: "/settings", title: "설정", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <SettingsPage /> },
   { path: "/settings/audit", title: "감사 이력", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <AuditPage /> },
   { path: "/settings/auth", title: "계정과 기기", group: "more" as NavigationGroup, parent: { to: "/settings", label: "설정" }, live: true, element: <SessionSettings /> },

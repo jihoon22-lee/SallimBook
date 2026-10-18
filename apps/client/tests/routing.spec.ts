@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/household/setup", (route) => route.fulfill({ json: { available: false } }));
   await page.route("**/api/v1/me", (route) => route.fulfill({
     status: 401, contentType: "application/json",
     body: JSON.stringify({ error: { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", request_id: "synthetic" } }),

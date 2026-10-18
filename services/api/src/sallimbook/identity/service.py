@@ -31,6 +31,8 @@ from sallimbook.identity.auth_models import (
 )
 from sallimbook.identity.models import Household
 from sallimbook.identity.schemas import (
+    ConnectionCodeResponse,
+    ConnectionRequest,
     InvitationAcceptance,
     InvitationRequest,
     InvitationResponse,
@@ -38,6 +40,7 @@ from sallimbook.identity.schemas import (
     MemberResponse,
     NativeTokenResponse,
     ReauthenticationRequest,
+    SetupRequest,
 )
 
 WEB_IDLE = timedelta(minutes=30)
@@ -341,6 +344,7 @@ def create_partner_invitation(
     request: InvitationRequest,
     *,
     step_up_token: str | None = None,
+    _connection_code: bool = False,
 ) -> InvitationResponse:
     now = utcnow()
     if step_up_token is None:
@@ -390,7 +394,7 @@ def create_partner_invitation(
         )
         .values(revoked_at=now, version=Invitation.version + 1)
     )
-    token = secrets.token_urlsafe(32)
+    token = _fresh_connection_code(session) if _connection_code else secrets.token_urlsafe(32)
     invitation = Invitation(
         household_id=principal.household_id,
         intended_login=request.intended_login,
@@ -404,6 +408,33 @@ def create_partner_invitation(
     result = InvitationResponse(id=invitation.id, token=token, expires_at=invitation.expires_at)
     session.commit()
     return result
+
+
+def _fresh_connection_code(session: Session) -> str:
+    # Reissuing never recycles a previous code, including consumed/revoked ones.
+    for _ in range(32):
+        code = f"{secrets.randbelow(100_000_000):08d}"
+        if (
+            session.scalar(
+                select(Invitation.id).where(Invitation.token_hash == token_hash("invite", code))
+            )
+            is None
+        ):
+            return code
+    raise DomainError("DATABASE_UNAVAILABLE", "연결 코드를 만들지 못했습니다.", 503)
+
+
+def create_connection_code(
+    session: Session, principal: Principal, *, step_up_token: str | None = None
+) -> ConnectionCodeResponse:
+    invitation = create_partner_invitation(
+        session,
+        principal,
+        InvitationRequest(intended_login="partner"),
+        step_up_token=step_up_token,
+        _connection_code=True,
+    )
+    return ConnectionCodeResponse(code=invitation.token, expires_at=invitation.expires_at)
 
 
 def renew_bootstrap_invitation(session: Session, intended_login: str) -> InvitationResponse:
@@ -447,16 +478,27 @@ def accept_invitation(
 ) -> MemberResponse:
     now = utcnow()
     _admit_attempt(session, [(f"invite-source:{source}", 30)], now)
-    token = request.token.get_secret_value()
-    if not _valid_token(token):
-        raise DomainError("INVALID_INVITATION", "초대를 다시 확인해 주세요.", 400)
+    user, member = _accept_invitation_locked(session, request, connection=False)
+    result = member_response(user, member)
+    session.commit()
+    return result
+
+
+def _accept_invitation_locked(
+    session: Session, request: InvitationAcceptance | ConnectionRequest, *, connection: bool
+) -> tuple[User, HouseholdMember]:
+    token = request.code.get_secret_value() if connection else request.token.get_secret_value()
+    invalid_code = "INVALID_CONNECTION_CODE" if connection else "INVALID_INVITATION"
+    valid = bool(re.fullmatch(r"[0-9]{8}", token)) if connection else _valid_token(token)
+    if not valid:
+        raise DomainError(invalid_code, "초대를 다시 확인해 주세요.", 400)
     invitation_id = session.execute(
         select(Invitation.id, Invitation.household_id).where(
             Invitation.token_hash == token_hash("invite", token),
         )
     ).one_or_none()
     if invitation_id is None:
-        raise DomainError("INVALID_INVITATION", "초대를 다시 확인해 주세요.", 400)
+        raise DomainError(invalid_code, "초대를 다시 확인해 주세요.", 400)
     # Always lock household before invitation, matching invitation issuance's lock order.
     session.execute(
         select(Household).where(Household.id == invitation_id.household_id).with_for_update()
@@ -469,8 +511,9 @@ def accept_invitation(
         invitation.used_at is not None
         or invitation.revoked_at is not None
         or invitation.expires_at <= now
+        or (connection and (invitation.kind != "partner" or invitation.intended_login != "partner"))
     ):
-        raise DomainError("INVALID_INVITATION", "초대를 다시 확인해 주세요.", 400)
+        raise DomainError(invalid_code, "초대를 다시 확인해 주세요.", 400)
     slots = set(
         session.scalars(
             select(HouseholdMember.slot).where(
@@ -494,7 +537,7 @@ def accept_invitation(
             )
         )
         if issuer is None:
-            raise DomainError("INVALID_INVITATION", "초대를 다시 확인해 주세요.", 400)
+            raise DomainError(invalid_code, "초대를 다시 확인해 주세요.", 400)
     user = User(
         login_name=invitation.intended_login,
         display_name=request.display_name,
@@ -513,12 +556,10 @@ def accept_invitation(
         session.add(member)
         invitation.used_at = now
         session.flush()
-        result = member_response(user, member)
-        session.commit()
     except IntegrityError:
         session.rollback()
         raise DomainError("REGISTRATION_CONFLICT", "등록 상태를 다시 확인해 주세요.", 409) from None
-    return result
+    return user, member
 
 
 @dataclass(frozen=True)
@@ -561,6 +602,76 @@ def login(
     if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
         user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
+    result = issue_session(session, user, member, request.device_label, transport)
+    session.commit()
+    return result
+
+
+def setup_available(session: Session) -> bool:
+    # Revoked members and disabled/orphaned users also permanently close setup.
+    # A server recovery must never turn into a fresh account takeover endpoint.
+    return (
+        session.scalar(select(User.id).limit(1)) is None
+        and session.scalar(select(HouseholdMember.id).limit(1)) is None
+        and len(session.scalars(select(Household.id).limit(2)).all()) <= 1
+    )
+
+
+def setup_household(
+    session: Session, request: SetupRequest, source: str, transport: Literal["web", "native"]
+) -> LoginResult:
+    """Enroll once after the route verifies the private proxy's owner identity."""
+    _admit_attempt(session, [(f"setup-source:{source}", 5)], utcnow())
+    # Same installation lock as both operator CLI paths; household lock also
+    # serializes acceptance of a previously issued operator invitation.
+    session.execute(select(func.pg_advisory_xact_lock(0x53414C4C494D)))
+    households = list(session.scalars(select(Household).order_by(Household.id).with_for_update()))
+    if not setup_available(session):
+        raise DomainError("SETUP_COMPLETE", "이미 시작한 가계입니다. 로그인해 주세요.", 409)
+    household = households[0] if households else Household(name="우리 가계")
+    if not households:
+        session.add(household)
+        session.flush()
+    now = utcnow()
+    session.execute(
+        update(Invitation)
+        .where(
+            Invitation.household_id == household.id,
+            Invitation.used_at.is_(None),
+            Invitation.revoked_at.is_(None),
+        )
+        .values(revoked_at=now, version=Invitation.version + 1)
+    )
+    user = User(
+        login_name="owner",
+        display_name=request.display_name,
+        password_hash=PASSWORD_HASHER.hash(request.password.get_secret_value()),
+    )
+    session.add(user)
+    try:
+        session.flush()
+        member = HouseholdMember(
+            household_id=household.id, user_id=user.id, slot=1, role="owner", status="active"
+        )
+        session.add(member)
+        session.flush()
+        result = issue_session(session, user, member, request.device_label, transport)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise DomainError("REGISTRATION_CONFLICT", "등록 상태를 다시 확인해 주세요.", 409) from None
+    return result
+
+
+def connect_household(
+    session: Session, request: ConnectionRequest, source: str, transport: Literal["web", "native"]
+) -> LoginResult:
+    # Five guesses per installation/15 minutes, regardless of claimed or actual
+    # source address. Reissuing a code does not reset the guessing budget.
+    _admit_attempt(
+        session, [("connection-global", 5), (f"connection-source:{source}", 5)], utcnow()
+    )
+    user, member = _accept_invitation_locked(session, request, connection=True)
     result = issue_session(session, user, member, request.device_label, transport)
     session.commit()
     return result

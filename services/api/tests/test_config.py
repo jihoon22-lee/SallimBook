@@ -1,6 +1,28 @@
 import pytest
+from pydantic import ValidationError
 
 from sallimbook.config import Settings
+
+
+@pytest.mark.parametrize("environment", ["development", "test", "staging", "production"])
+def test_first_start_has_no_implicit_trusted_identity_or_proxy(environment, monkeypatch):
+    monkeypatch.delenv("SALLIMBOOK_SELF_SETUP_IDENTITY_SHA256", raising=False)
+    monkeypatch.delenv("SALLIMBOOK_SELF_SETUP_PROXY_HOST", raising=False)
+    settings = Settings(environment=environment, _env_file=None)
+    assert settings.self_setup_identity_sha256 is None
+    assert settings.self_setup_proxy_host is None
+
+
+@pytest.mark.parametrize("value", ["", "a" * 63, "A" * 64, "g" * 64])
+def test_first_start_requires_canonical_identity_digest(value):
+    with pytest.raises(ValidationError):
+        Settings(self_setup_identity_sha256=value, _env_file=None)
+
+
+@pytest.mark.parametrize("value", ["", "https://node", "node:8000", "../../node", "127.0.0.1"])
+def test_first_start_proxy_is_a_configured_service_name(value):
+    with pytest.raises(ValidationError):
+        Settings(self_setup_proxy_host=value, _env_file=None)
 
 
 @pytest.fixture(autouse=True)

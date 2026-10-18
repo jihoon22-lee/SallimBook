@@ -3,6 +3,7 @@
 SB-034~040 · R-01~R-22 · 2026-10-18 WSL Ubuntu.
 이 기록은 0.x 통합본의 개발 검증이며 v1.0.0 출시 승인이나 Galaxy 실기기 인수를 뜻하지 않는다.
 도메인별 구현·검증은 [요구사항 추적표](../requirements-traceability.md)를 함께 읽는다.
+첫 등록 간소화 후 추가 결과는 [모바일 첫 시작 검증](mobile-onboarding.md)에 별도로 기록한다.
 
 ## 완료한 통합 검사
 
@@ -116,8 +117,15 @@ PR #86의 재현 명령 후속 정정은 필수 `--web-image` 인자를 문서�
 
 실제 Galaxy 2대의 기기 인증·Keystore 무효화·취소·백그라운드·재설치·CVC 백업/전송 차단,
 TalkBack·확대 글꼴·양 계정 교차 편집, 운영 서명 APK의 데이터 보존 업데이트는 아직 실행하지
-않았다. 실제 전용 Tailscale 노드·서비스 FQDN/RP/DAL·VPN 외부 차단·운영 백업 보관과 복원도
-별도 입력과 실행 증거가 필요하다. 기존 호스트 Tailscale 및 다른 서버 설정은 변경하지 않았다.
+않았다. 운영 백업의 독립 보관·실제 복원, 비허용 tailnet 기기 접근 거부 및 WSL 재시작 복귀도
+별도 실행 증거가 필요하다. 기존 호스트 Tailscale 및 다른 서버 설정은 변경하지 않았다.
+
+위 최초 통합 검사 이후 PR #86에서 전용 Tailscale 노드와 실제 HTTPS를 기동했다.
+DB/scanner/API healthy, 사설 로그인·가입 브라우저와 Windows HTTPS, 익명 데이터 401,
+실제 서명 APK 다운로드 바이트 일치를 확인했다. 공개 DNS의 두 Funnel ingress에 직접 TLS로
+연결하여 앱 연결 JSON과 실제 서명 인증서 일치, 루트/API/APK 404도 확인했다.
+이는 비허용 tailnet 기기나 실제 Galaxy 패스키 검증을 대신하지 않는다.
+배포 근거는 [SB-040 운영 기록](https://github.com/jihoon22-lee/SallimBook/issues/49#issuecomment-6243874467)에 있다.
 
 CVC 활성화 게이트는 false다. 실제 기기 보안 검증과 사용자 선택을 모두 충족한 뒤 활성화하며,
 출시 게이트를 충족하기 전에는 관련 Issue를 완료 처리하거나 v1.0.0으로 배포하지 않는다.

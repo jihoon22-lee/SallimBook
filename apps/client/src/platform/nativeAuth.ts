@@ -14,6 +14,14 @@ async function invoke<T>(action: () => Promise<NativeAuthResult<T>>): Promise<T>
   catch { throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE"); }
   if (result.ok) return result.value;
   switch (result.code) {
+    case "REGISTRATION_CONFLICT": throw new ApiError(409, "REGISTRATION_CONFLICT");
+    case "LOGIN_UNAVAILABLE": throw new ApiError(409, "LOGIN_UNAVAILABLE");
+    case "VALIDATION_ERROR": throw new ApiError(422, "VALIDATION_ERROR");
+    case "SETUP_UNAVAILABLE": throw new ApiError(403, "SETUP_UNAVAILABLE");
+    case "SETUP_COMPLETE": throw new ApiError(409, "SETUP_COMPLETE");
+    case "INVALID_CONNECTION_CODE": throw new ApiError(400, "INVALID_CONNECTION_CODE");
+    case "HOUSEHOLD_FULL": throw new ApiError(409, "HOUSEHOLD_FULL");
+    case "RATE_LIMITED": throw new ApiError(429, "RATE_LIMITED");
     case "APP_LOCKED": throw new ApiError(0, "APP_LOCKED");
     case "SESSION_EXPIRED": throw new ApiError(401, "UNAUTHENTICATED");
     case "NETWORK_UNAVAILABLE": throw new ApiError(0, "NETWORK_UNAVAILABLE");
@@ -40,6 +48,10 @@ export async function nativeRequest<T>(options: NativeMetadataRequest): Promise<
 }
 
 export const nativeAuth = {
+  getSetupStatus: () => invoke(() => plugin.getSetupStatus()),
+  createHousehold: () => invoke(() => plugin.createHousehold()),
+  connectHousehold: () => invoke(() => plugin.connectHousehold()),
+  createConnectionCode: () => invoke(() => plugin.createConnectionCode()),
   lock: () => invoke(() => plugin.lockApp()),
   getAppLock: () => invoke(() => plugin.getAppLock()),
   onAppLock: (listener: (state: { locked: boolean }) => void) => plugin.addListener("appLockChanged", listener),

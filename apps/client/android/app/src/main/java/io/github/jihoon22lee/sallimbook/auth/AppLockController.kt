@@ -86,11 +86,13 @@ internal class AppLockController private constructor(private val app: Applicatio
         policy.resume(SystemClock.elapsedRealtime(), keyguard.isDeviceLocked)
         if (previous != policy.ticket(AppRequestKind.PROTECTED).generation) changed()
         val debugProof = io.github.jihoon22lee.sallimbook.BuildConfig.DEBUG &&
-            activity.javaClass.name == "io.github.jihoon22lee.sallimbook.debugproof.SecurityProofActivity"
+            activity.javaClass.name in setOf("io.github.jihoon22lee.sallimbook.debugproof.SecurityProofActivity",
+                "io.github.jihoon22lee.sallimbook.debugproof.CvcAcceptanceActivity")
         if (locked && activity !is io.github.jihoon22lee.sallimbook.MainActivity && !debugProof) {
             val mode = activity.intent.getStringExtra(NativeAuthActivity.EXTRA_MODE)
             val bootstrap = !NativeAuthSession.get(app).hasLocalSession() &&
                 (activity is NativeAuthActivity && mode in setOf(NativeAuthActivity.LOGIN, NativeAuthActivity.INVITATION) ||
+                    activity is NativeOnboardingActivity && NativeOnboardingActivity.enrollment(mode) ||
                     activity is NativePasskeyActivity && mode == NativePasskeyActivity.LOGIN)
             // AndroidX launches a non-exported trampoline while Credential Manager owns the
             // ceremony. This permits that screen only; it grants no unlock or HTTP privilege.

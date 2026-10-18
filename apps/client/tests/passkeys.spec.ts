@@ -26,6 +26,7 @@ async function mockPasskeys(page: Page, options: { signedIn?: boolean; expired?:
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const failure = (status: number, code: string) => route.fulfill({ status, json: { error: { code, message: "UNTRUSTED_PASSKEY_SERVER_MESSAGE", request_id: "synthetic" } } });
+    if (path === "/api/v1/household/setup") return route.fulfill({ json: { available: false } });
     if (path === "/api/v1/me") return options.signedIn ? route.fulfill({ json: member }) : failure(401, "UNAUTHENTICATED");
     if (path === "/api/v1/auth/web/csrf") return route.fulfill({ json: { csrf_token: "synthetic-ui-csrf" } });
     if (path === "/api/v1/devices") return route.fulfill({ json: { items: [], next_cursor: null } });
@@ -108,7 +109,7 @@ for (const reason of ["navigation", "pagehide", "visibility", "cancel"] as const
   await fillPasskeyLogin(page);
   await page.getByRole("button", { name: "패스키로 로그인", exact: true }).click();
   await expect.poll(async () => (await observations(page)).calls).toBe(1);
-  if (reason === "navigation") await page.getByRole("link", { name: "초대 코드로 계정 등록", exact: true }).click();
+  if (reason === "navigation") await page.getByRole("link", { name: "배우자 연결", exact: true }).click();
   else if (reason === "pagehide") await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
   else if (reason === "visibility") await page.evaluate(() => { Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" }); document.dispatchEvent(new Event("visibilitychange")); });
   else await page.getByRole("button", { name: "패스키 인증 취소", exact: true }).click();

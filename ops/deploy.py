@@ -33,11 +33,13 @@ REQUIRED = {
     "version_name",
     "source_commit",
 }
+OPTIONAL = {"setup_identity_sha256"}
 
 
 def validate(config):
     if (
-        set(config) != REQUIRED
+        not REQUIRED.issubset(config)
+        or set(config) - REQUIRED - OPTIONAL
         or type(config["format"]) is not int
         or config["format"] != 1
     ):
@@ -73,6 +75,11 @@ def validate(config):
         raise ValueError("Release version name must be numeric x.y.z")
     if not re.fullmatch(r"[0-9a-f]{40}", config["source_commit"]):
         raise ValueError("Exact source commit required")
+    if "setup_identity_sha256" in config and (
+        not isinstance(config["setup_identity_sha256"], str)
+        or not re.fullmatch(r"[0-9a-fA-F]{64}", config["setup_identity_sha256"])
+    ):
+        raise ValueError("Self-setup identity requires a SHA-256 hex digest")
     return config
 
 
@@ -100,6 +107,13 @@ def render(config):
         bytes.fromhex(c["certificate_sha256"].replace(":", ""))
     ).decode().rstrip("=")
     runtime = c["runtime_directory"]
+    setup_environment = {}
+    if "setup_identity_sha256" in c:
+        setup_environment = {
+            "SALLIMBOOK_SELF_SETUP_IDENTITY_SHA256": c["setup_identity_sha256"].lower(),
+            # Caddy shares this service's namespace. Never trust forwarded IPs.
+            "SALLIMBOOK_SELF_SETUP_PROXY_HOST": "node",
+        }
     public_caddy = """{
     admin off
     auto_https off
@@ -250,6 +264,7 @@ http://:8080 {{
                 "SALLIMBOOK_FIELD_ENCRYPTION_KEY_FILE": "/run/secrets/field-keyring.json",
                 "SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY": "/srv/documents",
                 "SALLIMBOOK_DOCUMENT_SCANNER_SOCKET": "/run/scanner/clamd.sock",
+                **setup_environment,
             },
             "volumes": [
                 runtime + "/field-keyring.json:/run/secrets/field-keyring.json:ro",

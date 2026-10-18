@@ -5,6 +5,8 @@ import type { components, operations } from "../../../packages/api-client/src/sc
  * Business response types continue to come from the generated API client, not this contract.
  */
 export type NativeAuthErrorCode =
+  | "SETUP_UNAVAILABLE" | "SETUP_COMPLETE" | "INVALID_CONNECTION_CODE" | "HOUSEHOLD_FULL" | "RATE_LIMITED"
+  | "REGISTRATION_CONFLICT" | "LOGIN_UNAVAILABLE" | "VALIDATION_ERROR"
   | "AUTH_UNAVAILABLE" | "AUTH_CANCELLED" | "ACCESS_DENIED" | "SESSION_EXPIRED"
   | "KEY_INVALIDATED" | "NETWORK_UNAVAILABLE" | "INVALID_REQUEST"
   | "AUTH_FAILED" | "REGISTRATION_FAILED" | "PASSKEYS_DISABLED" | "PASSKEY_REQUIRED"
@@ -41,6 +43,14 @@ export type NativeVaultEntry =
   | { action: "resume-rotation" | "abort-rotation"; rotationId: string };
 
 export interface SallimBookAuth {
+  /** First-account availability only; no setup secret or operator token crosses the bridge. */
+  getSetupStatus(): Promise<NativeAuthResult<components["schemas"]["SetupStatusResponse"]>>;
+  /** Native UI owns name/password/confirmation and installs the resulting session. */
+  createHousehold(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
+  /** Native UI additionally owns the eight-digit connection code. */
+  connectHousehold(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
+  /** Generated connection code is displayed only on the native protected screen. */
+  createConnectionCode(): Promise<NativeAuthResult<{ status: "created" | "cancelled" }>>;
   listAuditEvents(options: { query?: NonNullable<operations["listAuditEvents"]["parameters"]["query"]> }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AuditListResponse"]>>>;
   openVaultUI(options: NativeVaultEntry): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
   getVaultStatus(): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["VaultStatusResponse"]>>>;

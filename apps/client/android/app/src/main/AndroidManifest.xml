@@ -31,6 +31,10 @@
         </activity>
 
         <activity
+            android:name=".auth.NativeOnboardingActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar" />
+        <activity
             android:name=".auth.NativeAuthActivity"
             android:exported="false"
             android:theme="@style/AppTheme.NoActionBar" />

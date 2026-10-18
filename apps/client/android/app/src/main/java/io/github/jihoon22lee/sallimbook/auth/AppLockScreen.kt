@@ -28,6 +28,9 @@ internal class AppLockScreen(private val activity: MainActivity) {
     private val handler = Handler(Looper.getMainLooper())
     private var resumed = false
     private var gate: ForegroundRequest? = null
+    private var setupGate: ForegroundRequest? = null
+    private var setupAvailable: Boolean? = null
+    private var setupChecked = false
     private var password: CharArray? = null
     private var signal: CancellationSignal? = null
     private var attempt: AppLockTicket? = null
@@ -65,9 +68,12 @@ internal class AppLockScreen(private val activity: MainActivity) {
         column.addView(this)
     }
     private val reauthenticate = button("비밀번호로 다시 인증하고 열기", ::passwordUnlock)
+    private val setup = button("처음 시작하기") { launch(NativeOnboardingActivity.SETUP) }
+    private val connect = button("배우자 연결하기") { launch(NativeOnboardingActivity.CONNECT) }
+    private val retrySetup = button("시작 상태 다시 확인") { setupChecked = false; checkSetupStatus() }
     private val login = button("계정 로그인") { launch(NativeAuthActivity.LOGIN) }
     private val passkey = button("패스키로 계정 로그인") { launch(NativePasskeyActivity.LOGIN, true) }
-    private val invitation = button("초대 수락") { launch(NativeAuthActivity.INVITATION) }
+    private val invitation = button("기존 초대 코드로 가입") { launch(NativeAuthActivity.INVITATION) }
     private val logoutButton = button("이 기기에서 로그아웃", ::logout)
     private val explanation = label("기기 인증은 서버의 최근 로그인을 갱신하거나 카드 보관함을 열지 않습니다. 비밀번호 재인증은 서버에서 현재 계정을 확인합니다.")
     private val close = button("닫기") { activity.finish() }
@@ -102,19 +108,44 @@ internal class AppLockScreen(private val activity: MainActivity) {
         if (attempt?.let { !lock.isCurrent(it) } == true) cancelPrompt()
         val session = auth.hasLocalSession()
         listOf(unlock, input, reauthenticate, logoutButton).forEach { it.visibility = if (session) View.VISIBLE else View.GONE }
-        listOf(login, passkey, invitation).forEach { it.visibility = if (session) View.GONE else View.VISIBLE }
-        title.text = if (session) "SallimBook · 앱 잠금" else "SallimBook · 로그인"
-        listOf(unlock, reauthenticate, login, passkey, invitation, logoutButton).forEach {
+        listOf(login, passkey, invitation, connect).forEach { it.visibility = if (session) View.GONE else View.VISIBLE }
+        setup.visibility = if (!session && setupAvailable == true) View.VISIBLE else View.GONE
+        retrySetup.visibility = if (!session && setupChecked && setupAvailable == null && setupGate == null) View.VISIBLE else View.GONE
+        title.text = if (session) "SallimBook · 앱 잠금" else "SallimBook · 시작"
+        listOf(unlock, reauthenticate, login, passkey, invitation, logoutButton, setup, connect, retrySetup).forEach {
             it.isEnabled = resumed && auth.available && gate == null && signal == null
         }
+        explanation.text = if (session) "기기 인증은 서버의 최근 로그인을 갱신하거나 카드 보관함을 열지 않습니다. 비밀번호 재인증은 서버에서 현재 계정을 확인합니다."
+            else "처음 사용하는 사람은 가계를 만들고, 배우자는 받은 숫자 8자리로 연결합니다. 이미 가입했다면 계정 로그인 또는 패스키를 이용해 주세요."
         if (!auth.available) status.text = "앱 인증 서버 설정을 확인할 수 없어요. 올바른 앱 빌드를 사용해 주세요."
     }
     private fun launch(mode: String, usePasskey: Boolean = false) {
         if (!ready() || auth.hasLocalSession() || !auth.available || gate != null || signal != null) return
         clearInput()
+        setupGate?.cancel(); setupGate = null
         success = null
-        activity.startActivity(Intent(activity, if (usePasskey) NativePasskeyActivity::class.java else NativeAuthActivity::class.java)
+        val component = if (NativeOnboardingActivity.enrollment(mode)) NativeOnboardingActivity::class.java
+            else if (usePasskey) NativePasskeyActivity::class.java else NativeAuthActivity::class.java
+        activity.startActivity(Intent(activity, component)
             .putExtra(NativeAuthActivity.EXTRA_MODE, mode))
+    }
+    private fun checkSetupStatus() {
+        if (!ready() || auth.hasLocalSession() || !auth.available || setupChecked || setupGate != null || gate != null) return
+        setupChecked = true
+        val request = ForegroundRequest().also { setupGate = it }
+        status.text = "처음 시작할 수 있는지 확인하고 있어요."
+        auth.getSetupStatus(request) { outcome -> activity.runOnUiThread {
+            if (setupGate !== request) return@runOnUiThread
+            setupGate = null
+            if (!ready() || !request.isActive() || auth.hasLocalSession()) return@runOnUiThread
+            setupAvailable = outcome.value?.get("available") as? Boolean
+            status.text = when (setupAvailable) {
+                true -> "이름과 비밀번호로 가계를 만들 수 있어요."
+                false -> "기존 계정으로 로그인하거나 배우자의 연결 코드를 입력해 주세요."
+                null -> "시작 상태를 확인하지 못했어요. 연결을 확인한 후 다시 시도해 주세요."
+            }
+            render()
+        } }
     }
     private fun startPrompt() {
         if (!ready() || !auth.hasLocalSession() || gate != null || signal != null) return
@@ -177,6 +208,7 @@ internal class AppLockScreen(private val activity: MainActivity) {
                 else -> "비밀번호 인증을 완료하지 못했어요. 입력과 연결 상태를 확인해 주세요."
             }
             render()
+            setupChecked = false; checkSetupStatus()
         } }
     }
     private fun logout() {
@@ -197,9 +229,15 @@ internal class AppLockScreen(private val activity: MainActivity) {
         attempt = null; success = null
         val old = signal; signal = null; old?.cancel()
     }
-    fun onResume() { resumed = true; render(); finishPrompt() }
-    fun onFocusChanged(focused: Boolean) { if (focused) finishPrompt() else clearInput() }
-    fun onPause() { resumed = false; clearInput(); gate?.cancel(); gate = null; render() }
+    fun onResume() { resumed = true; setupChecked = false; setupAvailable = null; render(); finishPrompt(); checkSetupStatus() }
+    fun onFocusChanged(focused: Boolean) {
+        if (focused) { finishPrompt(); checkSetupStatus() }
+        else { clearInput(); setupGate?.cancel(); setupGate = null; setupChecked = false }
+    }
+    fun onPause() {
+        resumed = false; clearInput(); gate?.cancel(); gate = null
+        setupGate?.cancel(); setupGate = null; setupChecked = false; setupAvailable = null; render()
+    }
     fun onStop() { cancelPrompt() }
     fun onDestroy() { onPause(); cancelPrompt(); lock.removeListener(changed) }
     private fun Int.dp(): Int = (this * activity.resources.displayMetrics.density).toInt()

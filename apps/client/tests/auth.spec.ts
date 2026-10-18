@@ -76,6 +76,7 @@ async function mockIdentity(page: Page, loggedIn = false) {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
     state.paths.push(path);
+    if (path === "/api/v1/household/setup") return route.fulfill({ json: { available: false } });
     if (path === "/api/v1/me") {
       if (state.meOffline) return route.abort("failed");
       return state.loggedIn ? route.fulfill({ json: member }) : failure(route, 401, "UNAUTHENTICATED");
@@ -183,6 +184,7 @@ test("revealed invitation disappears within thirty seconds", async ({ page }) =>
   await page.clock.install();
   await mockIdentity(page, true);
   await page.goto("/settings/auth");
+  await page.getByText("기존 로그인 이름으로 초대", { exact: true }).click();
   await page.getByLabel("초대할 로그인 이름").fill("synthetic.partner");
   await page.getByRole("button", { name: "초대 만들기", exact: true }).click();
   await page.clock.fastForward(60_000);
@@ -310,6 +312,7 @@ test("partner invitation asks for recent login when the server requires it", asy
   const api = await mockIdentity(page, true);
   api.inviteError = "REAUTHENTICATION_REQUIRED";
   await page.goto("/settings/auth");
+  await page.getByText("기존 로그인 이름으로 초대", { exact: true }).click();
   await page.getByLabel("초대할 로그인 이름", { exact: true }).fill("synthetic.partner");
   await page.getByRole("button", { name: "초대 만들기", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("5분 이내 로그인");
@@ -321,6 +324,7 @@ test("partner invitation asks for recent login when the server requires it", asy
 test("invitation code is revealed explicitly, never put into the URL or persistent storage, and cleared on navigation", async ({ page }) => {
   const api = await mockIdentity(page, true);
   await page.goto("/settings/auth");
+  await page.getByText("기존 로그인 이름으로 초대", { exact: true }).click();
   await page.getByLabel("초대할 로그인 이름", { exact: true }).fill("synthetic.partner");
   await page.getByRole("button", { name: "초대 만들기", exact: true }).click();
   await page.getByRole("button", { name: "초대 코드 보기" }).click();
@@ -336,7 +340,7 @@ test("invitation code is revealed explicitly, never put into the URL or persiste
 
 test("accepting an invitation uses manual code entry and does not pretend to create a login session", async ({ page }) => {
   const api = await mockIdentity(page);
-  await page.goto("/onboarding");
+  await page.goto("/onboarding/invitation");
   const password = `synthetic-only-${crypto.randomUUID()}`;
   await page.getByLabel("초대 코드", { exact: true }).fill(api.invitationCode);
   await page.getByLabel("표시 이름", { exact: true }).fill("합성 새 구성원");

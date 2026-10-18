@@ -16,12 +16,13 @@ async function nativeMock(page: Page, scenario: Scenario = {}) {
       __nativeMock: state,
       CapacitorCustomPlatform: { name: "android" },
       Capacitor: {
-        PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSession", "loginUI", "reauthenticateUI", "acceptInvitationUI", "createInvitationUI", "logout", "request", "passkeyLoginUI", "registerPasskeyUI", "revokePasskeyUI", "revokeDeviceUI", "createInvitationWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })).concat([{ name: "addListener", rtype: "callback" }, { name: "removeListener", rtype: "promise" }]) }],
+        PluginHeaders: [{ name: "SallimBookAuth", methods: ["getSetupStatus", "getSession", "loginUI", "reauthenticateUI", "acceptInvitationUI", "createInvitationUI", "logout", "request", "passkeyLoginUI", "registerPasskeyUI", "revokePasskeyUI", "revokeDeviceUI", "createInvitationWithPasskeyUI"].map((name) => ({ name, rtype: "promise" })).concat([{ name: "addListener", rtype: "callback" }, { name: "removeListener", rtype: "promise" }]) }],
         nativeCallback: () => "synthetic-lock-listener",
         nativePromise: async (_plugin: string, method: string, args: Record<string, unknown> = {}) => {
           if (method === "removeListener") return;
           state.calls.push({ method, args });
           const success = (value: unknown) => ({ ok: true, value });
+          if (method === "getSetupStatus") return success({ available: false });
           if (method === "getSession") return success({ available: true, authenticated: state.authenticated });
           if (method === "loginUI" || method === "passkeyLoginUI") { if (!initial.cancelled) state.authenticated = true; return success({ status: initial.cancelled ? "cancelled" : "authenticated" }); }
           if (method === "reauthenticateUI") return success({ status: initial.cancelled ? "cancelled" : "authenticated" });
@@ -104,7 +105,7 @@ test("cancelled native login stays signed out and permits retry", async ({ page 
 
 for (const cancelled of [true, false]) test(`native invitation acceptance ${cancelled ? "cancelled" : "accepted"} never creates a JS session`, async ({ page }) => {
   await nativeMock(page, { cancelled });
-  await page.goto("/onboarding");
+  await page.goto("/onboarding/invitation");
   await page.getByRole("button", { name: "초대 수락하고 계정 등록", exact: true }).click();
   await expect(page.getByRole("button", { name: "초대 수락하고 계정 등록", exact: true })).toBeEnabled();
   await expect(page.getByText("계정 등록을 마쳤어요.", { exact: false })).toHaveCount(cancelled ? 0 : 1);
@@ -115,6 +116,7 @@ for (const cancelled of [true, false]) test(`native invitation acceptance ${canc
 for (const cancelled of [true, false]) test(`native invitation creation ${cancelled ? "cancelled" : "created"} returns status only`, async ({ page }) => {
   await nativeMock(page, { authenticated: true, cancelled });
   await page.goto("/settings/auth");
+  await page.getByText("기존 로그인 이름으로 초대", { exact: true }).click();
   await page.getByRole("button", { name: "초대 만들기", exact: true }).click();
   await expect(page.getByRole("button", { name: "초대 만들기", exact: true })).toBeEnabled();
   await expect(page.getByText("초대를 만들었어요.", { exact: false })).toHaveCount(cancelled ? 0 : 1);
@@ -194,6 +196,7 @@ for (const cancelled of [true, false]) test(`native scoped device action ${cance
 for (const cancelled of [true, false]) test(`native scoped invitation ${cancelled ? "cancels" : "creates"} within native UI`, async ({ page }) => {
   await nativeMock(page, { authenticated: true, cancelled });
   await page.goto("/settings/auth");
+  await page.getByText("기존 로그인 이름으로 초대", { exact: true }).click();
   await page.getByRole("button", { name: "패스키로 확인하고 초대", exact: true }).click();
   await expect(page.getByRole("button", { name: "패스키로 확인하고 초대", exact: true })).toBeEnabled();
   await expect(page.getByText("초대를 만들었어요.", { exact: false })).toHaveCount(cancelled ? 0 : 1);

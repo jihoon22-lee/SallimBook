@@ -61,7 +61,7 @@ class AppLockPolicyTest {
         val policy = AppLockPolicy().also { it.resume(0, false) }
         for (kind in AppRequestKind.entries) {
             val ticket = policy.ticket(kind)
-            assertFalse(policy.httpAllowed(ticket, "GET", "/api/v1/me"))
+            assertEquals(kind == AppRequestKind.ONBOARDING, policy.httpAllowed(ticket, "GET", "/api/v1/me"))
             assertFalse(policy.httpAllowed(ticket, "GET", "/api/v1/assets"))
             assertFalse(policy.httpAllowed(ticket, "POST", "/api/v1/accounts/00000000-0000-4000-8000-000000000001/reveal"))
         }
@@ -73,7 +73,7 @@ class AppLockPolicyTest {
     }
     @Test fun invitationLogoutAndProtectedTicketsNeverUnlock() {
         val policy = AppLockPolicy().also { it.resume(0, false) }
-        for (kind in listOf(AppRequestKind.INVITATION, AppRequestKind.LOGOUT, AppRequestKind.PROTECTED))
+        for (kind in listOf(AppRequestKind.INVITATION, AppRequestKind.LOGOUT, AppRequestKind.PROTECTED, AppRequestKind.SETUP_STATUS))
             assertFalse(policy.unlock(policy.ticket(kind)))
     }
     @Test fun queuedRequestKeepsCreationGenerationAcrossLockAndUnlock() {
@@ -116,5 +116,23 @@ class AppLockPolicyTest {
             fail("A cancelled server authentication unlocked the screen")
         } catch (failure: AuthFailure) { assertEquals(AuthCode.AUTH_CANCELLED, failure.code) }
         assertTrue(policy.isLocked())
+    }
+    @Test fun setupAvailabilityTicketCannotEnrollAuthenticateRefreshOrUnlock() {
+        val policy = AppLockPolicy().also { it.resume(0, false) }; val ticket = policy.ticket(AppRequestKind.SETUP_STATUS)
+        assertTrue(policy.httpAllowed(ticket, "GET", NativeOnboardingPolicy.STATUS_PATH))
+        for (path in listOf(NativeOnboardingPolicy.SETUP_PATH, NativeOnboardingPolicy.CONNECT_PATH,
+            NativeOnboardingPolicy.CODE_PATH, "/api/v1/auth/native/login", "/api/v1/auth/native/refresh"))
+            assertFalse(policy.httpAllowed(ticket, "POST", path))
+        assertFalse(policy.unlock(ticket))
+    }
+    @Test fun onboardingTicketCanOnlyEnrollAndVerifyItsNewMeBeforeRealServerUnlock() {
+        val policy = AppLockPolicy().also { it.resume(0, false) }; val ticket = policy.ticket(AppRequestKind.ONBOARDING)
+        assertTrue(policy.httpAllowed(ticket, "POST", NativeOnboardingPolicy.SETUP_PATH))
+        assertTrue(policy.httpAllowed(ticket, "POST", NativeOnboardingPolicy.CONNECT_PATH))
+        assertTrue(policy.httpAllowed(ticket, "GET", "/api/v1/me"))
+        for (path in listOf(NativeOnboardingPolicy.CODE_PATH, "/api/v1/auth/native/refresh", "/api/v1/auth/native/login"))
+            assertFalse(policy.httpAllowed(ticket, "POST", path))
+        assertFalse(policy.httpAllowed(ticket, "GET", "/api/v1/household/members"))
+        policy.pause(); assertFalse(policy.unlock(ticket))
     }
 }

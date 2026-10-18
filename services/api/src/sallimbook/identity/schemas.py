@@ -1,8 +1,9 @@
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints, field_validator
 
 LoginName = Annotated[
     str,
@@ -39,6 +40,36 @@ class InvitationAcceptance(InputModel):
     token: SecretStr = Field(min_length=32, max_length=128)
     password: SecretStr = Field(min_length=15, max_length=128)
     display_name: DisplayName
+
+
+class SetupRequest(InputModel):
+    display_name: DisplayName
+    password: SecretStr = Field(min_length=15, max_length=128)
+    device_label: DisplayName
+
+
+class ConnectionRequest(SetupRequest):
+    # This low-entropy, short-lived code has a dedicated global guess limit;
+    # it is never accepted as a session, refresh token or legacy invitation.
+    code: SecretStr = Field(
+        min_length=8, max_length=8, json_schema_extra={"pattern": r"^[0-9]{8}$"}
+    )
+
+    @field_validator("code")
+    @classmethod
+    def validate_connection_code(cls, value: SecretStr) -> SecretStr:
+        if not re.fullmatch(r"[0-9]{8}", value.get_secret_value()):
+            raise ValueError("Connection code must contain exactly eight ASCII digits")
+        return value
+
+
+class SetupStatusResponse(BaseModel):
+    available: bool
+
+
+class ConnectionCodeResponse(BaseModel):
+    code: str = Field(pattern=r"^[0-9]{8}$", repr=False)
+    expires_at: datetime
 
 
 class RefreshRequest(InputModel):

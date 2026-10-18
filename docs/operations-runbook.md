@@ -41,6 +41,8 @@
 }
 ```
 
+선택 필드 `setup_identity_sha256`은 최초 사용자의 인증된 `Tailscale-User-Login` 헤더 값을 UTF-8로 인코딩한 SHA-256 64자리 hex다. 생략하면 모바일/웹 자체 초기 등록은 비활성화되며 기존 format 1 manifest도 그대로 유효하다. 빈 문자열·null은 허용하지 않는다. renderer는 설정된 경우에만 API에 `SALLIMBOOK_SELF_SETUP_IDENTITY_SHA256`과 `SALLIMBOOK_SELF_SETUP_PROXY_HOST=node`를 함께 주입한다. proxy hostname은 manifest에서 변경할 수 없다. 실제 로그인 이름을 manifest·Git·로그에 기록하지 않는다. 이 digest는 비밀번호나 단독 인증 토큰이 아니며 공개 설정에 들어간다. `api.env`에는 이 값을 넣을 수 없다.
+
 ```bash
 python3 -m ops.build_context /PRIVATE_BUILD_PARENT/NEW_CONTEXT --commit REVIEWED_SHA
 docker build --build-arg SALLIMBOOK_CVD_REFRESH=YYYY-MM-DD -t PRIVATE_API_TAG /PRIVATE_BUILD_PARENT/NEW_CONTEXT/api
@@ -67,6 +69,16 @@ Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy �
 - 공개 HTTPS `https://FQDN:443`: `/.well-known/assetlinks.json`의 GET/HEAD만 제공한다. 다른 경로는 404다. 공개 Caddy에는 API upstream, DB·첨부·비밀 mount가 없다. 사설·공개 Caddy는 같은 source-bound 웹 이미지를 사용하되 공개 설정은 DAL 경로만 제공한다. 이 이미지는 고정된 Caddy base의 불필요한 cap_net_bind_service 파일 capability를 빌드 시 제거한다. 8080/8081 고포트만 사용하므로 런타임 UID 10001·cap_drop ALL·no-new-privileges는 그대로 유지한다.
 - TLS는 전용 노드의 Serve/Funnel에서 종료한다. Caddy는 같은 격리 namespace의 HTTP proxy다. 이전 문서의 “Caddy만 외부 HTTPS” 설명은 이 배치에서는 적용되지 않는다.
 - 외부에서 들어온 `Forwarded`/`X-Forwarded-For`는 API에 전달하지 않고, API의 proxy header 해석도 끈다. 내부 HTTP가 인증 쿠키를 비보안 쿠키로 바꾸지 않는다.
+
+### 모바일 최초 등록의 신뢰 경계
+
+초기 등록을 켠 배포에서는 허용된 사용자가 Android 앱 또는 사설 웹에서 직접 첫 계정과 가계를 만든다. 사용자·구성원 기록이 한 번이라도 생긴 뒤에는 초기 등록을 다시 열지 않는다. 두 번째 계정은 기존 구성원의 초대로 등록한다. 운영 CLI의 등록 코드 전달을 사용자에게 필수 단계로 요구하지 않는다. 초기 등록 미설정·인증 헤더 누락/불일치·신뢰하지 않는 연결 상대는 서버에서 거절한다.
+
+[고정 Tailscale 1.104.1 구현](https://github.com/tailscale/tailscale/blob/v1.104.1/ipn/ipnlocal/serve.go#L1023-L1064)은 요청의 사용자 식별 헤더를 먼저 삭제한 뒤, tailnet 연결의 WhoIs 결과로 사용자 로그인을 설정한다. Funnel·태그 기기·사용자 확인 실패에는 로그인 헤더를 넣지 않는다. 따라서 태그가 없는 사용자 소유 Android 기기를 사용해야 한다. ASCII 로그인은 그대로이며 비ASCII 로그인은 RFC 2047 Q-encoding된 **실제 헤더 값**을 해시한다. 앱에서 로그인 헤더를 만들어 보내지 않는다. [Serve 공식 설명](https://tailscale.com/docs/features/tailscale-serve#identity-headers)도 이 헤더를 사용하는 backend의 직접 접근 차단을 요구한다.
+
+사설 Caddy는 node namespace의 loopback만 수신하고 [기본 proxy 동작](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#headers)으로 Serve의 식별 헤더를 API에 전달한다. API는 `request.client.host`가 Docker DNS의 현재 `node` 주소인지 확인한 뒤에만 헤더 digest를 검사한다. `--no-proxy-headers`를 유지하므로 위조한 전달 IP가 연결 상대를 대신하지 않는다. API 직접 호출이나 다른 container에서 같은 로그인 헤더를 보내는 것만으로 초기 등록이 열리지 않는다. node namespace 내부 프로세스와 Docker 운영자는 이 경계의 신뢰 대상이다. 공개 Caddy는 같은 namespace에 있어도 API proxy 경로가 없고, 공개 443은 DAL 파일 외 모두 404다.
+
+배포 검증은 manifest 생략/잘못된 digest, 임의 proxy host, env 파일 우회, 렌더링 이후 설정 변조, loopback·namespace·공개 경로 구성을 검사한다. 격리 Caddy 시험은 인증 헤더의 전달과 전달 IP 제거를 확인한다. 실제 사용자 인증은 이 모의 upstream 시험으로 입증하지 않는다. API 권한 시험에서 허용 identity+신뢰 peer만 성공하고 다른 identity·누락/중복 헤더·직접 peer·위조 Forwarded·DNS 실패·이미 초기화된 DB는 실패하는지 확인해야 한다. Tailscale 버전을 바꿀 때에는 위 소스의 헤더 제거/재설정 동작을 다시 검토하고, 실제 사설 HTTPS 검증에서도 다른 사용자가 보낸 위조 로그인 헤더가 허용 identity로 통과하지 않는지 확인한다.
 
 운영자는 새 전용 노드의 등록과 허용 기기 ACL을 별도로 승인·구성한다. 호스트의 기존 `tailscale serve/funnel/reset/up` 명령을 실행하지 않는다. 기존 노드 상태나 다른 프로젝트의 인증키를 복사하지 않는다. 실제 FQDN/ACL/인증서가 없는 단계에서는 사설 HTTPS·패스키 인수를 통과로 표시하지 않는다.
 

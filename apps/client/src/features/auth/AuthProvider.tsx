@@ -10,6 +10,10 @@ import { createPasskey, getPasskey } from "../../platform/webauthn";
 
 export type Member = components["schemas"]["MemberResponse"];
 export type Device = components["schemas"]["DeviceResponse"];
+type SetupInput = components["schemas"]["SetupRequest"];
+type ConnectionInput = components["schemas"]["ConnectionRequest"];
+type SetupStatus = components["schemas"]["SetupStatusResponse"];
+type ConnectionCode = components["schemas"]["ConnectionCodeResponse"];
 type LoginInput = components["schemas"]["LoginRequest"];
 type InvitationInput = components["schemas"]["InvitationAcceptance"];
 type InvitationRequest = components["schemas"]["InvitationRequest"];
@@ -34,6 +38,12 @@ interface AuthContextValue {
   domainApi: AuthenticatedApi;
   reloadSession(): Promise<void>;
   login(input: LoginInput): Promise<void>;
+  getSetupStatus(signal: AbortSignal): Promise<SetupStatus>;
+  createHousehold(input: SetupInput, signal: AbortSignal): Promise<void>;
+  connectHousehold(input: ConnectionInput, signal: AbortSignal): Promise<void>;
+  registerNative(mode: "setup" | "connect"): Promise<boolean>;
+  createConnectionCode(signal: AbortSignal): Promise<ConnectionCode>;
+  createNativeConnectionCode(): Promise<boolean>;
   loginNative(passkey?: boolean): Promise<boolean>;
   loginPasskey(input: PasskeyLoginInput, signal: AbortSignal): Promise<void>;
   registerPasskey(label: string, signal: AbortSignal): Promise<boolean>;
@@ -55,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const generation = useRef(0);
   const mounted = useRef(false);
   const restoreFlight = useRef<Promise<void> | null>(null);
+  const nativeRegistration = useRef<{ restoreRequested: boolean } | null>(null);
   const csrfFlight = useRef<{ generation: number; promise: Promise<string> } | null>(null);
 
   const ensureCurrent = useCallback((requestGeneration: number) => {
@@ -153,7 +164,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void nativeAuth.onAppLock(({ locked }) => {
       if (disposed || !mounted.current) return;
       // Events discard UI state; native policy still decides whether any API may run.
-      if (locked) clearForAppLock(); else void reloadSession();
+      if (locked) {
+        if (nativeRegistration.current) nativeRegistration.current.restoreRequested = false;
+        clearForAppLock();
+      } else if (nativeRegistration.current) {
+        // Native unlock can arrive before the enrollment Activity result. The active
+        // enrollment will validate /me itself; a second restore must not cancel it.
+        nativeRegistration.current.restoreRequested = true;
+      } else void reloadSession();
     }).then((value) => { if (disposed) void value.remove(); else handle = value; })
       .catch(() => { if (!disposed) clearForAppLock(); });
     return () => { disposed = true; if (handle) void handle.remove(); };
@@ -236,6 +254,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     return true;
   }, [ensureCurrent, reloadSession]);
+
+  const getSetupStatus = useCallback(async (signal: AbortSignal): Promise<SetupStatus> => {
+    signal.throwIfAborted();
+    const result = isNativeAuth() ? await nativeAuth.getSetupStatus()
+      : await requestApi(() => apiClient.GET("/api/v1/household/setup", { signal }));
+    signal.throwIfAborted();
+    return result;
+  }, []);
+
+  const registerWeb = useCallback(async (input: SetupInput | ConnectionInput, signal: AbortSignal) => {
+    requireWebAuth();
+    if (member.current) throw new ApiError(0, "ALREADY_AUTHENTICATED");
+    signal.throwIfAborted();
+    const requestGeneration = ++generation.current;
+    const data = "code" in input
+      ? await requestApi(() => apiClient.POST("/api/v1/auth/web/connect", { body: input, signal }))
+      : await requestApi(() => apiClient.POST("/api/v1/auth/web/setup", { body: input, signal }));
+    ensureCurrent(requestGeneration);
+    signal.throwIfAborted();
+    csrf.current = data.csrf_token;
+    member.current = data.member;
+    setState({ status: "authenticated", member: data.member });
+  }, [ensureCurrent]);
+  const createHousehold = useCallback((input: SetupInput, signal: AbortSignal) => registerWeb(input, signal), [registerWeb]);
+  const connectHousehold = useCallback((input: ConnectionInput, signal: AbortSignal) => registerWeb(input, signal), [registerWeb]);
+
+  const registerNative = useCallback(async (mode: "setup" | "connect") => {
+    if (!isNativeAuth()) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
+    if (member.current) throw new ApiError(0, "ALREADY_AUTHENTICATED");
+    if (nativeRegistration.current) throw new ApiError(0, "REQUEST_CANCELLED");
+    const flight = { restoreRequested: false };
+    nativeRegistration.current = flight;
+    const requestGeneration = ++generation.current;
+    try {
+      const result = mode === "setup" ? await nativeAuth.createHousehold() : await nativeAuth.connectHousehold();
+      ensureCurrent(requestGeneration);
+      if (result.status !== "authenticated") return false;
+      const currentMember = await nativeRequest<Member>({ method: "GET", path: "/api/v1/me" });
+      ensureCurrent(requestGeneration);
+      csrf.current = null;
+      member.current = currentMember;
+      flight.restoreRequested = false;
+      setState({ status: "authenticated", member: currentMember });
+      return true;
+    } finally {
+      if (nativeRegistration.current === flight) {
+        nativeRegistration.current = null;
+        if (flight.restoreRequested && mounted.current) void reloadSession();
+      }
+    }
+  }, [ensureCurrent, reloadSession]);
+
+  const createConnectionCode = useCallback((signal: AbortSignal): Promise<ConnectionCode> => mutation((token) => {
+    signal.throwIfAborted();
+    return requestApi(() => apiClient.POST("/api/v1/household/connection-code", { headers: { "X-CSRF-Token": token }, signal }));
+  }), [mutation]);
+  const createNativeConnectionCode = useCallback((): Promise<boolean> => authenticatedRequest(async () =>
+    (await nativeAuth.createConnectionCode()).status === "created"), [authenticatedRequest]);
 
   const logout = useCallback(async () => {
     if (isNativeAuth()) {
@@ -395,8 +471,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   }), [authenticatedRequest, mutation, scopedOperation]);
 
-  const value = useMemo(() => ({ state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
-    [state, domainApi, reloadSession, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
+  const value = useMemo(() => ({ state, domainApi, reloadSession, getSetupStatus, createHousehold, connectHousehold, registerNative, createConnectionCode, createNativeConnectionCode, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice }),
+    [state, domainApi, reloadSession, getSetupStatus, createHousehold, connectHousehold, registerNative, createConnectionCode, createNativeConnectionCode, login, loginNative, loginPasskey, registerPasskey, listPasskeys, revokePasskey, logout, acceptInvitation, createPartnerInvitation, listDevices, revokeDevice]);
   return <AuthContext.Provider value={value}>{state.status === "locked"
     ? <p role="status">앱이 잠겨 있어요. Android 보호 화면에서 다시 열어 주세요.</p>
     : children}</AuthContext.Provider>;

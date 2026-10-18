@@ -5,6 +5,7 @@ import type { components } from "@sallimbook/api-client";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { NativeAuthAction } from "./NativeAuthAction";
+import { ConnectionCodePanel } from "./ConnectionCodePanel";
 import { PasskeyPanel } from "./PasskeyPanel";
 import { useAuthCeremony } from "./useAuthCeremony";
 import { supportsWebAuthn } from "../../platform/webauthn";
@@ -93,7 +94,7 @@ function InvitationPanel() {
       <p>초대받는 사람에게 코드를 전달하고 공동 가계 시작 화면에 직접 입력하도록 안내해 주세요. 이 화면을 벗어나면 코드는 보관하지 않아요.</p>
       {revealed ? <><output aria-label="생성된 초대 코드">{invitation.token}</output><button type="button" onClick={() => { setInvitation(null); setRevealed(false); }}>초대 코드 가리기</button></>
         : <button type="button" onClick={() => setRevealed(true)}>초대 코드 보기</button>}
-      <Link to="/onboarding">공동 가계 시작 화면</Link>
+      <Link to="/onboarding/invitation">기존 초대 수락 화면</Link>
     </div>}
   </section>;
 }
@@ -176,6 +177,7 @@ function AuthenticatedSettings({ member }: { member: Member }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [secretReset, setSecretReset] = useState(0);
+  const [legacyOpen, setLegacyOpen] = useState(false);
   async function signOut() {
     if (busy) return;
     setSecretReset((value) => value + 1);
@@ -193,9 +195,10 @@ function AuthenticatedSettings({ member }: { member: Member }) {
       <AuthError error={error} />
       <div className="form-actions"><button type="button" disabled={busy} onClick={() => void signOut()}>{busy ? "로그아웃 중…" : "로그아웃"}</button><Link className="button-link" to="/login">최근 로그인 다시 확인</Link></div>
     </section>
+    {member.role === "owner" && <ConnectionCodePanel key={`connection:${secretReset}`} onLegacyInvitation={() => setLegacyOpen(true)} />}
     <DevicePanel />
     <PasskeyPanel />
-    {member.role === "owner" ? isNativeAuth() ? <NativeAuthAction mode="invite" /> : <InvitationPanel key={secretReset} /> : <section className="card"><h2>구성원 초대</h2><p>두 번째 구성원 초대는 가계 관리자 계정에서 만들 수 있어요.</p></section>}
+    {member.role === "owner" ? <details open={legacyOpen} onToggle={(event) => setLegacyOpen(event.currentTarget.open)}><summary>기존 로그인 이름으로 초대</summary>{legacyOpen && (isNativeAuth() ? <NativeAuthAction mode="invite" /> : <InvitationPanel key={secretReset} />)}</details> : <section className="card"><h2>구성원 초대</h2><p>두 번째 구성원 초대는 가계 관리자 계정에서 만들 수 있어요.</p></section>}
   </div>;
 }
 

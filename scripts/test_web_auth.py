@@ -53,6 +53,7 @@ def execute(
     exports: bool = False,
     audit: bool = False,
     vault: bool = False,
+    onboarding: bool = False,
 ) -> None:
     values = {
         key: value for key, value in dotenv_values(ROOT / ".env").items() if value
@@ -86,6 +87,7 @@ def execute(
             exports=exports,
             audit=audit,
             vault=vault,
+            onboarding=onboarding,
         )
     finally:
         subprocess.run(COMPOSE + ["stop", "db-test"], env=environment, check=True)
@@ -105,6 +107,7 @@ def run_browser(
     exports: bool = False,
     audit: bool = False,
     vault: bool = False,
+    onboarding: bool = False,
 ) -> None:
     schema = "sallimbook_test_" + uuid4().hex
     admin = make_engine(url)
@@ -119,20 +122,21 @@ def run_browser(
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
         password = secrets.token_urlsafe(32)
-        with Session(engine) as session:
-            invitation = service.create_bootstrap_invitation(
-                session, "합성 HTTPS 검증 가계", "synthetic_https_owner"
-            )
-            session.commit()
-            service.accept_invitation(
-                session,
-                InvitationAcceptance(
-                    token=invitation.token,
-                    password=password,
-                    display_name="합성 HTTPS 구성원",
-                ),
-                "synthetic-browser-harness",
-            )
+        if not onboarding:
+            with Session(engine) as session:
+                invitation = service.create_bootstrap_invitation(
+                    session, "합성 HTTPS 검증 가계", "synthetic_https_owner"
+                )
+                session.commit()
+                service.accept_invitation(
+                    session,
+                    InvitationAcceptance(
+                        token=invitation.token,
+                        password=password,
+                        display_name="합성 HTTPS 구성원",
+                    ),
+                    "synthetic-browser-harness",
+                )
         foreign_login = "synthetic_export_foreign"
         foreign_password = secrets.token_urlsafe(32) if exports or audit else None
         if exports or audit:
@@ -215,6 +219,13 @@ def run_browser(
                     webauthn_rp_id=host if passkeys else None,
                     webauthn_web_origins=[origin] if passkeys else [],
                     webauthn_native_origins=[],
+                    # Isolated proxy-input fixture only; this is not a Tailscale
+                    # identity integration test or production authorization bypass.
+                    self_setup_identity_sha256=(
+                        hashlib.sha256(b"synthetic-start@example.invalid").hexdigest()
+                        if onboarding else None
+                    ),
+                    self_setup_proxy_host="localhost" if onboarding else None,
                     field_encryption_key_file=field_keys if finance or insurance or documents or exports else None,
                     document_storage_directory=private / "document-storage" if documents or exports else None,
                     **document_settings,
@@ -271,6 +282,7 @@ def run_browser(
                         ssl_keyfile=str(key),
                         ssl_certfile=str(cert),
                         access_log=False,
+                        proxy_headers=False,
                         log_level="critical",
                     )
                 )
@@ -293,7 +305,8 @@ def run_browser(
                     json.dumps(
                         {
                             "password": password,
-                            "login": "synthetic_https_owner",
+                            "login": "owner" if onboarding else "synthetic_https_owner",
+                            **({"setup_identity": "synthetic-start@example.invalid"} if onboarding else {}),
                             "control": control,
                             **({"foreign_login": foreign_login, "foreign_password": foreign_password} if exports or audit else {}),
                         }
@@ -328,6 +341,7 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_EXPORTS": "1" if exports else "0",
                         "SALLIMBOOK_HTTPS_AUDIT": "1" if audit else "0",
                         "SALLIMBOOK_HTTPS_VAULT": "1" if vault else "0",
+                        "SALLIMBOOK_HTTPS_ONBOARDING": "1" if onboarding else "0",
                     },
                     capture_output=True,
                     text=True,
@@ -338,7 +352,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|passkeys|finance|months|cashflow|insurance|homecare|documents|exports|audit|vault)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|onboarding|passkeys|finance|months|cashflow|insurance|homecare|documents|exports|audit|vault)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -412,7 +426,10 @@ if __name__ == "__main__":
     parser.add_argument("--audit", action="store_true", help="Verify safe audit metadata filters and household access through real HTTPS.")
     parser.add_argument("--exports", action="store_true", help="Verify private ZIP exports and selected originals with real HTTPS and PostgreSQL.")
     parser.add_argument("--vault", action="store_true", help="Verify real WebCrypto vault sharing, recovery, rotation and purge through HTTPS.")
+    parser.add_argument("--onboarding", action="store_true", help="Verify mobile first-start and spouse connection with real API/PostgreSQL and synthetic private-proxy identity.")
     args = parser.parse_args()
+    if args.onboarding and any(value for name, value in vars(args).items() if name != "onboarding"):
+        parser.error("--onboarding uses an empty installation and cannot be combined with other modes")
     with test_service_lock():
         execute(
             passkeys=args.passkeys or args.finance,
@@ -426,4 +443,5 @@ if __name__ == "__main__":
             exports=args.exports,
             audit=args.audit,
             vault=args.vault,
+            onboarding=args.onboarding,
         )

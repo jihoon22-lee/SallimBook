@@ -1,7 +1,7 @@
 package io.github.jihoon22lee.sallimbook.auth
 
 /** Local screen authorization only. No server freshness, credentials, or vault keys. */
-internal enum class AppRequestKind { PROTECTED, LOGIN, INVITATION, REAUTHENTICATE, LOGOUT }
+internal enum class AppRequestKind { PROTECTED, LOGIN, INVITATION, REAUTHENTICATE, LOGOUT, SETUP_STATUS, ONBOARDING }
 internal data class AppLockTicket(val generation: Long, val kind: AppRequestKind)
 
 /** Installed by Application, never by a bridge call. Tests can exercise policies without Android. */
@@ -33,7 +33,7 @@ internal class AppLockPolicy {
     @Synchronized fun allowed(ticket: AppLockTicket): Boolean =
         foreground && ticket.generation == generation && (!locked || ticket.kind != AppRequestKind.PROTECTED)
     @Synchronized fun unlock(ticket: AppLockTicket): Boolean {
-        if (ticket.kind !in setOf(AppRequestKind.LOGIN, AppRequestKind.REAUTHENTICATE) || !allowed(ticket)) return false
+        if (ticket.kind !in setOf(AppRequestKind.LOGIN, AppRequestKind.REAUTHENTICATE, AppRequestKind.ONBOARDING) || !allowed(ticket)) return false
         locked = false
         return true
     }
@@ -48,6 +48,11 @@ internal class AppLockPolicy {
     fun httpAllowed(ticket: AppLockTicket, method: String, path: String): Boolean {
         if (!allowed(ticket)) return false
         if (ticket.kind == AppRequestKind.PROTECTED) return true
+        if (ticket.kind == AppRequestKind.SETUP_STATUS)
+            return method == "GET" && path == NativeOnboardingPolicy.STATUS_PATH
+        if (ticket.kind == AppRequestKind.ONBOARDING)
+            return method == "POST" && path in setOf(NativeOnboardingPolicy.SETUP_PATH, NativeOnboardingPolicy.CONNECT_PATH) ||
+                method == "GET" && path == "/api/v1/me"
         if (method != "POST") return false
         val names = when (ticket.kind) {
             AppRequestKind.LOGIN -> setOf("/api/v1/auth/native/login", "/api/v1/auth/native/passkeys/options", "/api/v1/auth/native/passkeys/verify")

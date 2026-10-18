@@ -12,6 +12,7 @@ import android.widget.Button
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.jihoon22lee.sallimbook.auth.NativeVaultAcceptanceGate
+import io.github.jihoon22lee.sallimbook.auth.AppLockController
 import io.github.jihoon22lee.sallimbook.auth.NativeVaultBinding
 import io.github.jihoon22lee.sallimbook.auth.NativeVaultFailure
 import io.github.jihoon22lee.sallimbook.auth.NativeVaultStore
@@ -90,6 +91,13 @@ class NativeVaultCvcAcceptanceTest {
         NativeVaultAcceptanceGate.end(activity)
         rejected { NativeVaultStore(context, CvcAcceptanceFixtures.NAMESPACE).prepareEncryption(binding) }
         assertFalse(NativeVaultAcceptanceGate.armSyntheticCvcWriteFailure(activity))
+    }
+    @Test fun debugProofOwnerRemainsUsableWhileProductionAppIsLocked() {
+        instrumentation.runOnMainSync { AppLockController.get(context).lock() }
+        withOwner {
+            assertTrue(AppLockController.get(context).locked)
+            assertTrue(NativeVaultAcceptanceGate.allows(context, binding, CvcAcceptanceFixtures.NAMESPACE))
+        }
     }
     @Test fun ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization() {
         // The public structured Keystore error API starts at 33. Do not use hidden APIs or

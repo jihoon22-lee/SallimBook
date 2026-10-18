@@ -104,6 +104,11 @@ class SallimBookAuthPlugin : Plugin() {
         else begin(call) { gate, callback -> auth.getSession(gate, callback) }
     } }
 
+    @PluginMethod fun getSetupStatus(call: PluginCall) { main.post {
+        if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
+        else begin(call, allowLocked = true) { gate, callback -> auth.getSetupStatus(gate, callback) }
+    } }
+
     @PluginMethod fun logout(call: PluginCall) { main.post {
         if (!emptyOptions(call)) failure(call, AuthCode.INVALID_REQUEST)
         else begin(call, allowLocked = true) { gate, callback -> auth.logout(gate, callback) }
@@ -315,6 +320,9 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun listDocumentLinks(call: PluginCall) = finance(call, FinanceOperation.LIST_DOCUMENT_LINKS)
 
     @PluginMethod fun loginUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.LOGIN) } }
+    @PluginMethod fun createHousehold(call: PluginCall) { main.post { launchForm(call, NativeOnboardingActivity.SETUP) } }
+    @PluginMethod fun connectHousehold(call: PluginCall) { main.post { launchForm(call, NativeOnboardingActivity.CONNECT) } }
+    @PluginMethod fun createConnectionCode(call: PluginCall) { main.post { launchForm(call, NativeOnboardingActivity.CREATE_CODE) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
     @PluginMethod fun createInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.CREATE_INVITATION) } }
@@ -367,7 +375,9 @@ class SallimBookAuthPlugin : Plugin() {
     private fun launchForm(call: PluginCall, mode: String, targetId: String? = null, ifMatch: String? = null, targetKind: String? = null, vaultAction: String? = null, exportInput: String? = null) {
         if (mode !in setOf(NativeVaultActivity.MODE,NativeExportActivity.MODE) && targetId == null && !emptyOptions(call)) { failure(call, AuthCode.INVALID_REQUEST); return }
         if (!trustedForeground() || !activity.hasWindowFocus()) { failure(call, AuthCode.ACCESS_DENIED); return }
-        if (appLock.locked) { failure(call, AuthCode.APP_LOCKED); return }
+        val enrollment = NativeOnboardingActivity.enrollment(mode)
+        if (enrollment && auth.hasLocalSession()) { failure(call, AuthCode.ACCESS_DENIED); return }
+        if (appLock.locked && !enrollment) { failure(call, AuthCode.APP_LOCKED); return }
         val now = SystemClock.elapsedRealtime()
         if (!auth.available || uiCall != null || pending.isNotEmpty() ||
             lastUiLaunch != Long.MIN_VALUE && now - lastUiLaunch < 1000) {
@@ -377,11 +387,13 @@ class SallimBookAuthPlugin : Plugin() {
         lastUiLaunch = now
         uiCall = call
         uiMode = mode
-        documentUiRequest = if (mode in setOf(NativeDocumentActivity.UPLOAD, NativeDocumentActivity.DOWNLOAD, NativeVaultActivity.MODE,NativeExportActivity.MODE)) ForegroundRequest() else null
+        documentUiRequest = if (enrollment || mode in setOf(NativeOnboardingActivity.CREATE_CODE, NativeDocumentActivity.UPLOAD,
+            NativeDocumentActivity.DOWNLOAD, NativeVaultActivity.MODE,NativeExportActivity.MODE)) ForegroundRequest() else null
         try {
             val passkey = mode in setOf(NativePasskeyActivity.LOGIN, NativePasskeyActivity.REGISTER,
                 NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE, NativePasskeyActivity.INVITE, NativePasskeyActivity.ACCOUNT)
             val component = when {
+                enrollment || mode == NativeOnboardingActivity.CREATE_CODE -> NativeOnboardingActivity::class.java
                 mode == NativeExportActivity.MODE -> NativeExportActivity::class.java
                 mode == NativeVaultActivity.MODE -> NativeVaultActivity::class.java
                 passkey -> NativePasskeyActivity::class.java
@@ -410,8 +422,9 @@ class SallimBookAuthPlugin : Plugin() {
     private fun authActivityResult(call: PluginCall?, result: ActivityResult) {
         if (call == null || call !== uiCall) return
         val expected = when (uiMode) {
-            NativeAuthActivity.LOGIN, NativeAuthActivity.REAUTHENTICATE, NativePasskeyActivity.LOGIN -> "authenticated"
-            NativeAuthActivity.CREATE_INVITATION, NativePasskeyActivity.INVITE -> "created"
+            NativeAuthActivity.LOGIN, NativeAuthActivity.REAUTHENTICATE, NativePasskeyActivity.LOGIN,
+                NativeOnboardingActivity.SETUP, NativeOnboardingActivity.CONNECT -> "authenticated"
+            NativeAuthActivity.CREATE_INVITATION, NativePasskeyActivity.INVITE, NativeOnboardingActivity.CREATE_CODE -> "created"
             NativePasskeyActivity.REGISTER -> "registered"
             NativePasskeyActivity.REVOKE, NativePasskeyActivity.DEVICE -> "revoked"
             NativeAccountNumberActivity.EDIT, NativeInsurancePolicyNumberActivity.EDIT -> "saved"
@@ -442,13 +455,14 @@ class SallimBookAuthPlugin : Plugin() {
         val call = uiCall ?: return
         val outcome = uiOutcome ?: return
         val documentRequest = documentUiRequest
+        val cancelledEnrollment = NativeOnboardingActivity.enrollment(uiMode) && outcome.value?.get("status") == "cancelled" && !auth.hasLocalSession()
         val staleDocument = documentRequest != null && (!documentRequest.isActive() ||
             documentRequest.appLockTicket()?.let { !appLock.isCurrent(it) } != false)
         uiCall = null
         uiMode = null
         uiOutcome = null
         documentUiRequest?.cancel(); documentUiRequest = null
-        resolve(call, if (appLock.locked) AuthOutcome.failure(AuthCode.APP_LOCKED) else if (staleDocument) AuthOutcome.failure(AuthCode.AUTH_CANCELLED) else outcome)
+        resolve(call, if (appLock.locked && !cancelledEnrollment) AuthOutcome.failure(AuthCode.APP_LOCKED) else if (staleDocument) AuthOutcome.failure(AuthCode.AUTH_CANCELLED) else outcome)
     }
 
     private fun flushCancelled() {
