@@ -97,7 +97,9 @@ def receipt(kind="PNG", *, korean=False, card=False, pan=False):
     for number, line in enumerate(lines):
         draw.text((40, 45 + 125 * number), line, font=font, fill="black")
     buffer = io.BytesIO()
-    image.save(buffer, format=kind, resolution=200)
+    # Fixtures are clock-independent; dated PDF acceptance uses explicit metadata.
+    metadata = {"creationDate": None, "modDate": None} if kind == "PDF" else {}
+    image.save(buffer, format=kind, resolution=200, **metadata)
     image.close()
     return buffer.getvalue()
 
@@ -137,6 +139,19 @@ def text_pdf(*, card=False, active=False, pan=False):
     buffer = io.BytesIO()
     writer.write(buffer)
     return buffer.getvalue()
+
+
+def metadata_pdf(metadata):
+    """A real image PDF with deliberate synthetic /Info values, never wall-clock dates."""
+    # PdfWriter.__enter__ reinitializes the writer, discarding constructor clones.
+    writer = PdfWriter(clone_from=io.BytesIO(receipt("PDF", korean=True)))
+    try:
+        writer.add_metadata(metadata)
+        buffer = io.BytesIO()
+        writer.write(buffer)
+        return buffer.getvalue()
+    finally:
+        writer.close()
 
 
 def accepted(data, mime, stage):
@@ -187,6 +202,16 @@ def main():
             ("png_korean", receipt(korean=True), "image/png"),
             ("pdf_text", text_pdf(), "application/pdf"),
             ("pdf_image_korean", receipt("PDF", korean=True), "application/pdf"),
+            (
+                "pdf_dated_korean",
+                metadata_pdf(
+                    {
+                        "/CreationDate": "D:20261018051908Z",
+                        "/ModDate": "D:20261018051908Z",
+                    }
+                ),
+                "application/pdf",
+            ),
         ]:
             accepted(data, mime, stage)
             results.append(stage)
@@ -199,6 +224,20 @@ def main():
         with Image.new("RGB", (400, 200), "white") as image:
             image.save(blank, format="PNG")
         cases = [
+            (
+                "card_pdf_metadata",
+                metadata_pdf({"/Title": synthetic_pan()}),
+                "application/pdf",
+                {"DOCUMENT_CARD_DATA"},
+                {},
+            ),
+            (
+                "card_pdf_date_suffix",
+                metadata_pdf({"/CreationDate": "D:20261018051908Z CVC SECURITY CODE"}),
+                "application/pdf",
+                {"DOCUMENT_CARD_DATA"},
+                {},
+            ),
             (
                 "luhn_pdf_text",
                 text_pdf(pan=True),
