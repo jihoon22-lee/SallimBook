@@ -246,6 +246,7 @@ jobs:
           python3 - <<'PY'
           import json, os, re, xml.etree.ElementTree as ET
           from pathlib import Path
+          from scripts.android_cloud_results import failure_stage
           output = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-evidence'
           output.mkdir(mode=0o700, parents=True, exist_ok=True)
           probe = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-probe'
@@ -283,7 +284,10 @@ jobs:
                   for tag, counter in (('failure', 'failures'), ('error', 'errors'), ('skipped', 'skipped')):
                       if case.find(tag) is not None:
                           counts[counter] += 1
-                          ET.SubElement(node, tag, message='Native test reported ' + tag + '; details withheld')
+                          problem = ET.SubElement(node, tag, message='Native test reported ' + tag + '; details withheld')
+                          stage = failure_stage(classname, name, case.find(tag))
+                          if stage is not None:
+                              problem.set('stage', stage)
                           if tag == 'skipped' and (label != 'existing' or name != permitted_skip):
                               valid = False
               for name, count in counts.items():

@@ -5,6 +5,62 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+# Only the test-owned fixed stage can cross the diagnostic boundary. Never copy
+# raw exception text, stack traces, view snapshots, credentials or dynamic labels.
+ONBOARDING_CLASS = "io.github.jihoon22lee.sallimbook.AndroidCloudOnboardingTest"
+ONBOARDING_METHOD = "firstStartCancelInvalidInputThenRealSessionAndHome"
+ONBOARDING_STAGES = frozenset(
+    {
+        "FIXTURE_ORIGIN",
+        "EMPTY_SESSION",
+        "MAIN_LAUNCH",
+        "PREDICATE_ASSET",
+        "SIGNED_OUT_HOME",
+        "ANONYMOUS_REJECTED",
+        "SETUP_AVAILABLE",
+        "OPEN_CANCEL_FORM",
+        "CANCEL_FORM",
+        "CANCELLED_SESSION_EMPTY",
+        "OPEN_SETUP_FORM",
+        "SUBMIT_EMPTY",
+        "INVALID_INPUT",
+        "INVALID_SESSION_EMPTY",
+        "FILL_NAME",
+        "FILL_PASSWORD",
+        "FILL_CONFIRMATION",
+        "SUBMIT_VALID",
+        "SESSION_AND_MAIN",
+        "BRIDGE_READY",
+        "AUTHENTICATED_HOME",
+        "FINISH_MAIN",
+    }
+)
+
+
+def failure_stage(classname, method, problem):
+    if (
+        classname != ONBOARDING_CLASS
+        or method != ONBOARDING_METHOD
+        or problem.tag not in {"failure", "error"}
+    ):
+        return None
+    # Already-sanitized intermediate XML is checked again by the workflow.
+    stage = problem.get("stage")
+    if stage in ONBOARDING_STAGES:
+        return stage
+    # Android's XmlTestRunListener may put the exception only in element text.
+    # The native test removes its stack: accept one exact line, never parse a trace.
+    marker = r"(?:java\.lang\.AssertionError: )?SALLIMBOOK_CLOUD_STAGE: ([A-Z_]+)"
+    candidates = [
+        problem.get("message", ""),
+        (problem.text or "").removesuffix("\n").removesuffix("\r"),
+    ]
+    for message in candidates:
+        match = re.fullmatch(marker, message)
+        if match and match[1] in ONBOARDING_STAGES:
+            return match[1]
+    return None
+
 
 def save_instrumentation(label, expected, source, destination):
     destination = Path(destination)
@@ -42,7 +98,10 @@ def save_instrumentation(label, expected, source, destination):
                             "Requires API 33+, enrolled strong biometric and "
                             "clean synthetic Keystore namespace"
                         )
-                    ET.SubElement(case, tag, message=reason)
+                    node = ET.SubElement(case, tag, message=reason)
+                    stage = failure_stage(classname, name, original.find(tag))
+                    if stage is not None:
+                        node.set("stage", stage)
     for name, count in counts.items():
         suite.set(name, str(count))
     target = destination / f"{label}.xml"

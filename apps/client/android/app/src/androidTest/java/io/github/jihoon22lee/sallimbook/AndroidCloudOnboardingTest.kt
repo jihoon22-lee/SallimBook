@@ -34,8 +34,17 @@ class AndroidCloudOnboardingTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
 
-    private fun safeStep(label: String, action: () -> Unit) {
-        try { action() } catch (_: Throwable) { throw AssertionError("Cloud onboarding step failed: $label") }
+    // Public fixed labels only. Never attach Throwable, view hierarchy, ID or input to failure.
+    private enum class CloudStage {
+        FIXTURE_ORIGIN, EMPTY_SESSION, MAIN_LAUNCH, PREDICATE_ASSET, SIGNED_OUT_HOME,
+        ANONYMOUS_REJECTED, SETUP_AVAILABLE, OPEN_CANCEL_FORM, CANCEL_FORM,
+        CANCELLED_SESSION_EMPTY, OPEN_SETUP_FORM, SUBMIT_EMPTY, INVALID_INPUT,
+        INVALID_SESSION_EMPTY, FILL_NAME, FILL_PASSWORD, FILL_CONFIRMATION,
+        SUBMIT_VALID, SESSION_AND_MAIN, BRIDGE_READY, AUTHENTICATED_HOME, FINISH_MAIN
+    }
+    private fun <T> at(stage: CloudStage, action: () -> T): T {
+        try { return action() }
+        catch (_: Throwable) { throw AssertionError("SALLIMBOOK_CLOUD_STAGE: ${stage.name}").apply { stackTrace = emptyArray() } }
     }
 
     private fun awaitState(label: String, condition: () -> Boolean) {
@@ -60,11 +69,11 @@ class AndroidCloudOnboardingTest {
         return null
     }
 
-    private fun click(text: String) = safeStep("click $text") {
+    private fun click(text: String) {
         onView(withText(text)).perform(scrollTo(), click())
     }
 
-    private fun fill(caption: String, value: String) = safeStep("fill $caption") {
+    private fun fill(caption: String, value: String) {
         var id = View.NO_ID
         instrumentation.runOnMainSync {
             id = resumed()?.window?.decorView?.let { label(it, caption)?.labelFor } ?: View.NO_ID
@@ -98,47 +107,57 @@ class AndroidCloudOnboardingTest {
     @Test fun firstStartCancelInvalidInputThenRealSessionAndHome() {
         assumeTrue("Requires the disposable cloud HTTPS fixture",
             InstrumentationRegistry.getArguments().getString("sallimbookCloudFixture") == "true")
-        assertTrue(BuildConfig.SALLIMBOOK_API_ORIGIN.startsWith("https://127.0.0.1:"))
-        assertFalse(NativeAuthSession.get(context).hasLocalSession())
-        val main = instrumentation.startActivitySync(
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        ) as MainActivity
+        at(CloudStage.FIXTURE_ORIGIN) { assertTrue(BuildConfig.SALLIMBOOK_API_ORIGIN.startsWith("https://127.0.0.1:")) }
+        at(CloudStage.EMPTY_SESSION) { assertFalse(NativeAuthSession.get(context).hasLocalSession()) }
+        val main = at(CloudStage.MAIN_LAUNCH) {
+            instrumentation.startActivitySync(
+                Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ) as MainActivity
+        }
         try {
-            val authenticatedHome = instrumentation.context.assets
-                .open("sallimbook_cloud_authenticated_home.js").bufferedReader().use { it.readText() }
-            awaitWebState("signed-out home shell", main,
-                "Boolean(location.pathname === '/' && document.querySelector('#assets-title') && " +
-                    "document.querySelector('#consumables-title'))")
-            assertFalse("Signed-out headings do not prove an authenticated home",
-                evaluateBoolean(main, authenticatedHome))
-            awaitState("setup available") {
-                label(main.window.decorView, "처음 시작하기")?.let { it.isShown && it.isEnabled } == true
+            val authenticatedHome = at(CloudStage.PREDICATE_ASSET) {
+                instrumentation.context.assets.open("sallimbook_cloud_authenticated_home.js").bufferedReader().use { it.readText() }
             }
-            click("처음 시작하기")
-            click("닫기")
-            assertFalse(NativeAuthSession.get(context).hasLocalSession())
-            click("처음 시작하기")
-            click("가계 만들고 시작")
-            awaitState("invalid input rejected") {
-                resumed()?.window?.decorView?.let {
-                    label(it, "이름, 비밀번호 길이와 확인, 연결 코드를 확인해 주세요.") != null
-                } == true
+            at(CloudStage.SIGNED_OUT_HOME) {
+                awaitWebState("signed-out home shell", main,
+                    "Boolean(location.pathname === '/' && document.querySelector('#assets-title') && " +
+                        "document.querySelector('#consumables-title'))")
             }
-            assertFalse(NativeAuthSession.get(context).hasLocalSession())
+            at(CloudStage.ANONYMOUS_REJECTED) { assertFalse(evaluateBoolean(main, authenticatedHome)) }
+            at(CloudStage.SETUP_AVAILABLE) {
+                awaitState("setup available") {
+                    label(main.window.decorView, "처음 시작하기")?.let { it.isShown && it.isEnabled } == true
+                }
+            }
+            at(CloudStage.OPEN_CANCEL_FORM) { click("처음 시작하기") }
+            at(CloudStage.CANCEL_FORM) { click("닫기") }
+            at(CloudStage.CANCELLED_SESSION_EMPTY) { assertFalse(NativeAuthSession.get(context).hasLocalSession()) }
+            at(CloudStage.OPEN_SETUP_FORM) { click("처음 시작하기") }
+            at(CloudStage.SUBMIT_EMPTY) { click("가계 만들고 시작") }
+            at(CloudStage.INVALID_INPUT) {
+                awaitState("invalid input rejected") {
+                    resumed()?.window?.decorView?.let {
+                        label(it, "이름, 비밀번호 길이와 확인, 연결 코드를 확인해 주세요.") != null
+                    } == true
+                }
+            }
+            at(CloudStage.INVALID_SESSION_EMPTY) { assertFalse(NativeAuthSession.get(context).hasLocalSession()) }
             // Generated solely in native test memory; never an argument, log or fixture file.
             val password = UUID.randomUUID().toString() + UUID.randomUUID().toString()
-            fill("표시 이름", "Synthetic Android Owner")
-            fill("새 비밀번호 · 15~128자", password)
-            fill("새 비밀번호 확인", password)
-            click("가계 만들고 시작")
-            awaitState("real session and unlocked main") {
-                NativeAuthSession.get(context).hasLocalSession() &&
-                    !AppLockController.get(context).locked && resumed() === main
+            at(CloudStage.FILL_NAME) { fill("표시 이름", "Synthetic Android Owner") }
+            at(CloudStage.FILL_PASSWORD) { fill("새 비밀번호 · 15~128자", password) }
+            at(CloudStage.FILL_CONFIRMATION) { fill("새 비밀번호 확인", password) }
+            at(CloudStage.SUBMIT_VALID) { click("가계 만들고 시작") }
+            at(CloudStage.SESSION_AND_MAIN) {
+                awaitState("real session and unlocked main") {
+                    NativeAuthSession.get(context).hasLocalSession() &&
+                        !AppLockController.get(context).locked && resumed() === main
+                }
             }
-            assertTrue(main.secureBridgeReady)
-            awaitWebState("authenticated home API data", main, authenticatedHome)
+            at(CloudStage.BRIDGE_READY) { assertTrue(main.secureBridgeReady) }
+            at(CloudStage.AUTHENTICATED_HOME) { awaitWebState("authenticated home API data", main, authenticatedHome) }
         } finally {
-            instrumentation.runOnMainSync { main.finish() }
+            at(CloudStage.FINISH_MAIN) { instrumentation.runOnMainSync { main.finish() } }
         }
     }
 }
