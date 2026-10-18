@@ -77,6 +77,29 @@ JS의 가입 호출 없이도 잠금 해제 이벤트 후 실제 `/me` 조회로
 추가하고 테스트 APK를 생성한다. release 전체 DEX에서 기존 검증 marker 9개가 없는지 다시 확인한다.
 기기 계측 시험은 패키징과 실행을 구분한다.
 
+2026-10-18, 분리 작업 트리에서 다음을 실행했다. 서버 계약은 `4e0f5c9`의 기존 토큰 응답과
+새 setup/connect/connection-code 스키마에 대조했으며 API/생성 client/lockfile을 변경하지 않았다.
+
+| 명령·검사 | 결과 |
+|---|---|
+| `pnpm install --frozen-lockfile`, `pnpm android:sync` | 성공. TypeScript 검사·기존 web bundle 생성·Capacitor sync 포함 |
+| `./gradlew --no-daemon --max-workers=1 :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease :app:testDebugUnitTest` | 성공. JVM **356개**, 실패·오류·건너뜀 0. 신규 가입 정책/수명주기 회귀 23개 포함 |
+| debug/release 병합 manifest | NativeOnboardingActivity `exported=false` 확인 |
+| 실제 unsigned release APK 전체 DEX | 새 onboarding 클래스 존재, 합성 보안 검증 marker 9개 제외 |
+| `pnpm test:docs`, `git diff --check` | 문서 검증·도구 테스트 **64개**·diff 검사 성공 |
+| `connectedDebugAndroidTest` 및 실제 기기 가입 | **미실행**. 계측 APK의 CVC gate 8개·WebView 4개는 컴파일/패키징만 수행 |
+
+첫 전체 실행은 355개 중 기존 `NativeDocumentHttpTest.serverRetryAfterZeroCannotTriggerASecondDownloadRequest`
+한 건이 `expected 1, actual 0`으로 실패했다. 동시에 브라우저 검사가 진행 중이었고 이 테스트의 서버
+수신 대기는 1.5초다. 브라우저가 종료된 뒤 단일 테스트를 `--max-workers=1`로 분리해 실행하여
+1개 통과(1.689초)를 확인하고, 최신 소스의 전체 356개도 순차 검사로 통과했다. 환경 부하와 시간 제한의
+영향 가능성은 있으나 원인으로 확정하지 않는다. 관련 transport 코드나 기존 테스트 판정은 바꾸지 않았다.
+
+APK는 `apps/client/android/app/build/outputs/apk/`의 `debug/app-debug.apk`,
+`androidTest/debug/app-debug-androidTest.apk`, `release/app-release-unsigned.apk`에 생성했다.
+이 작업 트리의 API origin/RP/cert 값은 공란이다. 실제 서버 로그인·서명 배포를 검증한 APK가 아니며,
+통합된 React 화면과 설정을 포함한 최종 검사는 별도 통합 작업에서 수행한다.
+
 아직 실행하지 않은 두 Galaxy 인수 항목:
 
 - 처음 시작 가능/불가 상태, 이름·암호 확인, 가입 후 바로 홈 진입, 연결 코드 발급·만료·잘못된 입력·연결 후 홈 진입.
