@@ -275,7 +275,7 @@ jobs:
           seen = set()
           permitted_skip = 'ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization'
           total_skips = 0
-          for label, expected in (('existing', 12), ('onboarding', 1)):
+          for label, expected in (('existing', 15), ('onboarding', 1)):
               counts = dict(tests=0, failures=0, errors=0, skipped=0)
               clean = ET.Element('testsuite', name=label)
               source = probe / 'tests' / (label + '.xml')

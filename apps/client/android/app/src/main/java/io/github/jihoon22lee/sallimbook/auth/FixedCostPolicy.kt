@@ -141,7 +141,7 @@ internal object FixedCostPolicy {
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
         val route = routes[operation] ?: invalid()
         val args = obj(value)
-        val variables = Regex("\\{([A-Za-z]+)}").findAll(route.path).map { it.groupValues[1] }.toList()
+        val variables = Regex("\\{([A-Za-z]+)\\}").findAll(route.path).map { it.groupValues[1] }.toList()
         val write = route.method != "GET"
         val required = variables.toSet() + (if (route.version) setOf("ifMatch") else emptySet()) + (if (write) setOf("input", "idempotencyKey") else emptySet())
         if (!args.keys.containsAll(required) || !(required + if (route.query) setOf("query") else emptySet()).containsAll(args.keys)) invalid()

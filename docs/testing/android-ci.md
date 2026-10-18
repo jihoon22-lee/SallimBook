@@ -336,3 +336,32 @@ HTML·입력값·DOM 원문·API 데이터는 반환하지 않으며, 진단 자
 기한 초과 또는 예상 밖 결과도 임의 값을 내보내지 않는다. 제품 코드·API 계약은 변경하지 않는다.
 브라우저 12개, 정제 도구 19개 및 계측 Kotlin 컴파일이 통과했다. 별도 진단 브랜치에서
 workflow_dispatch로 실행해 PR 자동 리뷰는 최종 수정에 남겨 둔다.
+
+
+[39104931074](https://github.com/jihoon22-lee/SallimBook/actions/runs/39104931074)은
+`9e9fdccb0ad8dba39f34599a756c07f42b452226`의 별도 진단 실행이다. 같은 홈 실패에
+`CARE=NATIVE_UNAVAILABLE`, `NATIVE_CARE=NATIVE_UNAVAILABLE`가 확인됐다. 11 PASS / 1 FAIL /
+1 조건부 SKIP이며 release 검사는 미실행, 정리는 완료됐다.
+[요약](evidence/android-kvm-20261018/run-39104931074/summary.json),
+[가입 XML](evidence/android-kvm-20261018/run-39104931074/onboarding.xml),
+[기존 XML](evidence/android-kvm-20261018/run-39104931074/existing.xml),
+[SDK](evidence/android-kvm-20261018/run-39104931074/sdk.json)를 보존했다.
+
+원인은 6개 정책의 경로 템플릿 추출 정규식에서 닫는 중괄호를 이스케이프하지 않은 것이다.
+JDK 21은 이를 허용하지만 [Android Pattern의 ICU 구현](https://android.googlesource.com/platform/libcore/+/refs/heads/master/ojluni/src/main/java/java/util/regex/Pattern.java)은
+리터럴 `}`의 이스케이프를 요구한다. 소모품뿐 아니라 Cashflow/FixedCost/Document/Insurance/
+InsuranceEvent 경로도 같은 표현식을 사용했다. 요청 준비의 PatternSyntaxException이 일반
+`AUTH_UNAVAILABLE`로 처리되어 서버에 요청하기 전에 조회를 막는다. Compare 정책은 해당
+표현식을 사용하지 않아 자산 요약만 성공한 관측과 일치한다.
+
+[로컬 ICU 78 재현](evidence/android-kvm-20261018/route-icu-reproduction.json)은 제품 Kotlin의
+정적 정규식 90개를 검사했다. 수정 전 위 6개에서 `U_REGEX_RULE_SYNTAX`, 수정 후 90개 모두
+컴파일 성공이다. 이는 Android API 36 자체의 실행 증명을 대체하지 않는다. 제품 변경은
+6개 표현식의 닫는 중괄호 이스케이프뿐이며 경로·권한·입력·응답 계약을 유지한다.
+새 NativeRoutePolicyTest 3개는 실제 Android에서 여섯 도메인의 목록/다중 변수 경로,
+빈 소모품 응답과 잘못된 ID·추가 인자 거절을 검증한다. 기존 보안 12개와 합쳐 정확히 15개,
+가입 1개를 별도로 요구하며, 원래 생체인증 조건부 skip만 허용한다.
+
+수정 후 로컬 JVM 356개(실패/skip 0), 새 경로 회귀 시나리오 3개의 호스트 실행과
+Android 계측 Kotlin 컴파일이 통과했다. 도구 189개, 문서 75개·로컬 링크 457개,
+Ruff와 diff 검사도 통과했다. 실제 Android 회귀/가입 통과는 후속 KVM 결과로 기록한다.

@@ -1,0 +1,45 @@
+[
+  {
+    "source": "before",
+    "icu": "78",
+    "static_regexes_checked": 90,
+    "errors": [
+      {
+        "file": "apps/client/android/app/src/main/java/io/github/jihoon22lee/sallimbook/auth/InsuranceEventPolicy.kt",
+        "line": 540,
+        "error": "U_REGEX_RULE_SYNTAX"
+      },
+      {
+        "file": "apps/client/android/app/src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeHomecarePolicy.kt",
+        "line": 172,
+        "error": "U_REGEX_RULE_SYNTAX"
+      },
+      {
+        "file": "apps/client/android/app/src/main/java/io/github/jihoon22lee/sallimbook/auth/InsurancePolicy.kt",
+        "line": 138,
+        "error": "U_REGEX_RULE_SYNTAX"
+      },
+      {
+        "file": "apps/client/android/app/src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeDocumentPolicy.kt",
+        "line": 115,
+        "error": "U_REGEX_RULE_SYNTAX"
+      },
+      {
+        "file": "apps/client/android/app/src/main/java/io/github/jihoon22lee/sallimbook/auth/FixedCostPolicy.kt",
+        "line": 144,
+        "error": "U_REGEX_RULE_SYNTAX"
+      },
+      {
+        "file": "apps/client/android/app/src/main/java/io/github/jihoon22lee/sallimbook/auth/CashflowPolicy.kt",
+        "line": 169,
+        "error": "U_REGEX_RULE_SYNTAX"
+      }
+    ]
+  },
+  {
+    "source": "after",
+    "icu": "78",
+    "static_regexes_checked": 90,
+    "errors": []
+  }
+]

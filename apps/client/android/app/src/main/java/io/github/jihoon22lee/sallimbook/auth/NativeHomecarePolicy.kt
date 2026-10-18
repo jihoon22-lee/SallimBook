@@ -169,7 +169,7 @@ internal object NativeHomecarePolicy {
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
         val route = routes[operation] ?: invalid()
         val args = obj(value)
-        val ids = Regex("\\{([^}]+)}").findAll(route.path).map { it.groupValues[1] }.toSet()
+        val ids = Regex("\\{([^}]+)\\}").findAll(route.path).map { it.groupValues[1] }.toSet()
         val required = ids + (if (route.input.isNotEmpty()) setOf("input") else emptySet()) +
             (if (route.version) setOf("ifMatch") else emptySet()) + (if (route.idem) setOf("idempotencyKey") else emptySet())
         if (!args.keys.containsAll(required) || !(required + if (route.query.isNotEmpty()) setOf("query") else emptySet()).containsAll(args.keys)) invalid()

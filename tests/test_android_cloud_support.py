@@ -316,7 +316,7 @@ class CloudSupportTests(unittest.TestCase):
             source = root / "sallimbook-android-probe/tests"
             source.mkdir(parents=True)
             suite = ET.Element("testsuite")
-            for index in range(12):
+            for index in range(15):
                 ET.SubElement(suite, "testcase", classname="SyntheticTest", name=f"case{index}")
             ET.ElementTree(suite).write(source / "existing.xml")
             suite = ET.Element("testsuite")
