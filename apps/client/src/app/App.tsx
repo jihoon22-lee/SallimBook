@@ -8,7 +8,9 @@ import { AssetComparisonPage } from "../features/assets/comparison/ComparisonPag
 import { AssetMonthPage } from "../features/assets/months/MonthPage";
 import { AssetListPage, AssetNewPage, AssetDetailPage } from "../features/assets/AssetPages";
 import { authScreens } from "../features/auth/screens";
-import { AuthProvider } from "../features/auth/AuthProvider";
+import { Icon } from "../shared/Icon";
+import type { IconName } from "../shared/Icon";
+import { AuthProvider, useAuth } from "../features/auth/AuthProvider";
 import { InvitationAcceptPage } from "../features/auth/InvitationAcceptPage";
 import { OnboardingPage } from "../features/auth/OnboardingPage";
 import { SignedOutWelcome } from "../features/auth/OnboardingEntry";
@@ -41,7 +43,7 @@ import { RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 
 const screens = [
-  { path: "/", title: "함께 살피는 오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><SignedOutWelcome /><Dashboard /></> },
+  { path: "/", title: "오늘의 살림", group: "home" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><SignedOutWelcome /><Dashboard /></> },
   { path: "/more", title: "더보기", group: "more" as NavigationGroup, parent: { to: "/", label: "홈" }, live: true, element: <><div className="intro"><h1>더보기</h1><p>우리 집 물건과 공동 가계의 설정을 관리해요.</p></div><RelatedLinks links={householdScreens.find((screen) => screen.path === "/more")!.links ?? []} /></> },
   { path: "/appliances", title: "가전 관리", group: "more" as NavigationGroup, parent: { to: "/more", label: "더보기" }, live: true, element: <ApplianceListPage /> },
   { path: "/appliances/new", title: "가전 등록", group: "more" as NavigationGroup, parent: { to: "/appliances", label: "가전 목록" }, live: true, element: <ApplianceNewPage /> },
@@ -116,12 +118,12 @@ const screens = [
   { path: "/insurance/claims/:id/edit", title: "보험 청구 정정", group: "insurance" as NavigationGroup, parent: { to: "/insurance/cases", label: "보험 사건" }, live: true, element: <ClaimDetailPage edit /> },
 ];
 
-const navigation: { group: NavigationGroup; to: string; label: string; icon: string; children?: ScreenLink[] }[] = [
-  { group: "home", to: "/", label: "홈", icon: "⌂" },
-  { group: "assets", to: "/assets", label: "자산", icon: "▥", children: [{ to: "/accounts", label: "계좌" }, { to: "/assets/compare", label: "월간 비교" }] },
-  { group: "living", to: "/living", label: "생활비", icon: "↔", children: [{ to: "/income", label: "수입" }, { to: "/fixed-payments", label: "고정 납부" }, { to: "/cards", label: "카드" }] },
-  { group: "insurance", to: "/insurance", label: "보험", icon: "♡", children: [{ to: "/insurance/policies", label: "계약" }, { to: "/insurance/cases", label: "사건·청구·지급" }] },
-  { group: "more", to: "/more", label: "더보기", icon: "···", children: [{ to: "/appliances", label: "가전" }, { to: "/consumables", label: "소모품" }, { to: "/vault", label: "보관함" }, { to: "/settings", label: "설정" }] },
+const navigation: { group: NavigationGroup; to: string; label: string; icon: IconName; children?: ScreenLink[] }[] = [
+  { group: "home", to: "/", label: "홈", icon: "home" },
+  { group: "assets", to: "/assets", label: "자산", icon: "assets", children: [{ to: "/accounts", label: "계좌" }, { to: "/assets/compare", label: "월간 비교" }] },
+  { group: "living", to: "/living", label: "생활비", icon: "cashflow", children: [{ to: "/income", label: "수입" }, { to: "/fixed-payments", label: "고정 납부" }, { to: "/cards", label: "카드" }] },
+  { group: "insurance", to: "/insurance", label: "보험", icon: "insurance", children: [{ to: "/insurance/policies", label: "계약" }, { to: "/insurance/cases", label: "사건·청구·지급" }] },
+  { group: "more", to: "/more", label: "더보기", icon: "more", children: [{ to: "/appliances", label: "가전" }, { to: "/consumables", label: "소모품" }, { to: "/vault", label: "보관함" }, { to: "/settings", label: "설정" }] },
 ];
 
 function Navigation({ active, desktop = false }: { active?: NavigationGroup; desktop?: boolean }) {
@@ -129,7 +131,7 @@ function Navigation({ active, desktop = false }: { active?: NavigationGroup; des
     <nav className={desktop ? "sidebar-nav" : "mobile-tabs"} aria-label={desktop ? "전체 메뉴" : "주 메뉴"}>
       <ul>{navigation.map((item) => <li key={item.group}>
         <Link to={item.to} className="nav-item" aria-current={active === item.group ? "page" : undefined}>
-          <span className="nav-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>
+          <span className="nav-icon"><Icon name={item.icon} /></span><span>{item.label}</span>
         </Link>
         {desktop && item.children && <ul className="subnav">{item.children.map((child) => <li key={child.to}><NavLink to={child.to}>{child.label}</NavLink></li>)}</ul>}
       </li>)}</ul>
@@ -142,6 +144,7 @@ function NotFound() {
 }
 
 function AppShell() {
+  const { state } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement>(null);
@@ -149,6 +152,8 @@ function AppShell() {
   const current = matchRoutes(screens, location)?.at(-1)?.route;
   const parent = current?.parent.to ?? "/";
   const title = current?.title ?? "페이지를 찾을 수 없어요";
+  const authPage = location.pathname === "/login" || location.pathname.startsWith("/onboarding");
+  const domain = /^\/(appliances|consumables|appliance-consumables)/.test(location.pathname) ? "homecare" : location.pathname.startsWith("/insurance") || location.pathname.includes("audit") ? "records" : "finance";
 
   function goBack() {
     if (canGoBackWithinApp(window.history.state)) navigate(-1);
@@ -177,21 +182,23 @@ function AppShell() {
   }), [navigate, location.pathname, parent]);
 
   return (
-    <>
+    <div className={`app-shell${authPage ? " auth-shell" : ""}`} data-domain={domain}>
       <a className="skip-link" href="#main-content">본문으로 바로가기</a>
       <aside className="sidebar">
-        <Link className="brand" to="/" aria-label="SallimBook 홈"><span className="brand-mark" aria-hidden="true">살림</span><span>SallimBook</span></Link>
-        <p className="sidebar-caption">함께 쌓는 우리 집의 기록</p>
+        <Link className="brand" to="/" aria-label="SallimBook 홈"><span className="brand-mark"><Icon name="book" size={25} /></span><span className="brand-name">SallimBook<small>살림북</small></span></Link>
+        <p className="sidebar-caption">우리 가계</p>
         <Navigation desktop active={current?.group} />
+        <div className="sidebar-footer"><Link className="sidebar-account" to={state.status === "authenticated" ? "/settings/auth" : "/login"}><span className="account-avatar"><Icon name="account" size={18} /></span><span><strong>{state.status === "authenticated" ? state.member.display_name : "내 계정 연결"}</strong><small>{state.status === "authenticated" ? "함께 쓰는 공동 가계" : "우리 집의 기록을 시작해요"}</small></span><Icon name="arrow-right" size={16} /></Link></div>
       </aside>
       <div className="workspace">
         <header className="topbar">
-          <Link className="brand" to="/" aria-label="SallimBook 홈"><span className="brand-mark" aria-hidden="true">살림</span><span>SallimBook</span></Link>
-          <Link className="topbar-link" to="/settings">설정</Link>
+          <Link className="brand" to="/" aria-label="SallimBook 홈"><span className="brand-mark"><Icon name="book" size={25} /></span><span className="brand-name">SallimBook<small>살림북</small></span></Link>
+          <div className="topbar-context"><span>우리 가계</span><span aria-hidden="true">/</span><strong>{title}</strong></div>
+          <Link className="topbar-link" to="/settings" aria-label="설정"><Icon name="settings" size={19} /><span>설정</span></Link>
           {isNativeAuth() && <button type="button" onClick={() => void nativeAuth.lock().catch(() => {})}>앱 잠금</button>}
         </header>
         <div className="page">
-          {location.pathname !== "/" && <div className="back-row"><button className="back-button" onClick={goBack}><span aria-hidden="true">← </span>뒤로</button><span className="muted">{current?.parent.label ?? "홈"}</span></div>}
+          {location.pathname !== "/" && <div className="back-row"><button className="back-button" onClick={goBack}><Icon name="arrow-left" size={17} />뒤로</button><span className="muted">{current?.parent.label ?? "홈"}</span></div>}
           <main id="main-content" ref={mainRef} tabIndex={-1}>
             <Routes>{screens.map((screen) => <Route key={screen.path} path={screen.path} element={screen.element} />)}<Route path="*" element={<NotFound />} /></Routes>
           </main>
@@ -199,7 +206,7 @@ function AppShell() {
         </div>
       </div>
       <Navigation active={current?.group} />
-    </>
+    </div>
   );
 }
 

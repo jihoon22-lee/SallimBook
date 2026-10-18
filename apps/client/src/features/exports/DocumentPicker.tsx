@@ -19,7 +19,7 @@ export function DocumentPicker({ selected, busy, changed }: { selected: Document
     <p>현재 연결이 있고 보관이 완료된 문서만 선택할 수 있어요. 원본 파일 이름과 내용에는 개인 정보가 포함될 수 있어요.</p>
     <label>불러온 문서에서 이름 찾기<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} disabled={busy} maxLength={255} /></label>
     <DocumentError error={list.error} />{validation && <p role="alert">{validation}</p>}
-    {list.loading && <p role="status">문서 목록을 확인하고 있어요.</p>}
+    {list.loading && <p className="loading-state" role="status">문서 목록을 확인하고 있어요.</p>}
     {!list.error && <ul className="record-list">{list.items.filter((row) => row.original_name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((row) => {
       const checked = selected.some((item) => item.id === row.id);
       return <li key={row.id}><label className="checkbox-field"><input type="checkbox" checked={checked} disabled={busy || !checked && !exportable(row)} onChange={() => toggle(row)} />{row.original_name}</label><p>{byteLabel(row.size_bytes)} · {stateLabel(row)} · 현재 연결 {row.active_link_count}개</p></li>;

@@ -92,7 +92,7 @@ export function PasskeyPanel() {
     {done && <p role="status">패스키를 등록했어요.</p>}
     {authenticating && !native && <button type="button" onClick={ceremony.cancel}>패스키 인증 취소</button>}
     <button type="button" disabled={loading || busy} onClick={() => { setActionError(null); void load(); }}>패스키 목록 다시 불러오기</button>
-    {loading && <p role="status">패스키 목록을 불러오고 있어요.</p>}
+    {loading && <p className="loading-state" role="status">패스키 목록을 불러오고 있어요.</p>}
     <AuthError error={error} />
     {error && items.length > 0 && <p>표시된 패스키 목록은 최신 상태가 아닐 수 있어요. 다시 불러온 뒤 해제해 주세요.</p>}
     {!loading && !error && items.length === 0 && <p>등록된 패스키가 없어요.</p>}

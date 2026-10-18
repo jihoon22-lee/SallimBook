@@ -1,3 +1,4 @@
+import { Icon } from "../../shared/Icon";
 import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -68,9 +69,10 @@ function AssetList() {
   useEffect(() => { void load(); return () => { generation.current++; }; }, [load]);
   function filter(name: string, value: string) { const next = new URLSearchParams(pendingParams.current); if (value) next.set(name, value); else next.delete(name); pendingParams.current = next; setParams(next); }
 
+  const filterCount = [kind, category, owner === "joint" || isUuid(owner) ? owner : "", inclusion, status !== "active" ? status : ""].filter(Boolean).length;
   return <>
     <div className="form-actions"><Link className="button-link" to="/assets/new">자산·부채 등록</Link><Link className="button-link secondary-button" to="/accounts">계좌 관리</Link></div>
-    <section className="card finance-filters" aria-labelledby="asset-filter-title"><h2 id="asset-filter-title">자산 찾기</h2><p className="muted">기본정보 목록은 현재 등록 상태를 기준으로 보여줘요. 월별 금액과는 별개예요.</p>
+    <details className="card finance-filters asset-filter-panel"><summary><span><Icon name="filter" size={17} /> 자산 찾기</span><span className="muted">{filterCount ? `조건 ${filterCount}개 적용` : "사용 중 · 추가 조건 없음"}</span></summary><p className="muted">기본정보 목록은 현재 등록 상태를 기준으로 보여줘요. 월별 금액과는 별개예요.</p>
       <div className="filter-grid">
         <div className="form-field"><label htmlFor="asset-kind-filter">자산·부채 필터</label><select id="asset-kind-filter" value={kind} onChange={(event) => filter("kind", event.target.value)}><option value="">전체</option>{Object.entries(assetKinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
         <div className="form-field"><label htmlFor="asset-category-filter">분류 필터</label><select id="asset-category-filter" value={category} onChange={(event) => filter("category", event.target.value)}><option value="">전체 분류</option>{Object.entries(categories).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
@@ -78,13 +80,16 @@ function AssetList() {
         <div className="form-field"><label htmlFor="asset-inclusion-filter">합계 포함 필터</label><select id="asset-inclusion-filter" value={inclusion} onChange={(event) => filter("inclusion", event.target.value)}><option value="">포함·제외 모두</option><option value="included">합계에 포함</option><option value="excluded">합계에서 제외</option></select></div>
         <div className="form-field"><label htmlFor="asset-status-filter">등록 상태 필터</label><select id="asset-status-filter" value={status} onChange={(event) => filter("status", event.target.value)}><option value="active">사용 중</option><option value="archived">사용 종료</option><option value="all">모든 상태</option></select></div>
       </div>
-      <MemberLoadError error={members.error} retry={members.retry} />
       <div className="form-actions"><button type="button" disabled={loading} onClick={() => void load()}>자산 목록 다시 불러오기</button><button type="button" className="secondary-button" onClick={() => { pendingParams.current = new URLSearchParams(); setParams({}); }}>필터 초기화</button></div>
-    </section>
+    </details>
+    <MemberLoadError error={members.error} retry={members.retry} />
     <FinanceError error={error} />
-    {loading && <p role="status">자산 목록을 불러오고 있어요.</p>}
-    {!loading && !error && items.length === 0 && <section className="card"><h2>조건에 맞는 자산이 없어요</h2><p>필터를 바꾸거나 자산·부채를 등록해 주세요. 빈 목록을 0원 자산으로 표시하지 않아요.</p></section>}
-    <ul className="finance-list">{items.map((asset) => <li key={asset.id} className="card"><div className="item-heading"><h2><Link to={`/assets/${asset.id}`}>{asset.name}</Link></h2><span className="status-chip">{asset.status === "archived" ? "사용 종료" : "사용 중"}</span></div><AssetSummary asset={asset} members={members.members} /><MissingAmount /></li>)}</ul>
+    {error && <button type="button" onClick={() => void load()}>자산 목록 다시 불러오기</button>}
+    {loading && <p className="loading-state" role="status">자산 목록을 불러오고 있어요.</p>}
+    {!loading && !error && items.length === 0 && <section className="card empty-state"><span className="empty-state-icon"><Icon name="assets" size={25} /></span><h2>조건에 맞는 자산이 없어요</h2><p>필터를 바꾸거나 자산·부채를 등록해 주세요. 빈 목록을 0원 자산으로 표시하지 않아요.</p></section>}
+    {items.length > 0 && <div className="list-heading"><h2>등록된 자산·부채</h2><span className="muted">불러온 항목 {items.length}개</span></div>}
+    {items.length > 0 && <MissingAmount />}
+    <ul className="finance-list asset-records">{items.map((asset) => <li key={asset.id} className="card asset-record"><div className="item-heading"><div className="record-heading"><span className="record-icon"><Icon name={asset.kind === "liability" ? "cashflow" : "assets"} /></span><div><h2><Link to={`/assets/${asset.id}`}>{asset.name}</Link></h2><p className="record-subline">{categories[asset.category]} · {ownerLabel(asset, members.members)}</p></div></div><span className="status-chip">{asset.status === "archived" ? "사용 종료" : "사용 중"}</span></div><details className="record-details"><summary>소유·지분·보유기간 자세히</summary><AssetSummary asset={asset} members={members.members} /></details></li>)}</ul>
     {cursor && <button type="button" disabled={loading} onClick={() => void load(cursor)}>자산 더 보기</button>}
   </>;
 }

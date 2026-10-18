@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 import { createContext, useContext, useId, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -34,10 +35,10 @@ export function MonthPicker() {
   const id = useId();
   return (
     <div className="month-picker">
-      <label htmlFor={id}>확인할 월</label>
+      <div className="month-control"><label htmlFor={id}><Icon name="calendar" size={17} />확인할 월</label>
       <input id={id} type="month" value={month} min="0001-01" max="9999-12"
         onChange={(event) => { if (isValidMonth(event.target.value)) setMonth(event.target.value); }} />
-      <span className="muted">서울 기준 · {formatMonth(month)}</span>
+      </div><span className="muted">서울 기준 · {formatMonth(month)}</span>
     </div>
   );
 }

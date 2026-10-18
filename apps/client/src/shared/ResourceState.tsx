@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 export type ResourceStatus = "loading" | "empty" | "error" | "stale" | "forbidden" | "conflict";
 
 const states: Record<ResourceStatus, { title: string; description: string }> = {
@@ -13,7 +14,7 @@ export function ResourceState({ status, onRetry }: { status: ResourceStatus; onR
   const state = states[status];
   return (
     <section className="card resource-state" role={status === "error" || status === "conflict" ? "alert" : "status"} aria-busy={status === "loading"}>
-      <h2>{state.title}</h2>
+      <span className="empty-state-icon"><Icon name={status === "loading" ? "refresh" : status === "empty" ? "book" : "insurance"} size={26} /></span><h2>{state.title}</h2>
       <p>{state.description}</p>
       {onRetry && ["error", "stale", "conflict"].includes(status) && <button onClick={onRetry}>다시 불러오기</button>}
     </section>

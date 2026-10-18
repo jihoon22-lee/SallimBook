@@ -106,8 +106,8 @@
       "git_sha1": "ef012269cc1891ba65bc869badbf5efed032294b"
     },
     "docs/design-system.md": {
-      "sha256": "cfa2f6a0477fb0413aa8edb857cdee878cf8a329db86fe81f95d71501befce02",
-      "git_sha1": "779da675bad565b1f030d34bb6b67195c418b6f1"
+      "sha256": "b406de5ae6e6bd77ffc505e14f2716cbcc73109e59b051b116505d5ab10d891c",
+      "git_sha1": "1d8228187a9d8ed633573e10ac50efaa6a360a04"
     },
     "docs/future-integrations.md": {
       "sha256": "9efb2233e7edebb057fe8c4ba6e557c86ba34d8085eb43998ac471f9adbf9689",
@@ -126,8 +126,8 @@
       "git_sha1": "55259ff24ebf33dd439b2d646f59771442602058"
     },
     "docs/README.md": {
-      "sha256": "28d03cd1a1d4adc6262d508cd4478b154664ac71e1b003755e9a4da4c909c0e5",
-      "git_sha1": "3468feff5b921f1a703cf58d4e192b0aa39639d2"
+      "sha256": "e6958277596a2bf5bced10f149cea19b272347d16d5c2122f463ce6429dc3864",
+      "git_sha1": "82261199282f6f3022835766830965f28cd0e88f"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -376,6 +376,10 @@
     "docs/testing/operations-automation.md": {
       "sha256": "f7944efeb06533856044ca22d61cf3406cb3d9432591885992a6a6ebe7d37509",
       "git_sha1": "24c1c1023d247debea649995f6f571fe5b0eccce"
+    },
+    "docs/testing/design-refresh.md": {
+      "sha256": "75a8bdf1d963694f96fdc537f45520c7320219438d058e90f931742def9d9b2f",
+      "git_sha1": "4663e10f40372406e7e8314917c472ee1eda3bd5"
     }
   }
 }

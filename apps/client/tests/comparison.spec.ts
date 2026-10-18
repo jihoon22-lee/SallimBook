@@ -50,6 +50,6 @@ for (const mode of ["available", "unconfirmed"] as const) test(`selected exclude
     await route.fulfill({ json: data });
   });
   for (const url of [`${path}&asset_id=${uid(11)}`, `/assets/${uid(11)}`, `/accounts/${uid(30)}`]) {
-    await page.goto(url); const warning = page.locator(".date-warning"); await expect(warning).toContainText("2025년 1월: 월말이 아닌 항목 0개 · 기준일 미입력 1개"); await expect(warning).toContainText("2025년 2월: 월말이 아닌 항목 1개 · 기준일 미입력 0개"); await expect(warning).not.toContainText("서로 다른 기준일이 섞여 있어요"); await expect(page.getByText("합계 제외", { exact: true }).first()).toBeVisible();
+    await page.goto(url); const warning = page.locator(".date-warning"); await expect(warning).toContainText("2025년 1월: 월말이 아닌 항목 0개 · 기준일 미입력 1개"); await expect(warning).toContainText("2025년 2월: 월말이 아닌 항목 1개 · 기준일 미입력 0개"); await expect(warning).not.toContainText("서로 다른 기준일이 섞여 있어요"); if (url.startsWith("/assets/compare")) await page.getByText("두 월 기록 비교", { exact: true }).first().click(); await expect(page.getByText("합계 제외", { exact: true }).first()).toBeVisible();
   }
 });
