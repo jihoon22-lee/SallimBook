@@ -22,6 +22,7 @@ import time
 import unicodedata
 import warnings
 import zlib
+from datetime import datetime
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_PIXELS = 16_000_000
@@ -491,6 +492,30 @@ _FILTERS = {
 }
 
 
+def _pdf_date(value: str) -> bool:
+    # ISO 32000-1:2008, 7.9.4 and Table 317: only /Info date fields have this type.
+    # https://opensource.adobe.com/dc-acrobat-sdk-docs/standards/pdfstandards/pdf/PDF32000_2008.pdf
+    match = re.fullmatch(
+        r"D:([0-9]{4}(?:[0-9]{2}){0,5})"
+        r"(?:Z|[+-]([0-9]{2})(?:'(?:([0-9]{2})'?)?)?)?",
+        value,
+    )
+    if match is None:
+        return False
+    digits, offset_hour, offset_minute = match.groups()
+    fields = [int(digits[:4])]
+    fields.extend(int(digits[index : index + 2]) for index in range(4, len(digits), 2))
+    defaults = [1, 1, 0, 0, 0]
+    fields.extend(defaults[len(fields) - 1 :])
+    try:
+        datetime(*fields)
+    except ValueError:
+        return False
+    return (offset_hour is None or int(offset_hour) <= 23) and (
+        offset_minute is None or int(offset_minute) <= 59
+    )
+
+
 def _pdf(data: bytes):
     from pypdf import apply_configuration
     from pypdf.errors import PyPdfError
@@ -561,28 +586,36 @@ def _read_pdf(data: bytes):
     if len(references) > MAX_OBJECTS or int(reader.trailer.get("/Size", 0)) > MAX_OBJECTS + 1:
         raise Rejected
     visited_refs = set()
+    traversed_refs = set()
     visited_objects = set()
     nodes = 0
     decompressed = 0
 
-    def visit(value, depth=0):
+    def visit(value, depth=0, *, context="ordinary", inventory=False):
         nonlocal nodes, decompressed
         nodes += 1
         if nodes > MAX_NODES or depth > MAX_DEPTH:
             raise Rejected
         if isinstance(value, IndirectObject):
-            identity = (value.generation, value.idnum)
+            reference = (value.generation, value.idnum)
+            # Sweep unreachable objects without retyping an already visited
+            # /Info date as an untyped standalone string.
+            if inventory and reference in traversed_refs:
+                return
+            identity = (*reference, context)
             if identity in visited_refs:
                 return
             visited_refs.add(identity)
+            traversed_refs.add(reference)
             if len(visited_refs) > MAX_OBJECTS:
                 raise Rejected
-            visit(value.get_object(), depth + 1)
+            visit(value.get_object(), depth + 1, context=context)
             return
         if isinstance(value, (DictionaryObject, ArrayObject)):
-            if id(value) in visited_objects:
+            identity = (id(value), context)
+            if identity in visited_objects:
                 return
-            visited_objects.add(id(value))
+            visited_objects.add(identity)
         if isinstance(value, DictionaryObject):
             if len(value) > MAX_OBJECTS or _ACTIVE_KEYS.intersection(value):
                 raise Rejected
@@ -607,7 +640,16 @@ def _read_pdf(data: bytes):
             for key, child in value.items():
                 if not isinstance(key, NameObject) or len(str(key)) > 256:
                     raise Rejected
-                visit(child, depth + 1)
+                child_context = "ordinary"
+                if value is reader.trailer and key == "/Info" and isinstance(child, IndirectObject):
+                    child_context = "info"
+                elif (
+                    context == "info"
+                    and not isinstance(value, StreamObject)
+                    and key in {"/CreationDate", "/ModDate"}
+                ):
+                    child_context = "date"
+                visit(child, depth + 1, context=child_context)
         elif isinstance(value, ArrayObject):
             if len(value) > MAX_OBJECTS:
                 raise Rejected
@@ -617,7 +659,10 @@ def _read_pdf(data: bytes):
             if str(value) in _ACTIVE_NAMES or len(str(value)) > 256:
                 raise Rejected
         elif isinstance(value, TextStringObject):
-            _card_text(str(value))
+            # The exception belongs to this typed edge, never a shared object.
+            # Aliases in titles, pages or orphan dictionaries are still scanned.
+            if context != "date" or not _pdf_date(str(value)):
+                _card_text(str(value))
         elif isinstance(value, ByteStringObject):
             if len(value) > MAX_STREAM:
                 raise Rejected
@@ -625,7 +670,7 @@ def _read_pdf(data: bytes):
 
     visit(reader.trailer)
     for generation, object_id in references:
-        visit(IndirectObject(object_id, generation, reader))
+        visit(IndirectObject(object_id, generation, reader), inventory=True)
     pages = reader.pages
     if not 1 <= len(pages) <= MAX_PAGES:
         raise Rejected
