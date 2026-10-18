@@ -83,3 +83,6 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 
 Android 클라우드의 빌드·부팅 제한과 후속 수정은 [실행 결과](testing/android-cloud-results.md),
 GitHub KVM 계측의 조건·정제 근거는 [Android CI](testing/android-ci.md)에 구분합니다.
+
+인증·보관함 복구·CVC의 신뢰 경계와 미검증 가정은
+[SB-009 위협모델 설계 리뷰](testing/threat-model-review.md)에 추적합니다.

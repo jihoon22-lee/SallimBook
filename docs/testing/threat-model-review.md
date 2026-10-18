@@ -16,7 +16,7 @@
 별도 내부 설계 검토다. 작성자는 이전 Android 보관함 구현에도 참여했으므로 전 구성요소의
 구현자로부터 독립된 외부 보안 감사로 표현하지 않는다. 서버·웹 소스의 교차 검토와 기존
 [서버 리뷰](vault-server.md), [웹 리뷰](vault-web.md), [네이티브 별도 리뷰와 수정](native-vault-lifecycle.md)의
-근거를 함께 사용한다. 문서의 최종 수용은 다른 검토자가 이 기준 커밋과 근거를 확인하는 절차다.
+근거를 함께 사용한다. 후속 통합 검토에서는 같은 기준 커밋의 서버 `get_recovery_wrapping`/`recover`의 membership·최근 인증, native `finish`의 동일 Cipher·일회 소비·`doFinal`, release CVC gate와 no-backup 저장, 웹 PBKDF2/HKDF 분리 및 export의 private 열 분류를 추가 대조했다. 이 근거로 SB-009의 설계 리뷰 범위를 수용하며 아래 미검증 가정과 출시 게이트는 유지한다. 이 교차 검토 역시 외부 전문 감사나 새 런타임 시험은 아니다.
 
 실제 키·사용자 자료·운영 DB·비공개 백업·기기에는 접근하지 않았다. Docker, ADB, 생체 인증,
 침투 시험, DB/브라우저/JVM 시험을 이번 리뷰에서 실행하지 않았다. 기존 실행 기록과 시험 코드의
