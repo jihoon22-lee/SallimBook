@@ -1,0 +1,55 @@
+[
+  {
+    "path": "debug/app-debug.apk",
+    "sha256": "6439b696b1947f90c5bcd2dbb41a5f24468cc3f2b28aa68aab9aaf52753f24fc",
+    "metadata": [
+      "package: name='io.github.jihoon22lee.sallimbook.debug' versionCode='1' versionName='0.1.0-dev' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+      "sdkVersion:'30'",
+      "targetSdkVersion:'36'"
+    ],
+    "signature_verified": true,
+    "public_certificate_sha256": [
+      "Signer #1 certificate SHA-256 digest: 1fc5785141acab984c17d0a27076fc200dbe6f14cf1d863ddc36e0f81e166e5b"
+    ]
+  },
+  {
+    "path": "androidTest/debug/app-debug-androidTest.apk",
+    "sha256": "815ac65a2eb074d7335e4a75721f3c2d5b5cadba694f9555b1078ce1f398e8e8",
+    "metadata": [
+      "package: name='io.github.jihoon22lee.sallimbook.debug.test' versionCode='' versionName='' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+      "sdkVersion:'30'",
+      "targetSdkVersion:'36'"
+    ],
+    "signature_verified": true,
+    "public_certificate_sha256": [
+      "Signer #1 certificate SHA-256 digest: 1fc5785141acab984c17d0a27076fc200dbe6f14cf1d863ddc36e0f81e166e5b"
+    ]
+  },
+  {
+    "path": "release/app-release-unsigned.apk",
+    "sha256": "ea9b8b690640d6e63c5184285bb5bf9a40c03ca1447c690534f16c20e163e656",
+    "metadata": [
+      "package: name='io.github.jihoon22lee.sallimbook' versionCode='1' versionName='0.1.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+      "sdkVersion:'30'",
+      "targetSdkVersion:'36'"
+    ],
+    "signature_verified": false,
+    "public_certificate_sha256": [],
+    "isolation": {
+      "status": "PASS",
+      "entries_scanned": 517,
+      "dex_files": [
+        "classes.dex",
+        "classes2.dex"
+      ],
+      "markers": [
+        "sallimbook_cloud_",
+        "AndroidCloudOnboardingTest",
+        "CvcAcceptanceActivity",
+        "SecurityProofActivity",
+        "debugproof/"
+      ],
+      "matches": []
+    }
+  }
+]

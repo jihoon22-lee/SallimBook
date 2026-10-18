@@ -1,0 +1,80 @@
+[
+  {
+    "class": "AndroidCloudOnboardingTest",
+    "method": "firstStartCancelInvalidInputThenRealSessionAndHome",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "normalStoreCannotActivateLocalCvc",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "syntheticStoreStartsClosedWithoutActivityOwner",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "activeOwnerAllowsOnlyExactSyntheticBindingAndNamespace",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "endingOwnerImmediatelyClosesSyntheticGate",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "debugProofOwnerRemainsUsableWhileProductionAppIsLocked",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "clearingOneSyntheticNamespacePreservesAnother",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "NativeVaultCvcAcceptanceTest",
+    "method": "namespaceCannotEscapeNoBackupDirectory",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "SecureBridgeWebViewTest",
+    "method": "initialNavigationWaitsForBridgeConstruction",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "SecureBridgeWebViewTest",
+    "method": "listenerFailureFallbackCannotLoadAPageOrEnableAuth",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "SecureBridgeWebViewTest",
+    "method": "fallbackAfterQueuedNavigationStillFailsClosed",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  },
+  {
+    "class": "SecureBridgeWebViewTest",
+    "method": "initialNavigationCannotEscapeTheBundledOrigin",
+    "status": "BLOCKED_ENV",
+    "reason": "API 36 and API 30 did not complete boot within the 600-second deadline; no instrumentation executed"
+  }
+]
