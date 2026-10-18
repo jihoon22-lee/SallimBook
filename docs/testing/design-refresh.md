@@ -25,6 +25,8 @@ Pretendard Variable v1.3.9 원본 WOFF2와 OFL을 앱에 포함했다. 출처·�
 | 변경 UI 테스트와 HTTPS integration spec 명시적 TypeScript 검사 | 통과 |
 | 변경 문서의 로컬 링크 검사 | 3개 통과 |
 | `git diff --check` | 통과 |
+| 통합 단계 실제 HTTPS `--onboarding`, `--finance`, `--homecare`, `--insurance` | 모두 통과, 실제 API/PostgreSQL 사용 |
+| 통합 단계 `pnpm test:docs` | 문서 70개·링크 336개·68 tests 통과 |
 
 위 브라우저 수치는 단계별 재검증을 포함하므로 서로 더한 값을 서로 다른 테스트 수로 해석하지 않는다. 모든 fixture는 합성 데이터다. 브라우저 범위는 인증·가계 시작·native adapter·앱 잠금·자산·계좌·카드·월 비교·고정비·보험·가전/재고·첨부·26개 직접 경로를 포함한다.
 
@@ -46,7 +48,9 @@ Chromium의 실제 렌더 글꼴 조회에서 `Pretendard Variable`, `isCustomFo
 
 ## 한계
 
-이번 변경에서 실제 HTTPS API·PostgreSQL 통합 및 Android 실기기 시험은 다시 실행하지 않았다. HTTPS fixture의 타입 검사와 mock 브라우저 시험을 실제 서버 검증으로 간주하지 않는다. Android WebView·키보드·TalkBack·생체 인증 실패·보관함 복호화는 기존 실기기 게이트에서 별도로 확인해야 한다. 문서 manifest의 통합 갱신은 최종 PR에서 수행한다.
+통합 단계에서 첫 시작·배우자 연결, 금융 자산·재인증, 가전/소모품, 보험의 실제 HTTPS API·PostgreSQL 흐름을 재실행해 통과했다. 모두 합성 계정과 일회용 schema를 사용했으며 HTTP route mock을 사용하지 않았다. 금융 시험은 가상 인증기의 실제 WebAuthn 서명도 확인했다. 시험 schema·서버를 정리하고 전용 시험 DB를 중지했다.
+
+Android 실기기 시험은 다시 실행하지 않았다. Android WebView·키보드·TalkBack·생체 인증 실패·보관함 복호화는 기존 실기기 게이트에서 별도로 확인해야 한다. 문서 manifest는 통합 단계에서 갱신·검증했다.
 
 ## 재현 명령
 
