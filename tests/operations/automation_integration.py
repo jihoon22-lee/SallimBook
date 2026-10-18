@@ -165,7 +165,7 @@ def run_check(image, app_source, age_keygen, output):
             "import os;from pathlib import Path;"
             "roots=[Path('/fixture/credentials'),Path('/fixture/runtime'),"
             "Path('/fixture/backups/sallimbook-staging'),Path('/fixture/restores/sallimbook-staging')];"
-            "[(os.chown(p,10001,10001),os.chmod(p,0o700 if p.is_dir() else 0o600)) "
+            "[os.chown(p,10001,10001) "
             "for root in roots for p in [*root.rglob('*'),root]]"
         )
         operator.docker(
