@@ -11,7 +11,7 @@ from ops.deploy import TAILSCALE, write_config
 
 
 def command(args):
-    result = subprocess.run(args, capture_output=True, text=True, timeout=120)
+    result = subprocess.run(args, check=False, capture_output=True, text=True, timeout=120)
     if result.returncode:
         raise RuntimeError("Isolated deployment validation failed")
     return result.stdout

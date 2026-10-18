@@ -71,3 +71,6 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 
 남은 운영·보안·출시 작업의 순서는 [v1 잔여 실행 계획](v1-completion-plan.md)에 있습니다.
 새 클라우드 세션에는 [Android 테스트 전달문](testing/android-cloud-handoff.md)을 전달합니다.
+
+실제 암호화 백업의 격리 복원 결과와 미완료 운영 조건은
+[운영 백업·복원 기록](testing/operating-backup-restore.md)에 구분합니다.
