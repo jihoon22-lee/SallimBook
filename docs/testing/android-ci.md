@@ -166,6 +166,7 @@ actionlint .github/workflows/android-instrumentation.yml
 | [39096333533](https://github.com/jihoon22-lee/SallimBook/actions/runs/39096333533) | `a7b56fb89154c120d13f670f33a750a3ec411351` | 11 PASS / 1 SKIPPED | 1 FAIL, `CANCEL_FORM` | FAIL |
 | [39096963060](https://github.com/jihoon22-lee/SallimBook/actions/runs/39096963060) | `d4ed676d63829500013b3d80a0047ff9b3a4198f` | 11 PASS / 1 SKIPPED | 1 FAIL, `CANCEL_SCROLL` | FAIL |
 | [39097997409](https://github.com/jihoon22-lee/SallimBook/actions/runs/39097997409) | `5f555bd067f96f2205d801eaff348a155fafadf8` | 11 PASS / 1 SKIPPED | 1 FAIL, `SESSION_AND_MAIN` / `ASSERTION` | FAIL |
+| [39099073948](https://github.com/jihoon22-lee/SallimBook/actions/runs/39099073948) | `95aa9c7dd3c771aa36dbbe9bd726d74a7fb37357` | 11 PASS / 1 SKIPPED | 1 FAIL, `SESSION_CREATED` / `INPUT_INVALID` | FAIL |
 
 두 checkout SHA는 GitHub가 만든 PR merge ref이며 각각 PR head `3ca1bd3`, `39adb28`에 해당한다.
 두 실행 모두 KVM 가속, API 36/x86_64 부팅, AVD/ADB 종료와 합성 DB·포트 정리를 확인했다.
@@ -230,3 +231,34 @@ KVM·부팅·정리는 통과했지만 release 검사는 앞선 실패 때문에
 상태 분류는 EditText를 제외하며 입력과 닮은 문자열도 상태로 수집하지 않는다.
 정제 도구·workflow 이중 정제와 부정 사례, Kotlin 계측 컴파일이 통과했다.
 제품 코드·기기 인증 조건·보안 가드는 변경하지 않았고, 가입 성공은 새 원격 결과로 판정한다.
+
+
+다섯 번째 실행(PR head `c4bccb7`)은 마지막 스크롤 이후의 입력 보존·정책·owner 준비 검사를
+모두 통과했으나 `SESSION_CREATED`에서 실패했다. flow `000`, 공개 상태 `INPUT_INVALID`이며
+세션 생성·잠금 해제·main 복귀가 확인되지 않았다. 이 상태는 앞선 빈 입력 시험의 문구가 남았을
+가능성도 있어, API가 유효한 등록 요청을 거절했다는 뜻으로 해석하지 않는다.
+[요약](evidence/android-kvm-20261018/run-39099073948/summary.json),
+[SDK](evidence/android-kvm-20261018/run-39099073948/sdk.json),
+[기존 XML](evidence/android-kvm-20261018/run-39099073948/existing.xml),
+[가입 XML](evidence/android-kvm-20261018/run-39099073948/onboarding.xml)을 보존했다.
+KVM·부팅·정리는 성공했고 release 격리 검사는 앞선 실패 때문에 실행되지 않았다.
+
+
+후속 helper는 IME를 닫은 뒤와 각 실제 swipe 이후에 프레임별 scroll 위치·대상/viewport/window
+영역·focus·layout·IME 상태를 관찰한다. 연속 1초 동안 상태가 같고 뒤따르는 프레임도 안정적이어야
+다음 입력/탭으로 진행하며 대기는 10초로 제한한다. 화면 밖의 대상도 먼저 정지 여부를 확인한 뒤
+실제 swipe로 가져오고, 최종 90% 표시 기준은 유지한다. 좌표나 입력은 진단에 출력하지 않는다.
+
+이 보완의 근거는 Android 16의 [ScrollView 구현](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/widget/ScrollView.java)이다.
+fling 또는 edge effect 중 첫 `ACTION_DOWN`을 부모가 가로채면 버튼 탭이 스크롤 정지로 소비될 수 있다.
+[EdgeEffect 구현](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/widget/EdgeEffect.java)은 glow와 stretch가
+다른 종료 방식을 사용한다. 1초를 모든 기기의 효과 종료 보장 시간으로 주장하지 않으며,
+앞선 실패의 원인이 이 동작이었다고 확정하지 않는다. 실제 요청의 재제출이나 listener 직접 호출은 없다.
+
+최종 탭에는 시험용 listener로 고정 5비트와 공개 status enum만 추가 관찰한다. 비트 순서는 표시 이름
+보존/비밀번호 비움/확인 비밀번호 비움/status 갱신/window focus 상실이며 `tap_status`는 탭 반환 직후
+관찰한 공개 상태다. 같은 문구를 다시 설정해도 갱신으로 기록한다. 정상 화면 전환도 focus를 잃으므로
+focus 비트만으로 실패를 단정하지 않는다. listener는 관찰 직후 제거하고 입력 내용은 출력하지 않는다.
+진단은 stage 36개/reason 14개/status 20개 및 고정 비트만 허용하며, 새 tap 비트와 tap_status는 함께 있어야
+보존한다. 두 차례 정제 이후에도 같은 규칙을 적용하고, 잘못된 비트·부분 필드·동적 문자열은 제거한다.
+기존 세션 생성/잠금 해제/main 복귀의 총 30초 기한, 최종 동시 상태와 실제 API 홈 검증을 유지한다.
