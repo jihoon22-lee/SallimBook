@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
 
 const routes = [
   ["/login", "로그인"], ["/onboarding", "공동 가계 시작"],
-  ["/", "함께 살피는 오늘의 살림"], ["/assets", "자산과 부채"],
+  ["/", "오늘의 살림"], ["/assets", "자산과 부채"],
   ["/assets/synthetic-asset", "자산 상세"], ["/assets/months/2026-10", "월별 자산 확인"],
   ["/assets/compare", "월간 자산 비교"], ["/accounts", "계좌 관리"],
   ["/accounts/synthetic-account", "계좌 상세"], ["/income", "월간 수입"],
@@ -50,7 +50,7 @@ test("navigation exposes five mobile tabs or the expanded desktop sidebar", asyn
   await expect(nav).toBeVisible();
   if (testInfo.project.name === "android-size") {
     await expect(desktop).toBeHidden();
-    await expect(mobile.getByRole("link")).toHaveText(["⌂홈", "▥자산", "↔생활비", "♡보험", "···더보기"]);
+    await expect(mobile.getByRole("link")).toHaveText(["홈", "자산", "생활비", "보험", "더보기"]);
     for (const link of await mobile.getByRole("link").all()) {
       const bounds = await link.boundingBox();
       expect(bounds!.height).toBeGreaterThanOrEqual(48);

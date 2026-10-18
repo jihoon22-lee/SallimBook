@@ -14,7 +14,7 @@ async function fillRegistration(page: Page, code?: string, mismatch = false) {
 }
 async function expectHomeAndOpenAccount(page: Page) {
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { level: 1, name: "함께 살피는 오늘의 살림" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "오늘의 살림" })).toBeVisible();
   await expect(page.getByRole("link", { name: "우리 가계 시작하기", exact: true })).toHaveCount(0);
   await page.locator(".topbar-link").click();
   await page.getByRole("main").getByRole("link", { name: /^계정과 기기/ }).click();
@@ -35,7 +35,7 @@ test("empty household home starts entirely in browser with no operator token or 
   await page.getByRole("button", { name: "가계 만들고 시작하기", exact: true }).click();
   await expectHomeAndOpenAccount(page);
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
-  await expect(page.getByText("합성 새 이름", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("합성 새 이름", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "배우자 연결 코드 만들기", exact: true })).toBeVisible();
   expect(state.validSetup).toBe(true); expect(state.setupWrites).toBe(1); expect(state.loginWrites).toBe(0);
   await expect(page.locator("input[type=password]")).toHaveCount(0);

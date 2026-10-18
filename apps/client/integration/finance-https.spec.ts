@@ -22,7 +22,7 @@ for (const viewport of [{ name: "desktop", width: 1280, height: 900 }, { name: "
   page.on("response", (response) => { if (response.url().endsWith("/reveal") && response.status() === 200) revealNoStore = response.headers()["cache-control"]?.includes("no-store") ?? false; });
   try {
     await page.goto("/login"); await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login); await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
-    await page.getByLabel("이 기기 이름", { exact: true }).fill(`합성 금융 ${viewport.name}`); await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await page.getByText("기기 이름 변경", { exact: true }).click(); await page.getByLabel("이 기기 이름", { exact: true }).fill(`합성 금융 ${viewport.name}`); await page.getByRole("button", { name: "로그인", exact: true }).click();
     await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
     await page.getByLabel("패스키 이름", { exact: true }).fill(`합성 금융 확인 ${viewport.name}`); await page.getByRole("button", { name: "패스키 등록", exact: true }).click();
     await expect(page.getByRole("heading", { name: `합성 금융 확인 ${viewport.name}`, exact: true })).toBeVisible(); console.log("SAFE_PHASE=FINANCE_LOGIN");

@@ -23,7 +23,6 @@ export function ComparisonStatus({ data }: { data: Comparison }) {
 }
 export function ComparisonNumbers({ data }: { data: Comparison }) {
   const current = data.current.totals; const previous = data.previous?.totals;
-  const percentReason = data.change_percent_unavailable_reason === "zero_previous_total" ? "이전 순자산이 0원이어서 증감률을 계산하지 않아요." : data.change_percent_unavailable_reason === "negative_previous_total" ? "이전 순자산이 음수여서 증감률을 계산하지 않아요. 원 단위 변화를 확인해 주세요." : "두 월의 확정 기록이 필요해요.";
   return <><dl className="metadata-grid comparison-numbers">
     <div><dt>확인 월 순자산</dt><dd>{!current ? "월 기록 없음" : current.net_assets_krw === null ? "금액 확인 필요" : formatKrw(current.net_assets_krw)}</dd></div>
     <div><dt>이전 비교월 순자산</dt><dd>{!previous ? "월 기록 없음" : previous.net_assets_krw === null ? "금액 확인 필요" : formatKrw(previous.net_assets_krw)}</dd></div>
@@ -31,6 +30,11 @@ export function ComparisonNumbers({ data }: { data: Comparison }) {
     <div><dt>동일 범위 변화</dt><dd>{data.common_scope_delta_krw === null ? "비교할 수 없음" : signedKrw(data.common_scope_delta_krw)}</dd></div>
     <div><dt>순자산 증감률</dt><dd>{percentLabel(data.change_percent)}</dd></div>
   </dl>
+  <ComparisonNotes data={data} /></>;
+}
+export function ComparisonNotes({ data }: { data: Comparison }) {
+  const percentReason = data.change_percent_unavailable_reason === "zero_previous_total" ? "이전 순자산이 0원이어서 증감률을 계산하지 않아요." : data.change_percent_unavailable_reason === "negative_previous_total" ? "이전 순자산이 음수여서 증감률을 계산하지 않아요. 원 단위 변화를 확인해 주세요." : "두 월의 확정 기록이 필요해요.";
+  return <>
   {data.change_percent === null && <p className="muted">{percentReason}</p>}
   {data.state === "unconfirmed" && <p className="muted">위에 보이는 월 금액은 현재 작성본의 참고 합계예요. 미확인 금액을 포함할 수 있어요.</p>}
   <p className="muted">동일 범위는 양쪽 월에 포함되고 가계 지분이 같은 항목이에요. 자산 변화는 수입·지출을 모두 반영한 저축액이나 투자 수익률이 아니에요.</p></>;

@@ -6,7 +6,7 @@ type S = components["schemas"];
 const fixture = JSON.parse(readFileSync(process.env.SALLIMBOOK_HTTPS_FIXTURE!, "utf8")) as { login: string; password: string; control: string; foreign_login: string; foreign_password: string };
 test.setTimeout(180_000); test.use({ actionTimeout: 15_000, navigationTimeout: 20_000 });
 async function login(page: Page, foreign = false) {
-  await page.goto("/login"); await page.getByLabel("로그인 이름", { exact: true }).fill(foreign ? fixture.foreign_login : fixture.login); await page.getByLabel("비밀번호", { exact: true }).fill(foreign ? fixture.foreign_password : fixture.password); await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 감사 HTTPS"); await page.getByRole("button", { name: "로그인", exact: true }).click(); await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
+  await page.goto("/login"); await page.getByLabel("로그인 이름", { exact: true }).fill(foreign ? fixture.foreign_login : fixture.login); await page.getByLabel("비밀번호", { exact: true }).fill(foreign ? fixture.foreign_password : fixture.password); await page.getByText("기기 이름 변경", { exact: true }).click(); await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 감사 HTTPS"); await page.getByRole("button", { name: "로그인", exact: true }).click(); await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
 }
 async function read<T>(page: Page, path: string): Promise<T> { return page.evaluate(async (path) => { const response = await fetch(path, { cache: "no-store" }); if (!response.ok) throw new Error("Synthetic metadata read failed"); return response.json(); }, path); }
 async function seed(page: Page, count: number, foreign = false) {

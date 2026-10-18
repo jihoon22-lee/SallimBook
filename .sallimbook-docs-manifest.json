@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "056080fa2c38af01c13128a0ff06db5a78b8929a996340fc89f06bc1f8164c54",
-      "git_sha1": "bbdf27c7f2833f9fdb91384445759e54bb360289"
+      "sha256": "22fa1009784494b156f9bbea6b9cee60f138f107ff4f63f0016ff6ba12e68569",
+      "git_sha1": "1641a3946277172f2f3deadbd41a9f53a48cc1ba"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -106,8 +106,8 @@
       "git_sha1": "ef012269cc1891ba65bc869badbf5efed032294b"
     },
     "docs/design-system.md": {
-      "sha256": "cfa2f6a0477fb0413aa8edb857cdee878cf8a329db86fe81f95d71501befce02",
-      "git_sha1": "779da675bad565b1f030d34bb6b67195c418b6f1"
+      "sha256": "b406de5ae6e6bd77ffc505e14f2716cbcc73109e59b051b116505d5ab10d891c",
+      "git_sha1": "1d8228187a9d8ed633573e10ac50efaa6a360a04"
     },
     "docs/future-integrations.md": {
       "sha256": "9efb2233e7edebb057fe8c4ba6e557c86ba34d8085eb43998ac471f9adbf9689",
@@ -118,16 +118,16 @@
       "git_sha1": "8d85b0041b74f1df30d634b0e550a5003979f692"
     },
     "docs/requirements-traceability.md": {
-      "sha256": "c238a5ecd53aeb41a1e4de28c8a442c3a27764f231323ea096ccfa6f98a82213",
-      "git_sha1": "6e06a8ab6e2232ae59a3b0f2d20711a4671b2fd2"
+      "sha256": "fb5ca549808352cd164f6690dab0f6464be0f42c1bf98c611650486cbc8dccbf",
+      "git_sha1": "ca0447d8291be935300d544b0a8670a06b1c8c0f"
     },
     "docs/native-bridge-contract.md": {
       "sha256": "b277cf8616d743aa73baefdb76cfedf586f3072ff26e43a3d5b3241a890cbede",
       "git_sha1": "55259ff24ebf33dd439b2d646f59771442602058"
     },
     "docs/README.md": {
-      "sha256": "0a6764a8af8eb54a2ca4794b662abb8f03cad14adc6b6b9d006f3f82086768f1",
-      "git_sha1": "6eb07e185eee1e8f472221895c4f070287790518"
+      "sha256": "e6958277596a2bf5bced10f149cea19b272347d16d5c2122f463ce6429dc3864",
+      "git_sha1": "82261199282f6f3022835766830965f28cd0e88f"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -274,8 +274,8 @@
       "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
     },
     "docs/operations-runbook.md": {
-      "sha256": "bf95053a99d9322b4f84ae97609e8bf7743436a208748c13ac4f8f8aeb50c135",
-      "git_sha1": "3059b01544e4d8f80abd48c47381ff67974b24cc"
+      "sha256": "9b3795492bc15320a525d19c2a3347612894bf9188324109b1b87f1cd2e20dc5",
+      "git_sha1": "11eef04e6e4cb70fcb4bdf558f9d6d5c71ee2339"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
@@ -362,12 +362,24 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "5f9678ba1f5b9f53498ee7c3795f9bd05e80a02e83985a297969e910ea24c224",
-      "git_sha1": "75c0f606bca14ce28200fe0f90c5920415094313"
+      "sha256": "cc9af50454967c55a9869efe8e7f80cb69ad9f92d6279dcf9b8bdec570019d01",
+      "git_sha1": "c82875b06c7c8e5d1eb76277242abb6cbd10e65d"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
       "git_sha1": "27dd4e0485a6233c9f07ee402a67a20d9201b8f8"
+    },
+    "docs/testing/backup-retention.md": {
+      "sha256": "b6afe232ec5eaf28e318850df11c00232afa3dd69b50676f74e31d7cd21db3f1",
+      "git_sha1": "10b7d5a3395629224b144f837cfb318b43f0b388"
+    },
+    "docs/testing/operations-automation.md": {
+      "sha256": "f7944efeb06533856044ca22d61cf3406cb3d9432591885992a6a6ebe7d37509",
+      "git_sha1": "24c1c1023d247debea649995f6f571fe5b0eccce"
+    },
+    "docs/testing/design-refresh.md": {
+      "sha256": "75a8bdf1d963694f96fdc537f45520c7320219438d058e90f931742def9d9b2f",
+      "git_sha1": "4663e10f40372406e7e8314917c472ee1eda3bd5"
     }
   }
 }

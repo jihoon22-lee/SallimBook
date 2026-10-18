@@ -24,7 +24,7 @@ async function fillRegistration(page: Page, name: string, code?: string) {
 }
 async function home(page: Page) {
   await expect(page).toHaveURL(`${process.env.SALLIMBOOK_HTTPS_ORIGIN}/`);
-  await expect(page.getByRole("heading", { level: 1, name: "함께 살피는 오늘의 살림", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "우리 가계 시작하기", exact: true })).toHaveCount(0);
 }
 async function noPersistence(page: Page) {

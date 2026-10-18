@@ -22,11 +22,11 @@ for (const mode of ["setup", "connect"] as const) {
       expect(state.authenticated).toBe(false);
     } else {
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.getByRole("heading", { level: 1, name: "함께 살피는 오늘의 살림" })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "오늘의 살림" })).toBeVisible();
       await expect(page.getByRole("link", { name: "우리 가계 시작하기", exact: true })).toHaveCount(0);
       await page.locator(".topbar-link").click();
       await page.getByRole("main").getByRole("link", { name: /^계정과 기기/ }).click();
-      await expect(page.getByText("합성 앱 새 계정", { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText("합성 앱 새 계정", { exact: true })).toBeVisible();
       expect(state.calls.some((call) => call.method === "request" && call.args.path === "/api/v1/me")).toBe(true);
       await expect(page.getByRole("button", { name: "배우자 연결 코드 만들기", exact: true })).toHaveCount(mode === "setup" ? 1 : 0);
     }
@@ -92,7 +92,7 @@ for (const mode of ["setup", "connect"] as const) test(`native ${mode} unlock ev
   const restores = state.calls.filter((call) => call.method === "getSession").length;
   await button.click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { level: 1, name: "함께 살피는 오늘의 살림" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "오늘의 살림" })).toBeVisible();
   expect(state.calls.filter((call) => call.method === "getSession")).toHaveLength(restores);
   expect(state.calls.some((call) => call.method === "request" && call.args.path === "/api/v1/me")).toBe(true);
   await noSecrets(page, state);
@@ -103,7 +103,7 @@ test("native lock invalidates a late registration result instead of exposing the
   await page.goto("/onboarding");
   await page.getByRole("button", { name: "앱에서 가계 시작하기", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("앱이 잠겨 있어요");
-  await expect(page.getByRole("heading", { name: "함께 살피는 오늘의 살림", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "오늘의 살림", exact: true })).toHaveCount(0);
   expect(state.calls.some((call) => call.method === "request" && call.args.path === "/api/v1/me")).toBe(false);
   await noSecrets(page, state);
 });
@@ -114,11 +114,11 @@ test("native curtain enrollment restores the verified session on unlock without 
   await expect(page.getByRole("status")).toContainText("앱이 잠겨 있어요");
   state.authenticated = true; state.available = false;
   await state.emitLock(false);
-  await expect(page.getByRole("heading", { level: 1, name: "함께 살피는 오늘의 살림" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "오늘의 살림" })).toBeVisible();
   await expect(page.getByRole("link", { name: "우리 가계 시작하기", exact: true })).toHaveCount(0);
   await page.locator(".topbar-link").click();
   await page.getByRole("main").getByRole("link", { name: /^계정과 기기/ }).click();
-  await expect(page.getByText("합성 앱 새 계정", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("합성 앱 새 계정", { exact: true })).toBeVisible();
   expect(state.calls.some((call) => call.method === "request" && call.args.path === "/api/v1/me")).toBe(true);
   expect(state.calls.some((call) => call.method === "createHousehold" || call.method === "connectHousehold")).toBe(false);
   await noSecrets(page, state);
