@@ -396,6 +396,89 @@ class BackupTests(unittest.TestCase):
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_preflight_requires_sdk_for_existing_apk_and_refuses_unsafe_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            downloads = directory / "downloads"
+            downloads.mkdir()
+            apk = downloads / "SallimBook.apk"
+            self.assertEqual(
+                preflight.verify_download_apk(directory, config(), None), {"status": "not-present"}
+            )
+            self.make_apk(apk)
+            apk.chmod(0o644)
+            with patch.object(preflight, "inspect_apk") as inspect:
+                with self.assertRaisesRegex(backup.OperationError, "--sdk"):
+                    preflight.verify_download_apk(directory, config(), None)
+                apk.chmod(0o666)
+                with self.assertRaises(backup.OperationError):
+                    preflight.verify_download_apk(directory, config(), directory)
+                apk.unlink()
+                apk.symlink_to(directory / "missing.apk")
+                with self.assertRaises(backup.OperationError):
+                    preflight.verify_download_apk(directory, config(), directory)
+                inspect.assert_not_called()
+
+    def test_preflight_rejects_changed_bytes_and_unverified_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "downloads").mkdir()
+            apk = directory / "downloads/SallimBook.apk"
+            self.make_apk(apk)
+            apk.chmod(0o644)
+            expected = backup.digest(apk)
+            for result in (
+                {"signed": False, "sha256": expected},
+                {"signed": True, "sha256": "0" * 64},
+            ):
+                with patch.object(preflight, "inspect_apk", return_value=result):
+                    with self.assertRaises(backup.OperationError):
+                        preflight.verify_download_apk(directory, config(), directory)
+
+            def changed_file(*args, **kwargs):
+                apk.write_bytes(b"different unverified APK")
+                return {"signed": True, "sha256": expected}
+
+            with patch.object(preflight, "inspect_apk", side_effect=changed_file):
+                with self.assertRaisesRegex(backup.OperationError, "changed"):
+                    preflight.verify_download_apk(directory, config(), directory)
+
+    def test_preflight_checks_actual_apk_instead_of_trusting_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "downloads").mkdir()
+            apk = directory / "downloads/SallimBook.apk"
+            self.make_apk(apk)
+            apk.chmod(0o644)
+            apk.with_suffix(".receipt.json").write_text(json.dumps({"signed": True}))
+            with (
+                patch.object(release, "tools", return_value={
+                    key: key for key in ("apksigner", "zipalign", "apkanalyzer")
+                }),
+                patch.object(release, "run", side_effect=self.tool_output),
+            ):
+                verified = preflight.verify_download_apk(directory, config(), directory)
+                self.assertEqual(verified["status"], "verified")
+                self.assertTrue(verified["signed"])
+                self.assertEqual(verified["sha256"], backup.digest(apk))
+
+                def wrong_certificate(command, **kwargs):
+                    if command[1] == "verify":
+                        return "Signer #1 certificate SHA-256 digest: " + "cd" * 32
+                    return self.tool_output(command, **kwargs)
+
+                with patch.object(release, "run", side_effect=wrong_certificate):
+                    with self.assertRaisesRegex(backup.OperationError, "certificate mismatch"):
+                        preflight.verify_download_apk(directory, config(), directory)
+                with self.assertRaises(backup.OperationError):
+                    preflight.verify_download_apk(
+                        directory, {**config(), "version_code": 3}, directory
+                    )
+                # The sidecar still claims success, but the current APK is invalid.
+                apk.write_bytes(b"not an APK")
+                with self.assertRaises(zipfile.BadZipFile):
+                    preflight.verify_download_apk(directory, config(), directory)
+
     def test_source_snapshot_excludes_ignored_private_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"

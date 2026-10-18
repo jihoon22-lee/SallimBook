@@ -10,7 +10,7 @@
 |---|---|---|
 | `python3 -m ops.deploy MANIFEST NEW_DIRECTORY` | 공개 배포 manifest를 검사하고 Compose/Caddy/Serve/Digital Asset Links/Android 설정 생성 | 컨테이너 시작, 노드 등록, 키 생성 |
 | `python3 -m ops.build_context NEW_DIRECTORY --commit SHA` | 깨끗한 commit의 최소 이미지 빌드 입력 생성, frozen 의존성 및 웹 빌드 | 이미지 게시, 운영 배포 |
-| `uv run --project services/api python -m ops.preflight CONFIG_DIRECTORY` | 생성 설정·전용 DB 접속 대상/비밀번호 일치·파일 소유권·로컬 이미지 확인 | 서비스 시작, 노드 등록 |
+| `uv run --project services/api python -m ops.preflight CONFIG_DIRECTORY` | 생성 설정·전용 DB·파일 소유권·이미지 확인, APK가 있으면 --sdk로 실제 서명/ID/버전 검사 | 서비스 시작, 노드 등록 |
 | `… -m ops.database provision …` / `verify-runtime` | 전용 migration/admin 역할과 제한된 API 역할 분리·권한 확인 | 업무 스키마 변경, 기존 역할 비밀번호 덮어쓰기 |
 | `uv run --project services/api python -m ops.backup create …` | 일관된 DB/첨부 스냅샷을 age로 암호화하고 완료 receipt 생성 | 서버 암호화키·서명키·Tailscale 상태·CVC 포함 |
 | `… -m ops.backup restore …` | 빈 전용 `*_restorecheck` DB와 새 디렉터리로 복원 | 기존 DB 덮어쓰기, API 시작, 운영 승격 |
@@ -219,7 +219,14 @@ python3 -m ops.release \
 
 깨끗한 source commit, JDK 21, 고정 SDK/build-tools 36.0.0을 요구한다. `ops/release.init.gradle`은 이 실행에만 versionCode/versionName과 debuggable=false를 적용한다. 이전 배포 versionCode보다 커야 하며 이전 APK의 실제 앱 ID·버전·서명 인증서도 확인한다. 최초 배포만 `--previous-version 0`과 previous-apk 생략이 가능하다. 검사 항목은 release 앱 ID, manifest backup/cleartext/debug 설정, bundled WebView URL/allowNavigation/mixed-content 부재, native 공개 설정 값, debug proof class 부재, zipalign, apksigner 서명과 인증서 지문이다.
 
-검증된 최종 signed release APK만 생성 설정의 `downloads/SallimBook.apk`에 운영자가 0644로 복사한다. 이 디렉터리는 사설 Caddy에만 읽기 전용으로 mount하며 다른 파일·디렉터리·trailing-slash 경로는 404다. 다운로드 주소는 `https://FQDN:8443/downloads/SallimBook.apk`이고 허용된 tailnet 기기만 접근한다. APK는 첨부 다운로드 형식과 no-store 응답으로 제공하며, 공개 443에는 mount나 경로를 추가하지 않는다. 서명키·비밀번호 파일·debug/unsigned APK를 이 디렉터리에 넣지 않는다.
+검증된 최종 signed release APK만 생성 설정의 `downloads/SallimBook.apk`에 운영자가 0644로 복사한다. 이 디렉터리는 사설 Caddy에만 읽기 전용으로 mount하며 다른 파일·디렉터리·trailing-slash 경로는 404다. 다운로드 주소는 `https://FQDN:8443/downloads/SallimBook.apk`이고 허용된 tailnet 기기만 접근한다. APK는 첨부 다운로드 형식과 no-store 응답으로 제공하며, 공개 443에는 mount나 경로를 추가하지 않는다. 서명키·비밀번호 파일·debug/unsigned APK를 이 디렉터리에 넣지 않는다. 다운로드용 APK를 배치한 뒤 웹을 시작하거나 해당 다운로드 디렉터리로 전환하기 전에 아래 preflight를 통과해야 한다. APK가 존재하는데 --sdk가 없으면 실패한다. SDK의 apkanalyzer/apksigner/zipalign으로 manifest의 앱 ID·인증서·버전·debug/backup/원격 WebView 설정을 실제 파일과 대조하고 검사 전후 SHA-256 및 파일 식별자가 같은지 확인한다. 이웃 receipt의 signed=true나 이전 checksum만으로 통과하지 않는다.
+
+```bash
+JAVA_HOME=/SELECTED_JDK_21 uv run --project services/api python -m ops.preflight \
+  /PRIVATE_CONFIG/RENDERED_DIRECTORY --sdk /DEDICATED_ANDROID_SDK
+```
+
+APK가 없으면 결과는 not-present이며 다운로드를 승인한 것이 아니다. 설정을 새 디렉터리에 다시 생성할 때 기존 검증된 APK를 잃거나 미검증 파일로 바꾸지 않는다. 신뢰한 원본 APK를 새 downloads 디렉터리에 복사하고 새 manifest로 재검증한 뒤 전환한다. 검사는 해당 시점의 파일에 대한 것이므로 이후 APK를 바꾸면 다시 실행한다. 이 운영 도구 보완은 기존 d9eb6e2 이미지·앱 payload·서명을 바꾸거나 이미지/앱 재빌드를 요구하지 않는다.
 
 서명 검사와 실제 업데이트는 별개다. S25 Ultra/S24 Ultra에서 이전 **같은 인증서의 release APK** 위에 새 APK를 설치하여 DB·로그인·Keystore·보관함/로컬 CVC 동작을 확인한다. 다른 인증서/낮은 versionCode 설치 거부도 확인한다. debug APK를 정식 배포하거나 일반 빌드 artifact에 signing material을 넣지 않는다. private 배포 경로에 대한 인증은 APK 밖에 두며 GitHub token을 앱에 내장하지 않는다.
 
