@@ -79,9 +79,14 @@
 
 ## CI와 변경 소유 범위
 
-원격 CI `39087600798`은 7개 job이 실패했고 steps/logs를 받지 못했다. 실행기/계정/권한/저장소 설정을
-실제 근거로 확인하며 결제 문제라고 추측해 단정하지 않는다. 사용할 수 있는 권한으로 해결되지 않는 항목은
-실패 원인과 필요한 설정 한 항목만 사용자에게 전달한다. 원격 CI 성공과 로컬 성공은 각각 남긴다.
+원격 CI `39087600798`과 후속 `39091077393`은 runner/step 시작 전에 실패했다.
+후속 실행의 job 재시도도 runner ID 0, steps 없음으로 실패했다. 사용자가 실제 실행 화면의 annotation을
+확인해 GitHub 계정의 Actions 결제/예산 제한에 따른 사전 차단임을 전달했다. 이는 코드 테스트 실패와
+구분한다. 처음에는 CLI의 Checks 조회도 403이었으며 사용자 화면 확인으로 원인을 확인했다.
+이후 사용자의 명시적 요청으로 Git 전체 기록의 비밀 검사를 수행하고 저장소를 공개로 전환했다.
+공개 전환 뒤 annotation API 조회와 원격 runner 시작을 직접 확인했다. `d8585dc`의 실행
+`39093133775`를 재실행했으며, 최종 변경의 전체 job 성공은 별도로 확인한다.
+비용·결제수단은 변경하지 않았다. [GitHub 공식 진단 안내](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows#reviewing-billing-errors)를 따른다.
 
 현재 환경은 `ops/`, 운영 문서, `.github/workflows/`, 출시 통합을 담당한다. 클라우드는 Android 계측·
 시험 harness·시험용 debug 설정·결과 문서를 담당한다. Android 시험에 필요한 Gradle 의존성과 그 잠금 파일은

@@ -163,7 +163,9 @@ uv run --project services/api python -m ops.backup create \
 
 age는 기밀성과 암호문 변조 검사를 제공하며 백업 작성자의 서명은 제공하지 않는다. 완료 receipt의 archive SHA-256은 접근 통제가 다른 운영 기록에도 보관한다. 같은 저장소에서 함께 바뀐 archive/receipt만으로 출처를 확인했다고 주장하지 않는다.
 
-보존 정책의 기본안은 일별 14개·주별 8개·월별 12개, RPO 24시간/RTO 4시간이다. 이는 정책/목표이며 실측 결과가 아니다. 이 변경은 cron/systemd/Task Scheduler나 자동 삭제를 설치하지 않는다. 운영자는 새 완료 백업과 월간 격리 복원 성공을 확인한 뒤 별도 승인된 스케줄/보존 작업을 구성한다. 키 보존 기간은 가장 오래된 복원 대상과 맞추며 백업 암호문만 남기고 필요한 키를 먼저 폐기하지 않는다.
+보존 정책은 최근 14일·8주·12개월의 각 기간에서 가장 최신 사본을 유지하며, 전체 최신 백업과 복원 근거에 연결된 원본을 추가 보호한다. RPO 24시간/RTO 4시간은 목표다. [실제 첫 복원 기록](testing/operating-backup-restore.md)의 짧은 무결성 검사 시간은 전체 서비스 RTO가 아니다.
+
+단일 실행 백업 명령은 예약 작업이나 삭제를 설치하지 않는다. [운영 예약 작업](testing/operations-automation.md)은 별도 설정으로 백업·상태 검사·월간 격리 복원·첨부 검사 DB 갱신을 실행한다. [보존 도구](testing/backup-retention.md)는 읽기 전용 계획을 만들고, 독립 사본 선언·실제 사본 해시·복원 무결성 증거·명시한 계획 해시를 모두 확인해야 원본 삭제를 허용한다. 예약 작업은 자동 삭제를 호출하지 않는다. 현재 외부 보관 위치 결정은 사용자 요청으로 운영 시작 뒤로 미뤘으며, 그동안 삭제 대상은 0건이다. 키 보존 기간은 가장 오래된 복원 대상과 맞추며 필요한 키를 먼저 폐기하지 않는다.
 
 ## 5. 새 환경으로 격리 복원
 
@@ -179,6 +181,8 @@ uv run --project services/api python -m ops.backup restore \
 ```
 
 도구는 archive digest, age 무결성, 제한된 tar 경로/형식, 모든 entry SHA/크기를 검사한다. symlink/hardlink/상위 경로/임의 파일/중복 entry를 추출하지 않는다. 복원 전에 PostgreSQL 18 initdb의 기본 객체만 허용하고 사용자 테이블·함수·타입·확장·event trigger·빈 사용자 schema·large object·DB별 subscription/설정을 거부한다. 기존 객체를 지우거나 `--clean`으로 맞추지 않는다. 암호화 dump는 age→pg_restore pipe를 사용하고 `--single-transaction --exit-on-error --no-owner --no-acl`로 복구한다. schema revision과 전체 public 테이블 목록/행 수를 대조하고 `QUARANTINE`, `restore.json`, `backup-manifest.json`을 남긴다. 실패한 DB/디렉터리는 격리 상태이며 자동 삭제·재시도 덮어쓰기를 하지 않는다.
+
+정기 `restore-check`는 이 복원에 서버 필드/첨부의 실제 인증 복호화 검사를 더하고, 원래 두 기록의 해시와 연결한 `restore-integrity.json`을 발급한다. 사용자 비밀번호 변경·보관함 키 회전·운영 전환을 수행하지 않으므로 다음 절의 전체 복구 인수와 구분한다. 아직 두 번째 구성원이 연결되지 않은 가계에서도 백업 무결성 검사는 가능하다.
 
 백업 시점 이후의 기록이 원본 손실로 사라졌다면 최신 삭제/철회/금전 이력을 자동으로 재구성할 수 없다. 복원 시각을 현재 시각으로 바꾸거나 자동 재전송으로 채우지 않는다. 두 사용자가 RPO 구간의 자산 스냅샷·수입/보험금/납부·재고·삭제 기록·가계 구성원을 다시 확인한다. 확인 결과와 수용한 손실 범위를 비밀 원문 없는 인수 기록에 남긴다.
 

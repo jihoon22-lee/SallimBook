@@ -126,8 +126,8 @@
       "git_sha1": "55259ff24ebf33dd439b2d646f59771442602058"
     },
     "docs/README.md": {
-      "sha256": "0a6764a8af8eb54a2ca4794b662abb8f03cad14adc6b6b9d006f3f82086768f1",
-      "git_sha1": "6eb07e185eee1e8f472221895c4f070287790518"
+      "sha256": "28d03cd1a1d4adc6262d508cd4478b154664ac71e1b003755e9a4da4c909c0e5",
+      "git_sha1": "3468feff5b921f1a703cf58d4e192b0aa39639d2"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -274,8 +274,8 @@
       "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
     },
     "docs/operations-runbook.md": {
-      "sha256": "bf95053a99d9322b4f84ae97609e8bf7743436a208748c13ac4f8f8aeb50c135",
-      "git_sha1": "3059b01544e4d8f80abd48c47381ff67974b24cc"
+      "sha256": "42422af7fd9818e5cbd592fa23c76e3e561968d4815651dd5b62e47b0d648a33",
+      "git_sha1": "26cebb7b02c4e39c755b8f7398e3dacef3363475"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
@@ -362,16 +362,20 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "8b879ec89a5e208b98013ec7e56095350432f1f47edda1484f4a9c31ca00aaa5",
-      "git_sha1": "ee4af498ad9320f5cce1553287b6e7fe2103a332"
+      "sha256": "cc9af50454967c55a9869efe8e7f80cb69ad9f92d6279dcf9b8bdec570019d01",
+      "git_sha1": "c82875b06c7c8e5d1eb76277242abb6cbd10e65d"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
       "git_sha1": "27dd4e0485a6233c9f07ee402a67a20d9201b8f8"
     },
     "docs/testing/backup-retention.md": {
-      "sha256": "87bc437d660d8f9aea5517bf8949567c516814ca5f8978debf4c5bcd790f5cdd",
-      "git_sha1": "e28177de8caaff08d13859d6fbe5dd5cf0647066"
+      "sha256": "b6afe232ec5eaf28e318850df11c00232afa3dd69b50676f74e31d7cd21db3f1",
+      "git_sha1": "10b7d5a3395629224b144f837cfb318b43f0b388"
+    },
+    "docs/testing/operations-automation.md": {
+      "sha256": "c1e5b944ba87b306752528b93118ff43f95d28dd55e43787c0095e64fa7b73ad",
+      "git_sha1": "1d8d1582cc8e56d8e188fcca494bb4ae761820f0"
     }
   }
 }
