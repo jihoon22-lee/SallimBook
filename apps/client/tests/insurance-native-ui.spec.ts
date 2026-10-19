@@ -4,33 +4,324 @@ import { mockInsuranceEvents, claimRow } from "./support/insurance-events";
 import { mockNativeInsurance } from "./support/insurance-native";
 import { uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
-test.beforeEach(async ({ page }) => { await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z")); });
-async function voidCurrent(page: Page, name: string) { await page.getByRole("button", { name: `${name} 무효 검토`, exact: true }).click(); await page.getByLabel("금전 기록 무효 사유", { exact: true }).fill("합성 앱 오등록 무효"); await page.getByLabel("실제 환불·반환이 아닌 오등록 무효임을 확인했어요.", { exact: true }).check(); await page.getByRole("button", { name: "사유와 함께 금전 기록 무효 처리", exact: true }).click(); await expect(page.getByRole("button", { name: `${name} 무효 검토`, exact: true })).toHaveCount(0); }
-async function called(native: Awaited<ReturnType<typeof mockNativeInsurance>>, methods: string[]) { for (const method of methods) await expect.poll(() => native.calls.some((call) => call.method === method), { message: method }).toBe(true); expect(native.http).toEqual([]); }
-test("native policy coverage premium commands and protected number activities never pass plaintext through JS", async ({ page }) => {
-  const state = await mockInsuranceEvents(page); const native = await mockNativeInsurance(page, state); await page.goto("/insurance/policies"); await page.getByRole("link", { name: "보험 계약 등록", exact: true }).click(); await page.getByLabel("보험사", { exact: true }).fill("합성 앱 보험사"); await page.getByLabel("보험 상품명", { exact: true }).fill("합성 앱 계약"); await page.getByLabel("보장 시작일", { exact: true }).fill("2025-01-01"); await page.getByRole("button", { name: "보험 계약 등록", exact: true }).click(); await page.getByRole("button", { name: "Android에서 증권번호 관리", exact: true }).click(); await page.getByRole("button", { name: "Android에서 전체 증권번호 보기", exact: true }).click(); await expect(page.locator('input[type="password"], output')).toHaveCount(0);
-  await page.getByRole("link", { name: "보험 계약 수정", exact: true }).click(); await page.getByLabel("보험 상품명", { exact: true }).fill("합성 앱 수정 계약"); await page.getByRole("button", { name: "보험 계약 수정 저장", exact: true }).click(); await page.getByRole("button", { name: "보장 항목 추가", exact: true }).click(); await page.getByLabel("보장 이름", { exact: true }).fill("합성 앱 보장"); await page.getByLabel("기록한 보장금액 (원)", { exact: true }).fill("100000"); await page.getByRole("button", { name: "보장 항목 저장", exact: true }).click(); await page.getByRole("button", { name: "보장 수정: 합성 앱 보장", exact: true }).click(); await page.getByLabel("기록한 보장금액 (원)", { exact: true }).fill("100001"); await page.getByRole("button", { name: "보장 항목 저장", exact: true }).click(); await page.getByRole("combobox", { name: "연결할 보험료 규칙", exact: true }).selectOption(uid(61)); await page.getByRole("button", { name: "보험료 규칙 연결", exact: true }).click(); await page.getByRole("button", { name: "보험료 연결 해제 검토", exact: true }).click(); await page.getByLabel("같은 납부 규칙의 과거 기록이 보존되는 것을 확인했어요.", { exact: true }).check(); await page.getByRole("button", { name: "보험료 연결 변경 저장", exact: true }).click(); await expect(page.getByRole("button", { name: "보험료 연결 복원 검토", exact: true })).toBeVisible();
-  await called(native, ["listInsurancePolicies", "getInsurancePolicy", "createInsurancePolicy", "updateInsurancePolicy", "listInsuranceCoverages", "createInsuranceCoverage", "updateInsuranceCoverage", "listPolicyPremiumLinks", "createPolicyPremiumLink", "updatePolicyPremiumLink", "editInsurancePolicyNumberUI", "showInsurancePolicyNumberUI"]); expect(native.calls.every((call) => !Object.hasOwn(call.args.input ?? {}, "policy_number"))).toBe(true); expect(native.calls.find((c) => c.method === "updateInsurancePolicy")!.args.ifMatch).toBe('"2"');
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
 });
-test("native independent case and tree creation correction conflict and leaf deletion use all ten core commands", async ({ page }) => {
-  const state = await mockInsuranceEvents(page); const native = await mockNativeInsurance(page, state); await page.goto("/insurance/cases"); await page.getByRole("link", { name: "보험 사건 등록", exact: true }).click(); await page.getByLabel("사건 이름", { exact: true }).fill("합성 앱 사건"); await page.getByRole("combobox", { name: "사건 환자", exact: true }).selectOption(uid(2)); await page.getByRole("button", { name: "보험 사건 등록", exact: true }).click(); await page.getByRole("link", { name: "사건 상태·내용 변경", exact: true }).click(); await page.getByRole("combobox", { name: "정산 상태", exact: true }).selectOption("settled"); await page.getByLabel("사건 변경 사유", { exact: true }).fill("합성 앱 정산 완료"); await page.getByRole("button", { name: "사건 변경 저장", exact: true }).click(); await page.getByRole("button", { name: "사건 아래 진료 추가", exact: true }).click(); await page.getByLabel("진료 이름", { exact: true }).fill("합성 앱 외래"); await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click(); await page.getByRole("button", { name: "진료 내용·위치 수정", exact: true }).click(); state.core.conflict = "node"; await page.getByLabel("진료 이름", { exact: true }).fill("합성 앱 외래 수정"); await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click(); await page.getByRole("button", { name: "보험 현재 내용 비교", exact: true }).click(); await page.getByRole("button", { name: "비교한 보험 수정 유지", exact: true }).click(); await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click(); await page.getByRole("button", { name: "오등록 진료 삭제 검토", exact: true }).click(); await page.getByLabel("오등록 항목 합성 앱 외래 수정 삭제를 확인했어요.", { exact: true }).check(); await page.getByRole("button", { name: "오등록 진료 삭제", exact: true }).click(); await expect(page.getByRole("region", { name: "선택한 진료", exact: true })).toHaveCount(0);
-  await called(native, ["listInsuranceCases", "createInsuranceCase", "getInsuranceCase", "updateInsuranceCase", "insuranceCaseHistory", "listMedicalNodes", "getMedicalNode", "createMedicalNode", "updateMedicalNode", "deleteMedicalNode", "medicalNodeSummary", "insuranceCaseSummary"]);
+async function voidCurrent(page: Page, name: string) {
+  await page.getByRole("button", { name: `${name} 무효 검토`, exact: true }).click();
+  await page.getByLabel("금전 기록 무효 사유", { exact: true }).fill("합성 앱 오등록 무효");
+  await page
+    .getByLabel("실제 환불·반환이 아닌 오등록 무효임을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "사유와 함께 금전 기록 무효 처리", exact: true }).click();
+  await expect(page.getByRole("button", { name: `${name} 무효 검토`, exact: true })).toHaveCount(0);
+}
+async function called(native: Awaited<ReturnType<typeof mockNativeInsurance>>, methods: string[]) {
+  for (const method of methods)
+    await expect
+      .poll(() => native.calls.some((call) => call.method === method), { message: method })
+      .toBe(true);
+  expect(native.http).toEqual([]);
+}
+test("native policy coverage premium commands and protected number activities never pass plaintext through JS", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  const native = await mockNativeInsurance(page, state);
+  await page.goto("/insurance/policies");
+  await page.getByRole("link", { name: "보험 계약 등록", exact: true }).click();
+  await page.getByLabel("보험사", { exact: true }).fill("합성 앱 보험사");
+  await page.getByLabel("보험 상품명", { exact: true }).fill("합성 앱 계약");
+  await page.getByLabel("보장 시작일", { exact: true }).fill("2025-01-01");
+  await page.getByRole("button", { name: "보험 계약 등록", exact: true }).click();
+  await page.getByRole("button", { name: "Android에서 증권번호 관리", exact: true }).click();
+  await page.getByRole("button", { name: "Android에서 전체 증권번호 보기", exact: true }).click();
+  await expect(page.locator('input[type="password"], output')).toHaveCount(0);
+  await page.getByRole("link", { name: "보험 계약 수정", exact: true }).click();
+  await page.getByLabel("보험 상품명", { exact: true }).fill("합성 앱 수정 계약");
+  await page.getByRole("button", { name: "보험 계약 수정 저장", exact: true }).click();
+  await page.getByRole("button", { name: "보장 항목 추가", exact: true }).click();
+  await page.getByLabel("보장 이름", { exact: true }).fill("합성 앱 보장");
+  await page.getByLabel("기록한 보장금액 (원)", { exact: true }).fill("100000");
+  await page.getByRole("button", { name: "보장 항목 저장", exact: true }).click();
+  await page.getByRole("button", { name: "보장 수정: 합성 앱 보장", exact: true }).click();
+  await page.getByLabel("기록한 보장금액 (원)", { exact: true }).fill("100001");
+  await page.getByRole("button", { name: "보장 항목 저장", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "연결할 보험료 규칙", exact: true })
+    .selectOption(uid(61));
+  await page.getByRole("button", { name: "보험료 규칙 연결", exact: true }).click();
+  await page.getByRole("button", { name: "보험료 연결 해제 검토", exact: true }).click();
+  await page
+    .getByLabel("같은 납부 규칙의 과거 기록이 보존되는 것을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "보험료 연결 변경 저장", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "보험료 연결 복원 검토", exact: true }),
+  ).toBeVisible();
+  await called(native, [
+    "listInsurancePolicies",
+    "getInsurancePolicy",
+    "createInsurancePolicy",
+    "updateInsurancePolicy",
+    "listInsuranceCoverages",
+    "createInsuranceCoverage",
+    "updateInsuranceCoverage",
+    "listPolicyPremiumLinks",
+    "createPolicyPremiumLink",
+    "updatePolicyPremiumLink",
+    "editInsurancePolicyNumberUI",
+    "showInsurancePolicyNumberUI",
+  ]);
+  expect(native.calls.every((call) => !Object.hasOwn(call.args.input ?? {}, "policy_number"))).toBe(
+    true,
+  );
+  expect(native.calls.find((c) => c.method === "updateInsurancePolicy")!.args.ifMatch).toBe('"2"');
 });
-test("native medical expense and refund workflows use domain versions through corrections and voids", async ({ page }) => {
-  const state = await mockInsuranceEvents(page); const native = await mockNativeInsurance(page, state); await page.goto(`/insurance/cases/${uid(90)}`); await page.getByRole("link", { name: "실제 의료비 추가", exact: true }).click(); await page.getByRole("combobox", { name: "비용 귀속 진료", exact: true }).selectOption(uid(91)); await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("100"); await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click(); await page.getByRole("link", { name: "의료비 원본 정정", exact: true }).click(); await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("101"); await page.getByLabel("의료비 정정 사유", { exact: true }).fill("합성 앱 의료비 정정"); await page.getByLabel("기존 의료비는 무효로 보존하고 새 원본으로 정정하는 것을 확인했어요.", { exact: true }).check(); await page.getByRole("button", { name: "의료비 정정 저장", exact: true }).click(); await page.getByRole("link", { name: "실제 의료비 환불 기록", exact: true }).click(); await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("1"); await page.getByLabel("의료비 환불 사유", { exact: true }).fill("합성 앱 환불"); await page.getByRole("button", { name: "의료비 환불 저장", exact: true }).click(); await page.getByRole("link", { name: "의료비 환불 원본 정정", exact: true }).click(); await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("2"); await page.getByLabel("의료비 환불 정정 사유", { exact: true }).fill("합성 앱 환불 정정"); await page.getByRole("button", { name: "의료비 환불 정정 저장", exact: true }).click(); await voidCurrent(page, "의료비 환불"); await page.getByRole("link", { name: "환불 원래 의료비", exact: true }).click(); await voidCurrent(page, "의료비");
-  await called(native, ["listMedicalExpenses", "createMedicalExpense", "getMedicalExpense", "correctMedicalExpense", "medicalExpenseHistory", "voidMedicalExpense", "listMedicalRefunds", "createMedicalRefund", "getMedicalRefund", "correctMedicalRefund", "medicalRefundHistory", "voidMedicalRefund"]); expect(native.calls.filter((c) => c.method.startsWith("correctMedical") || c.method.startsWith("voidMedical")).every((c) => !!c.args.idempotencyKey && !!c.args.ifMatch)).toBe(true);
+test("native independent case and tree creation correction conflict and leaf deletion use all ten core commands", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  const native = await mockNativeInsurance(page, state);
+  await page.goto("/insurance/cases");
+  await page.getByRole("link", { name: "보험 사건 등록", exact: true }).click();
+  await page.getByLabel("사건 이름", { exact: true }).fill("합성 앱 사건");
+  await page.getByRole("combobox", { name: "사건 환자", exact: true }).selectOption(uid(2));
+  await page.getByRole("button", { name: "보험 사건 등록", exact: true }).click();
+  await page.getByRole("link", { name: "사건 상태·내용 변경", exact: true }).click();
+  await page.getByRole("combobox", { name: "정산 상태", exact: true }).selectOption("settled");
+  await page.getByLabel("사건 변경 사유", { exact: true }).fill("합성 앱 정산 완료");
+  await page.getByRole("button", { name: "사건 변경 저장", exact: true }).click();
+  await page.getByRole("button", { name: "사건 아래 진료 추가", exact: true }).click();
+  await page.getByLabel("진료 이름", { exact: true }).fill("합성 앱 외래");
+  await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click();
+  await page.getByRole("button", { name: "진료 내용·위치 수정", exact: true }).click();
+  state.core.conflict = "node";
+  await page.getByLabel("진료 이름", { exact: true }).fill("합성 앱 외래 수정");
+  await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click();
+  await page.getByRole("button", { name: "보험 현재 내용 비교", exact: true }).click();
+  await page.getByRole("button", { name: "비교한 보험 수정 유지", exact: true }).click();
+  await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click();
+  await page.getByRole("button", { name: "오등록 진료 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("오등록 항목 합성 앱 외래 수정 삭제를 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "오등록 진료 삭제", exact: true }).click();
+  await expect(page.getByRole("region", { name: "선택한 진료", exact: true })).toHaveCount(0);
+  await called(native, [
+    "listInsuranceCases",
+    "createInsuranceCase",
+    "getInsuranceCase",
+    "updateInsuranceCase",
+    "insuranceCaseHistory",
+    "listMedicalNodes",
+    "getMedicalNode",
+    "createMedicalNode",
+    "updateMedicalNode",
+    "deleteMedicalNode",
+    "medicalNodeSummary",
+    "insuranceCaseSummary",
+  ]);
 });
-test("native claim create and versioned correction retain evidence history without actual cash", async ({ page }) => {
-  const state = await mockInsuranceEvents(page); const native = await mockNativeInsurance(page, state); await page.goto(`/insurance/claims/new?case=${uid(90)}&policy=${uid(80)}`); await page.getByLabel("청구 접수번호 (선택)", { exact: true }).fill("합성 앱 청구"); await page.getByRole("checkbox", { name: /SYNTHETIC-RECEIPT-1001/ }).check(); await page.getByRole("button", { name: "청구 기록 저장", exact: true }).click(); await page.getByRole("link", { name: "청구 상태·근거 정정", exact: true }).click(); await page.getByRole("combobox", { name: "청구 상태", exact: true }).selectOption("documents_required"); await page.getByLabel("청구 정정 사유", { exact: true }).fill("합성 앱 추가 서류"); await page.getByRole("button", { name: "청구 정정 저장", exact: true }).click(); await expect(page.getByRole("heading", { name: "청구 버전 2", exact: true })).toBeVisible(); await page.getByRole("link", { name: "청구 사건", exact: true }).first().click();
-  await called(native, ["listInsuranceClaims", "createInsuranceClaim", "getInsuranceClaim", "updateInsuranceClaim", "insuranceClaimHistory"]); expect(native.calls.find((c) => c.method === "updateInsuranceClaim")!.args.ifMatch).toBe('"1"'); expect(state.expenses).toHaveLength(5); expect(state.payouts).toHaveLength(2);
+test("native medical expense and refund workflows use domain versions through corrections and voids", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  const native = await mockNativeInsurance(page, state);
+  await page.goto(`/insurance/cases/${uid(90)}`);
+  await page.getByRole("link", { name: "실제 의료비 추가", exact: true }).click();
+  await page.getByRole("combobox", { name: "비용 귀속 진료", exact: true }).selectOption(uid(91));
+  await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("100");
+  await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+  await page.getByRole("link", { name: "의료비 원본 정정", exact: true }).click();
+  await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("101");
+  await page.getByLabel("의료비 정정 사유", { exact: true }).fill("합성 앱 의료비 정정");
+  await page
+    .getByLabel("기존 의료비는 무효로 보존하고 새 원본으로 정정하는 것을 확인했어요.", {
+      exact: true,
+    })
+    .check();
+  await page.getByRole("button", { name: "의료비 정정 저장", exact: true }).click();
+  await page.getByRole("link", { name: "실제 의료비 환불 기록", exact: true }).click();
+  await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("1");
+  await page.getByLabel("의료비 환불 사유", { exact: true }).fill("합성 앱 환불");
+  await page.getByRole("button", { name: "의료비 환불 저장", exact: true }).click();
+  await page.getByRole("link", { name: "의료비 환불 원본 정정", exact: true }).click();
+  await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("2");
+  await page.getByLabel("의료비 환불 정정 사유", { exact: true }).fill("합성 앱 환불 정정");
+  await page.getByRole("button", { name: "의료비 환불 정정 저장", exact: true }).click();
+  await voidCurrent(page, "의료비 환불");
+  await page.getByRole("link", { name: "환불 원래 의료비", exact: true }).click();
+  await voidCurrent(page, "의료비");
+  await called(native, [
+    "listMedicalExpenses",
+    "createMedicalExpense",
+    "getMedicalExpense",
+    "correctMedicalExpense",
+    "medicalExpenseHistory",
+    "voidMedicalExpense",
+    "listMedicalRefunds",
+    "createMedicalRefund",
+    "getMedicalRefund",
+    "correctMedicalRefund",
+    "medicalRefundHistory",
+    "voidMedicalRefund",
+  ]);
+  expect(
+    native.calls
+      .filter((c) => c.method.startsWith("correctMedical") || c.method.startsWith("voidMedical"))
+      .every((c) => !!c.args.idempotencyKey && !!c.args.ifMatch),
+  ).toBe(true);
 });
-test("native payout allocation correction and return lifecycle use all fifteen receipt commands", async ({ page }) => {
-  const state = await mockInsuranceEvents(page); state.claims.push(claimRow()); const native = await mockNativeInsurance(page, state); await page.goto("/insurance/payouts"); await page.getByRole("link", { name: "실제 보험금 수령 추가", exact: true }).click(); await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("100"); await page.getByRole("combobox", { name: "배분 사건", exact: true }).selectOption(uid(90)); await page.getByRole("combobox", { name: "배분 보험계약", exact: true }).selectOption(uid(80)); await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("100"); await page.getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true }).check(); await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click(); await page.getByRole("link", { name: "보험금 수령 원본 정정", exact: true }).click(); await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("101"); await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("101"); await page.getByLabel("보험금 수령 정정 사유", { exact: true }).fill("합성 앱 입금 정정"); await page.getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true }).check(); await page.getByRole("button", { name: "보험금 수령 정정 저장", exact: true }).click(); await page.getByRole("button", { name: "배분 1 청구 연결 정정", exact: true }).click(); state.conflict = true; await page.getByRole("combobox", { name: "배분 청구 (선택)", exact: true }).selectOption(uid(1200)); await page.getByLabel("배분 연결 정정 사유", { exact: true }).fill("합성 앱 후발 청구 연결"); await page.getByRole("button", { name: "같은 입금의 청구 연결 저장", exact: true }).click(); await page.getByRole("button", { name: "현재 배분 연결 비교", exact: true }).click(); await page.getByRole("button", { name: "비교한 배분 연결 유지", exact: true }).click(); await page.getByRole("button", { name: "같은 입금의 청구 연결 저장", exact: true }).click(); await page.getByRole("link", { name: "실제 보험금 반환 기록", exact: true }).click(); await page.getByRole("combobox", { name: "반환할 원래 배분", exact: true }).selectOption(state.payouts.at(-1)!.allocations[0]!.id); await page.getByLabel("보험금 반환 금액 (원)", { exact: true }).fill("1"); await page.getByLabel("보험금 반환 사유", { exact: true }).fill("합성 앱 반환"); await page.getByRole("button", { name: "보험금 반환 저장", exact: true }).click(); await page.getByRole("link", { name: "보험금 반환 원본 정정", exact: true }).click(); await page.getByLabel("보험금 반환 금액 (원)", { exact: true }).fill("2"); await page.getByLabel("보험금 반환 정정 사유", { exact: true }).fill("합성 앱 반환 정정"); await page.getByRole("button", { name: "보험금 반환 정정 저장", exact: true }).click(); await voidCurrent(page, "보험금 반환"); await page.getByRole("link", { name: "반환 원래 입금과 배분", exact: true }).click(); await voidCurrent(page, "보험금 수령");
-  await called(native, ["listInsurancePayouts", "createInsurancePayout", "getInsurancePayout", "correctInsurancePayout", "insurancePayoutHistory", "voidInsurancePayout", "getPayoutAllocation", "linkPayoutAllocation", "payoutAllocationHistory", "listInsuranceReturns", "createInsuranceReturn", "getInsuranceReturn", "correctInsuranceReturn", "insuranceReturnHistory", "voidInsuranceReturn"]); expect(native.calls.filter((c) => ["createInsurancePayout", "correctInsurancePayout", "createInsuranceReturn", "correctInsuranceReturn"].includes(c.method)).every((c) => !Object.hasOwn(c.args.input, "card_id"))).toBe(true);
+test("native claim create and versioned correction retain evidence history without actual cash", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  const native = await mockNativeInsurance(page, state);
+  await page.goto(`/insurance/claims/new?case=${uid(90)}&policy=${uid(80)}`);
+  await page.getByLabel("청구 접수번호 (선택)", { exact: true }).fill("합성 앱 청구");
+  await page.getByRole("checkbox", { name: /SYNTHETIC-RECEIPT-1001/ }).check();
+  await page.getByRole("button", { name: "청구 기록 저장", exact: true }).click();
+  await page.getByRole("link", { name: "청구 상태·근거 정정", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "청구 상태", exact: true })
+    .selectOption("documents_required");
+  await page.getByLabel("청구 정정 사유", { exact: true }).fill("합성 앱 추가 서류");
+  await page.getByRole("button", { name: "청구 정정 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "청구 버전 2", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "청구 사건", exact: true }).first().click();
+  await called(native, [
+    "listInsuranceClaims",
+    "createInsuranceClaim",
+    "getInsuranceClaim",
+    "updateInsuranceClaim",
+    "insuranceClaimHistory",
+  ]);
+  expect(native.calls.find((c) => c.method === "updateInsuranceClaim")!.args.ifMatch).toBe('"1"');
+  expect(state.expenses).toHaveLength(5);
+  expect(state.payouts).toHaveLength(2);
 });
-for (const failure of ["APP_LOCKED", "SESSION_EXPIRED", "NETWORK_UNAVAILABLE"] as const) test(`native insurance ${failure} protects the typed medical draft without HTTP fallback`, async ({ page }) => {
-  const state = await mockInsuranceEvents(page); const native = await mockNativeInsurance(page, state); await page.goto(`/insurance/expenses/new?case=${uid(90)}&node=${uid(91)}`); await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("100"); native.control.failure = failure; native.control.method = "createMedicalExpense"; await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click(); if (failure === "APP_LOCKED") { await expect(page.getByRole("status").filter({ hasText: "앱이 잠겨 있어요" })).toBeVisible(); await expect(page.getByLabel("의료비 지불 금액 (원)", { exact: true })).toHaveCount(0); } else if (failure === "SESSION_EXPIRED") await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toBeVisible(); else { await expect(page.getByRole("alert")).toBeVisible(); await expect(page.getByLabel("의료비 지불 금액 (원)", { exact: true })).toHaveValue("100"); } expect(native.http).toEqual([]); expect(state.writes).toHaveLength(0);
+test("native payout allocation correction and return lifecycle use all fifteen receipt commands", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.claims.push(claimRow());
+  const native = await mockNativeInsurance(page, state);
+  await page.goto("/insurance/payouts");
+  await page.getByRole("link", { name: "실제 보험금 수령 추가", exact: true }).click();
+  await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("100");
+  await page.getByRole("combobox", { name: "배분 사건", exact: true }).selectOption(uid(90));
+  await page.getByRole("combobox", { name: "배분 보험계약", exact: true }).selectOption(uid(80));
+  await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("100");
+  await page
+    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
+  await page.getByRole("link", { name: "보험금 수령 원본 정정", exact: true }).click();
+  await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("101");
+  await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("101");
+  await page.getByLabel("보험금 수령 정정 사유", { exact: true }).fill("합성 앱 입금 정정");
+  await page
+    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "보험금 수령 정정 저장", exact: true }).click();
+  await page.getByRole("button", { name: "배분 1 청구 연결 정정", exact: true }).click();
+  state.conflict = true;
+  await page
+    .getByRole("combobox", { name: "배분 청구 (선택)", exact: true })
+    .selectOption(uid(1200));
+  await page.getByLabel("배분 연결 정정 사유", { exact: true }).fill("합성 앱 후발 청구 연결");
+  await page.getByRole("button", { name: "같은 입금의 청구 연결 저장", exact: true }).click();
+  await page.getByRole("button", { name: "현재 배분 연결 비교", exact: true }).click();
+  await page.getByRole("button", { name: "비교한 배분 연결 유지", exact: true }).click();
+  await page.getByRole("button", { name: "같은 입금의 청구 연결 저장", exact: true }).click();
+  await page.getByRole("link", { name: "실제 보험금 반환 기록", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "반환할 원래 배분", exact: true })
+    .selectOption(state.payouts.at(-1)!.allocations[0]!.id);
+  await page.getByLabel("보험금 반환 금액 (원)", { exact: true }).fill("1");
+  await page.getByLabel("보험금 반환 사유", { exact: true }).fill("합성 앱 반환");
+  await page.getByRole("button", { name: "보험금 반환 저장", exact: true }).click();
+  await page.getByRole("link", { name: "보험금 반환 원본 정정", exact: true }).click();
+  await page.getByLabel("보험금 반환 금액 (원)", { exact: true }).fill("2");
+  await page.getByLabel("보험금 반환 정정 사유", { exact: true }).fill("합성 앱 반환 정정");
+  await page.getByRole("button", { name: "보험금 반환 정정 저장", exact: true }).click();
+  await voidCurrent(page, "보험금 반환");
+  await page.getByRole("link", { name: "반환 원래 입금과 배분", exact: true }).click();
+  await voidCurrent(page, "보험금 수령");
+  await called(native, [
+    "listInsurancePayouts",
+    "createInsurancePayout",
+    "getInsurancePayout",
+    "correctInsurancePayout",
+    "insurancePayoutHistory",
+    "voidInsurancePayout",
+    "getPayoutAllocation",
+    "linkPayoutAllocation",
+    "payoutAllocationHistory",
+    "listInsuranceReturns",
+    "createInsuranceReturn",
+    "getInsuranceReturn",
+    "correctInsuranceReturn",
+    "insuranceReturnHistory",
+    "voidInsuranceReturn",
+  ]);
+  expect(
+    native.calls
+      .filter((c) =>
+        [
+          "createInsurancePayout",
+          "correctInsurancePayout",
+          "createInsuranceReturn",
+          "correctInsuranceReturn",
+        ].includes(c.method),
+      )
+      .every((c) => !Object.hasOwn(c.args.input, "card_id")),
+  ).toBe(true);
 });
-test("native cancelled late receipt retains the operation key and never applies stale completion", async ({ page }) => {
-  const state = await mockInsuranceEvents(page); const native = await mockNativeInsurance(page, state); native.control.delayMethod = "createMedicalExpense"; native.control.delayMs = 200; await page.goto(`/insurance/expenses/new?case=${uid(90)}&node=${uid(91)}`); await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("100"); await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click(); await expect.poll(() => state.writes.length).toBe(1); await page.getByRole("button", { name: "요청 대기 중단", exact: true }).click(); await expect(page.getByRole("alert")).toBeVisible(); await expect(page).toHaveURL(/expenses\/new/); native.control.delayMs = 0; await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click(); await expect(page.getByRole("heading", { name: "의료비 상세", exact: true })).toBeVisible(); expect(state.expenses).toHaveLength(6); expect(state.writes[0]!.key).toBe(state.writes[1]!.key); expect(native.http).toEqual([]);
+for (const failure of ["APP_LOCKED", "SESSION_EXPIRED", "NETWORK_UNAVAILABLE"] as const)
+  test(`native insurance ${failure} protects the typed medical draft without HTTP fallback`, async ({
+    page,
+  }) => {
+    const state = await mockInsuranceEvents(page);
+    const native = await mockNativeInsurance(page, state);
+    await page.goto(`/insurance/expenses/new?case=${uid(90)}&node=${uid(91)}`);
+    await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("100");
+    native.control.failure = failure;
+    native.control.method = "createMedicalExpense";
+    await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+    if (failure === "APP_LOCKED") {
+      await expect(page.getByRole("status").filter({ hasText: "앱이 잠겨 있어요" })).toBeVisible();
+      await expect(page.getByLabel("의료비 지불 금액 (원)", { exact: true })).toHaveCount(0);
+    } else if (failure === "SESSION_EXPIRED")
+      await expect(
+        page.getByRole("heading", { name: "로그인이 필요해요", exact: true }),
+      ).toBeVisible();
+    else {
+      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page.getByLabel("의료비 지불 금액 (원)", { exact: true })).toHaveValue("100");
+    }
+    expect(native.http).toEqual([]);
+    expect(state.writes).toHaveLength(0);
+  });
+test("native cancelled late receipt retains the operation key and never applies stale completion", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  const native = await mockNativeInsurance(page, state);
+  native.control.delayMethod = "createMedicalExpense";
+  native.control.delayMs = 200;
+  await page.goto(`/insurance/expenses/new?case=${uid(90)}&node=${uid(91)}`);
+  await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("100");
+  await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+  await expect.poll(() => state.writes.length).toBe(1);
+  await page.getByRole("button", { name: "요청 대기 중단", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page).toHaveURL(/expenses\/new/);
+  native.control.delayMs = 0;
+  await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "의료비 상세", exact: true })).toBeVisible();
+  expect(state.expenses).toHaveLength(6);
+  expect(state.writes[0]!.key).toBe(state.writes[1]!.key);
+  expect(native.http).toEqual([]);
 });

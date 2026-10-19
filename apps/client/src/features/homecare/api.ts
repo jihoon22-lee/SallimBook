@@ -5,30 +5,309 @@ import { cancellableNative } from "../../platform/cancellableNative";
 
 export function useHomecareApi() {
   const { domainApi } = useAuth();
-  return useMemo(() => ({
-    deleteAppliance: (options: Parameters<typeof nativeFinance.deleteAppliance>[0], signal?: AbortSignal) => domainApi.write((c) => c.DELETE("/api/v1/appliances/{appliance_id}", { params: { path: { appliance_id: options.applianceId }, header: { "If-Match": options.ifMatch } }, signal }), () => cancellableNative(signal, () => nativeFinance.deleteAppliance(options))),
-    deleteConsumable: (options: Parameters<typeof nativeFinance.deleteConsumable>[0], signal?: AbortSignal) => domainApi.write((c) => c.DELETE("/api/v1/consumables/{consumable_id}", { params: { path: { consumable_id: options.consumableId }, header: { "If-Match": options.ifMatch } }, signal }), () => cancellableNative(signal, () => nativeFinance.deleteConsumable(options))),
-    deleteApplianceConsumable: (options: Parameters<typeof nativeFinance.deleteApplianceConsumable>[0], signal?: AbortSignal) => domainApi.write((c) => c.DELETE("/api/v1/appliance-consumables/{link_id}", { params: { path: { link_id: options.linkId }, header: { "If-Match": options.ifMatch } }, signal }), () => cancellableNative(signal, () => nativeFinance.deleteApplianceConsumable(options))),
-    listApplianceConsumables: (options: Parameters<typeof nativeFinance.listApplianceConsumables>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/appliance-consumables", { params: { query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listApplianceConsumables(options))),
-    createApplianceConsumable: (options: Parameters<typeof nativeFinance.createApplianceConsumable>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/appliance-consumables", { body: options.input, signal }), () => cancellableNative(signal, () => nativeFinance.createApplianceConsumable(options))),
-    getApplianceConsumable: (options: Parameters<typeof nativeFinance.getApplianceConsumable>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/appliance-consumables/{link_id}", { params: { path: { link_id: options.linkId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getApplianceConsumable(options))),
-    updateApplianceConsumable: (options: Parameters<typeof nativeFinance.updateApplianceConsumable>[0], signal?: AbortSignal) => domainApi.write((c) => c.PATCH("/api/v1/appliance-consumables/{link_id}", { body: options.input, params: { path: { link_id: options.linkId }, header: { "If-Match": options.ifMatch } }, signal }), () => cancellableNative(signal, () => nativeFinance.updateApplianceConsumable(options))),
-    listConsumableReplacements: (options: Parameters<typeof nativeFinance.listConsumableReplacements>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/appliance-consumables/{link_id}/replacements", { params: { path: { link_id: options.linkId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listConsumableReplacements(options))),
-    createConsumableReplacement: (options: Parameters<typeof nativeFinance.createConsumableReplacement>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/appliance-consumables/{link_id}/replacements", { body: options.input, params: { path: { link_id: options.linkId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.createConsumableReplacement(options))),
-    getConsumableReplacement: (options: Parameters<typeof nativeFinance.getConsumableReplacement>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/appliance-consumables/{link_id}/replacements/{replacement_id}", { params: { path: { link_id: options.linkId, replacement_id: options.replacementId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getConsumableReplacement(options))),
-    cancelConsumableReplacement: (options: Parameters<typeof nativeFinance.cancelConsumableReplacement>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/appliance-consumables/{link_id}/replacements/{replacement_id}/cancel", { body: options.input, params: { path: { link_id: options.linkId, replacement_id: options.replacementId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.cancelConsumableReplacement(options))),
-    listAppliances: (options: Parameters<typeof nativeFinance.listAppliances>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/appliances", { params: { query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listAppliances(options))),
-    createAppliance: (options: Parameters<typeof nativeFinance.createAppliance>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/appliances", { body: options.input, signal }), () => cancellableNative(signal, () => nativeFinance.createAppliance(options))),
-    getAppliance: (options: Parameters<typeof nativeFinance.getAppliance>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/appliances/{appliance_id}", { params: { path: { appliance_id: options.applianceId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getAppliance(options))),
-    updateAppliance: (options: Parameters<typeof nativeFinance.updateAppliance>[0], signal?: AbortSignal) => domainApi.write((c) => c.PATCH("/api/v1/appliances/{appliance_id}", { body: options.input, params: { path: { appliance_id: options.applianceId }, header: { "If-Match": options.ifMatch } }, signal }), () => cancellableNative(signal, () => nativeFinance.updateAppliance(options))),
-    listConsumables: (options: Parameters<typeof nativeFinance.listConsumables>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/consumables", { params: { query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listConsumables(options))),
-    createConsumable: (options: Parameters<typeof nativeFinance.createConsumable>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/consumables", { body: options.input, signal }), () => cancellableNative(signal, () => nativeFinance.createConsumable(options))),
-    getConsumable: (options: Parameters<typeof nativeFinance.getConsumable>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/consumables/{consumable_id}", { params: { path: { consumable_id: options.consumableId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getConsumable(options))),
-    updateConsumable: (options: Parameters<typeof nativeFinance.updateConsumable>[0], signal?: AbortSignal) => domainApi.write((c) => c.PATCH("/api/v1/consumables/{consumable_id}", { body: options.input, params: { path: { consumable_id: options.consumableId }, header: { "If-Match": options.ifMatch } }, signal }), () => cancellableNative(signal, () => nativeFinance.updateConsumable(options))),
-    listStockMovements: (options: Parameters<typeof nativeFinance.listStockMovements>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/consumables/{consumable_id}/stock-movements", { params: { path: { consumable_id: options.consumableId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listStockMovements(options))),
-    createStockMovement: (options: Parameters<typeof nativeFinance.createStockMovement>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/consumables/{consumable_id}/stock-movements", { body: options.input, params: { path: { consumable_id: options.consumableId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.createStockMovement(options))),
-    getStockMovement: (options: Parameters<typeof nativeFinance.getStockMovement>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/consumables/{consumable_id}/stock-movements/{movement_id}", { params: { path: { consumable_id: options.consumableId, movement_id: options.movementId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getStockMovement(options))),
-    cancelStockMovement: (options: Parameters<typeof nativeFinance.cancelStockMovement>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/consumables/{consumable_id}/stock-movements/{movement_id}/cancel", { body: options.input, params: { path: { consumable_id: options.consumableId, movement_id: options.movementId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.cancelStockMovement(options))),
-    getHomecareStatus: (options: Parameters<typeof nativeFinance.getHomecareStatus>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/homecare/status", { params: { query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.getHomecareStatus(options))),
-  }), [domainApi]);
+  return useMemo(
+    () => ({
+      deleteAppliance: (
+        options: Parameters<typeof nativeFinance.deleteAppliance>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.DELETE("/api/v1/appliances/{appliance_id}", {
+              params: {
+                path: { appliance_id: options.applianceId },
+                header: { "If-Match": options.ifMatch },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.deleteAppliance(options)),
+        ),
+      deleteConsumable: (
+        options: Parameters<typeof nativeFinance.deleteConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.DELETE("/api/v1/consumables/{consumable_id}", {
+              params: {
+                path: { consumable_id: options.consumableId },
+                header: { "If-Match": options.ifMatch },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.deleteConsumable(options)),
+        ),
+      deleteApplianceConsumable: (
+        options: Parameters<typeof nativeFinance.deleteApplianceConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.DELETE("/api/v1/appliance-consumables/{link_id}", {
+              params: {
+                path: { link_id: options.linkId },
+                header: { "If-Match": options.ifMatch },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.deleteApplianceConsumable(options)),
+        ),
+      listApplianceConsumables: (
+        options: Parameters<typeof nativeFinance.listApplianceConsumables>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/appliance-consumables", { params: { query: options.query }, signal }),
+          () => cancellableNative(signal, () => nativeFinance.listApplianceConsumables(options)),
+        ),
+      createApplianceConsumable: (
+        options: Parameters<typeof nativeFinance.createApplianceConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) => c.POST("/api/v1/appliance-consumables", { body: options.input, signal }),
+          () => cancellableNative(signal, () => nativeFinance.createApplianceConsumable(options)),
+        ),
+      getApplianceConsumable: (
+        options: Parameters<typeof nativeFinance.getApplianceConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/appliance-consumables/{link_id}", {
+              params: { path: { link_id: options.linkId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getApplianceConsumable(options)),
+        ),
+      updateApplianceConsumable: (
+        options: Parameters<typeof nativeFinance.updateApplianceConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/appliance-consumables/{link_id}", {
+              body: options.input,
+              params: {
+                path: { link_id: options.linkId },
+                header: { "If-Match": options.ifMatch },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.updateApplianceConsumable(options)),
+        ),
+      listConsumableReplacements: (
+        options: Parameters<typeof nativeFinance.listConsumableReplacements>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/appliance-consumables/{link_id}/replacements", {
+              params: { path: { link_id: options.linkId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.listConsumableReplacements(options)),
+        ),
+      createConsumableReplacement: (
+        options: Parameters<typeof nativeFinance.createConsumableReplacement>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/appliance-consumables/{link_id}/replacements", {
+              body: options.input,
+              params: {
+                path: { link_id: options.linkId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.createConsumableReplacement(options)),
+        ),
+      getConsumableReplacement: (
+        options: Parameters<typeof nativeFinance.getConsumableReplacement>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/appliance-consumables/{link_id}/replacements/{replacement_id}", {
+              params: { path: { link_id: options.linkId, replacement_id: options.replacementId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getConsumableReplacement(options)),
+        ),
+      cancelConsumableReplacement: (
+        options: Parameters<typeof nativeFinance.cancelConsumableReplacement>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/appliance-consumables/{link_id}/replacements/{replacement_id}/cancel", {
+              body: options.input,
+              params: {
+                path: { link_id: options.linkId, replacement_id: options.replacementId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.cancelConsumableReplacement(options)),
+        ),
+      listAppliances: (
+        options: Parameters<typeof nativeFinance.listAppliances>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/appliances", { params: { query: options.query }, signal }),
+          () => cancellableNative(signal, () => nativeFinance.listAppliances(options)),
+        ),
+      createAppliance: (
+        options: Parameters<typeof nativeFinance.createAppliance>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) => c.POST("/api/v1/appliances", { body: options.input, signal }),
+          () => cancellableNative(signal, () => nativeFinance.createAppliance(options)),
+        ),
+      getAppliance: (
+        options: Parameters<typeof nativeFinance.getAppliance>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/appliances/{appliance_id}", {
+              params: { path: { appliance_id: options.applianceId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getAppliance(options)),
+        ),
+      updateAppliance: (
+        options: Parameters<typeof nativeFinance.updateAppliance>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/appliances/{appliance_id}", {
+              body: options.input,
+              params: {
+                path: { appliance_id: options.applianceId },
+                header: { "If-Match": options.ifMatch },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.updateAppliance(options)),
+        ),
+      listConsumables: (
+        options: Parameters<typeof nativeFinance.listConsumables>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/consumables", { params: { query: options.query }, signal }),
+          () => cancellableNative(signal, () => nativeFinance.listConsumables(options)),
+        ),
+      createConsumable: (
+        options: Parameters<typeof nativeFinance.createConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) => c.POST("/api/v1/consumables", { body: options.input, signal }),
+          () => cancellableNative(signal, () => nativeFinance.createConsumable(options)),
+        ),
+      getConsumable: (
+        options: Parameters<typeof nativeFinance.getConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/consumables/{consumable_id}", {
+              params: { path: { consumable_id: options.consumableId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getConsumable(options)),
+        ),
+      updateConsumable: (
+        options: Parameters<typeof nativeFinance.updateConsumable>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/consumables/{consumable_id}", {
+              body: options.input,
+              params: {
+                path: { consumable_id: options.consumableId },
+                header: { "If-Match": options.ifMatch },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.updateConsumable(options)),
+        ),
+      listStockMovements: (
+        options: Parameters<typeof nativeFinance.listStockMovements>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/consumables/{consumable_id}/stock-movements", {
+              params: { path: { consumable_id: options.consumableId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.listStockMovements(options)),
+        ),
+      createStockMovement: (
+        options: Parameters<typeof nativeFinance.createStockMovement>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/consumables/{consumable_id}/stock-movements", {
+              body: options.input,
+              params: {
+                path: { consumable_id: options.consumableId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.createStockMovement(options)),
+        ),
+      getStockMovement: (
+        options: Parameters<typeof nativeFinance.getStockMovement>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/consumables/{consumable_id}/stock-movements/{movement_id}", {
+              params: {
+                path: { consumable_id: options.consumableId, movement_id: options.movementId },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getStockMovement(options)),
+        ),
+      cancelStockMovement: (
+        options: Parameters<typeof nativeFinance.cancelStockMovement>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/consumables/{consumable_id}/stock-movements/{movement_id}/cancel", {
+              body: options.input,
+              params: {
+                path: { consumable_id: options.consumableId, movement_id: options.movementId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.cancelStockMovement(options)),
+        ),
+      getHomecareStatus: (
+        options: Parameters<typeof nativeFinance.getHomecareStatus>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/homecare/status", { params: { query: options.query }, signal }),
+          () => cancellableNative(signal, () => nativeFinance.getHomecareStatus(options)),
+        ),
+    }),
+    [domainApi],
+  );
 }

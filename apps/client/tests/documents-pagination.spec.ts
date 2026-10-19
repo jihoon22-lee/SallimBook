@@ -6,23 +6,43 @@ import { uid } from "./support/finance";
 for (const transport of ["web", "native"] as const) {
   for (const currentTarget of [true, false]) {
     for (const failPage of [false, true]) {
-      test(`${transport} document history page two ${currentTarget ? "blocks duplicate" : "allows new target"}${failPage ? " after failure and retry" : ""}`, async ({ page }) => {
+      test(`${transport} document history page two ${currentTarget ? "blocks duplicate" : "allows new target"}${failPage ? " after failure and retry" : ""}`, async ({
+        page,
+      }) => {
         const state = await mockDocuments(page);
-        state.links = Array.from({ length: 50 }, (_, index) => documentLink(8100 + index, {
-          active: false, ended_at: "2026-10-18T00:00:00Z", end_reason: "합성 과거 연결 종료",
-        }));
-        state.links.push(documentLink(8150, { target: { kind: "appliance", id: uid(currentTarget ? 100 : 101) } }));
+        state.links = Array.from({ length: 50 }, (_, index) =>
+          documentLink(8100 + index, {
+            active: false,
+            ended_at: "2026-10-18T00:00:00Z",
+            end_reason: "합성 과거 연결 종료",
+          }),
+        );
+        state.links.push(
+          documentLink(8150, { target: { kind: "appliance", id: uid(currentTarget ? 100 : 101) } }),
+        );
         let release: () => void = () => {};
         let pageStarted = false;
         let fail = failPage;
-        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
         const handle = state.handle;
         state.handle = async (...args) => {
           const result = await handle(...args);
           if (args[0] === "GET" && args[1].endsWith("/links") && args[2]?.has("cursor")) {
             pageStarted = true;
             await gate;
-            if (fail) return { status: 503, body: { error: { code: "REQUEST_FAILED", message: "UNTRUSTED_PAGE_ERROR", request_id: "synthetic" } } };
+            if (fail)
+              return {
+                status: 503,
+                body: {
+                  error: {
+                    code: "REQUEST_FAILED",
+                    message: "UNTRUSTED_PAGE_ERROR",
+                    request_id: "synthetic",
+                  },
+                },
+              };
           }
           return result;
         };
@@ -38,7 +58,11 @@ for (const transport of ["web", "native"] as const) {
           await expect(detail.locator("ul.record-list > li")).toHaveCount(50);
           await expect(more).toBeEnabled();
           await expect(link).toBeDisabled();
-          await expect(detail.getByText("연결 여부를 확인하려면 남은 연결 이력을 모두 확인해 주세요.", { exact: true })).toBeVisible();
+          await expect(
+            detail.getByText("연결 여부를 확인하려면 남은 연결 이력을 모두 확인해 주세요.", {
+              exact: true,
+            }),
+          ).toBeVisible();
           await more.click();
           await expect.poll(() => pageStarted).toBe(true);
           await expect(more).toBeDisabled();
@@ -66,11 +90,18 @@ for (const transport of ["web", "native"] as const) {
             await link.click();
             await expect(detail.getByText("현재 대상에 연결 완료", { exact: true })).toBeVisible();
             expect(state.writes).toHaveLength(1);
-            expect(state.writes[0]).toMatchObject({ path: "/api/v1/document-links", method: "POST", version: '"1"', body: { document_id: uid(8000), target: { kind: "appliance", id: uid(100) } } });
+            expect(state.writes[0]).toMatchObject({
+              path: "/api/v1/document-links",
+              method: "POST",
+              version: '"1"',
+              body: { document_id: uid(8000), target: { kind: "appliance", id: uid(100) } },
+            });
             await expect(link).toBeDisabled();
           }
           if (native) expect(native.http).toEqual([]);
-        } finally { release(); }
+        } finally {
+          release();
+        }
       });
     }
   }

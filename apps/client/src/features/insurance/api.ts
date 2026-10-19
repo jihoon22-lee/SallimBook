@@ -4,26 +4,225 @@ import { nativeFinance } from "../../platform/nativeFinance";
 import type { Schema, PolicyInput, PolicyPatch, PolicyQuery, CaseQuery } from "./model";
 export function useInsuranceApi() {
   const { domainApi } = useAuth();
-  return useMemo(() => ({
-    policies: (query: PolicyQuery = {}) => domainApi.read((c) => c.GET("/api/v1/insurance/policies", { params: { query } }), () => nativeFinance.listInsurancePolicies({ query })),
-    policy: (policyId: string) => domainApi.read((c) => c.GET("/api/v1/insurance/policies/{policy_id}", { params: { path: { policy_id: policyId } } }), () => nativeFinance.getInsurancePolicy({ policyId })),
-    createPolicy: (input: PolicyInput) => domainApi.write((c) => c.POST("/api/v1/insurance/policies", { body: input }), () => nativeFinance.createInsurancePolicy({ input })),
-    updatePolicy: (policyId: string, input: PolicyPatch, version: number) => domainApi.write((c) => c.PATCH("/api/v1/insurance/policies/{policy_id}", { body: input, params: { path: { policy_id: policyId }, header: { "If-Match": `"${version}"` } } }), () => nativeFinance.updateInsurancePolicy({ policyId, input, ifMatch: `"${version}"` })),
-    coverages: (policyId: string, cursor?: string) => domainApi.read((c) => c.GET("/api/v1/insurance/policies/{policy_id}/coverages", { params: { path: { policy_id: policyId }, query: { limit: 200, ...(cursor ? { cursor } : {}) } } }), () => nativeFinance.listInsuranceCoverages({ policyId, query: { limit: 200, ...(cursor ? { cursor } : {}) } })),
-    createCoverage: (policyId: string, input: Schema["CoverageInput"]) => domainApi.write((c) => c.POST("/api/v1/insurance/policies/{policy_id}/coverages", { body: input, params: { path: { policy_id: policyId } } }), () => nativeFinance.createInsuranceCoverage({ policyId, input })),
-    updateCoverage: (policyId: string, coverageId: string, input: Schema["CoveragePatch"], version: number) => domainApi.write((c) => c.PATCH("/api/v1/insurance/policies/{policy_id}/coverages/{coverage_id}", { body: input, params: { path: { policy_id: policyId, coverage_id: coverageId }, header: { "If-Match": `"${version}"` } } }), () => nativeFinance.updateInsuranceCoverage({ policyId, coverageId, input, ifMatch: `"${version}"` })),
-    premiums: (policyId: string, cursor?: string) => domainApi.read((c) => c.GET("/api/v1/insurance/policies/{policy_id}/premium-links", { params: { path: { policy_id: policyId }, query: { limit: 200, ...(cursor ? { cursor } : {}) } } }), () => nativeFinance.listPolicyPremiumLinks({ policyId, query: { limit: 200, ...(cursor ? { cursor } : {}) } })),
-    createPremium: (policyId: string, ruleId: string) => domainApi.write((c) => c.POST("/api/v1/insurance/policies/{policy_id}/premium-links", { body: { rule_id: ruleId }, params: { path: { policy_id: policyId } } }), () => nativeFinance.createPolicyPremiumLink({ policyId, input: { rule_id: ruleId } })),
-    updatePremium: (policyId: string, linkId: string, active: boolean, version: number) => domainApi.write((c) => c.PATCH("/api/v1/insurance/policies/{policy_id}/premium-links/{link_id}", { body: { active }, params: { path: { policy_id: policyId, link_id: linkId }, header: { "If-Match": `"${version}"` } } }), () => nativeFinance.updatePolicyPremiumLink({ policyId, linkId, input: { active }, ifMatch: `"${version}"` })),
-    cases: (query: CaseQuery = {}) => domainApi.read((c) => c.GET("/api/v1/insurance/cases", { params: { query } }), () => nativeFinance.listInsuranceCases({ query })),
-    case: (caseId: string) => domainApi.read((c) => c.GET("/api/v1/insurance/cases/{case_id}", { params: { path: { case_id: caseId } } }), () => nativeFinance.getInsuranceCase({ caseId })),
-    createCase: (input: Schema["CaseInput"]) => domainApi.write((c) => c.POST("/api/v1/insurance/cases", { body: input }), () => nativeFinance.createInsuranceCase({ input })),
-    updateCase: (caseId: string, input: Schema["CasePatch"], version: number) => domainApi.write((c) => c.PATCH("/api/v1/insurance/cases/{case_id}", { body: input, params: { path: { case_id: caseId }, header: { "If-Match": `"${version}"` } } }), () => nativeFinance.updateInsuranceCase({ caseId, input, ifMatch: `"${version}"` })),
-    caseHistory: (caseId: string, cursor?: number) => domainApi.read((c) => c.GET("/api/v1/insurance/cases/{case_id}/history", { params: { path: { case_id: caseId }, query: { limit: 50, ...(cursor ? { cursor } : {}) } } }), () => nativeFinance.insuranceCaseHistory({ caseId, query: { limit: 50, ...(cursor ? { cursor } : {}) } })),
-    nodes: (caseId: string, cursor?: string) => domainApi.read((c) => c.GET("/api/v1/insurance/cases/{case_id}/nodes", { params: { path: { case_id: caseId }, query: { limit: 200, ...(cursor ? { cursor } : {}) } } }), () => nativeFinance.listMedicalNodes({ caseId, query: { limit: 200, ...(cursor ? { cursor } : {}) } })),
-    node: (caseId: string, nodeId: string) => domainApi.read((c) => c.GET("/api/v1/insurance/cases/{case_id}/nodes/{node_id}", { params: { path: { case_id: caseId, node_id: nodeId } } }), () => nativeFinance.getMedicalNode({ caseId, nodeId })),
-    createNode: (caseId: string, input: Schema["MedicalNodeInput"]) => domainApi.write((c) => c.POST("/api/v1/insurance/cases/{case_id}/nodes", { body: input, params: { path: { case_id: caseId } } }), () => nativeFinance.createMedicalNode({ caseId, input })),
-    updateNode: (caseId: string, nodeId: string, input: Schema["MedicalNodePatch"], version: number) => domainApi.write((c) => c.PATCH("/api/v1/insurance/cases/{case_id}/nodes/{node_id}", { body: input, params: { path: { case_id: caseId, node_id: nodeId }, header: { "If-Match": `"${version}"` } } }), () => nativeFinance.updateMedicalNode({ caseId, nodeId, input, ifMatch: `"${version}"` })),
-    deleteNode: (caseId: string, nodeId: string, version: number) => domainApi.write((c) => c.DELETE("/api/v1/insurance/cases/{case_id}/nodes/{node_id}", { params: { path: { case_id: caseId, node_id: nodeId }, header: { "If-Match": `"${version}"` } } }), () => nativeFinance.deleteMedicalNode({ caseId, nodeId, ifMatch: `"${version}"` })),
-  }), [domainApi]);
+  return useMemo(
+    () => ({
+      policies: (query: PolicyQuery = {}) =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/insurance/policies", { params: { query } }),
+          () => nativeFinance.listInsurancePolicies({ query }),
+        ),
+      policy: (policyId: string) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/policies/{policy_id}", {
+              params: { path: { policy_id: policyId } },
+            }),
+          () => nativeFinance.getInsurancePolicy({ policyId }),
+        ),
+      createPolicy: (input: PolicyInput) =>
+        domainApi.write(
+          (c) => c.POST("/api/v1/insurance/policies", { body: input }),
+          () => nativeFinance.createInsurancePolicy({ input }),
+        ),
+      updatePolicy: (policyId: string, input: PolicyPatch, version: number) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/insurance/policies/{policy_id}", {
+              body: input,
+              params: { path: { policy_id: policyId }, header: { "If-Match": `"${version}"` } },
+            }),
+          () => nativeFinance.updateInsurancePolicy({ policyId, input, ifMatch: `"${version}"` }),
+        ),
+      coverages: (policyId: string, cursor?: string) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/policies/{policy_id}/coverages", {
+              params: {
+                path: { policy_id: policyId },
+                query: { limit: 200, ...(cursor ? { cursor } : {}) },
+              },
+            }),
+          () =>
+            nativeFinance.listInsuranceCoverages({
+              policyId,
+              query: { limit: 200, ...(cursor ? { cursor } : {}) },
+            }),
+        ),
+      createCoverage: (policyId: string, input: Schema["CoverageInput"]) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/policies/{policy_id}/coverages", {
+              body: input,
+              params: { path: { policy_id: policyId } },
+            }),
+          () => nativeFinance.createInsuranceCoverage({ policyId, input }),
+        ),
+      updateCoverage: (
+        policyId: string,
+        coverageId: string,
+        input: Schema["CoveragePatch"],
+        version: number,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/insurance/policies/{policy_id}/coverages/{coverage_id}", {
+              body: input,
+              params: {
+                path: { policy_id: policyId, coverage_id: coverageId },
+                header: { "If-Match": `"${version}"` },
+              },
+            }),
+          () =>
+            nativeFinance.updateInsuranceCoverage({
+              policyId,
+              coverageId,
+              input,
+              ifMatch: `"${version}"`,
+            }),
+        ),
+      premiums: (policyId: string, cursor?: string) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/policies/{policy_id}/premium-links", {
+              params: {
+                path: { policy_id: policyId },
+                query: { limit: 200, ...(cursor ? { cursor } : {}) },
+              },
+            }),
+          () =>
+            nativeFinance.listPolicyPremiumLinks({
+              policyId,
+              query: { limit: 200, ...(cursor ? { cursor } : {}) },
+            }),
+        ),
+      createPremium: (policyId: string, ruleId: string) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/policies/{policy_id}/premium-links", {
+              body: { rule_id: ruleId },
+              params: { path: { policy_id: policyId } },
+            }),
+          () => nativeFinance.createPolicyPremiumLink({ policyId, input: { rule_id: ruleId } }),
+        ),
+      updatePremium: (policyId: string, linkId: string, active: boolean, version: number) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/insurance/policies/{policy_id}/premium-links/{link_id}", {
+              body: { active },
+              params: {
+                path: { policy_id: policyId, link_id: linkId },
+                header: { "If-Match": `"${version}"` },
+              },
+            }),
+          () =>
+            nativeFinance.updatePolicyPremiumLink({
+              policyId,
+              linkId,
+              input: { active },
+              ifMatch: `"${version}"`,
+            }),
+        ),
+      cases: (query: CaseQuery = {}) =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/insurance/cases", { params: { query } }),
+          () => nativeFinance.listInsuranceCases({ query }),
+        ),
+      case: (caseId: string) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/cases/{case_id}", { params: { path: { case_id: caseId } } }),
+          () => nativeFinance.getInsuranceCase({ caseId }),
+        ),
+      createCase: (input: Schema["CaseInput"]) =>
+        domainApi.write(
+          (c) => c.POST("/api/v1/insurance/cases", { body: input }),
+          () => nativeFinance.createInsuranceCase({ input }),
+        ),
+      updateCase: (caseId: string, input: Schema["CasePatch"], version: number) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/insurance/cases/{case_id}", {
+              body: input,
+              params: { path: { case_id: caseId }, header: { "If-Match": `"${version}"` } },
+            }),
+          () => nativeFinance.updateInsuranceCase({ caseId, input, ifMatch: `"${version}"` }),
+        ),
+      caseHistory: (caseId: string, cursor?: number) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/cases/{case_id}/history", {
+              params: {
+                path: { case_id: caseId },
+                query: { limit: 50, ...(cursor ? { cursor } : {}) },
+              },
+            }),
+          () =>
+            nativeFinance.insuranceCaseHistory({
+              caseId,
+              query: { limit: 50, ...(cursor ? { cursor } : {}) },
+            }),
+        ),
+      nodes: (caseId: string, cursor?: string) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/cases/{case_id}/nodes", {
+              params: {
+                path: { case_id: caseId },
+                query: { limit: 200, ...(cursor ? { cursor } : {}) },
+              },
+            }),
+          () =>
+            nativeFinance.listMedicalNodes({
+              caseId,
+              query: { limit: 200, ...(cursor ? { cursor } : {}) },
+            }),
+        ),
+      node: (caseId: string, nodeId: string) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/cases/{case_id}/nodes/{node_id}", {
+              params: { path: { case_id: caseId, node_id: nodeId } },
+            }),
+          () => nativeFinance.getMedicalNode({ caseId, nodeId }),
+        ),
+      createNode: (caseId: string, input: Schema["MedicalNodeInput"]) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/cases/{case_id}/nodes", {
+              body: input,
+              params: { path: { case_id: caseId } },
+            }),
+          () => nativeFinance.createMedicalNode({ caseId, input }),
+        ),
+      updateNode: (
+        caseId: string,
+        nodeId: string,
+        input: Schema["MedicalNodePatch"],
+        version: number,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/insurance/cases/{case_id}/nodes/{node_id}", {
+              body: input,
+              params: {
+                path: { case_id: caseId, node_id: nodeId },
+                header: { "If-Match": `"${version}"` },
+              },
+            }),
+          () => nativeFinance.updateMedicalNode({ caseId, nodeId, input, ifMatch: `"${version}"` }),
+        ),
+      deleteNode: (caseId: string, nodeId: string, version: number) =>
+        domainApi.write(
+          (c) =>
+            c.DELETE("/api/v1/insurance/cases/{case_id}/nodes/{node_id}", {
+              params: {
+                path: { case_id: caseId, node_id: nodeId },
+                header: { "If-Match": `"${version}"` },
+              },
+            }),
+          () => nativeFinance.deleteMedicalNode({ caseId, nodeId, ifMatch: `"${version}"` }),
+        ),
+    }),
+    [domainApi],
+  );
 }
