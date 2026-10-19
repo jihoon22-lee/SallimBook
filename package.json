@@ -13,6 +13,8 @@
     "db:stop": "docker compose --env-file .env -f infra/compose.dev.yaml -p sallimbook-dev stop db",
     "build": "pnpm --filter @sallimbook/client build",
     "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,mts,cts,js,mjs,cjs}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mts,cts,js,mjs,cjs}\"",
     "api:generate": "uv run --project services/api python scripts/export_openapi.py && pnpm --filter @sallimbook/api-client generate",
     "android:sync": "pnpm build && pnpm --filter @sallimbook/client exec cap sync android",
     "android:build": "pnpm android:sync && python3 scripts/build_android.py",
@@ -20,5 +22,8 @@
     "test:api": "uv run --project services/api pytest services/api/tests",
     "test:database": "uv run --project services/api python scripts/test_database.py",
     "test:web": "pnpm --filter @sallimbook/client exec playwright test"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
   }
 }
