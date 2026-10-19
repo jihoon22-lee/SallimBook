@@ -116,6 +116,8 @@ pnpm typecheck
 pnpm build
 pnpm test:api
 pnpm test:database  # 일회용 *_test DB: 18745, 시험 후 이 컨테이너만 중지
+pnpm test:database services/api/tests/test_income.py -q  # pytest 인자는 그대로 전달
+pnpm test:database -k income  # 경로가 없으면 services/api/tests만 수집
 pnpm --filter @sallimbook/client exec playwright install chromium
 pnpm test:web  # 전용 시험 포트 18743, 다른 실행 중인 서버를 재사용하지 않음
 uv run --project services/api python scripts/test_web_auth.py  # 실제 HTTPS + 격리 PostgreSQL 인증

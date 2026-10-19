@@ -42,8 +42,8 @@
       "git_sha1": "9bc8381ce3ec89db73312cdc47e1059d0598f390"
     },
     "README.md": {
-      "sha256": "ec106b58c7c5349a39484545816ed9958e9e8ece4e316dcddd220db07e74a087",
-      "git_sha1": "a18f8f996665ed6371f1b662bb2740f5efb75b8c"
+      "sha256": "99b5b42328f4d828d638310d822f14f993523ffce7a14636c35b4c9ee3dd572d",
+      "git_sha1": "41eef289e09e11981697e4484bbb8a3fbab0e2a1"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -86,8 +86,8 @@
       "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
     },
     "docs/development-environment.md": {
-      "sha256": "cd5da1589dca0c87f9c20cf5147e825911cfabd9b947c8ae4dbeaa5e054b7673",
-      "git_sha1": "3acd9612fe9beca4e0975a0a8e9af126d00b1111"
+      "sha256": "4bbd0e7ce67de19c2a49620841afb1be080cdccc36d73fba1f05b6e945d76506",
+      "git_sha1": "49d5f66df0e6047d8068951ea2483d8d1bdfd004"
     },
     "docs/testing-and-acceptance.md": {
       "sha256": "eab8aaec6ac234e0a2828d88c954b2a2d050011c89943d3f2ac4d3a0dfa34ffa",
@@ -206,8 +206,8 @@
       "git_sha1": "f0b61e34ad240976219d1abf815c3e565e1c2bcd"
     },
     "scripts/test_database.py": {
-      "sha256": "429775febbbca7beeb2aa6251e19c544dcda25b4d69d420288e22b7f32af8253",
-      "git_sha1": "8accf5f4e9f214fff7ec99bd87c472cc16629c9f"
+      "sha256": "aca1601b09f488d12786295f88cc7969ee117ef97a00fc06be3a2bf2776c01f1",
+      "git_sha1": "101f25d2f5ca681c37a4dcf04e8e174041e3a1a8"
     },
     "packages/test-fixtures/README.md": {
       "sha256": "5864b90d1a56bbc02aa47937c576073d65093ec40b45233452e7ed56e0a63e6f",
