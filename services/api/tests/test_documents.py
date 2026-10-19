@@ -58,6 +58,9 @@ def document_app(db_engine, tmp_path, monkeypatch):
         environment="test",
         field_encryption_key_file=key_file,
         document_storage_directory=tmp_path / "private",
+        # Tests must not depend on the host's free space; the production headroom
+        # default is covered by the explicit low-disk test below.
+        document_min_free_bytes=0,
         _env_file=None,
     )
     install_http_contract(app)
@@ -964,6 +967,18 @@ def test_low_disk_space_rejects_before_reservation_or_write(document_app, actors
     assert list(document_app.state.settings.document_storage_directory.iterdir()) == []
     with Session(document_app.state.engine) as session:
         assert list(session.scalars(select(DocumentStorageReservation))) == []
+
+
+def test_fixture_uploads_do_not_require_production_disk_headroom(document_app, actors, monkeypatch):
+    from sallimbook.documents import quota
+
+    half_gib = 512 * 1024 * 1024
+    monkeypatch.setattr(
+        quota.os, "fstatvfs", lambda _: SimpleNamespace(f_bavail=half_gib // 4096, f_frsize=4096)
+    )
+    with TestClient(document_app) as client:
+        row = pending(client, actors[0])
+        assert upload(client, actors[0], row).status_code == 200
 
 
 def test_reservation_identity_and_live_charge_cannot_be_changed_directly(document_app, actors):
