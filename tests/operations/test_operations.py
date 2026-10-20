@@ -244,7 +244,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(
             compose["services"]["api"]["depends_on"]["scanner"]["condition"], "service_healthy"
         )
-        for role in ("api", "scanner"):
+        for role in ("api", "scanner", "inspector"):
             self.assertEqual(
                 compose["services"][role]["healthcheck"]["test"],
                 ["CMD", "python", "-m", "ops.health", role],
@@ -302,11 +302,44 @@ class DeploymentTests(unittest.TestCase):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 deploy.render({**config(), key: value})
 
+    def test_document_inspector_is_isolated_from_network_secrets_and_storage(self):
+        compose = deploy.render(config())["compose.json"]
+        inspector, api = compose["services"]["inspector"], compose["services"]["api"]
+        self.assertEqual(inspector["image"], config()["api_image"])
+        self.assertEqual(inspector["network_mode"], "none")
+        self.assertEqual(inspector["user"], "10002:10003")
+        self.assertTrue(inspector["read_only"])
+        self.assertEqual(inspector["cap_drop"], ["ALL"])
+        self.assertIn("no-new-privileges:true", inspector["security_opt"])
+        self.assertEqual(inspector["volumes"], ["inspector_socket:/run/inspector"])
+        for key in ("env_file", "environment", "networks", "depends_on", "group_add", "ports"):
+            self.assertNotIn(key, inspector)
+        self.assertEqual(inspector["mem_limit"], inspector["memswap_limit"])
+        self.assertEqual(inspector["pids_limit"], 32)
+        self.assertEqual(
+            inspector["command"],
+            ["python", "-B", "-m", "sallimbook.documents.inspector", "--socket",
+             "/run/inspector/inspector.sock"],
+        )
+        self.assertEqual(api["group_add"], ["10003"])
+        self.assertIn("inspector_socket:/run/inspector:ro", api["volumes"])
+        self.assertEqual(
+            api["environment"]["SALLIMBOOK_DOCUMENT_INSPECTOR_SOCKET"],
+            "/run/inspector/inspector.sock",
+        )
+        self.assertEqual(api["depends_on"]["inspector"], {"condition": "service_healthy"})
+        self.assertEqual(compose["volumes"]["inspector_socket"], {})
+        for name, service in compose["services"].items():
+            if name not in {"api", "inspector"}:
+                self.assertFalse(any("inspector" in v for v in service.get("volumes", [])), name)
+        dockerfile = (Path(__file__).resolve().parents[2] / "ops/Dockerfile.api").read_text()
+        self.assertIn("install -d -o 10002 -g 10003 -m 0750 /run/inspector", dockerfile)
+
     def test_full_local_image_ids_are_preserved_without_repository_prefix(self):
         local = {**config(), "api_image": "sha256:" + "a" * 64,
                  "web_image": "sha256:" + "b" * 64}
         services = deploy.render(local)["compose.json"]["services"]
-        for name in ("api", "scanner"):
+        for name in ("api", "scanner", "inspector"):
             self.assertEqual(services[name]["image"], local["api_image"])
         for name in ("web", "public"):
             self.assertEqual(services[name]["image"], local["web_image"])

@@ -604,6 +604,8 @@ class RuntimeBoundaries(unittest.TestCase):
         self.assertEqual(item.manifest, original)
         self.assertFalse((Path(self.config["state_directory"]) / "active-deployment.json").exists())
         self.assertTrue((item.journal.directory / "promotion-rolled-back.json").exists())
+        for call in compose.call_args_list:
+            self.assertEqual(call.args[-3:], ("scanner", "inspector", "api"))
 
     def test_cvd_uncertain_atomic_commit_preserves_new_services_for_recovery(self):
         item = self.make_runtime()
@@ -636,6 +638,51 @@ class RuntimeBoundaries(unittest.TestCase):
         )
         self.assertEqual(result["status"], "scanner-refresh-promoted")
         self.assertTrue(result["web_and_apk_unchanged"])
+        self.assertEqual(compose.call_args.args[-3:], ("scanner", "inspector", "api"))
+
+    def test_service_set_requires_the_document_inspector(self):
+        item = self.make_runtime()
+        names = ["api", "db", "scanner", "node", "web", "public"]
+
+        def rows(services):
+            return "\n".join(json.dumps({"Service": name, "ID": name}) for name in services)
+
+        def inspect(*args, **kwargs):
+            name = args[-1]
+            role = "api" if name in {"api", "scanner", "inspector"} else "web"
+            return json.dumps({
+                "labels": {
+                    "com.docker.compose.project": item.project,
+                    "com.docker.compose.service": name,
+                },
+                "running": True,
+                "health": "healthy",
+                "image": item.manifest[role + "_image"],
+                "restarts": 0,
+            })
+
+        with patch.object(item, "docker", side_effect=inspect):
+            with (
+                patch.object(item, "compose", return_value=rows(names)),
+                self.assertRaisesRegex(auto.AutomationError, "SERVICE_SET"),
+            ):
+                item.services()
+            with patch.object(item, "compose", return_value=rows(names + ["inspector"])):
+                self.assertIn("inspector", item.services())
+
+    def test_interrupted_promotion_recovery_restarts_scanner_inspector_and_api(self):
+        item = self.make_runtime()
+        previous = auto.Journal(self.config, "cvd-refresh", "d" * 64)
+        previous.phase("promotion-started")
+        with (
+            patch.object(item, "preflight"),
+            patch.object(item, "compose") as compose,
+            patch.object(item, "services", return_value={}),
+        ):
+            item.recover(auto.unfinished_runs(self.config, exclude=item.journal.run_id))
+        compose.assert_called_once()
+        self.assertEqual(compose.call_args.args[-3:], ("scanner", "inspector", "api"))
+        self.assertTrue((previous.directory / "recovered.json").exists())
 
     def test_recovery_cleans_only_recorded_owned_containers_and_networks(self):
         item = self.make_runtime()

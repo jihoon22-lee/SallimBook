@@ -40,6 +40,12 @@ POSTGRES = (
 # Repository digests and full local image IDs are immutable references. A local
 # build's image ID is not a repository digest and must never be appended to a tag.
 IMAGE = re.compile(r"(?:[a-z0-9][a-z0-9./:_-]*@)?sha256:[0-9a-f]{64}")
+INSPECTOR_SOCKET = "/run/inspector/inspector.sock"
+INSPECTOR_USER = "10002:10003"
+INSPECTOR_GROUP = "10003"
+# WP12 measurement rule: max(1024, ceil((1.25 x peak MiB + 96) / 128) x 128); peak 763.3 MiB.
+INSPECTOR_MEMORY = "1152m"
+INSPECTOR_PIDS = 32
 REQUIRED = {
     "format",
     "project",
@@ -287,13 +293,16 @@ http://:8080 {{
                 "SALLIMBOOK_FIELD_ENCRYPTION_KEY_FILE": "/run/secrets/field-keyring.json",
                 "SALLIMBOOK_DOCUMENT_STORAGE_DIRECTORY": "/srv/documents",
                 "SALLIMBOOK_DOCUMENT_SCANNER_SOCKET": "/run/scanner/clamd.sock",
+                "SALLIMBOOK_DOCUMENT_INSPECTOR_SOCKET": INSPECTOR_SOCKET,
                 **setup_environment,
             },
             "volumes": [
                 runtime + "/field-keyring.json:/run/secrets/field-keyring.json:ro",
                 runtime + "/documents:/srv/documents",
                 "scanner_socket:/run/scanner:ro",
+                "inspector_socket:/run/inspector:ro",
             ],
+            "group_add": [INSPECTOR_GROUP],
             "tmpfs": [
                 "/tmp:rw,noexec,nosuid,nodev,size=160m,mode=0700,uid=10001,gid=10001"
             ],
@@ -315,6 +324,7 @@ http://:8080 {{
             "depends_on": {
                 "db": {"condition": "service_healthy"},
                 "scanner": {"condition": "service_healthy"},
+                "inspector": {"condition": "service_healthy"},
             },
             "healthcheck": {
                 "test": [
@@ -352,6 +362,35 @@ http://:8080 {{
                 "timeout": "5s",
                 "retries": 3,
                 "start_period": "90s",
+            },
+        },
+        "inspector": {
+            **common,
+            "image": c["api_image"],
+            "user": INSPECTOR_USER,
+            "read_only": True,
+            "network_mode": "none",
+            "volumes": ["inspector_socket:/run/inspector"],
+            "tmpfs": [
+                "/tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=10002,gid=10003"
+            ],
+            "command": [
+                "python",
+                "-B",
+                "-m",
+                "sallimbook.documents.inspector",
+                "--socket",
+                INSPECTOR_SOCKET,
+            ],
+            "mem_limit": INSPECTOR_MEMORY,
+            "memswap_limit": INSPECTOR_MEMORY,
+            "pids_limit": INSPECTOR_PIDS,
+            "healthcheck": {
+                "test": ["CMD", "python", "-m", "ops.health", "inspector"],
+                "interval": "10s",
+                "timeout": "5s",
+                "retries": 3,
+                "start_period": "20s",
             },
         },
         "db": {
@@ -405,7 +444,12 @@ http://:8080 {{
             "app": {"internal": True},
             "database": {"internal": True},
         },
-        "volumes": {"node_state": {}, "db_data": {}, "scanner_socket": {}},
+        "volumes": {
+            "node_state": {},
+            "db_data": {},
+            "scanner_socket": {},
+            "inspector_socket": {},
+        },
     }
     return {
         "compose.json": compose,
