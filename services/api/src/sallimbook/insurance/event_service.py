@@ -620,11 +620,8 @@ def _submitted_date(payload):
 def create_claim(session, principal, payload):
     cash.lock_cash_household(session, principal)
     scoped_entity(session, InsuranceCase, payload.case_id, principal)
-    policy = scoped_entity(session, InsurancePolicy, payload.policy_id, principal)
-    if policy.status != "active":
-        raise DomainError(
-            "POLICY_UNAVAILABLE", "새 청구에는 사용 중인 보험계약을 선택해 주세요.", 422
-        )
+    # Claims are often filed after a policy ends; only the household boundary applies.
+    scoped_entity(session, InsurancePolicy, payload.policy_id, principal)
     _submitted_date(payload)
     _claim_expenses(session, principal, payload.case_id, payload.expense_ids)
     row = InsuranceClaim(
@@ -767,9 +764,10 @@ def claim_history(session, principal, claim_id, *, cursor=None, limit=50):
     )
 
 
-def _allocation_targets(session, principal, allocations, *, previous=()):
+def _allocation_targets(session, principal, allocations):
     _loaded(session, principal, InsuranceCase, {r.case_id for r in allocations})
-    policies = _loaded(
+    # Ended or lapsed policies still pay late benefits; only the household boundary applies.
+    _loaded(
         session,
         principal,
         InsurancePolicy,
@@ -781,7 +779,6 @@ def _allocation_targets(session, principal, allocations, *, previous=()):
         InsuranceClaim,
         {r.claim_id for r in allocations if r.claim_id is not None},
     )
-    historical = {(r.case_id, r.policy_id) for r in previous}
     for row in allocations:
         if row.claim_id is not None:
             claim = claims[row.claim_id]
@@ -789,17 +786,6 @@ def _allocation_targets(session, principal, allocations, *, previous=()):
                 raise DomainError(
                     "CLAIM_ALLOCATION_MISMATCH", "청구와 같은 사건·보험계약을 선택해 주세요.", 422
                 )
-            # A late receipt may settle an existing claim after its policy ended.
-        elif (
-            row.policy_id is not None
-            and policies[row.policy_id].status != "active"
-            and (row.case_id, row.policy_id) not in historical
-        ):
-            raise DomainError(
-                "POLICY_UNAVAILABLE",
-                "새 직접 지급 연결에는 사용 중인 보험계약을 선택해 주세요.",
-                422,
-            )
 
 
 def _remember_allocation(session, principal, row, reason=None):
@@ -875,10 +861,9 @@ def _new_payout(
     *,
     correction_of=None,
     correction_reason=None,
-    previous=(),
     previous_cash=None,
 ):
-    _allocation_targets(session, principal, payload.allocations, previous=previous)
+    _allocation_targets(session, principal, payload.allocations)
     source = cash.prepare_cash_record(
         session,
         principal,
@@ -1007,14 +992,6 @@ def correct_payout(session, principal, payout_id, payload, if_match, key):
     def execute():
         row = scoped_entity(session, InsurancePayout, payout_id, principal, for_update=True)
         require_version(row, if_match)
-        previous = list(
-            session.scalars(
-                select(PayoutAllocation).where(
-                    PayoutAllocation.household_id == principal.household_id,
-                    PayoutAllocation.payout_id == row.id,
-                )
-            )
-        )
         _void_payout(session, principal, row, payload.reason)
         previous_cash = _source(session, principal, row, "insurance_receipt", active=False)
         replacement = _new_payout(
@@ -1023,7 +1000,6 @@ def correct_payout(session, principal, payout_id, payload, if_match, key):
             payload,
             correction_of=row.id,
             correction_reason=payload.reason,
-            previous=previous,
             previous_cash=previous_cash,
         )
         return _reference(replacement, "insurance_payout")
@@ -1060,7 +1036,7 @@ def update_allocation_links(session, principal, allocation_id, payload, if_match
             raise DomainError(
                 "CLAIM_ALLOCATION_MISMATCH", "청구와 보험계약 연결을 확인해 주세요.", 422
             ) from None
-        _allocation_targets(session, principal, [candidate], previous=[row])
+        _allocation_targets(session, principal, [candidate])
         row.policy_id, row.claim_id = candidate.policy_id, candidate.claim_id
         before = _bump(session, row, principal)
         _remember_allocation(session, principal, row, payload.reason)

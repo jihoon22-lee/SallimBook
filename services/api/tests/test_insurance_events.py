@@ -788,6 +788,49 @@ class TestInsuranceEventCorrections:
         with Session(db_engine) as session:
             assert session.scalar(select(func.count()).select_from(CashRecord)) == 3
 
+    @pytest.mark.parametrize("status", ["ended", "lapsed"])
+    def test_inactive_policy_accepts_late_claim_and_direct_allocation(self, app, actors, status):
+        actor, _, foreign = actors
+        with TestClient(app) as client:
+            case, policy = new_case(client, actor), new_policy(client, actor)
+            changed = client.patch(
+                f"{BASE}/policies/{policy['id']}",
+                headers=headers(actor, version=1),
+                json={"status": status},
+            )
+            assert changed.status_code == 200
+            claim = create_metadata(
+                client, actor, "/claims", {"case_id": case["id"], "policy_id": policy["id"]}
+            )
+            assert claim["policy_id"] == policy["id"]
+            direct = new_payout(client, actor, [allocation(case["id"], policy_id=policy["id"])])
+            assert direct["allocations"][0]["policy_id"] == policy["id"]
+            assert direct["allocations"][0]["claim_id"] is None
+            loose = new_payout(client, actor, [allocation(case["id"])])
+            linked = client.patch(
+                f"{BASE}/payout-allocations/{loose['allocations'][0]['id']}",
+                headers=headers(actor, version=1),
+                json={"policy_id": policy["id"], "reason": "합성 종료 계약 연결"},
+            )
+            assert linked.status_code == 200
+            other = new_policy(client, foreign)
+            assert (
+                client.post(
+                    BASE + "/claims",
+                    headers=actor.headers,
+                    json={"case_id": case["id"], "policy_id": other["id"]},
+                ).status_code
+                == 404
+            )
+            assert (
+                client.post(
+                    BASE + "/payouts",
+                    headers=headers(actor),
+                    json=actual(allocations=[allocation(case["id"], policy_id=other["id"])]),
+                ).status_code
+                == 404
+            )
+
     def test_direct_receipt_later_claim_link_has_history_and_no_second_cash(
         self, app, actors, db_engine
     ):
@@ -805,20 +848,6 @@ class TestInsuranceEventCorrections:
                 json={"status": "ended"},
             )
             assert ended.status_code == 200
-            assert (
-                client.post(
-                    BASE + "/claims",
-                    headers=actor.headers,
-                    json={"case_id": case["id"], "policy_id": policy["id"]},
-                ).status_code
-                == 422
-            )
-            direct = client.post(
-                BASE + "/payouts",
-                headers=headers(actor),
-                json=actual(allocations=[allocation(case["id"], policy_id=policy["id"])]),
-            )
-            assert direct.status_code == 422
             path = f"{BASE}/payout-allocations/{allocated['id']}"
             body = {
                 "policy_id": policy["id"],
