@@ -149,6 +149,40 @@ def _size(width: int, height: int) -> None:
         raise Rejected
 
 
+# Digit groups joined by one space or a dash (optionally spaced); dots, commas, colons and
+# tildes end a run, so dates such as 2026.02.22 2026.03.01 never form one candidate.
+_PAN_SEPARATOR = r"(?: ?[-–—] ?| )"
+_PAN_RUN = re.compile(r"(?<!\d)\d+(?:" + _PAN_SEPARATOR + r"\d+)*")
+_PAN_LAYOUTS = frozenset(
+    {(length,) for length in range(13, 20)}
+    | {(4, 4, 4, 4)}
+    | {(4, 4, 4, 4, tail) for tail in (1, 2, 3)}
+    | {(4, 6, 5), (4, 6, 4)}
+)
+_PAN_WINDOWS = (1, 3, 4, 5)
+
+
+def _pan_candidates(text: str):
+    """Card-like digit strings (13–19 digits) from NFKC text, in linear time."""
+    for run in _PAN_RUN.finditer(text):
+        groups = re.findall(r"\d+", run[0])
+        lengths = [len(group) for group in groups]
+        for start in range(len(groups)):
+            for width in _PAN_WINDOWS:
+                window = tuple(lengths[start : start + width])
+                if len(window) == width and window in _PAN_LAYOUTS:
+                    yield "".join(groups[start : start + width])
+        # A maximal stretch of single digits (spaced-out OCR) is one candidate as a whole.
+        opened = None
+        for index, length in enumerate([*lengths, 0]):
+            if length == 1:
+                opened = index if opened is None else opened
+                continue
+            if opened is not None and 13 <= index - opened <= 19:
+                yield "".join(groups[opened:index])
+            opened = None
+
+
 def _card_text(value: str) -> None:
     # NFKC makes full-width digits and punctuation equivalent. Do not log candidates.
     normalized = "".join(
@@ -166,9 +200,9 @@ def _card_text(value: str) -> None:
         normalized,
     ):
         raise Rejected("DOCUMENT_CARD_DATA")
-    for match in re.finditer(r"(?<!\d)(?:\d[\s\-–—.]*){12,18}\d(?!\d)", normalized):
-        digits = [int(char) for char in match[0] if char.isdecimal()]
-        if not 13 <= len(digits) <= 19 or len(set(digits)) == 1:
+    for candidate in _pan_candidates(normalized):
+        digits = [int(char) for char in candidate]
+        if len(set(digits)) == 1:
             continue
         total = 0
         for index, digit in enumerate(reversed(digits)):
