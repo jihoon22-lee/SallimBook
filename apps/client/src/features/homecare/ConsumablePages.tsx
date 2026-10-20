@@ -238,6 +238,8 @@ function ConsumableList() {
       (cursor?: string) => api.listConsumables({ query: { status, cursor, limit: 50 } }),
       [api, status],
     ),
+    undefined,
+    "consumables",
   );
   return (
     <>

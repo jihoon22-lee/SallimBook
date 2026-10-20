@@ -1,6 +1,15 @@
 import { useEffect, useRef } from "react";
 import { isNativeAuth, nativeAuth } from "../platform/nativeAuth";
-import { Link, matchRoutes, NavLink, Route, Routes, useLocation, useNavigate } from "react-router";
+import {
+  Link,
+  matchRoutes,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from "react-router";
 import {
   AccountListPage,
   AccountNewPage,
@@ -69,6 +78,7 @@ import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navi
 import { MonthProvider } from "../shared/MonthContext";
 import { RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
+import { useHistoryScroll } from "../shared/historyRestore";
 
 const screens = [
   {
@@ -771,6 +781,7 @@ function NotFound() {
 function AppShell() {
   const { state } = useAuth();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(location.pathname);
@@ -791,12 +802,16 @@ function AppShell() {
 
   useEffect(() => {
     document.title = location.pathname === "/" ? "SallimBook · 살림북" : `${title} · SallimBook`;
-    if (previousPath.current !== location.pathname) {
-      mainRef.current?.focus();
-      window.scrollTo(0, 0);
-    }
+    const active = document.activeElement;
+    // A POP keeps its restored scroll and only recovers focus the old screen took with it.
+    if (
+      previousPath.current !== location.pathname &&
+      (navigationType !== "POP" || !active || active === document.body)
+    )
+      mainRef.current?.focus({ preventScroll: true });
     previousPath.current = location.pathname;
-  }, [location.pathname, title]);
+  }, [location.pathname, navigationType, title]);
+  useHistoryScroll(location, navigationType);
 
   useEffect(
     () =>

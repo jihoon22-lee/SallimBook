@@ -201,6 +201,8 @@ function IncomeList() {
         }),
       [api, month, member, kind, state],
     ),
+    undefined,
+    "income",
   );
   return (
     <>

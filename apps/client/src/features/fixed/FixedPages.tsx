@@ -283,6 +283,8 @@ function FixedList() {
       (cursor?: string) => api.obligations({ month, limit: 50, ...(cursor ? { cursor } : {}) }),
       [api, month, refresh],
     ),
+    undefined,
+    "fixed-obligations",
   );
   return (
     <>
@@ -402,6 +404,8 @@ function RuleList() {
       (cursor?: string) => api.rules({ limit: 50, ...(cursor ? { cursor } : {}) }),
       [api],
     ),
+    undefined,
+    "fixed-rules",
   );
   return (
     <>

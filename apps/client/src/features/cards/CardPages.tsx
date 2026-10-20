@@ -120,6 +120,8 @@ function CardList() {
         }),
       [api, owner, type, account, status],
     ),
+    undefined,
+    "cards",
   );
   return (
     <>

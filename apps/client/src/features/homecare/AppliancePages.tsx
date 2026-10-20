@@ -270,6 +270,8 @@ function ApplianceList() {
       (cursor?: string) => api.listAppliances({ query: { status, cursor, limit: 50 } }),
       [api, status],
     ),
+    undefined,
+    "appliances",
   );
   const today = useResource(
     useCallback(

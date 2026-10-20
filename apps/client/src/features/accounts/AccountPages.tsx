@@ -26,11 +26,11 @@ import { AccountNumber } from "./AccountNumber";
 import { useAccountsApi } from "./api";
 import { accountTypes } from "./model";
 import type { Account, AccountQuery } from "./model";
+import { usePagedList } from "../finance/queries";
 
 function AccountList() {
   const api = useAccountsApi();
   const members = useHouseholdMembers();
-  const mounted = useMounted();
   const [params, setParams] = useSearchParams();
   const pending = useRef(params);
   useEffect(() => {
@@ -50,46 +50,14 @@ function AccountList() {
     }),
     [type, owner, status],
   );
-  const [items, setItems] = useState<Account[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [error, setError] = useState<ApiError | null>(null);
-  const [loading, setLoading] = useState(true);
-  const generation = useRef(0);
-  const load = useCallback(
-    async (after?: string) => {
-      const current = ++generation.current;
-      setLoading(true);
-      setError(null);
-      if (!after) {
-        setItems([]);
-        setCursor(null);
-      }
-      try {
-        const response = await api.list({ ...query, ...(after ? { cursor: after } : {}) });
-        if (!mounted.current || current !== generation.current) return;
-        setItems((old) =>
-          after
-            ? [
-                ...old,
-                ...response.items.filter((item) => !old.some((value) => value.id === item.id)),
-              ]
-            : response.items,
-        );
-        setCursor(response.next_cursor);
-      } catch (failure) {
-        if (mounted.current && current === generation.current) setError(toApiError(failure));
-      } finally {
-        if (mounted.current && current === generation.current) setLoading(false);
-      }
-    },
-    [api, query, mounted],
+  const { items, cursor, loading, error, reload, more } = usePagedList(
+    useCallback(
+      (after?: string) => api.list({ ...query, ...(after ? { cursor: after } : {}) }),
+      [api, query],
+    ),
+    undefined,
+    "accounts",
   );
-  useEffect(() => {
-    void load();
-    return () => {
-      generation.current++;
-    };
-  }, [load]);
   function filter(key: string, value: string) {
     const next = new URLSearchParams(pending.current);
     if (value) next.set(key, value);
@@ -152,7 +120,7 @@ function AccountList() {
           </div>
         </div>
         <div className="form-actions">
-          <button type="button" disabled={loading} onClick={() => void load()}>
+          <button type="button" disabled={loading} onClick={() => void reload()}>
             계좌 목록 다시 불러오기
           </button>
           <button
@@ -169,7 +137,7 @@ function AccountList() {
       <MemberLoadError error={members.error} retry={members.retry} />
       <FinanceError error={error} />
       {error && (
-        <button type="button" onClick={() => void load()}>
+        <button type="button" onClick={() => void reload()}>
           계좌 다시 확인
         </button>
       )}
@@ -220,7 +188,7 @@ function AccountList() {
         ))}
       </ul>
       {cursor && (
-        <button type="button" disabled={loading} onClick={() => void load(cursor)}>
+        <button type="button" disabled={loading} onClick={() => void more()}>
           계좌 더 보기
         </button>
       )}

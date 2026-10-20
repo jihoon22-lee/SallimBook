@@ -35,6 +35,8 @@ function PolicyList() {
         }),
       [api, status, insured, holder],
     ),
+    undefined,
+    "insurance-policies",
   );
   return (
     <>
