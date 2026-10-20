@@ -134,6 +134,43 @@ def _verify_password(encoded: str, password: str) -> bool:
         return False
 
 
+def _login_buckets(login_name: str, source: str) -> list[tuple[str, int]]:
+    return [(f"login-account:{login_name}", 5), (f"login-source:{source}", 30)]
+
+
+def _reauth_buckets(user_id: UUID, source: str) -> list[tuple[str, int]]:
+    return [(f"reauth-account:{user_id}", 5), (f"reauth-source:{source}", 30)]
+
+
+def _refund_attempts(session: Session, keys: Iterable[str]) -> None:
+    """Return one admitted attempt per key after a verified password; the caller commits.
+
+    Keys are updated one at a time in the admission lock order. A success right after a
+    window reset may refund nothing, so it can count at most once.
+    """
+    window_start = utcnow() - THROTTLE_WINDOW
+    for key in sorted(set(keys)):
+        session.execute(
+            update(LoginThrottle)
+            .where(
+                LoginThrottle.key_hash == token_hash("throttle", key),
+                LoginThrottle.attempts > 0,
+                LoginThrottle.window_started_at > window_start,
+            )
+            .values(attempts=LoginThrottle.attempts - 1)
+        )
+
+
+def _verify_admitted(
+    session: Session, buckets: list[tuple[str, int]], encoded: str, password: str
+) -> bool:
+    """Verify after admission; only failed verifications keep counting toward the limits."""
+    if not _verify_password(encoded, password):
+        return False
+    _refund_attempts(session, [key for key, _ in buckets])
+    return True
+
+
 def member_response(user: User, member: HouseholdMember) -> MemberResponse:
     return MemberResponse(
         user_id=user.id,
@@ -575,17 +612,14 @@ def login(
     session: Session, request: LoginRequest, source: str, transport: Literal["web", "native"]
 ) -> LoginResult:
     now = utcnow()
-    _admit_attempt(
-        session,
-        [
-            (f"login-account:{request.login_name}", 5),
-            (f"login-source:{source}", 30),
-        ],
-        now,
-    )
+    buckets = _login_buckets(request.login_name, source)
+    _admit_attempt(session, buckets, now)
     user = session.scalar(select(User).where(User.login_name == request.login_name))
-    verified = _verify_password(
-        user.password_hash if user else _DUMMY_HASH, request.password.get_secret_value()
+    verified = _verify_admitted(
+        session,
+        buckets,
+        user.password_hash if user else _DUMMY_HASH,
+        request.password.get_secret_value(),
     )
     member = (
         None
@@ -681,16 +715,15 @@ def reauthenticate(
     session: Session, principal: Principal, request: ReauthenticationRequest, source: str
 ) -> MemberResponse:
     """Verify the current account again without creating a device or extending session expiry."""
-    _admit_attempt(
-        session,
-        [(f"reauth-account:{principal.user_id}", 5), (f"reauth-source:{source}", 30)],
-        utcnow(),
-    )
+    buckets = _reauth_buckets(principal.user_id, source)
+    _admit_attempt(session, buckets, utcnow())
     # Admission intentionally commits failures. Reacquire session -> device in this
     # order and recheck live state before elevating the existing session's recency.
     auth, devices = lock_session_devices(session, principal)
     user, member, _ = _active_identity(session, auth)
-    if not _verify_password(user.password_hash, request.password.get_secret_value()):
+    if not _verify_admitted(
+        session, buckets, user.password_hash, request.password.get_secret_value()
+    ):
         raise DomainError("REAUTHENTICATION_FAILED", "비밀번호를 확인해 주세요.", 403)
     # Password verification can take time; no previously expired access/session is revived.
     now = validate_locked_session(principal, auth, devices[principal.device_id])

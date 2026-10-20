@@ -204,6 +204,78 @@ def test_bootstrap_cli_rejects_public_directory_and_symlink_destination(tmp_path
 
 @pytest.mark.database
 class TestIdentityDatabase:
+    def test_successful_logins_do_not_consume_account_limit(self, identity_app, account, db_engine):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            for _ in range(6):
+                web_login(client, account)  # helper asserts 200
+        with Session(db_engine) as session:
+            for key in (f"login-account:{account.login_name}", "login-source:testclient"):
+                row = session.get(LoginThrottle, service.token_hash("throttle", key))
+                assert row is None or row.attempts == 0
+
+    def test_five_failures_lock_even_with_success_between_and_messages_differ(
+        self, identity_app, account
+    ):
+        wrong = {
+            "login_name": account.login_name,
+            "password": secrets.token_urlsafe(24),
+            "device_label": "PC",
+        }
+        right = {**wrong, "password": account.password}
+        with TestClient(identity_app, base_url="https://testserver") as client:
+
+            def post(body):
+                return client.post("/api/v1/auth/web/login", headers={"Origin": ORIGIN}, json=body)
+
+            failures = [post(wrong) for _ in range(4)]
+            assert post(right).status_code == 200  # success is not a failure
+            failures.append(post(wrong))
+            assert [r.status_code for r in failures] == [401] * 5
+            assert {
+                (r.json()["error"]["code"], r.json()["error"]["message"]) for r in failures
+            } == {("UNAUTHENTICATED", "로그인 정보를 확인해 주세요.")}
+            locked = post(right)
+            assert locked.status_code == 429
+            assert (locked.json()["error"]["code"], locked.json()["error"]["message"]) == (
+                "RATE_LIMITED",
+                "잠시 후 다시 시도해 주세요.",
+            )
+
+    def test_successful_reauthentication_does_not_consume_limit(self, identity_app, account):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            headers = {**NATIVE, **bearer(native_login(client, account))}
+            for _ in range(6):
+                assert (
+                    client.post(
+                        "/api/v1/auth/native/reauthenticate",
+                        headers=headers,
+                        json={"password": account.password},
+                    ).status_code
+                    == 200
+                )
+
+    def test_refund_never_goes_negative_or_touches_expired_windows(self, db_engine):
+        now = service.utcnow()
+        rows = {
+            "current": (now, 1),
+            "zero": (now, 0),
+            "expired": (now - service.THROTTLE_WINDOW, 3),
+        }
+        with Session(db_engine) as session:
+            session.add_all(
+                LoginThrottle(
+                    key_hash=service.token_hash("throttle", k), window_started_at=t, attempts=a
+                )
+                for k, (t, a) in rows.items()
+            )
+            session.commit()
+            service._refund_attempts(session, ["zero", "expired", "current", "missing"])
+            session.commit()
+            assert [
+                session.get(LoginThrottle, service.token_hash("throttle", k)).attempts
+                for k in ("current", "zero", "expired")
+            ] == [0, 0, 3]
+
     @pytest.mark.parametrize("transport", ["web", "native"])
     def test_password_reauthentication_preserves_device_session_and_expiry(
         self, identity_app, account, db_engine, transport

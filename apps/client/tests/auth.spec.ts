@@ -19,6 +19,7 @@ async function mockIdentity(page: Page, loggedIn = false) {
     loggedIn,
     meOffline: false,
     rejectLogin: false,
+    loginFailure: null as { status: number; code: string } | null,
     devicesUnauthorized: false,
     inviteError: null as string | null,
     revokeConflictOnce: false,
@@ -119,6 +120,8 @@ async function mockIdentity(page: Page, loggedIn = false) {
       return route.fulfill({ json: { csrf_token: state.csrf } });
     }
     if (path === "/api/v1/auth/web/login") {
+      if (state.loginFailure)
+        return failure(route, state.loginFailure.status, state.loginFailure.code);
       state.loginAttempts += 1;
       const body = route.request().postDataJSON();
       state.validLoginShape =
@@ -470,4 +473,15 @@ test("native Android shows an unavailable state without JS credential requests o
   }
   expect(api.paths).toEqual([]);
   await expectNoPersistence(page);
+});
+test("login rate limit shows a wait message instead of a credential error", async ({ page }) => {
+  const api = await mockIdentity(page);
+  for (const code of ["RATE_LIMITED"]) {
+    api.loginFailure = { status: 429, code };
+    await page.goto("/login");
+    await fillLogin(page);
+    await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("잠시 후 다시 시도해 주세요");
+    await expect(page.getByRole("alert")).not.toContainText("로그인 이름이나 비밀번호");
+  }
 });
