@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 // Real HTTPS + API + PostgreSQL, credentials are ephemeral synthetic fixtures.
 // No route(), response mocks, trace, screenshots, video, or credential assertions.
@@ -126,4 +127,54 @@ test("real CSRF rejects mutation without token and rotated token only succeeds o
     return [missing, stale, current, replay];
   });
   expect(statuses).toEqual([403, 403, 204, 401]);
+});
+
+test("real password change signs out the other browser and only the new password logs in", async ({
+  page,
+  browser,
+}) => {
+  const next = `synthetic-https-${crypto.randomUUID()}`;
+  const otherContext = await browser.newContext({ baseURL: process.env.SALLIMBOOK_HTTPS_ORIGIN });
+  const other = await otherContext.newPage();
+  async function signIn(target: Page, password: string) {
+    await target.goto("/login");
+    await target.getByLabel("로그인 이름", { exact: true }).fill(fixture.login);
+    await target.getByLabel("비밀번호", { exact: true }).fill(password);
+    await target.getByRole("button", { name: "로그인", exact: true }).click();
+  }
+  const signedIn = (target: Page) =>
+    expect(
+      target.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+    ).toBeVisible();
+  async function change(target: Page, current: string, replacement: string) {
+    await target.goto("/settings/auth");
+    await target.getByLabel("현재 비밀번호", { exact: true }).fill(current);
+    await target.getByLabel("새 비밀번호", { exact: true }).fill(replacement);
+    await target.getByLabel("새 비밀번호 확인", { exact: true }).fill(replacement);
+    await target.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+    await expect(
+      target.getByRole("status").filter({ hasText: "비밀번호를 바꿨어요." }),
+    ).toBeVisible();
+  }
+  try {
+    await signIn(page, fixture.password);
+    await signedIn(page);
+    await signIn(other, fixture.password);
+    await signedIn(other);
+    await change(page, fixture.password, next);
+    await other.goto("/settings/auth");
+    await expect(
+      other.getByRole("heading", { name: "로그인이 필요해요", exact: true }),
+    ).toBeVisible();
+    await signIn(other, fixture.password);
+    await expect(other.getByRole("alert")).toContainText(
+      "로그인 이름이나 비밀번호를 확인해 주세요.",
+    );
+    await signIn(other, next);
+    await signedIn(other);
+    // Restore the fixture password so test order inside this file does not matter.
+    await change(other, next, fixture.password);
+  } finally {
+    await otherContext.close();
+  }
 });

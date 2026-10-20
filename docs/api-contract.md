@@ -53,6 +53,15 @@ native는 현재 access token과 전용 transport 규칙을 적용한다. 기존
 유지하고 최근 인증 시각만 갱신한다. 비밀번호 실패는 `403 REAUTHENTICATION_FAILED`, 시도 제한은 429이며
 기존 세션을 파기하지 않는다. 만료·폐기된 세션/기기는 401로 거부한다.
 
+비밀번호 변경은 `POST /auth/password`에 `current_password`와 `new_password`(15–128자)를 보낸다.
+다른 기기 모두 로그아웃은 `POST /devices/revoke-others`에 `password`를 보낸다. 두 경로는 웹(Origin·CSRF)과
+native(전용 transport) 공용이다. 성공하면 200 `{"revoked_devices": n}`을 돌려주고, 현재 기기를 뺀 본인의
+활성 기기를 모두 폐기한다. 폐기한 기기의 access·refresh·웹 세션은 기기 상태 검사에서 거부된다. 현재 세션은
+유지하고 최근 인증 시각을 갱신한다. 오류는 `403 REAUTHENTICATION_FAILED`, `422 VALIDATION_ERROR`(현재와 같은 새 비밀번호·형식),
+`429 RATE_LIMITED`·`AUTH_BUSY`(재인증과 같은 시도 제한), 401이다. If-Match·Idempotency-Key는 쓰지 않는다.
+비밀번호 변경은 현재 비밀번호가 사실상의 버전이라 같은 요청을 다시 보내면 403이 되고, 다른 기기 로그아웃은
+다시 보내도 같은 상태(0대 폐기)이며, 둘 다 본인 계정만 바꾼다. 등록한 패스키는 바꾸지 않는다.
+
 기존 `POST /auth/invitations/accept`는 긴 일회성 초대로 계정을 만들고 로그인은 별도로 수행한다.
 기존 API 계약은 유지하며 새 기본 시작/연결 경로만 등록과 로그인을 한 번에 완료한다.
 인증된 `GET /me`, `GET /household/members`, `POST /household/invitations`,
@@ -306,7 +315,8 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 패스키 관리 | GET /auth/passkeys, DELETE /auth/passkeys/{credential_id} | 본인 메타데이터 목록·최근 로그인/If-Match 폐기 |
 | 재인증 | POST /auth/step-up/options, /auth/step-up/verify | 짧은 목적 제한 인증 상태 |
 | 사용자 | GET /me, GET /household/members | 허용된 공동 가계만 |
-| 초대·기기 | POST /household/invitations, GET /devices, DELETE /devices/{id} | 최근 로그인 또는 X-Step-Up-Token, 기기 세션 폐기 |
+| 비밀번호 | POST /auth/password | 현재·새 비밀번호, 다른 기기 모두 폐기, 같은 트랜잭션 감사 |
+| 초대·기기 | POST /household/invitations, GET /devices, DELETE /devices/{id}, POST /devices/revoke-others | 최근 로그인 또는 X-Step-Up-Token, 기기 세션 폐기. 다른 기기 모두 로그아웃은 비밀번호 확인 |
 | 홈 | GET /asset-comparison?to=YYYY-MM&limit=1, GET /asset-trends?from=...&to=..., GET /homecare/status | 별도 dashboard API 없음. 자산은 선택 월 비교 또는 최근 24개월에서 연속 확정 두 달의 비교, 소모품은 서버 오늘 |
 | 자산 | GET/POST /assets, GET/PATCH/DELETE /assets/{id} | 종료/삭제 의미 구분 |
 | 계좌 | GET/POST /accounts, GET/PATCH/DELETE /accounts/{id} | 자산 원본과 1:1, 참조 없을 때만 삭제(`ACCOUNT_IN_USE`) |
@@ -575,6 +585,6 @@ JSON 금액은 정밀한 십진 문자열, 월은 `YYYY-MM`, 날짜는 ISO 날�
 
 `GET /api/v1/audit-events`는 현재 가계의 감사 메타데이터만 반환한다. `limit` 1..200, `cursor`, `entity_type`, `entity_id`, `actor_member_id`, `action`, timezone을 포함한 `since`/`until` 필터를 지원한다. 기간은 `[since, until)`이다. 시각 내림차순·UUID 내림차순 keyset cursor에 가계/필터 바인딩을 검사한다. 삭제된 엔티티의 감사 이력도 조회할 수 있다. 응답은 ID, actor member ID, 엔티티/동작, 요청 ID, 전후 버전, UTC 시각, 알려진 변경 필드 이름만 제공한다. 원본 `safe_diff`나 전후 값은 반환하지 않으며 잘못된 메타데이터는 503으로 실패한다. 여러 HTTP 페이지 전체를 하나의 DB 스냅샷으로 보장하지 않는다.
 
-계정 보안 동작도 같은 감사 어휘(`core/audit.py`의 `AuditEntityType`·`AuditAction`, 38개·22개)로 기록한다. `registered_device/login`(로그인으로 기기 세션 시작), `registered_device/revoke`(기기 연결 해제·로그아웃으로 실제 세션 폐기), `passkey/create`·`passkey/revoke`, `invitation/create`·`invitation/accept`이다. 비밀번호·토큰·초대 코드·자격증명 원문은 기록하지 않는다.
+계정 보안 동작도 같은 감사 어휘(`core/audit.py`의 `AuditEntityType`·`AuditAction`, 39개·22개)로 기록한다. `registered_device/login`(로그인으로 기기 세션 시작), `registered_device/revoke`(기기 연결 해제·로그아웃·다른 기기 모두 로그아웃으로 실제 세션 폐기, 기기마다 1행), `passkey/create`·`passkey/revoke`, `invitation/create`·`invitation/accept`, `user/update`(비밀번호 변경, 바뀐 필드 이름 `password_hash`만)이다. 비밀번호·토큰·초대 코드·자격증명 원문은 기록하지 않는다.
 
 `user_export/export` 감사는 완성된 파일의 **서버 발급**을 뜻하며 클라이언트 저장 완료를 뜻하지 않는다. 선택 문서 열람 감사도 같은 요청 ID로 기록한다. 일반 audit API에는 최근 재인증을 추가로 요구하지 않지만 현재 세션·기기·활성 가계 구성원 권한은 검사한다. 이 API PR은 Android/웹 내보내기 화면, 운영 백업 스케줄과 실제 새 서버 복원 완료를 의미하지 않는다.
