@@ -381,6 +381,12 @@ export interface SallimBookAuth {
     ifMatch: string;
     idempotencyKey: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  carryPreviousAssetMonth(options: {
+    month: string;
+    input: components["schemas"]["MonthCarryPrevious"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
   listIncome(options: {
     query: NonNullable<operations["listIncome"]["parameters"]["query"]>;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeListResponse"]>>>;

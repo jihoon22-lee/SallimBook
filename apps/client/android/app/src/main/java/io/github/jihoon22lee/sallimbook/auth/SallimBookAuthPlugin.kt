@@ -148,6 +148,7 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun synchronizeAssetMonthScope(call: PluginCall) = finance(call, FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE)
     @PluginMethod fun confirmAssetMonth(call: PluginCall) = finance(call, FinanceOperation.CONFIRM_ASSET_MONTH)
     @PluginMethod fun reopenAssetMonth(call: PluginCall) = finance(call, FinanceOperation.REOPEN_ASSET_MONTH)
+    @PluginMethod fun carryPreviousAssetMonth(call: PluginCall) = finance(call, FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH)
 
     @PluginMethod fun listIncome(call: PluginCall) = finance(call, FinanceOperation.LIST_INCOME)
     @PluginMethod fun incomeSummary(call: PluginCall) = finance(call, FinanceOperation.INCOME_SUMMARY)

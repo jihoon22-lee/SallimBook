@@ -78,6 +78,7 @@ internal object CashflowPolicy {
         FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE to Route("POST", "/api/v1/asset-months/{month}/sync-scope", version = true),
         FinanceOperation.CONFIRM_ASSET_MONTH to Route("POST", "/api/v1/asset-months/{month}/confirm", version = true, idempotent = true),
         FinanceOperation.REOPEN_ASSET_MONTH to Route("POST", "/api/v1/asset-months/{month}/reopen", version = true, idempotent = true, status = 201),
+        FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH to Route("POST", "/api/v1/asset-months/{month}/carry-previous", version = true, idempotent = true),
         FinanceOperation.LIST_INCOME to Route("GET", "/api/v1/income", query = true),
         FinanceOperation.INCOME_SUMMARY to Route("GET", "/api/v1/income/summary", query = true),
         FinanceOperation.INCOME_DUPLICATE_CANDIDATES to Route("GET", "/api/v1/income/duplicates", query = true),
@@ -97,6 +98,7 @@ internal object CashflowPolicy {
         FinanceOperation.CONFIRM_ASSET_MONTH -> shape(value, mapOf("revision_id" to id,
             "acknowledge_non_month_end_dates" to bool, "acknowledge_scope_change" to bool), setOf("revision_id"))
         FinanceOperation.REOPEN_ASSET_MONTH -> shape(value, mapOf("revision_id" to id, "reason" to reason))
+        FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH -> shape(value, mapOf("revision_id" to id))
         FinanceOperation.UPDATE_ASSET_MONTH_VALUE -> {
             val row = shape(value, mapOf("revision_id" to id, "value_id" to id, "input_amount_krw" to nullable(money),
                 "as_of_date" to nullable(date), "unchanged" to bool, "change_reason" to nullable(reason)), setOf("revision_id", "value_id"))
@@ -262,7 +264,8 @@ internal object CashflowPolicy {
         }
         if (row["month"] != segments[4]) invalid()
         if (operation == FinanceOperation.GET_ASSET_MONTH_REVISION && row["revision_no"].toString() != segments[6]) invalid()
-        if (operation in setOf(FinanceOperation.CONFIRM_ASSET_MONTH, FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE) &&
+        if (operation in setOf(FinanceOperation.CONFIRM_ASSET_MONTH, FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE,
+                FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH) &&
             row["revision_id"] != request.body?.get("revision_id")) invalid()
         return row
     }

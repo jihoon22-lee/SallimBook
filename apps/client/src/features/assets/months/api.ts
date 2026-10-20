@@ -193,6 +193,33 @@ export function useAssetMonthsApi() {
               }),
             ),
         ),
+      carry: (
+        month: string,
+        body: components["schemas"]["MonthCarryPrevious"],
+        version: number,
+        key: string,
+        signal: AbortSignal,
+      ) =>
+        domainApi.write(
+          (client) =>
+            client.POST("/api/v1/asset-months/{month}/carry-previous", {
+              body,
+              params: {
+                path: { month },
+                header: { "If-Match": `"${version}"`, "Idempotency-Key": key },
+              },
+              signal,
+            }),
+          () =>
+            cancellableNative(signal, () =>
+              nativeFinance.carryPreviousAssetMonth({
+                month,
+                input: body,
+                ifMatch: `"${version}"`,
+                idempotencyKey: key,
+              }),
+            ),
+        ),
     };
   }, [domainApi]);
 }

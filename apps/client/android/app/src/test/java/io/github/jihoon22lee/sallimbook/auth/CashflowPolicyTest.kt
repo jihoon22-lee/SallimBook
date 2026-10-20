@@ -25,7 +25,7 @@ class CashflowPolicyTest {
     private fun history() = reference() + mapOf("state" to "draft", "previous_revision_id" to null, "reopened_reason" to null, "confirmed_at" to null, "created_at" to now)
     private fun month() = history() + mapOf("confirmed_by_member_id" to null, "totals" to totals(), "scope_stale" to false, "values" to listOf(value()), "next_cursor" to null)
 
-    @Test fun eightMonthlyCommandsRoundTripOnlyTheirAllowedRoutesAndHeaders() {
+    @Test fun nineMonthlyCommandsRoundTripOnlyTheirAllowedRoutesAndHeaders() {
         val requests = listOf(
             request(FinanceOperation.GET_ASSET_MONTH),
             request(FinanceOperation.GET_ASSET_MONTH_REVISION, mapOf("revisionNo" to 1, "query" to mapOf("limit" to 200, "cursor" to id))),
@@ -35,6 +35,7 @@ class CashflowPolicyTest {
             request(FinanceOperation.SYNCHRONIZE_ASSET_MONTH_SCOPE, mapOf("input" to mapOf("revision_id" to id), "ifMatch" to version)),
             request(FinanceOperation.CONFIRM_ASSET_MONTH, mapOf("input" to mapOf("revision_id" to id), "ifMatch" to version, "idempotencyKey" to "synthetic-confirm")),
             request(FinanceOperation.REOPEN_ASSET_MONTH, mapOf("input" to mapOf("revision_id" to id, "reason" to "합성 정정"), "ifMatch" to version, "idempotencyKey" to "synthetic-reopen")),
+            request(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, mapOf("input" to mapOf("revision_id" to id), "ifMatch" to version, "idempotencyKey" to "synthetic-carry")),
         )
         for (r in requests) {
             assertTrue(FinancePolicy.metadataHttpAllowed(r.method, r.path, r.body, r.ifMatch, r.idempotencyKey))
@@ -44,6 +45,26 @@ class CashflowPolicyTest {
         }
         assertTrue(requests[1].path.endsWith("revisions/1?cursor=$id&limit=200"))
         assertTrue(requests[2].path.endsWith("revisions?cursor=3&limit=1"))
+    }
+    @Test fun carryPreviousNeedsRevisionVersionAndKeyAndEchoesTheRevision() {
+        val args = mapOf("input" to mapOf("revision_id" to id), "ifMatch" to version, "idempotencyKey" to "synthetic-carry")
+        val carry = request(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, args)
+        assertEquals("/api/v1/asset-months/2026-01/carry-previous", carry.path)
+        for (change in listOf(
+            args - "ifMatch", args - "idempotencyKey", args + mapOf("input" to emptyMap<String, Any>()),
+            args + mapOf("input" to mapOf("revision_id" to id, "asset_ids" to listOf(id))),
+            args + mapOf("input" to mapOf("revision_id" to id, "copy_previous" to true)),
+        )) bad {
+            request(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, change)
+        }
+        assertFalse(FinancePolicy.metadataHttpAllowed("POST", carry.path, carry.body, carry.ifMatch, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("POST", carry.path, carry.body, null, carry.idempotencyKey))
+        assertFalse(AuthPolicy.requestAllowed("POST", carry.path, carry.ifMatch))
+        assertEquals(reference(), FinancePolicy.response(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, carry, 200, reference()))
+        bad(AuthCode.ACCESS_DENIED) {
+            FinancePolicy.response(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, carry, 200, reference() + mapOf("revision_id" to valueId))
+        }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, carry, 201, reference()) }
     }
     @Test fun monthAndRevisionAndQueriesRejectUnboundedOrAmbiguousValues() {
         for (m in listOf("0000-01", "2026-00", "2026-13", "2026-1", "2026-01/../accounts")) bad {
