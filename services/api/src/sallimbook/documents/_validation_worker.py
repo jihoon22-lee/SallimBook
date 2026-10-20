@@ -178,31 +178,130 @@ def _card_text(value: str) -> None:
             raise Rejected("DOCUMENT_CARD_DATA")
 
 
-def _polyglot(data: bytes, mime: str) -> None:
+# Each scanned range widens by the longest marker minus one so a marker that continues into
+# attacker-chosen bytes next to an excluded range (e.g. a PNG CRC) is still found.
+_MARKER_OVERLAP = 13
+
+
+def _merge(ranges: list[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(ranges):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return tuple(merged)
+
+
+def _jpeg_ranges(data: bytes) -> tuple[tuple[int, int], ...] | None:
+    """Everything except entropy-coded scan data; None when the layout cannot be followed."""
+    if not data.startswith(b"\xff\xd8"):
+        return None
+    ranges: list[tuple[int, int]] = []
+    opened = 0
+    position = 2
+    while position < len(data):
+        if data[position] != 0xFF:
+            return None
+        while position < len(data) and data[position] == 0xFF:
+            position += 1
+        if position >= len(data):
+            return None
+        marker = data[position]
+        position += 1
+        if marker == 0xD9:
+            ranges.append((opened, len(data)))
+            return _merge(ranges)
+        if marker in {0x00, 0x01} or 0xD0 <= marker <= 0xD8 or position + 2 > len(data):
+            return None
+        length = struct.unpack("!H", data[position : position + 2])[0]
+        if length < 2 or position + length > len(data):
+            return None
+        position += length
+        if marker == 0xDA:
+            ranges.append((opened, position))
+            while True:
+                if position + 1 >= len(data):
+                    return None
+                if data[position] != 0xFF:
+                    position += 1
+                    continue
+                following = data[position + 1]
+                if following == 0x00 or 0xD0 <= following <= 0xD7:
+                    position += 2
+                elif following == 0xFF:
+                    position += 1
+                else:
+                    opened = position
+                    break
+    return None
+
+
+def _png_ranges(data: bytes) -> tuple[tuple[int, int], ...] | None:
+    """Everything except IDAT payloads; None when the chunk layout cannot be followed."""
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    ranges: list[tuple[int, int]] = []
+    opened = 0
+    position = 8
+    while position < len(data):
+        if position + 12 > len(data):
+            return None
+        length = struct.unpack("!I", data[position : position + 4])[0]
+        name = data[position + 4 : position + 8]
+        end = position + 12 + length
+        if end > len(data):
+            return None
+        if name == b"IDAT":
+            ranges.append((opened, position + 8))
+            opened = end - 4
+        position = end
+        if name == b"IEND":
+            ranges.append((opened, len(data)))
+            return _merge(ranges)
+    return None
+
+
+def _scannable_ranges(data: bytes, mime: str, reader=None) -> tuple[tuple[int, int], ...]:
+    """Sorted half-open ranges that the marker scan covers; the whole file if unparseable."""
+    ranges = None
+    if mime == "image/jpeg":
+        ranges = _jpeg_ranges(data)
+    elif mime == "image/png":
+        ranges = _png_ranges(data)
+    return ranges if ranges is not None else ((0, len(data)),)
+
+
+def _polyglot(data: bytes, mime: str, ranges: tuple[tuple[int, int], ...] | None = None) -> None:
     # Reject append/prepend containers and executable signatures. Structural parsing
     # below additionally requires exact format termination and known container chunks.
-    if any(marker in data for marker in (b"PK\x03\x04", b"PK\x05\x06", b"\x7fELF", b"MZ\x90\x00")):
-        raise Rejected
-    if mime != "application/pdf" and b"%PDF-" in data:
-        raise Rejected
-    # HTML/PHP interpreters can ignore an image/PDF prefix. Raw executable markup
-    # is excluded even when stored in otherwise legal container metadata.
-    lower = data.lower()
-    if any(
-        marker in lower
-        for marker in (
-            b"<?php",
-            b"<?=",
-            b"<script",
-            b"<!doctype html",
-            b"<html",
-            b"<svg",
-            b"<iframe",
-            b"<object",
-            b"javascript:",
-        )
-    ):
-        raise Rejected
+    # Compressed image/stream data is excluded: random bytes there are not interpretable.
+    for start, end in _scannable_ranges(data, mime) if ranges is None else ranges:
+        part = data[max(0, start - _MARKER_OVERLAP) : min(len(data), end + _MARKER_OVERLAP)]
+        if any(
+            marker in part for marker in (b"PK\x03\x04", b"PK\x05\x06", b"\x7fELF", b"MZ\x90\x00")
+        ):
+            raise Rejected
+        if mime != "application/pdf" and b"%PDF-" in part:
+            raise Rejected
+        # HTML/PHP interpreters can ignore an image/PDF prefix. Raw executable markup
+        # is excluded even when stored in otherwise legal container metadata.
+        lower = part.lower()
+        if any(
+            marker in lower
+            for marker in (
+                b"<?php",
+                b"<?=",
+                b"<script",
+                b"<!doctype html",
+                b"<html",
+                b"<svg",
+                b"<iframe",
+                b"<object",
+                b"javascript:",
+            )
+        ):
+            raise Rejected
 
 
 def _png_structure(data: bytes) -> None:
