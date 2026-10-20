@@ -93,6 +93,16 @@ export function claimRow(id = 1200, expenses: string[] = []): S["ClaimResponse"]
     net_received_krw: "0",
   };
 }
+/** A claim revision as the server returns it: no received/returned money fields. */
+function claimRevisionBase(row: S["ClaimResponse"]) {
+  const {
+    received_krw: _received,
+    returned_krw: _returned,
+    net_received_krw: _net,
+    ...revision
+  } = structuredClone(row);
+  return revision;
+}
 export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>) {
   core.cases.push({ ...caseRow(95), title: "합성 두 번째 사건" });
   core.nodes.push(nodeRow(96, { case_id: uid(95), label: "합성 다른 사건 진료" }));
@@ -139,15 +149,8 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
   };
   const rememberClaim = (row: S["ClaimResponse"], reason: string | null = null) => {
     const history = state.claimHistories.get(row.id) ?? [];
-    // Revisions carry no money: received/returned amounts live on the current claim only.
-    const {
-      received_krw: _received,
-      returned_krw: _returned,
-      net_received_krw: _net,
-      ...revision
-    } = structuredClone(row);
     history.push({
-      ...revision,
+      ...claimRevisionBase(row),
       claim_id: row.id,
       changed_by_member_id: uid(2),
       changed_at: timestamp,
@@ -399,7 +402,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
             historyPage(
               state.claimHistories.get(id) ?? [
                 {
-                  ...claim,
+                  ...claimRevisionBase(claim),
                   claim_id: claim.id,
                   changed_at: timestamp,
                   changed_by_member_id: uid(2),
