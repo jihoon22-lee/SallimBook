@@ -1096,6 +1096,46 @@ def test_database_reversal_checks_original_full_quantity_and_unique_stock_versio
         assert session.scalar(select(func.count()).select_from(StockMovement)) == 1
 
 
+def raw_replacement(session, actor, stock_id, link_id, **changes):
+    row = session.get(Consumable, stock_id)
+    row.stock_quantity -= 1
+    row.version += 1
+    session.flush()
+    movement = StockMovement(
+        household_id=actor.household_id,
+        consumable_id=row.id,
+        created_by_member_id=actor.principal.member_id,
+        kind="replacement",
+        quantity_delta=-1,
+        occurred_on=date(2025, 1, 1),
+        reversal_of=None,
+        reason=None,
+        unit_cost_krw=None,
+        purchase_url=None,
+        note=None,
+        stock_version=row.version,
+    )
+    session.add(movement)
+    session.flush()
+    replacement = ConsumableReplacement(
+        **(
+            {
+                "household_id": actor.household_id,
+                "created_by_member_id": actor.principal.member_id,
+                "appliance_consumable_id": link_id,
+                "consumable_id": row.id,
+                "stock_movement_id": movement.id,
+                "replaced_on": date(2025, 1, 1),
+                "quantity": 1,
+                "note": None,
+            }
+            | changes
+        )
+    )
+    session.add(replacement)
+    return replacement
+
+
 def test_replacement_fact_and_movement_must_share_sku_date_and_quantity(
     homecare_app, actors, db_engine
 ):
@@ -1113,48 +1153,56 @@ def test_replacement_fact_and_movement_must_share_sku_date_and_quantity(
         {"appliance_consumable_id": UUID(other_link["id"])},
     ):
         with Session(db_engine) as session:
-            row = session.get(Consumable, UUID(stock["id"]))
-            row.stock_quantity -= 1
-            row.version += 1
-            session.flush()
-            movement = StockMovement(
-                household_id=actor.household_id,
-                consumable_id=row.id,
-                created_by_member_id=actor.principal.member_id,
-                kind="replacement",
-                quantity_delta=-1,
-                occurred_on=date(2025, 1, 1),
-                reversal_of=None,
-                reason=None,
-                unit_cost_krw=None,
-                purchase_url=None,
-                note=None,
-                stock_version=row.version,
-            )
-            session.add(movement)
-            session.flush()
-            replacement = ConsumableReplacement(
-                **(
-                    {
-                        "household_id": actor.household_id,
-                        "created_by_member_id": actor.principal.member_id,
-                        "appliance_consumable_id": UUID(link["id"]),
-                        "consumable_id": row.id,
-                        "stock_movement_id": movement.id,
-                        "replaced_on": date(2025, 1, 1),
-                        "quantity": 1,
-                        "note": None,
-                    }
-                    | changes
-                )
-            )
-            session.add(replacement)
+            raw_replacement(session, actor, UUID(stock["id"]), UUID(link["id"]), **changes)
             with pytest.raises(DBAPIError):
                 session.commit()
             session.rollback()
     with Session(db_engine) as session:
         assert session.get(Consumable, UUID(stock["id"])).stock_quantity == 3
         assert session.scalar(select(func.count()).select_from(ConsumableReplacement)) == 0
+
+
+def test_database_rejects_cleared_override_that_does_not_match_link_state(
+    homecare_app, actors, db_engine
+):
+    from sqlalchemy.exc import DBAPIError
+
+    actor = actors[0]
+    with TestClient(homecare_app) as client:
+        stock = post_consumable(client, actor)
+        link = post_link(
+            client, actor, post_appliance(client, actor), stock, next_check_override="2025-01-01"
+        )
+        receipt(client, actor, stock)
+    for changes in (
+        {"cleared_next_check_override": date(2025, 1, 1)},
+        {"cleared_link_version": 1},
+        {"cleared_next_check_override": date(2025, 1, 1), "cleared_link_version": 1},
+        {"cleared_next_check_override": date(2025, 1, 1), "cleared_link_version": 2},
+    ):
+        with Session(db_engine) as session:
+            raw_replacement(session, actor, UUID(stock["id"]), UUID(link["id"]), **changes)
+            with pytest.raises(DBAPIError):
+                session.commit()
+            session.rollback()
+    with TestClient(homecare_app) as client:
+        cleared = client.patch(
+            f"/api/v1/appliance-consumables/{link['id']}",
+            headers=headers(actor, version=1),
+            json={"next_check_override": None},
+        )
+        assert cleared.status_code == 200 and cleared.json()["version"] == 2
+    with Session(db_engine) as session:
+        raw_replacement(
+            session,
+            actor,
+            UUID(stock["id"]),
+            UUID(link["id"]),
+            cleared_next_check_override=date(2025, 1, 1),
+            cleared_link_version=2,
+        )
+        session.commit()
+        assert session.scalar(select(func.count()).select_from(ConsumableReplacement)) == 1
 
 
 def test_orphan_replacement_movement_and_direct_nonzero_opening_stock_cannot_commit(
