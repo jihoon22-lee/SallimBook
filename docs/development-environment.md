@@ -99,6 +99,8 @@ fsync 등 내구성 설정은 유지한다. [PostgreSQL 18 WAL 설정](https://w
 개발 DB 포트는 loopback에만 바인딩한다. 내부 전용 bridge는 host 포트를 게시하지 않으므로
 별도 개발용 `local_access` bridge도 연결한다. 운영 DB의 네트워크 설계와 구분한다.
 `pnpm test:database`는 tmpfs의 `sallimbook_test`만 사용하고 마지막에 시험 서비스만 중지한다.
+뒤에 붙인 인자는 모두 pytest에 그대로 전달한다(예: `pnpm test:database services/api/tests/test_income.py -q`, `pnpm test:database -k income`). 시험 경로가 없으면 `services/api/tests`를 붙여 저장소 전체를 수집하지 않는다.
+문서 시험 fixture는 여유 공간 하한을 0으로 두므로 호스트 `/tmp` 여유와 관계없이 같은 결과를 낸다. 운영 기본값(1GiB)은 별도 저용량 시험이 확인한다.
 각 DB 시험은 `sallimbook_test_<UUID>` schema를 생성·migration·폐기하며 다른 schema를 지우지 않는다.
 테스트 DB 이름이 `_test`로 끝나지 않으면 시험을 거부한다. 운영 DB로 시험하지 않는다.
 앱은 정적 웹 자산을 번들하며 `server.url`로 원격 UI를 로드하지 않는다.

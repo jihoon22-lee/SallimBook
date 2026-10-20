@@ -1,9 +1,9 @@
 """Run database checks using only SallimBook's ephemeral test service."""
 
-import argparse
 import fcntl
 import os
 import subprocess
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -12,6 +12,15 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_TESTS = "services/api/tests"
+USAGE = """usage: pnpm test:database [PYTEST_ARGS...]
+
+Every argument is passed to pytest unchanged. Without a test path the default
+services/api/tests suite is added, so options alone never collect the whole repository.
+
+  pnpm test:database services/api/tests/test_income.py -q
+  pnpm test:database -k income
+"""
 LOCK_DIRECTORY = Path.home() / ".cache" / "sallimbook"
 COMPOSE = [
     "docker",
@@ -61,10 +70,20 @@ def test_service_lock():
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
+def pytest_arguments(argv: list[str], root: Path) -> list[str]:
+    """Keep pytest arguments in order; add the default suite only when no path is given."""
+    if any((root / argument.split("::", 1)[0]).exists() for argument in argv if argument):
+        return list(argv)
+    return [*argv, DEFAULT_TESTS]
+
+
 def run_checks() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("pytest_args", nargs=argparse.REMAINDER)
-    args = parser.parse_args()
+    argv = sys.argv[1:]
+    if argv in (["-h"], ["--help"]):
+        print(__doc__)
+        print(USAGE)
+        raise SystemExit(0)
+    pytest_args = pytest_arguments(argv, ROOT)
     if not (ROOT / ".env").is_file():
         raise SystemExit("Run python3 scripts/setup_dev.py first.")
     values = {
@@ -108,7 +127,7 @@ def run_checks() -> None:
                 "--project",
                 "services/api",
                 "pytest",
-                *(args.pytest_args or ["services/api/tests"]),
+                *pytest_args,
             ],
             alembic + ["check"],
             alembic + ["downgrade", "base"],

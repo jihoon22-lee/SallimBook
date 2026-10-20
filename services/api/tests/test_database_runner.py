@@ -74,3 +74,52 @@ def test_runner_accepts_only_explicit_isolated_database():
     runner.validate_test_url(
         "postgresql+psycopg://sallimbook:synthetic@127.0.0.1:18745/sallimbook_test"
     )
+
+
+def load_runner(name):
+    path = Path(__file__).resolve().parents[3] / "scripts/test_database.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    return runner
+
+
+def test_pytest_arguments_keep_options_and_add_default_path(tmp_path):
+    runner = load_runner("database_runner_args")
+    assert runner.pytest_arguments(["-q", "-k", "income"], tmp_path) == [
+        "-q",
+        "-k",
+        "income",
+        "services/api/tests",
+    ]
+
+
+def test_pytest_arguments_keep_explicit_paths_and_node_ids(tmp_path):
+    runner = load_runner("database_runner_paths")
+    target = tmp_path / "services/api/tests/test_income.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("")
+    argv = ["services/api/tests/test_income.py::test_case", "-q"]
+    assert runner.pytest_arguments(argv, tmp_path) == argv
+
+
+def test_runner_passes_leading_pytest_options(tmp_path, monkeypatch):
+    runner = load_runner("database_runner_options")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    monkeypatch.setattr(runner, "LOCK_DIRECTORY", tmp_path / "host-lock")
+    (tmp_path / ".env").write_text(
+        "SALLIMBOOK_TEST_DATABASE_URL="
+        "postgresql+psycopg://sallimbook:synthetic@127.0.0.1:18745/sallimbook_test\n"
+    )
+    monkeypatch.setattr("sys.argv", ["test_database.py", "-q", "-k", "income"])
+    commands = []
+    monkeypatch.setattr(runner.subprocess, "check_output", lambda *a, **k: "")
+    monkeypatch.setattr(runner.subprocess, "run", lambda command, **k: commands.append(command))
+    runner.main()
+    pytest_command = next(c for c in commands if "pytest" in c)
+    assert pytest_command[pytest_command.index("pytest") + 1 :] == [
+        "-q",
+        "-k",
+        "income",
+        "services/api/tests",
+    ]
