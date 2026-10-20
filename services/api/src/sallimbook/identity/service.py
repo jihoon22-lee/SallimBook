@@ -5,7 +5,7 @@ import hmac
 import re
 import secrets
 import threading
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -42,7 +42,9 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    PasswordChangeRequest,
     ReauthenticationRequest,
+    RevokedDevicesResponse,
     SetupRequest,
 )
 
@@ -393,6 +395,146 @@ def lock_session_devices(
     return auth, devices
 
 
+def _active_device_ids(session: Session, principal: Principal) -> set[UUID]:
+    return set(
+        session.scalars(
+            select(RegisteredDevice.id).where(
+                RegisteredDevice.household_id == principal.household_id,
+                RegisteredDevice.user_id == principal.user_id,
+                RegisteredDevice.status == "active",
+            )
+        )
+    )
+
+
+def _lock_account_devices(
+    session: Session, principal: Principal
+) -> tuple[AuthSession, dict[UUID, RegisteredDevice], User]:
+    """Lock session -> every active device of this user (UUID order) -> the users row.
+
+    `issue_session` takes the same users row lock, so devices read after it include every
+    login that committed first; later logins wait and recheck the password hash. A device
+    that appeared after the first read cannot be locked out of UUID order, so start over.
+    """
+    for _ in range(3):
+        auth, devices = lock_session_devices(
+            session, principal, additional_device_ids=_active_device_ids(session, principal)
+        )
+        user = session.scalar(
+            select(User)
+            .where(User.id == principal.user_id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+        if _active_device_ids(session, principal).issubset(devices):
+            return auth, devices, user
+        session.rollback()
+    raise DomainError(
+        "AUTH_BUSY", "로그인 확인 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.", 429
+    )
+
+
+def _refund_busy[T](session: Session, buckets: list[tuple[str, int]], action: Callable[[], T]) -> T:
+    """AUTH_BUSY work never finished a password check, so it is not a counted attempt."""
+    try:
+        return action()
+    except DomainError as error:
+        if error.code == "AUTH_BUSY":
+            session.rollback()
+            _refund_attempts(session, [key for key, _ in buckets])
+            session.commit()
+        raise
+
+
+def _revoke_other_devices(
+    session: Session,
+    principal: Principal,
+    devices: dict[UUID, RegisteredDevice],
+    now: datetime,
+) -> int:
+    """Revoke locked sibling devices; their sessions and refresh tokens fail on device status."""
+    revoked = 0
+    for device in devices.values():
+        if device.id == principal.device_id or device.status != "active":
+            continue
+        before = device.version
+        device.status = "revoked"
+        device.revoked_at = now
+        session.flush()
+        record_event(
+            session,
+            principal,
+            entity_type="registered_device",
+            entity_id=device.id,
+            action="revoke",
+            before_version=before,
+            after_version=device.version,
+            changed_fields=("revoked_at", "status"),
+        )
+        revoked += 1
+    return revoked
+
+
+def revoke_other_devices(
+    session: Session, principal: Principal, request: ReauthenticationRequest, source: str
+) -> RevokedDevicesResponse:
+    buckets = _reauth_buckets(principal.user_id, source)
+    _admit_attempt(session, buckets, utcnow())
+    auth, devices, user = _refund_busy(
+        session, buckets, lambda: _lock_account_devices(session, principal)
+    )
+    if not _verify_admitted(
+        session, buckets, user.password_hash, request.password.get_secret_value()
+    ):
+        raise DomainError("REAUTHENTICATION_FAILED", "비밀번호를 확인해 주세요.", 403)
+    # Password work can take time; recheck the live session before counting it as recent.
+    now = validate_locked_session(principal, auth, devices[principal.device_id])
+    auth.authenticated_at = now
+    auth.last_seen_at = now
+    revoked = _revoke_other_devices(session, principal, devices, now)
+    session.commit()
+    return RevokedDevicesResponse(revoked_devices=revoked)
+
+
+def change_password(
+    session: Session, principal: Principal, request: PasswordChangeRequest, source: str
+) -> RevokedDevicesResponse:
+    """Replace the password and revoke every other device of this user in one transaction."""
+    current = request.current_password.get_secret_value()
+    replacement = request.new_password.get_secret_value()
+    if hmac.compare_digest(current.encode(), replacement.encode()):
+        raise DomainError(
+            "VALIDATION_ERROR", "현재 비밀번호와 다른 새 비밀번호를 입력해 주세요.", 422
+        )
+    buckets = _reauth_buckets(principal.user_id, source)
+    _admit_attempt(session, buckets, utcnow())
+    auth, devices, user = _refund_busy(
+        session, buckets, lambda: _lock_account_devices(session, principal)
+    )
+    if not _verify_admitted(session, buckets, user.password_hash, current):
+        raise DomainError("REAUTHENTICATION_FAILED", "비밀번호를 확인해 주세요.", 403)
+    encoded = _refund_busy(session, buckets, lambda: hash_password(replacement))
+    now = validate_locked_session(principal, auth, devices[principal.device_id])
+    before = user.version
+    user.password_hash = encoded
+    auth.authenticated_at = now
+    auth.last_seen_at = now
+    revoked = _revoke_other_devices(session, principal, devices, now)
+    session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="user",
+        entity_id=user.id,
+        action="update",
+        before_version=before,
+        after_version=user.version,
+        changed_fields=("password_hash",),
+    )
+    session.commit()
+    return RevokedDevicesResponse(revoked_devices=revoked)
+
+
 def create_bootstrap_invitation(
     session: Session, household_name: str, intended_login: str
 ) -> InvitationResponse:
@@ -683,12 +825,9 @@ def login(
     buckets = _login_buckets(request.login_name, source)
     _admit_attempt(session, buckets, now)
     user = session.scalar(select(User).where(User.login_name == request.login_name))
-    verified = _verify_admitted(
-        session,
-        buckets,
-        user.password_hash if user else _DUMMY_HASH,
-        request.password.get_secret_value(),
-    )
+    password = request.password.get_secret_value()
+    encoded = user.password_hash if user else _DUMMY_HASH
+    verified = _verify_admitted(session, buckets, encoded, password)
     member = (
         None
         if user is None
@@ -701,9 +840,13 @@ def login(
     )
     if not verified or user is None or user.disabled_at is not None or member is None:
         raise _unauthenticated()
-    _upgrade_hash(user, request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
     result = issue_session(session, user, member, request.device_label, transport)
+    # issue_session locked and reloaded the users row. A hash that changed after our
+    # verification is rechecked: a same-password rehash passes, an old password does not.
+    if user.password_hash != encoded and not _verify_password(user.password_hash, password):
+        raise _unauthenticated()
+    _upgrade_hash(user, password)
     session.commit()
     return result
 
@@ -815,6 +958,8 @@ def issue_session(
 
     This is an internal service, not an authentication bypass endpoint. The optional device
     ID must come from server ceremony state, never from a client's device identifier.
+    Locks the users row so password changes and sign-out of other devices serialize with
+    new sessions.
     """
     if transport not in {"web", "native"}:
         raise ValueError("Unsupported authentication transport")
@@ -829,6 +974,7 @@ def issue_session(
             HouseholdMember.household_id == member.household_id,
             HouseholdMember.status == "active",
         )
+        .with_for_update(of=User, key_share=True)
         .execution_options(populate_existing=True)
     ).one_or_none()
     if active is None:

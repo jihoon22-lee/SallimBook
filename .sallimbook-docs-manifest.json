@@ -66,16 +66,16 @@
       "git_sha1": "26cdc5749deee91cfb5b08343e7d30ef1b2bb9c2"
     },
     "docs/api-contract.md": {
-      "sha256": "bc6bd1205ff0bef38fca9c4a07028b7daf2de5352da4edd3e32e32eddf6ca9f2",
-      "git_sha1": "00f3eaec56b38ea37944ed1710ffc04ec281a43a"
+      "sha256": "07e18db5eeeded6f9123e2e08f9f4fc58a177fe845441cfa5219d1aeb87e055f",
+      "git_sha1": "5eed304d443b80781de3582444dd40da07a070b7"
     },
     "docs/screen-specifications.md": {
       "sha256": "021ba88a9c58de117a3d82e6ffdd3f38d8795a9768f296dfc32affdcffd62fa5",
       "git_sha1": "7e37f8aa182bda561934c3fea4ab726d89656646"
     },
     "docs/security-authentication.md": {
-      "sha256": "4d1153a5bdb74a544c2f0076adfd1c1808f36355ebfe36ebc41e48395023b701",
-      "git_sha1": "c550162e8341aab4c952fa295a3a1c51f5b0593e"
+      "sha256": "aff5d41d53436cc2e9ce4f4cc4170dcab6e42b0fdf8ccb25d4d2d0b790ec2e10",
+      "git_sha1": "6cf851970637d21557cb555a52f8f89fddfb089e"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -122,8 +122,8 @@
       "git_sha1": "4d927ddc17db103d9192bc15ad739a9078090c7f"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "9247482283803207cf8e9e73a66fde045e6520dddcd3b09adae59b1f20d3ebc9",
-      "git_sha1": "5cb599b018dabfc438f478eeb955abfbc13708e7"
+      "sha256": "5bfb317f4aff3ae5d12a052314d46b7b33d8dd6c79d819d26bb8121ddb33352c",
+      "git_sha1": "2808958bdbd46ba26b1315bf488670e67db124ec"
     },
     "docs/README.md": {
       "sha256": "07e29fb741d3519319ed7450b4855352ca2dc5b3530975adc80a6ec3fcbb7de2",
@@ -218,8 +218,8 @@
       "git_sha1": "92f6d43b8f73f1a998304733736b8bf131e9562d"
     },
     "docs/testing/browser-authentication.md": {
-      "sha256": "91afaf5e0e7e7cc3f73eae2ee7c460ea025cf5ced72f69ab24e5126c49fa59db",
-      "git_sha1": "3dc7010bcc46d28c698d32a8f3399b373892719c"
+      "sha256": "e42d41d26afbc5364cab1b197f4b988cc683067e46ac9b3d45c5d2d60f8a03fe",
+      "git_sha1": "fc58b46918848729ae3fe53fc139cecc06c0487b"
     },
     "scripts/test_web_auth.py": {
       "sha256": "4f3a11b17e5191447c28144fd849795412a5089461131dd0d53dc54032fc8c44",

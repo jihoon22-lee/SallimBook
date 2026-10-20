@@ -35,6 +35,7 @@ type InvitationRequest = components["schemas"]["InvitationRequest"];
 type Invitation = components["schemas"]["InvitationResponse"];
 type DeviceList = components["schemas"]["DeviceListResponse"];
 export type Passkey = components["schemas"]["CredentialResponse"];
+export type PasswordChange = components["schemas"]["PasswordChangeRequest"];
 type PasskeyList = components["schemas"]["CredentialListResponse"];
 type PasskeyLoginInput = components["schemas"]["LoginOptionsRequest"];
 type StepUpPurpose = ScopeProof["purpose"];
@@ -69,6 +70,9 @@ interface AuthContextValue {
   createPartnerInvitation(input: InvitationRequest, proof?: OperationProof): Promise<Invitation>;
   listDevices(cursor?: string): Promise<DeviceList>;
   revokeDevice(device: Device, proof?: OperationProof): Promise<boolean>;
+  /** 웹은 입력값을 받는다. Android는 인자 없이 네이티브 화면을 연다. 취소하면 false. */
+  changePassword(input?: PasswordChange): Promise<boolean>;
+  revokeOtherDevices(password?: string): Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -687,6 +691,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [authenticatedRequest, clearSession, mutation, scopedOperation],
   );
 
+  const changePassword = useCallback(
+    async (input?: PasswordChange): Promise<boolean> => {
+      if (isNativeAuth())
+        return authenticatedRequest(
+          async () => (await nativeAuth.changePassword()).status === "changed",
+        );
+      if (!input) throw new ApiError(422, "VALIDATION_ERROR");
+      await mutation((token) =>
+        requestApi(() =>
+          apiClient.POST("/api/v1/auth/password", {
+            body: input,
+            headers: { "X-CSRF-Token": token },
+          }),
+        ),
+      );
+      return true;
+    },
+    [authenticatedRequest, mutation],
+  );
+
+  const revokeOtherDevices = useCallback(
+    async (password?: string): Promise<boolean> => {
+      if (isNativeAuth())
+        return authenticatedRequest(
+          async () => (await nativeAuth.revokeOtherDevices()).status === "revoked",
+        );
+      if (!password) throw new ApiError(422, "VALIDATION_ERROR");
+      await mutation((token) =>
+        requestApi(() =>
+          apiClient.POST("/api/v1/devices/revoke-others", {
+            body: { password },
+            headers: { "X-CSRF-Token": token },
+          }),
+        ),
+      );
+      return true;
+    },
+    [authenticatedRequest, mutation],
+  );
+
   const domainApi = useMemo<AuthenticatedApi>(
     () => ({
       read: <T,>(
@@ -759,6 +803,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       createPartnerInvitation,
       listDevices,
       revokeDevice,
+      changePassword,
+      revokeOtherDevices,
     }),
     [
       state,
@@ -781,6 +827,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       createPartnerInvitation,
       listDevices,
       revokeDevice,
+      changePassword,
+      revokeOtherDevices,
     ],
   );
   return (

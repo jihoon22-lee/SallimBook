@@ -13,4 +13,13 @@ internal object NativeAuthMessages {
         AuthCode.AUTH_CANCELLED -> "인증을 취소했어요."
         else -> "인증을 완료할 수 없어요. 앱 설정을 확인해 주세요."
     }
+
+    /** Password change and sign-out-others screens. Everything else keeps [message]. */
+    fun accountMessage(code: AuthCode, changingPassword: Boolean): String = when {
+        code == AuthCode.AUTH_FAILED -> "현재 비밀번호를 확인해 주세요."
+        code == AuthCode.VALIDATION_ERROR -> "새 비밀번호는 15자 이상이고 현재 비밀번호와 달라야 해요."
+        code == AuthCode.NETWORK_UNAVAILABLE && changingPassword ->
+            "응답을 받지 못했어요. 비밀번호가 이미 바뀌었을 수 있으니, 다시 시도할 때는 현재 비밀번호 칸에 새 비밀번호를 넣어 보세요."
+        else -> message(code)
+    }
 }

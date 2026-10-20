@@ -94,6 +94,8 @@ export const nativeAuth = {
     invoke(() => plugin.revokeDeviceUI({ deviceId, ifMatch })),
   createInvitationWithPasskey: () => invoke(() => plugin.createInvitationWithPasskeyUI()),
   reauthenticate: () => invoke(() => plugin.reauthenticateUI()),
+  changePassword: () => invoke(() => plugin.changePasswordUI()),
+  revokeOtherDevices: () => invoke(() => plugin.revokeOtherDevicesUI()),
   acceptInvitation: () => invoke(() => plugin.acceptInvitationUI()),
   createInvitation: () => invoke(() => plugin.createInvitationUI()),
   logout: () => invoke(() => plugin.logout()),

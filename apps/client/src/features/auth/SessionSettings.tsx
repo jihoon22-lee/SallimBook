@@ -9,9 +9,16 @@ import { ConnectionCodePanel } from "./ConnectionCodePanel";
 import { PasskeyPanel } from "./PasskeyPanel";
 import { useAuthCeremony } from "./useAuthCeremony";
 import { supportsWebAuthn } from "../../platform/webauthn";
-import { AuthError, SessionStatus, useMounted } from "./AuthFeedback";
+import {
+  AuthError,
+  clearSensitiveFields,
+  SessionStatus,
+  useMounted,
+  useSensitiveForm,
+} from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
-import type { Device, Member } from "./AuthProvider";
+import type { Device, Member, PasswordChange } from "./AuthProvider";
+import { FormError } from "../../shared/formValidation";
 import { ReturnLoginLink } from "./ReturnLoginLink";
 
 function localDate(value: string) {
@@ -184,8 +191,130 @@ function InvitationPanel() {
   );
 }
 
+const possiblyApplied =
+  "응답을 받지 못했어요. 비밀번호가 이미 바뀌었을 수 있으니, 다시 시도할 때는 현재 비밀번호 칸에 새 비밀번호를 넣어 보세요.";
+
+function PasswordPanel({ onChanged }: { onChanged: () => void }) {
+  const { changePassword } = useAuth();
+  const formRef = useSensitiveForm();
+  const mounted = useMounted();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function run(input?: PasswordChange) {
+    setBusy(true);
+    try {
+      if ((await changePassword(input)) && mounted.current) {
+        setDone(true);
+        onChanged();
+      }
+    } catch (failure) {
+      if (mounted.current) setError(toApiError(failure));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (busy) return;
+    const fields = new FormData(form);
+    const input: PasswordChange = {
+      current_password: String(fields.get("current_password") ?? ""),
+      new_password: String(fields.get("new_password") ?? ""),
+    };
+    const confirmation = String(fields.get("new_password_confirmation") ?? "");
+    clearSensitiveFields(form);
+    setError(null);
+    setDone(false);
+    const invalid =
+      input.new_password !== confirmation
+        ? "새 비밀번호와 확인 입력이 달라요."
+        : input.new_password === input.current_password
+          ? "현재 비밀번호와 다른 새 비밀번호를 입력해 주세요."
+          : null;
+    setProblem(invalid);
+    if (!invalid) void run(input);
+  }
+
+  return (
+    <section className="card" aria-labelledby="password-change-title">
+      <h2 id="password-change-title">비밀번호 변경</h2>
+      <p>바꾸면 이 기기를 뺀 내 다른 기기는 모두 로그아웃돼요. 등록한 패스키는 그대로 유지돼요.</p>
+      {isNativeAuth() ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setError(null);
+            setDone(false);
+            void run();
+          }}
+        >
+          {busy ? "인증 화면 사용 중…" : "앱에서 비밀번호 변경"}
+        </button>
+      ) : (
+        <form ref={formRef} className="auth-form" onSubmit={submit}>
+          <div className="form-field">
+            <label htmlFor="current-password">현재 비밀번호</label>
+            <input
+              id="current-password"
+              name="current_password"
+              type="password"
+              autoComplete="current-password"
+              required
+              maxLength={128}
+              disabled={busy}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="new-password">새 비밀번호</label>
+            <input
+              id="new-password"
+              name="new_password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={15}
+              maxLength={128}
+              disabled={busy}
+              aria-describedby="new-password-help"
+            />
+            <p id="new-password-help" className="muted">
+              15자 이상으로 정해 주세요.
+            </p>
+          </div>
+          <div className="form-field">
+            <label htmlFor="new-password-confirmation">새 비밀번호 확인</label>
+            <input
+              id="new-password-confirmation"
+              name="new_password_confirmation"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={15}
+              maxLength={128}
+              disabled={busy}
+            />
+          </div>
+          {problem && <FormError message={problem} />}
+          <button type="submit" disabled={busy}>
+            {busy ? "변경 중…" : "비밀번호 변경"}
+          </button>
+        </form>
+      )}
+      <AuthError error={error} />
+      {error?.code === "NETWORK_UNAVAILABLE" && <p className="muted">{possiblyApplied}</p>}
+      {done && <p role="status">비밀번호를 바꿨어요. 다른 기기는 모두 로그아웃됐어요.</p>}
+    </section>
+  );
+}
+
 function DevicePanel() {
-  const { listDevices, revokeDevice } = useAuth();
+  const { listDevices, revokeDevice, revokeOtherDevices } = useAuth();
   const ceremony = useAuthCeremony();
   const mounted = useMounted();
   const generation = useRef(0);
@@ -196,6 +325,9 @@ function DevicePanel() {
   const [actionError, setActionError] = useState<ApiError | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
+  const signOutForm = useSensitiveForm();
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -249,6 +381,31 @@ function DevicePanel() {
     }
   }
 
+  async function signOutOthers(password?: string) {
+    if (revoking || loading) return;
+    setRevoking(true);
+    setActionError(null);
+    setSignedOut(false);
+    try {
+      if ((await revokeOtherDevices(password)) && mounted.current) {
+        setSignOutOpen(false);
+        setSignedOut(true);
+        await load();
+      }
+    } catch (failure) {
+      if (mounted.current) setActionError(toApiError(failure));
+    } finally {
+      if (mounted.current) setRevoking(false);
+    }
+  }
+
+  function submitSignOut(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const password = String(new FormData(form).get("password") ?? "");
+    clearSensitiveFields(form);
+    void signOutOthers(password);
+  }
   return (
     <section className="card" aria-labelledby="device-list-title">
       <h2 id="device-list-title">내 등록 기기</h2>
@@ -348,6 +505,62 @@ function DevicePanel() {
           기기 더 보기
         </button>
       )}
+      {isNativeAuth() ? (
+        <button type="button" disabled={loading || revoking} onClick={() => void signOutOthers()}>
+          다른 기기 모두 로그아웃
+        </button>
+      ) : signOutOpen ? (
+        <form
+          ref={signOutForm}
+          className="auth-form"
+          aria-label="다른 기기 모두 로그아웃 확인"
+          onSubmit={submitSignOut}
+        >
+          <p>
+            현재 계정의 비밀번호를 확인하면 이 기기를 뺀 내 기기의 로그인을 모두 해제해요. 등록한
+            패스키는 그대로 유지돼요.
+          </p>
+          <div className="form-field">
+            <label htmlFor="sign-out-others-password">현재 계정 비밀번호</label>
+            <input
+              id="sign-out-others-password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              maxLength={128}
+              disabled={revoking}
+            />
+          </div>
+          <div className="form-actions">
+            <button type="submit" disabled={revoking || loading}>
+              {revoking ? "로그아웃 중…" : "다른 기기 로그아웃 확인"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearSensitiveFields(signOutForm.current);
+                setSignOutOpen(false);
+              }}
+            >
+              취소
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          type="button"
+          disabled={loading || revoking}
+          onClick={() => {
+            setActionError(null);
+            setSignedOut(false);
+            setSignOutOpen(true);
+          }}
+        >
+          다른 기기 모두 로그아웃
+        </button>
+      )}
+      {signedOut && <p role="status">다른 기기를 모두 로그아웃했어요.</p>}
     </section>
   );
 }
@@ -359,6 +572,7 @@ function AuthenticatedSettings({ member }: { member: Member }) {
   const [error, setError] = useState<ApiError | null>(null);
   const [secretReset, setSecretReset] = useState(0);
   const [legacyOpen, setLegacyOpen] = useState(false);
+  const [deviceReload, setDeviceReload] = useState(0);
   async function signOut() {
     if (busy) return;
     setSecretReset((value) => value + 1);
@@ -391,13 +605,14 @@ function AuthenticatedSettings({ member }: { member: Member }) {
           <ReturnLoginLink className="button-link">최근 로그인 다시 확인</ReturnLoginLink>
         </div>
       </section>
+      <PasswordPanel onChanged={() => setDeviceReload((value) => value + 1)} />
       {member.role === "owner" && (
         <ConnectionCodePanel
           key={`connection:${secretReset}`}
           onLegacyInvitation={() => setLegacyOpen(true)}
         />
       )}
-      <DevicePanel />
+      <DevicePanel key={`devices:${deviceReload}`} />
       <PasskeyPanel />
       {member.role === "owner" ? (
         <details open={legacyOpen} onToggle={(event) => setLegacyOpen(event.currentTarget.open)}>

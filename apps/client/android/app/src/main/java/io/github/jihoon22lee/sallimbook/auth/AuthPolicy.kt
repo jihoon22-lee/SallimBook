@@ -197,6 +197,15 @@ internal object AuthPolicy {
             "device_type" to row["device_type"], "version" to version)
     }
 
+    fun revokedDevices(value: Any?): Int {
+        val count = record(value, setOf("revoked_devices"))["revoked_devices"]
+        return when {
+            count is Int && count >= 0 -> count
+            count is Long && count in 0..Int.MAX_VALUE.toLong() -> count.toInt()
+            else -> throw AuthFailure(AuthCode.ACCESS_DENIED)
+        }
+    }
+
     /** Preserve only recognized server codes/correlation; messages are local constants. */
     fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
         if (requestId == null || !uuid.matches(requestId)) return null

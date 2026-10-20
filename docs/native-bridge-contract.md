@@ -85,6 +85,8 @@ web vault에서도 secret component에만 평문을 한정하고 일반 상태�
 | `registerPasskeyUI` | 없음 | registered/cancelled |
 | `revokePasskeyUI` | credentialId, If-Match 형식의 ifMatch | revoked/cancelled |
 | `revokeDeviceUI` | deviceId, If-Match 형식의 ifMatch | revoked/cancelled |
+| `changePasswordUI` | 없음 | changed/cancelled; 현재·새 비밀번호는 native 전용, 다른 기기 폐기 |
+| `revokeOtherDevicesUI` | 없음 | revoked/cancelled; 비밀번호 확인 후 다른 기기 폐기 |
 | `acceptInvitationUI` | 없음 | accepted/cancelled; 로그인은 별도 동작 |
 | `createInvitationUI`, `createInvitationWithPasskeyUI` | 없음 | created/cancelled; 초대 코드는 네이티브에 최대 30초 표시 |
 | `logout` | 없음 | signedOut, serverRevoked |
@@ -98,6 +100,7 @@ Issue #87의 시작/연결은 전용 네이티브 화면과 제한된 HTTP ticke
 `request`는 GET `/me`, `/household/members`, `/devices`, `/auth/passkeys`와 버전을 지정한
 DELETE `/devices/{UUID}`만 허용한다(공통 `/api/v1` 접두사). 쿼리·ID·응답 필드도 제한하며,
 일반 API 메타데이터의 TS 타입은 생성 API client를 사용한다. 임의 본문·헤더·URL을 받아 전송하지 않는다.
+`/auth/password`와 `/devices/revoke-others` 두 경로는 JS `request`로 보낼 수 없다.
 
 `revokeDeviceUI`와 `createInvitationWithPasskeyUI`는 각각 대상 기기와 현재 가계에 고정한 scope로
 Credential Manager 인증을 수행하고 같은 네이티브 작업 안에서 grant를 소비한다. 패스키 등록·폐기는

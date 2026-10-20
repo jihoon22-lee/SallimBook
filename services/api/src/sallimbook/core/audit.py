@@ -90,6 +90,7 @@ AuditEntityType = Literal[
     "registered_device",
     "passkey",
     "invitation",
+    "user",
 ]
 AuditAction = Literal[
     "create",

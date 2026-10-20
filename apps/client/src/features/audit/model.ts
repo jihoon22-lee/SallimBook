@@ -60,6 +60,7 @@ export const entityLabels: Record<string, string> = {
   registered_device: "기기 로그인",
   passkey: "패스키",
   invitation: "초대·연결 코드",
+  user: "계정",
 };
 export const actionLabels: Record<string, string> = {
   create: "등록",

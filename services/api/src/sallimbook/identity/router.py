@@ -34,8 +34,10 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    PasswordChangeRequest,
     ReauthenticationRequest,
     RefreshRequest,
+    RevokedDevicesResponse,
     SetupRequest,
     SetupStatusResponse,
     WebLoginResponse,
@@ -183,6 +185,21 @@ def login_web(
 @router.get("/auth/web/csrf", response_model=CsrfResponse, operation_id="renewWebCsrf")
 def renew_web_csrf(principal: PrincipalDependency, session: SessionDependency) -> CsrfResponse:
     return CsrfResponse(csrf_token=service.renew_csrf(session, principal))
+
+
+@router.post(
+    "/auth/password",
+    response_model=RevokedDevicesResponse,
+    dependencies=[Depends(require_registration_transport)],
+    operation_id="changePassword",
+)
+def change_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+) -> RevokedDevicesResponse:
+    return service.change_password(session, principal, payload, request_source(request))
 
 
 @router.post(
@@ -379,6 +396,22 @@ def get_devices(
     )
     session.commit()
     return result
+
+
+@router.post(
+    "/devices/revoke-others",
+    response_model=RevokedDevicesResponse,
+    dependencies=[Depends(require_registration_transport)],
+    operation_id="revokeOtherDevices",
+)
+def revoke_other_devices(
+    payload: ReauthenticationRequest,
+    request: Request,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+) -> RevokedDevicesResponse:
+    # One route for both transports: Origin+CSRF for cookies, the native header for bearer.
+    return service.revoke_other_devices(session, principal, payload, request_source(request))
 
 
 @router.delete("/devices/{device_id}", status_code=204, operation_id="revokeDevice")

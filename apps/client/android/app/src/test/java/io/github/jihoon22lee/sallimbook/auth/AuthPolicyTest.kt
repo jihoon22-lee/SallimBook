@@ -193,4 +193,18 @@ class AuthPolicyTest {
         for (status in listOf(500, 502, 503)) assertEquals(AuthCode.NETWORK_UNAVAILABLE, AuthPolicy.credentialFailure(status))
         for (status in listOf(400, 401, 403, 422)) assertEquals(AuthCode.AUTH_FAILED, AuthPolicy.credentialFailure(status))
     }
+
+    @Test fun accountPasswordEndpointsAreNativeOnlyAndReturnOnlyACount() {
+        for (path in listOf("/api/v1/auth/password", "/api/v1/devices/revoke-others")) {
+            for (method in listOf("GET", "POST", "DELETE")) assertFalse(AuthPolicy.requestAllowed(method, path, null))
+        }
+        assertEquals(2, AuthPolicy.revokedDevices(mapOf("revoked_devices" to 2)))
+        assertEquals(0, AuthPolicy.revokedDevices(mapOf("revoked_devices" to 0L)))
+        for (body in listOf<Any?>(null, emptyMap<String, Any?>(), mapOf("revoked_devices" to -1),
+            mapOf("revoked_devices" to "1"), mapOf("revoked_devices" to 1.0),
+            mapOf("revoked_devices" to 1, "device_ids" to emptyList<String>()))) {
+            try { AuthPolicy.revokedDevices(body); fail("Unsafe revoke count") }
+            catch (failure: AuthFailure) { assertEquals(AuthCode.ACCESS_DENIED, failure.code) }
+        }
+    }
 }

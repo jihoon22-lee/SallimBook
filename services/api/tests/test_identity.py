@@ -39,7 +39,11 @@ from sallimbook.identity.auth_models import (
 from sallimbook.identity.dependencies import NATIVE_HEADER, SESSION_COOKIE
 from sallimbook.identity.models import Household
 from sallimbook.identity.router import router
-from sallimbook.identity.schemas import InvitationAcceptance, LoginRequest
+from sallimbook.identity.schemas import (
+    InvitationAcceptance,
+    LoginRequest,
+    PasswordChangeRequest,
+)
 
 ORIGIN = "https://sallimbook-test.invalid"
 NATIVE = {NATIVE_HEADER: "1"}
@@ -259,6 +263,307 @@ def test_rehash_is_skipped_not_failed_when_slots_are_busy(monkeypatch):
 
 @pytest.mark.database
 class TestIdentityDatabase:
+    @pytest.mark.parametrize("replacement", ["changed", "rehashed"])
+    def test_login_rechecks_password_hash_under_account_lock(
+        self, db_engine, account, monkeypatch, replacement
+    ):
+        verify = service._verify_admitted
+
+        def replace_after_verification(session, buckets, encoded, password):
+            verified = verify(session, buckets, encoded, password)
+            with Session(db_engine) as other:
+                user = other.get(User, account.user_id)
+                user.password_hash = service.hash_password(
+                    secrets.token_urlsafe(24) if replacement == "changed" else account.password
+                )
+                other.commit()
+            return verified
+
+        monkeypatch.setattr(service, "_verify_admitted", replace_after_verification)
+        request = LoginRequest(
+            login_name=account.login_name,
+            password=account.password,
+            device_label="합성 경합 기기",
+        )
+        with Session(db_engine) as session:
+            if replacement == "changed":
+                with pytest.raises(DomainError) as error:
+                    service.login(session, request, "synthetic-race", "native")
+                assert (error.value.code, error.value.status) == ("UNAUTHENTICATED", 401)
+            else:
+                service.login(session, request, "synthetic-race", "native")
+        with Session(db_engine) as session:
+            devices = session.scalar(select(func.count()).select_from(RegisteredDevice))
+        assert devices == (0 if replacement == "changed" else 1)
+
+    @pytest.mark.parametrize("transport", ["web", "native"])
+    def test_revoke_other_devices_keeps_this_device_and_requires_the_password(
+        self, identity_app, db_engine, account, transport
+    ):
+        path = "/api/v1/devices/revoke-others"
+        with (
+            TestClient(identity_app, base_url="https://testserver") as client,
+            TestClient(identity_app, base_url="https://testserver") as device,
+        ):
+            other = native_login(device, account)
+            headers = (
+                csrf(web_login(client, account))
+                if transport == "web"
+                else {**NATIVE, **bearer(native_login(client, account))}
+            )
+            if transport == "web":
+                missing = client.post(
+                    path, headers={"Origin": ORIGIN}, json={"password": account.password}
+                )
+                assert missing.json()["error"]["code"] == "CSRF_FAILED"
+            wrong = client.post(path, headers=headers, json={"password": secrets.token_urlsafe(24)})
+            assert wrong.status_code == 403
+            assert wrong.json()["error"]["code"] == "REAUTHENTICATION_FAILED"
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 200
+            stale = service.utcnow() - timedelta(minutes=6)
+            with Session(db_engine) as session:
+                for auth in session.scalars(select(AuthSession)):
+                    auth.authenticated_at = stale
+                session.commit()
+            result = client.post(path, headers=headers, json={"password": account.password})
+            assert result.status_code == 200 and result.json() == {"revoked_devices": 1}
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 401
+            refreshed = device.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": other["refresh_token"]},
+            )
+            assert refreshed.status_code == 401
+            again = client.post(path, headers=headers, json={"password": account.password})
+            assert again.status_code == 200 and again.json() == {"revoked_devices": 0}
+        with Session(db_engine) as session:
+            rows = session.execute(
+                select(
+                    RegisteredDevice.id, RegisteredDevice.status, AuthSession.authenticated_at
+                ).join(AuthSession, AuthSession.device_id == RegisteredDevice.id)
+            ).all()
+            events = session.execute(
+                select(AuditEvent.entity_id, AuditEvent.safe_diff).where(
+                    AuditEvent.entity_type == "registered_device", AuditEvent.action == "revoke"
+                )
+            ).all()
+        assert sorted(status for _, status, _ in rows) == ["active", "revoked"]
+        assert all((at > stale) == (status == "active") for _, status, at in rows)
+        revoked = next(identifier for identifier, status, _ in rows if status == "revoked")
+        assert [(entity, diff["changed_fields"]) for entity, diff in events] == [
+            (revoked, ["revoked_at", "status"])
+        ]
+
+    def test_revoke_others_shares_the_reauthentication_limit(self, identity_app, account):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            headers = {**NATIVE, **bearer(tokens)}
+            paths = ["/api/v1/auth/native/reauthenticate"] * 3
+            paths += ["/api/v1/devices/revoke-others"] * 2
+            for path in paths:
+                wrong = client.post(
+                    path, headers=headers, json={"password": secrets.token_urlsafe(24)}
+                )
+                assert wrong.status_code == 403
+            limited = client.post(
+                "/api/v1/devices/revoke-others",
+                headers=headers,
+                json={"password": account.password},
+            )
+            assert limited.status_code == 429
+            assert limited.json()["error"]["code"] == "RATE_LIMITED"
+            assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 200
+
+    def test_revoke_others_relocks_when_a_login_finishes_before_the_account_lock(
+        self, identity_app, db_engine, account, monkeypatch
+    ):
+        lock = service.lock_session_devices
+        concurrent = []
+
+        def login_after_first_lock(session, principal, *, additional_device_ids=()):
+            locked = lock(session, principal, additional_device_ids=additional_device_ids)
+            if not concurrent:
+                with Session(db_engine) as other:
+                    concurrent.append(
+                        service.login(
+                            other,
+                            LoginRequest(
+                                login_name=account.login_name,
+                                password=account.password,
+                                device_label="합성 동시 기기",
+                            ),
+                            "synthetic-concurrent",
+                            "native",
+                        )
+                    )
+            return locked
+
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            other = native_login(client, account)
+            tokens = native_login(client, account)
+            monkeypatch.setattr(service, "lock_session_devices", login_after_first_lock)
+            result = client.post(
+                "/api/v1/devices/revoke-others",
+                headers={**NATIVE, **bearer(tokens)},
+                json={"password": account.password},
+            )
+            assert result.status_code == 200 and result.json() == {"revoked_devices": 2}
+            late = {"Authorization": "Bearer " + concurrent[0].token}
+            assert client.get("/api/v1/me", headers=late).status_code == 401
+            assert client.get("/api/v1/me", headers=bearer(other)).status_code == 401
+            assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 200
+
+    @pytest.mark.parametrize("transport", ["web", "native"])
+    def test_password_change_replaces_login_and_signs_out_other_devices(
+        self, identity_app, db_engine, account, transport
+    ):
+        replacement = secrets.token_urlsafe(24)
+        body = {"current_password": account.password, "new_password": replacement}
+        with (
+            TestClient(identity_app, base_url="https://testserver") as client,
+            TestClient(identity_app, base_url="https://testserver") as device,
+        ):
+            other = native_login(device, account)
+            tokens = None if transport == "web" else native_login(client, account)
+            headers = (
+                csrf(web_login(client, account)) if tokens is None else {**NATIVE, **bearer(tokens)}
+            )
+            if transport == "web":
+                missing = client.post(
+                    "/api/v1/auth/password", headers={"Origin": ORIGIN}, json=body
+                )
+                assert missing.json()["error"]["code"] == "CSRF_FAILED"
+            result = client.post("/api/v1/auth/password", headers=headers, json=body)
+            assert result.status_code == 200 and result.json() == {"revoked_devices": 1}
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 401
+            me = {} if tokens is None else bearer(tokens)
+            assert client.get("/api/v1/me", headers=me).status_code == 200
+
+            def login(password):
+                return device.post(
+                    "/api/v1/auth/native/login",
+                    headers=NATIVE,
+                    json={
+                        "login_name": account.login_name,
+                        "password": password,
+                        "device_label": "합성 Android",
+                    },
+                )
+
+            assert login(account.password).status_code == 401
+            assert login(replacement).status_code == 200
+        with Session(db_engine) as session:
+            stored = session.get(User, account.user_id).password_hash
+            rows = session.execute(
+                select(
+                    AuditEvent.entity_type,
+                    AuditEvent.action,
+                    AuditEvent.entity_id,
+                    AuditEvent.safe_diff,
+                ).where(AuditEvent.action.not_in(("login", "accept")))  # fixture accept
+            ).all()
+        events = Counter((kind, action, tuple(d["changed_fields"])) for kind, action, _, d in rows)
+        assert events == Counter(
+            [
+                ("registered_device", "revoke", ("revoked_at", "status")),
+                ("user", "update", ("password_hash",)),
+            ]
+        )
+        assert next(entity for kind, _, entity, _ in rows if kind == "user") == account.user_id
+        dumped = json.dumps([d for *_, d in rows], ensure_ascii=False)
+        for secret in (account.password, replacement, stored):
+            assert secret not in dumped
+
+    def test_password_change_rejects_wrong_same_or_short_passwords_without_side_effects(
+        self, identity_app, db_engine, account
+    ):
+        with (
+            TestClient(identity_app, base_url="https://testserver") as client,
+            TestClient(identity_app, base_url="https://testserver") as device,
+        ):
+            other = native_login(device, account)
+            headers = {**NATIVE, **bearer(native_login(client, account))}
+            cases = [
+                (
+                    {
+                        "current_password": secrets.token_urlsafe(24),
+                        "new_password": secrets.token_urlsafe(24),
+                    },
+                    403,
+                    "REAUTHENTICATION_FAILED",
+                ),
+                (
+                    {"current_password": account.password, "new_password": account.password},
+                    422,
+                    "VALIDATION_ERROR",
+                ),
+                (
+                    {
+                        "current_password": account.password,
+                        "new_password": secrets.token_urlsafe(24)[:14],
+                    },
+                    422,
+                    "VALIDATION_ERROR",
+                ),
+                ({"current_password": account.password}, 422, "VALIDATION_ERROR"),
+            ]
+            for body, status, code in cases:
+                response = client.post("/api/v1/auth/password", headers=headers, json=body)
+                assert (response.status_code, response.json()["error"]["code"]) == (status, code)
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 200
+        with Session(db_engine) as session:
+            stored = session.get(User, account.user_id).password_hash
+            changed = session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action.not_in(("login", "accept")))  # fixture accept
+            )
+        assert service._verify_password(stored, account.password)
+        assert changed == 0
+
+    def test_concurrent_password_changes_from_two_devices_leave_one_winner(
+        self, db_engine, account
+    ):
+        logins = []
+        with Session(db_engine) as session:
+            for label in ("합성 첫 기기", "합성 둘째 기기"):
+                logins.append(
+                    service.login(
+                        session,
+                        LoginRequest(
+                            login_name=account.login_name,
+                            password=account.password,
+                            device_label=label,
+                        ),
+                        "synthetic-native",
+                        "native",
+                    )
+                )
+        barrier = Barrier(2)
+
+        def change(login):
+            with Session(db_engine) as session:
+                principal = service.authenticate(session, login.token, "native")
+                barrier.wait(timeout=10)
+                request = PasswordChangeRequest(
+                    current_password=account.password,
+                    new_password=secrets.token_urlsafe(24),
+                )
+                try:
+                    return service.change_password(
+                        session, principal, request, "synthetic-concurrency"
+                    ).revoked_devices
+                except DomainError as exc:
+                    return exc.status
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(change, login) for login in logins]
+            outcomes = [future.result(timeout=30) for future in futures]
+        assert sorted(outcomes) == [1, 401]
+        with Session(db_engine) as session:
+            statuses = sorted(session.scalars(select(RegisteredDevice.status)))
+        assert statuses == ["active", "revoked"]
+
     def test_security_events_keep_metadata_only(self, identity_app, db_engine, account):
         with Session(db_engine) as session:
             fixture_events = set(session.scalars(select(AuditEvent.id)))  # bootstrap acceptance

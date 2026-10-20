@@ -67,6 +67,8 @@ async function nativeMock(page: Page, scenario: Scenario = {}) {
               "revokePasskeyUI",
               "revokeDeviceUI",
               "createInvitationWithPasskeyUI",
+              "changePasswordUI",
+              "revokeOtherDevicesUI",
             ]
               .map((name) => ({ name, rtype: "promise" }))
               .concat([
@@ -108,6 +110,12 @@ async function nativeMock(page: Page, scenario: Scenario = {}) {
             return success({ status: initial.cancelled ? "cancelled" : "revoked" });
           }
           if (method === "revokeDeviceUI") {
+            if (!initial.cancelled) state.revoked = true;
+            return success({ status: initial.cancelled ? "cancelled" : "revoked" });
+          }
+          if (method === "changePasswordUI")
+            return success({ status: initial.cancelled ? "cancelled" : "changed" });
+          if (method === "revokeOtherDevicesUI") {
             if (!initial.cancelled) state.revoked = true;
             return success({ status: initial.cancelled ? "cancelled" : "revoked" });
           }
@@ -436,5 +444,39 @@ test("native registration session expiry clears account state without success", 
   await page.getByRole("button", { name: "앱에서 패스키 등록", exact: true }).click();
   await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toBeVisible();
   await expect(page.getByText("패스키를 등록했어요.", { exact: true })).toHaveCount(0);
+  await noWebCredentials(page);
+});
+
+test("native password change and sign-out of other devices use parameterless native screens", async ({
+  page,
+}) => {
+  await nativeMock(page, { authenticated: true });
+  await page.goto("/settings/auth");
+  await page.getByRole("button", { name: "앱에서 비밀번호 변경", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "비밀번호를 바꿨어요." })).toBeVisible();
+  await page.getByRole("button", { name: "다른 기기 모두 로그아웃", exact: true }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "다른 기기를 모두 로그아웃했어요." }),
+  ).toBeVisible();
+  await expect(page.locator(".device-card").filter({ hasText: "합성 첫 기기" })).toContainText(
+    "연결 해제됨",
+  );
+  await noWebCredentials(page);
+  const methods = (await bridgeState(page)).calls.map((call) => call.method);
+  expect(
+    methods.filter((name) => name === "changePasswordUI" || name === "revokeOtherDevicesUI"),
+  ).toEqual(["changePasswordUI", "revokeOtherDevicesUI"]);
+});
+
+test("cancelled native account screens change nothing", async ({ page }) => {
+  await nativeMock(page, { authenticated: true, cancelled: true });
+  await page.goto("/settings/auth");
+  await page.getByRole("button", { name: "앱에서 비밀번호 변경", exact: true }).click();
+  await page.getByRole("button", { name: "다른 기기 모두 로그아웃", exact: true }).click();
+  await expect(page.locator(".device-card").filter({ hasText: "합성 첫 기기" })).toContainText(
+    "연결됨",
+  );
+  await expect(page.getByText("비밀번호를 바꿨어요.")).toHaveCount(0);
+  await expect(page.getByText("다른 기기를 모두 로그아웃했어요.")).toHaveCount(0);
   await noWebCredentials(page);
 });

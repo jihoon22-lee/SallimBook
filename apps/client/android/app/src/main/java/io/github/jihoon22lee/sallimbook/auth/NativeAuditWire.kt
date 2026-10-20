@@ -129,7 +129,7 @@ internal object NativeAuditWire {
         "insurance_policy","insurance_return","medical_expense","medical_node","medical_refund","obligation",
         "payout_allocation","policy_premium_link","recurring_rule","stock_movement","user_export","vault",
         "vault_member_wrapping","vault_membership","vault_recovery_wrapping","vault_rotation","vault_share",
-        "registered_device","passkey","invitation",
+        "registered_device","passkey","invitation","user",
     )
     val actions=setOf(
         "archive","complete","confirm","convert","correct","create",
