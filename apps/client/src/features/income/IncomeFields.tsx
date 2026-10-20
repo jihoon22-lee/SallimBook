@@ -3,16 +3,19 @@ import { todaySeoul } from "../finance/dates";
 import { AccountSelect, linkDate } from "../finance/AccountChoices";
 import type { IncomeDraft } from "./model";
 import { manualKinds } from "./model";
+import { AmountField } from "../../shared/AmountField";
 export function IncomeFields({
   draft,
   onChange,
   disabled = false,
   fixedScope = false,
+  amountError = null,
 }: {
   draft: IncomeDraft;
   onChange: (draft: IncomeDraft) => void;
   disabled?: boolean;
   fixedScope?: boolean;
+  amountError?: string | null;
 }) {
   const members = useHouseholdMembers();
   const change = (field: keyof IncomeDraft, value: string) =>
@@ -96,20 +99,13 @@ export function IncomeFields({
             </label>
           </div>
         )}
-        <div className="form-field">
-          <label>
-            수입 금액 (원)
-            <input
-              inputMode="numeric"
-              type="text"
-              pattern="[0-9]+"
-              maxLength={20}
-              value={draft.amount}
-              onChange={(event) => change("amount", event.target.value)}
-              required
-            />
-          </label>
-        </div>
+        <AmountField
+          label="수입 금액 (원)"
+          required
+          value={draft.amount}
+          error={amountError}
+          onChange={(value) => change("amount", value)}
+        />
         <AccountSelect
           value={draft.account}
           onChange={(value) => change("account", value)}

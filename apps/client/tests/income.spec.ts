@@ -328,3 +328,38 @@ test("precision conversion leaves differing source accounts for the user to choo
     "계좌 연결 안 함",
   );
 });
+
+test("income amount accepts thousands separators, echoes the value and sends digits only", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  await page.goto("/income/new");
+  await page.getByRole("combobox", { name: "수입 구성원", exact: true }).selectOption(uid(2));
+  await page.getByLabel("수입 금액 (원)", { exact: true }).fill("3,500,000");
+  await expect(page.getByText("3,500,000원", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "수입 상세", exact: true })).toBeVisible();
+  expect(state.writes[0]!.body).toMatchObject({ amount_krw: "3500000" });
+});
+
+test("invalid income amount keeps save enabled and explains the field on submit", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  await page.goto("/income/new");
+  await page.getByRole("combobox", { name: "수입 구성원", exact: true }).selectOption(uid(2));
+  const amount = page.getByLabel("수입 금액 (원)", { exact: true });
+  await amount.fill("1.5");
+  const save = page.getByRole("button", { name: "수입 기록 저장", exact: true });
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(amount).toHaveAttribute("aria-invalid", "true");
+  await expect(amount).toBeFocused();
+  await expect(amount).toHaveAccessibleDescription(
+    "원 단위 숫자로 입력해 주세요. 세 자리마다 쉼표를 쓸 수 있지만 소수점·부호는 쓸 수 없어요.",
+  );
+  await expect(page.getByRole("alert")).toContainText("구성원·월·금액·실제 날짜를 확인해 주세요.");
+  await amount.fill("1,500");
+  await expect(amount).not.toHaveAttribute("aria-invalid", "true");
+  expect(state.writes).toHaveLength(0);
+});

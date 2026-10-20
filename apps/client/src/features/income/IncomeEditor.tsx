@@ -13,6 +13,8 @@ import { useIncomeApi } from "./api";
 import { excludeSelf, incomeDraft, incomeInput, incomePatch, preserveIncomeChanges } from "./model";
 import type { DuplicateResponse, Income, IncomeDraft, IncomeInput } from "./model";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { krwFieldError } from "../../shared/krw";
 
 export function IncomeEditor({ initial }: { initial?: Income }) {
   const api = useIncomeApi();
@@ -27,6 +29,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
   const [checking, setChecking] = useState(false);
   const [latest, setLatest] = useState<Income | null>(null);
   const [validation, setValidation] = useState("");
+  const attempt = useSubmitAttempt();
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const input = incomeInput(draft);
@@ -42,9 +45,10 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
     setAcknowledged(false);
     setValidation("");
   }
-  async function check() {
+  async function check(form: HTMLFormElement | null) {
     if (!input) {
-      setValidation("구성원·월·양수 정수 금액·실제 날짜를 확인해 주세요.");
+      setValidation("구성원·월·금액·실제 날짜를 확인해 주세요.");
+      if (form) attempt.reject(form);
       return null;
     }
     setChecking(true);
@@ -68,18 +72,20 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
       if (command.mounted.current) setChecking(false);
     }
   }
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
     if (checking || command.busy) return;
     if (!body) {
       setValidation(
         base
           ? "변경한 수입 내용과 정정 사유를 확인해 주세요."
-          : "구성원·월·양수 정수 금액·실제 날짜를 확인해 주세요.",
+          : "구성원·월·금액·실제 날짜를 확인해 주세요.",
       );
+      attempt.reject(form);
       return;
     }
-    const checked = duplicates ?? (await check());
+    const checked = duplicates ?? (await check(form));
     if (!checked || !command.mounted.current) return;
     if (checked.suspected && !acknowledged) {
       setValidation("아래 기존 기록을 확인하고 중복 여부를 선택해 주세요.");
@@ -118,7 +124,16 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
       <h2>{base ? "수입 정정" : "새 수입 기록"}</h2>
       <RecordedMoneyNotice />
       <form onInput={() => setDirty(true)} onSubmit={(event) => void submit(event)}>
-        <IncomeFields draft={draft} onChange={change} disabled={command.busy || checking} />
+        <IncomeFields
+          draft={draft}
+          onChange={change}
+          disabled={command.busy || checking}
+          amountError={
+            attempt.attempted
+              ? krwFieldError(draft.amount, { required: true, positive: true })
+              : null
+          }
+        />
         {base && (
           <div className="form-field">
             <label>
@@ -136,8 +151,8 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
         <button
           type="button"
           className="secondary-button"
-          disabled={!input || checking || command.busy}
-          onClick={() => void check()}
+          disabled={checking || command.busy}
+          onClick={(event) => void check(event.currentTarget.form)}
         >
           중복 기록 확인
         </button>
@@ -179,7 +194,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
             )}
           </section>
         )}
-        {validation && <p role="alert">{validation}</p>}
+        <FormError message={validation} />
         <CashflowError error={command.error} />
         {base && command.error?.status === 409 && (
           <button
@@ -228,7 +243,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
           backTo={base ? `/income/${base.id}` : "/income"}
           busy={command.busy}
           cancel={command.cancel}
-          disabled={checking || !body || (!!base && !base.editable)}
+          disabled={checking || (!!base && !base.editable)}
           label={base ? "수입 정정 저장" : "수입 기록 저장"}
         />
       </form>

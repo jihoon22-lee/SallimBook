@@ -542,6 +542,10 @@ footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
 button[type="submit"].danger-button, .danger-review button[type="submit"] { background: var(--danger); border-color: var(--danger); color: var(--surface); }
 button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:hover { filter: brightness(.9); }
 
+.amount-echo { margin: 0; font-size: .8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.field-error, .form-error { color: var(--danger); font-size: .8125rem; margin: 0; }
+.form-error { margin-block: 12px; }
+.form-field [aria-invalid="true"] { border-color: var(--danger); }
 .leave-dialog { max-width: min(28rem, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--foreground); }
 .leave-dialog::backdrop { background: rgb(0 0 0 / 40%); }
 .leave-dialog h2 { margin-top: 0; }
