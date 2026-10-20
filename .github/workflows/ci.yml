@@ -117,6 +117,7 @@ jobs:
           enable-cache: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
+      - run: pnpm lint
       - run: uv sync --project services/api --frozen
       - run: pnpm api:generate
       - name: Require committed OpenAPI and generated TypeScript updates
