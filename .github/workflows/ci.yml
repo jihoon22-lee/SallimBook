@@ -57,6 +57,7 @@ jobs:
           enable-cache: false
       - run: uv sync --project services/api --frozen
       - run: uv run --project services/api ruff check services/api/src services/api/tests services/api/migrations
+      - run: uv run --project services/api ruff format --check services/api/src services/api/tests services/api/migrations
       # PostgreSQL tests are exercised separately with an explicit disposable test DB.
       - run: uv run --project services/api pytest services/api/tests -m 'not database'
 
@@ -115,6 +116,7 @@ jobs:
           python-version: "3.14.7"
           enable-cache: false
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
       - run: uv sync --project services/api --frozen
       - run: pnpm api:generate
       - name: Require committed OpenAPI and generated TypeScript updates
