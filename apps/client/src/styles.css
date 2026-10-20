@@ -212,12 +212,12 @@ details > summary { min-height: 48px; padding-block: 11px; cursor: pointer; font
 .mobile-tabs > ul { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
 .nav-item { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 12px; border-radius: 9px; text-decoration: none; font-weight: 600; font-size: .875rem; }
 .nav-icon { display: inline-flex; width: 22px; justify-content: center; color: var(--muted); }
-.nav-item[aria-current="page"] { background: var(--selected); color: var(--accent); font-weight: 750; }
-.nav-item[aria-current="page"] .nav-icon { color: var(--accent); }
+.nav-item[aria-current] { background: var(--selected); color: var(--accent); font-weight: 750; }
+.nav-item[aria-current] .nav-icon { color: var(--accent); }
 .nav-item:hover, .subnav a:hover { background: var(--surface-subtle); }
 .mobile-tabs .nav-item { flex-direction: column; justify-content: center; gap: 5px; padding: 7px 2px; min-height: 58px; font-size: .6875rem; line-height: 1.2; }
-.mobile-tabs .nav-item[aria-current="page"] { background: transparent; }
-.mobile-tabs .nav-item[aria-current="page"] .nav-icon { background: var(--selected); border-radius: 9px; box-shadow: 0 0 0 6px var(--selected); }
+.mobile-tabs .nav-item[aria-current] { background: transparent; }
+.mobile-tabs .nav-item[aria-current] .nav-icon { background: var(--selected); border-radius: 9px; box-shadow: 0 0 0 6px var(--selected); }
 footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
 @media (min-width: 760px) {
   .dashboard-grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; }

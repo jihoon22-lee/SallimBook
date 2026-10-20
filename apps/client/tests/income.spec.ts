@@ -15,6 +15,11 @@ test("income summary separates earned and insurance inflow and filters only the 
   state.pageSize = 1;
   await page.goto("/income");
   const summary = page.getByRole("region", { name: "등록 수입 요약" });
+  await openDisclosure(page, "수입 종류·구성원별 상세");
+  await expect(page.getByRole("region", { name: "구성원별 등록 수입 표" })).toHaveAttribute(
+    "tabindex",
+    "0",
+  );
   await expect(summary).toContainText("3,200,000원");
   await expect(summary).toContainText("800,000원");
   await expect(summary).toContainText("4,000,000원");

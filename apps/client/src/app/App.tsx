@@ -88,12 +88,7 @@ const screens = [
     group: "home" as NavigationGroup,
     parent: { to: "/", label: "홈" },
     live: true,
-    element: (
-      <>
-        <SignedOutWelcome />
-        <Dashboard />
-      </>
-    ),
+    element: <Dashboard welcome={<SignedOutWelcome />} />,
   },
   {
     path: "/more",
@@ -730,6 +725,14 @@ const navigation: {
 ];
 
 function Navigation({ active, desktop = false }: { active?: NavigationGroup; desktop?: boolean }) {
+  const { pathname } = useLocation();
+  // The section link is "the page" only on its own path; on a sub-page it marks the section.
+  const current = (item: (typeof navigation)[number]) =>
+    pathname === item.to
+      ? ("page" as const)
+      : active === item.group
+        ? ("true" as const)
+        : undefined;
   return (
     <nav
       className={desktop ? "sidebar-nav" : "mobile-tabs"}
@@ -738,11 +741,7 @@ function Navigation({ active, desktop = false }: { active?: NavigationGroup; des
       <ul>
         {navigation.map((item) => (
           <li key={item.group}>
-            <Link
-              to={item.to}
-              className="nav-item"
-              aria-current={active === item.group ? "page" : undefined}
-            >
+            <Link to={item.to} className="nav-item" aria-current={current(item)}>
               <span className="nav-icon">
                 <Icon name={item.icon} />
               </span>

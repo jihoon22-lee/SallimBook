@@ -1,9 +1,10 @@
+import type { ReactNode } from "react";
 import { MonthPicker } from "../../shared/MonthContext";
 import { HomeAssetSummary } from "./HomeAssetSummary";
 import { TodayConsumables } from "../homecare/TodayConsumables";
 import { HomeSecondary } from "./HomeSecondary";
 
-export function Dashboard() {
+export function Dashboard({ welcome }: { welcome?: ReactNode }) {
   return (
     <>
       <div className="dashboard-heading">
@@ -14,6 +15,7 @@ export function Dashboard() {
         </div>
         <MonthPicker />
       </div>
+      {welcome}
       <div className="dashboard-grid">
         <HomeAssetSummary />
         <TodayConsumables compact />

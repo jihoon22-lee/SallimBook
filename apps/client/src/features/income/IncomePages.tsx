@@ -80,7 +80,12 @@ export function IncomeSummaryPanel() {
               </div>
             </dl>
             {data.members.length > 0 && (
-              <div className="table-scroll">
+              <div
+                className="table-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="구성원별 등록 수입 표"
+              >
                 <table>
                   <caption>구성원별 등록 수입</caption>
                   <thead>
