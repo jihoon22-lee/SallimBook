@@ -227,3 +227,81 @@ export function movementInput(d: MovementDraft): Schema["StockMovementCreate"] |
     note: optional(d.note),
   };
 }
+
+export const DUE_SOON_DAYS = 7;
+
+/** Adds days to a YYYY-MM-DD date at UTC midnight, so month, year and leap days carry over. */
+export function addDays(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Next check within seven days of the server's as_of; a due or unknown date is not "soon". */
+export function dueSoon(
+  row: Pick<Schema["HomecareStatusItem"], "as_of" | "next_check_on" | "replacement_due">,
+): boolean {
+  return (
+    row.replacement_due === false &&
+    row.next_check_on !== null &&
+    row.next_check_on <= addDays(row.as_of, DUE_SOON_DAYS)
+  );
+}
+
+/** The first matching state wins: due, purchase, soon, low stock, unknown, then ready. */
+export function attentionRank(row: Schema["HomecareStatusItem"]): 0 | 1 | 2 | 3 | 4 | 5 {
+  if (row.replacement_due === true) return 0;
+  if (row.purchase_needed) return 1;
+  if (dueSoon(row)) return 2;
+  if (row.low_stock) return 3;
+  if (row.replacement_due === null) return 4;
+  return 5;
+}
+
+export type TodayFilter = "attention" | "due" | "soon" | "purchase" | "unknown" | "all";
+
+export function matchesTodayFilter(
+  row: Schema["HomecareStatusItem"],
+  filter: TodayFilter,
+): boolean {
+  switch (filter) {
+    case "attention":
+      return attentionRank(row) < 5;
+    case "due":
+      return row.replacement_due === true;
+    case "soon":
+      return dueSoon(row);
+    case "purchase":
+      return row.purchase_needed;
+    case "unknown":
+      return row.replacement_due === null;
+    case "all":
+      return true;
+  }
+}
+
+export function compareAttention(
+  a: Schema["HomecareStatusItem"],
+  b: Schema["HomecareStatusItem"],
+): number {
+  return (
+    attentionRank(a) - attentionRank(b) ||
+    a.appliance_name.localeCompare(b.appliance_name, "ko") ||
+    a.consumable_name.localeCompare(b.consumable_name, "ko") ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+const warrantyRank = { active: 0, expired: 1, unknown: 2 } as const;
+
+/** Server warranty status first: active by nearest end, expired by latest end, then unknown. */
+export function compareWarranty(a: Appliance, b: Appliance): number {
+  const rank = warrantyRank[a.warranty_status] - warrantyRank[b.warranty_status];
+  if (rank) return rank;
+  const until = (a.warranty_until ?? "").localeCompare(b.warranty_until ?? "");
+  return (
+    (a.warranty_status === "expired" ? -until : until) ||
+    a.name.localeCompare(b.name, "ko") ||
+    a.id.localeCompare(b.id)
+  );
+}

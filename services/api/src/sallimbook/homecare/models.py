@@ -233,6 +233,10 @@ class ConsumableReplacement(ImmutableFields, Base):
             name="fk_consumable_replacements_movement_stock",
         ),
         CheckConstraint(f"quantity BETWEEN 1 AND {MAX_QUANTITY}", name="quantity_bounds"),
+        CheckConstraint(
+            "(cleared_next_check_override IS NULL) = (cleared_link_version IS NULL)",
+            name="cleared_override_pair",
+        ),
         Index(
             "ix_consumable_replacements_household_link_date_id",
             "household_id",
@@ -247,3 +251,5 @@ class ConsumableReplacement(ImmutableFields, Base):
     replaced_on: Mapped[date]
     quantity: Mapped[int] = mapped_column(BigInteger)
     note: Mapped[str | None] = mapped_column(String(2000))
+    cleared_next_check_override: Mapped[date | None]
+    cleared_link_version: Mapped[int | None] = mapped_column(BigInteger)

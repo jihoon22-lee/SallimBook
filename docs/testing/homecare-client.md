@@ -131,3 +131,25 @@ git diff --check
 API 계약·DB·migration·native 인증 정책 변경은 없다. 이 수정의 전체 통합 브라우저/실제 HTTPS
 재검증은 통합 브랜치에서 별도로 수행하며 위 표적 검증과 구분한다. 18756 브라우저를 종료하고
 검증 큐를 반환했다. 이 단계에서 Docker/DB는 사용하지 않았다.
+
+## 리뷰 보완: 곧 교체·홈 순서·해제한 직접 지정일 (WP07)
+
+홈 "살펴볼 소모품"은 교체 확인 필요 → 구매 필요 → 곧 교체 → 재고 부족 → 교체일 미확인 순으로,
+같은 순위는 가전·소모품 이름순으로 정렬해 앞 4개를 보여 준다. "곧 교체" 필터와 상태 칩을 추가했다.
+곧 교체는 서버 `as_of` 다음 날부터 7일 안의 다음 확인일이며 별도 API 필드 없이 화면에서 계산한다.
+홈 보증 카드는 보증기간 안 항목을 만료가 가까운 순으로, 그다음 최근에 끝난 항목 순으로 보여 준다.
+교체 취소 검토 안내는 이 교체 때 해제한 직접 지정일이 그 뒤 기기 설정을 바꾸지 않았다면 다시 적용된다고 설명한다.
+
+```bash
+pnpm typecheck
+pnpm --filter @sallimbook/client exec playwright test tests/homecare-model.spec.ts tests/homecare-ui.spec.ts tests/homecare-native-ui.spec.ts tests/home.spec.ts tests/design-refresh.spec.ts
+uv run --project services/api python scripts/test_web_auth.py --homecare
+```
+
+- 순서·필터·칩, 보증 순서, 취소 안내의 새 시험은 각각 구현 전에 실패(개수 5 대 6, 오래 만료된 항목 우선, 문구 없음)를 확인한 뒤 통과했다.
+- desktop·android-size Playwright **110/110 통과**. 기본 mock에는 곧 교체 항목이 없어 기존 "확인할 소모품 2개"는 그대로다.
+- 실제 HTTPS 가전·재고 흐름 통과. 해제 교체 취소 뒤 기대값을 옛 동작(교체 이력 기준 2025-04-05)에서
+  되살린 직접 지정일(2027-01-01·override)로 바꿨다. 그 날짜는 아직 오지 않아 홈 기본 필터에 나오지 않으므로,
+  사용 중·종료 연결을 비교하는 홈 확인은 "모든 연결" 필터에서 수행한다.
+- 생성 client와 Android 정책·브리지는 바뀌지 않아 JVM 시험은 대상이 아니다.
+- **미실행:** Galaxy 실기기의 홈 카드 순서·보증 카드 확인. 사용자 확인 전에는 통과로 보지 않는다.

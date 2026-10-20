@@ -327,6 +327,8 @@ PUBLIC_COLUMNS = {
         "replaced_on",
         "quantity",
         "note",
+        "cleared_next_check_override",
+        "cleared_link_version",
         "id",
         "household_id",
         "created_by_member_id",

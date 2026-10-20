@@ -5,7 +5,7 @@ import { dateLabel } from "../finance/dates";
 import { allPages, useResource } from "../finance/queries";
 import { useHomecareApi } from "./api";
 import { ResourceFeedback, useSeoulDayRefresh } from "./HomecareSupport";
-import { warrantyLabels } from "./model";
+import { compareWarranty, warrantyLabels } from "./model";
 export function HomeWarranties() {
   const api = useHomecareApi();
   const resource = useResource(
@@ -19,11 +19,7 @@ export function HomeWarranties() {
     }, [api]),
   );
   useSeoulDayRefresh(resource.reload);
-  const rows = [...(resource.data ?? [])].sort(
-    (a, b) =>
-      Number(b.warranty_status === "expired") - Number(a.warranty_status === "expired") ||
-      (a.warranty_until ?? "9999").localeCompare(b.warranty_until ?? "9999"),
-  );
+  const rows = [...(resource.data ?? [])].sort(compareWarranty);
   return (
     <details className="home-warranties">
       <summary>가전 보증 기한 확인</summary>

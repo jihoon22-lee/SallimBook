@@ -7,7 +7,14 @@ import { useAuth } from "../auth/AuthProvider";
 import { dateLabel } from "../finance/dates";
 import { useResource } from "../finance/queries";
 import { useHomecareApi } from "./api";
-import type { Schema } from "./model";
+import {
+  attentionRank,
+  compareAttention,
+  dueSoon,
+  matchesTodayFilter,
+  type Schema,
+  type TodayFilter,
+} from "./model";
 import { HomeWarranties } from "./HomeWarranties";
 import { ResourceFeedback, useSeoulDayRefresh } from "./HomecareSupport";
 export async function completeToday(
@@ -34,7 +41,7 @@ export async function completeToday(
 }
 function TodayList({ compact }: { compact: boolean }) {
   const api = useHomecareApi();
-  const [filter, setFilter] = useState("attention");
+  const [filter, setFilter] = useState<TodayFilter>("attention");
   const resource = useResource(
     useCallback(
       () => completeToday((cursor) => api.getHomecareStatus({ query: { cursor, limit: 200 } })),
@@ -43,22 +50,16 @@ function TodayList({ compact }: { compact: boolean }) {
   );
   useSeoulDayRefresh(resource.reload);
   const shown =
-    resource.data?.items.filter(
-      (row) =>
-        filter === "all" ||
-        (filter === "due" && row.replacement_due === true) ||
-        (filter === "purchase" && row.purchase_needed) ||
-        (filter === "unknown" && row.replacement_due === null) ||
-        (filter === "attention" &&
-          (row.replacement_due !== false || row.purchase_needed || row.low_stock)),
-    ) ?? [];
+    resource.data?.items.filter((row) => matchesTodayFilter(row, filter)).sort(compareAttention) ??
+    [];
   const filterControl = (
     <div className="form-field">
       <label>
         오늘 소모품 보기
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+        <select value={filter} onChange={(e) => setFilter(e.target.value as TodayFilter)}>
           <option value="attention">확인할 항목</option>
           <option value="due">교체 확인 필요</option>
+          <option value="soon">곧 교체</option>
           <option value="purchase">구매 필요</option>
           <option value="unknown">교체일 미확인</option>
           <option value="all">모든 연결</option>
@@ -66,9 +67,7 @@ function TodayList({ compact }: { compact: boolean }) {
       </label>
     </div>
   );
-  const attentionCount = resource.data?.items.filter(
-    (row) => row.replacement_due !== false || row.purchase_needed || row.low_stock,
-  ).length;
+  const attentionCount = resource.data?.items.filter((row) => attentionRank(row) < 5).length;
   return (
     <>
       <ResourceFeedback resource={resource} />
@@ -113,14 +112,18 @@ function TodayList({ compact }: { compact: boolean }) {
                           ? "unknown"
                           : row.replacement_due
                             ? "due"
-                            : "ready"
+                            : dueSoon(row)
+                              ? "soon"
+                              : "ready"
                     }
                   >
                     {row.replacement_due === null
                       ? "교체 기준일 미확인"
                       : row.replacement_due
                         ? "교체 확인 필요"
-                        : "다음 확인일 전"}{" "}
+                        : dueSoon(row)
+                          ? "곧 교체"
+                          : "다음 확인일 전"}{" "}
                     · {row.purchase_needed ? "교체 수량 부족 · 구매 필요" : "교체할 재고 있음"}
                     {row.low_stock && " · 재고 부족 임계 이하"}
                   </p>

@@ -167,7 +167,7 @@ medical_payment/fixed_payment/insurance_receipt는 해당 subtype가 정확히 1
 | consumables | name, sku_or_model, unit, stock_quantity, low_stock_threshold | household 단위 공용 재고, version으로 잠금 |
 | appliance_consumables | appliance_id, consumable_id, interval_unit, interval_count?, next_check_override?, note | unique(appliance_id,consumable_id); 기기별 교체 기준 |
 | stock_movements | consumable_id, kind, quantity_delta, occurred_on, unit_cost_krw?, reversal_of?, reason? | 0 변화 금지; 조정 사유 필수 |
-| consumable_replacements | appliance_consumable_id, stock_movement_id, replaced_on, quantity, note | stock_movement_id unique; 취소는 반대 movement |
+| consumable_replacements | appliance_consumable_id, stock_movement_id, replaced_on, quantity, note, cleared_next_check_override?, cleared_link_version? | stock_movement_id unique; 취소는 반대 movement; 해제한 직접 지정일과 해제 직후 연결 version은 함께 있거나 함께 없다(0016 이전 행은 없음) |
 
 stock_quantity는 movement 합계의 트랜잭션 내 캐시다. 정기 검증으로 양쪽이 일치하는지 확인한다.
 동일 필터가 두 기기에 호환되면 재고는 한 군데, 교체일은 기기별 두 군데다.

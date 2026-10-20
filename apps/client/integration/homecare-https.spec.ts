@@ -255,10 +255,12 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
       .next_check_on,
   ).toBe("2025-04-06");
   await cancel(page, `/appliance-consumables/${linkA}/replacements/${clearReplacement}`, true);
-  expect(
-    (await read<S["ApplianceConsumableResponse"]>(page, `/api/v1/appliance-consumables/${linkA}`))
-      .next_check_on,
-  ).toBe("2025-04-05");
+  // Cancelling the clearing replacement restores the manual date it cleared.
+  const restored = await read<S["ApplianceConsumableResponse"]>(
+    page,
+    `/api/v1/appliance-consumables/${linkA}`,
+  );
+  expect([restored.next_check_on, restored.next_check_source]).toEqual(["2027-01-01", "override"]);
   const adjustment = await movement(
     page,
     sku,
@@ -314,6 +316,8 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
   await expect(
     page.getByText("확인한 합계 · 확인 1/1개 · 미입력 0개 · 전월값 미확인 0개"),
   ).toBeVisible();
+  // The restored manual date is not due yet, so list every link to compare active and ended ones.
+  await page.getByLabel("오늘 소모품 보기").selectOption("all");
   await expect(
     page.getByRole("link", { name: `합성 HTTPS 거실 청정기 · ${skuName}`, exact: true }),
   ).toBeVisible();
