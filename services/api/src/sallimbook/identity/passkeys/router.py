@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import select
 
+from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_recent_login, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.pagination import keyset_page
@@ -237,6 +238,18 @@ def revoke_passkey(
     identity.validate_locked_session(
         principal, auth, devices[principal.device_id], recent_login=True
     )
+    before = credential.version
     credential.revoked_at = identity.utcnow()
+    session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="passkey",
+        entity_id=credential.id,
+        action="revoke",
+        before_version=before,
+        after_version=credential.version,
+        changed_fields=("revoked_at",),
+    )
     session.commit()
     return Response(status_code=204)

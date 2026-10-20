@@ -72,3 +72,17 @@ def test_openapi_money_is_string_not_json_number():
     schema = TypeAdapter(KrwString).json_schema()
     assert schema["type"] == "string"
     assert schema["maxLength"] == 20
+
+
+def test_audit_vocabulary_has_one_definition():
+    from typing import get_args
+
+    from sallimbook.audit import service as audit_service
+    from sallimbook.core import audit
+
+    assert audit.ENTITY_TYPES == frozenset(get_args(audit.AuditEntityType))
+    assert audit.ACTIONS == frozenset(get_args(audit.AuditAction))
+    assert audit_service.ENTITY_TYPES is audit.ENTITY_TYPES
+    assert audit_service.ACTIONS is audit.ACTIONS
+    assert {"registered_device", "passkey", "invitation"} <= audit.ENTITY_TYPES
+    assert {"login", "revoke", "accept"} <= audit.ACTIONS

@@ -6,14 +6,13 @@ import hashlib
 import json
 import re
 from datetime import UTC, datetime
-from typing import get_args, get_type_hints
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
 
 from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.audit.schemas import AuditEventResponse, AuditListResponse
-from sallimbook.core.audit import AuditEvent, record_event
+from sallimbook.core.audit import ACTIONS, ENTITY_TYPES, AuditEvent
 from sallimbook.core.errors import DomainError
 from sallimbook.exports.catalog import (
     PRIVATE_COLUMNS,
@@ -24,8 +23,6 @@ from sallimbook.exports.catalog import (
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 
-ENTITY_TYPES = frozenset(get_args(get_type_hints(record_event)["entity_type"]))
-ACTIONS = frozenset(get_args(get_type_hints(record_event)["action"]))
 KNOWN_FIELDS = (
     frozenset(
         field

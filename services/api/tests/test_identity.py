@@ -4,6 +4,7 @@ import json
 import secrets
 import stat
 import threading
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -21,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from sallimbook.config import Settings
+from sallimbook.core.audit import AuditEvent
 from sallimbook.core.authorization import scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
@@ -257,6 +259,57 @@ def test_rehash_is_skipped_not_failed_when_slots_are_busy(monkeypatch):
 
 @pytest.mark.database
 class TestIdentityDatabase:
+    def test_security_events_keep_metadata_only(self, identity_app, db_engine, account):
+        with Session(db_engine) as session:
+            fixture_events = set(session.scalars(select(AuditEvent.id)))  # bootstrap acceptance
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            device = client.get("/api/v1/devices", headers=bearer(tokens)).json()["items"][0]
+            assert (
+                client.delete(
+                    "/api/v1/devices/" + device["id"],
+                    headers={**bearer(tokens), "If-Match": f'"{device["version"]}"'},
+                ).status_code
+                == 204
+            )
+            login = web_login(client, account)
+            invited = client.post(
+                "/api/v1/household/invitations",
+                headers=csrf(login),
+                json={"intended_login": "synthetic_partner"},
+            )
+            assert invited.is_success
+            secret = secrets.token_urlsafe(24)
+            assert client.post(
+                "/api/v1/auth/invitations/accept",
+                headers={"Origin": ORIGIN},
+                json={
+                    "token": invited.json()["token"],
+                    "password": secret,
+                    "display_name": "합성 B",
+                },
+            ).is_success
+            assert client.post("/api/v1/auth/web/logout", headers=csrf(login)).is_success
+        with Session(db_engine) as session:
+            rows = session.execute(
+                select(AuditEvent.entity_type, AuditEvent.action, AuditEvent.safe_diff).where(
+                    AuditEvent.id.not_in(fixture_events)
+                )
+            ).all()
+        assert Counter((t, a, tuple(d["changed_fields"])) for t, a, d in rows) == Counter(
+            [
+                ("registered_device", "login", ()),
+                ("registered_device", "revoke", ("revoked_at", "status")),
+                ("registered_device", "login", ()),
+                ("invitation", "create", ()),
+                ("invitation", "accept", ("used_at",)),
+                ("registered_device", "revoke", ("revoked_at", "status")),
+            ]
+        )
+        dumped = json.dumps([d for *_, d in rows], ensure_ascii=False)
+        for raw in (invited.json()["token"], secret, "synthetic_partner", account.login_name):
+            assert raw not in dumped
+
     def test_busy_password_work_does_not_consume_login_attempts(
         self, identity_app, account, db_engine, monkeypatch
     ):

@@ -41,6 +41,7 @@ from webauthn.helpers.structs import (
 from webauthn.registration.verify_registration_response import VerifiedRegistration
 
 from sallimbook.config import Settings
+from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_recent_login
 from sallimbook.core.errors import DomainError
 from sallimbook.identity import service as identity
@@ -567,6 +568,15 @@ def register_credential(
         raise DomainError("CREDENTIAL_UNAVAILABLE", "다른 패스키를 등록해 주세요.", 409) from None
     except DomainError:
         _failed_proof(session)
+    record_event(
+        session,
+        principal,
+        entity_type="passkey",
+        entity_id=credential.id,
+        action="create",
+        before_version=None,
+        after_version=credential.version,
+    )
     result = credential_response(credential)
     session.commit()
     return result

@@ -1433,7 +1433,12 @@ def test_audit_records_fields_and_actor_without_copying_private_values(
         )
     with Session(db_engine) as session:
         events = list(
-            session.scalars(select(AuditEvent).where(AuditEvent.household_id == actor.household_id))
+            session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.household_id == actor.household_id,
+                    AuditEvent.entity_type != "registered_device",  # fixture sign-ins
+                )
+            )
         )
         assert {row.entity_type for row in events} >= {"consumable", "stock_movement"}
         assert all(row.actor_id == actor.principal.user_id for row in events)

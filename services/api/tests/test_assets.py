@@ -346,7 +346,12 @@ class TestAssetsDatabase:
         )
         assert stale.status_code == 409
         with Session(db_engine) as session:
-            events = session.scalars(select(AuditEvent).order_by(AuditEvent.occurred_at)).all()
+            # Fixture sign-ins are audited separately from asset changes.
+            events = session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_type != "registered_device")
+                .order_by(AuditEvent.occurred_at)
+            ).all()
             assert len(events) == 2
             assert events[0].actor_id == a.user_id
             assert events[0].before_version is None and events[0].after_version == 1

@@ -110,7 +110,11 @@ test("real audit UI paginates metadata filters current household and rejects exp
     const list = page.getByRole("region", { name: "감사 기록 목록", exact: true });
     await expect(list.getByRole("listitem")).toHaveCount(50);
     await page.getByRole("button", { name: "감사 기록 더 보기", exact: true }).click();
-    await expect(list.getByRole("listitem")).toHaveCount(52);
+    // Sign-ins are audited too, so the second page holds the seeded rows plus this user's logins.
+    await expect(page.getByRole("button", { name: "감사 기록 더 보기", exact: true })).toHaveCount(
+      0,
+    );
+    const shown = await list.getByRole("listitem").count();
     expect(requests.slice(0, 2).map((item) => !!item.query.cursor)).toEqual([false, true]);
     for (const value of [
       "SYNTHETIC_PRIVATE_AUDIT_VALUE",
@@ -121,9 +125,16 @@ test("real audit UI paginates metadata filters current household and rejects exp
     ])
       await expect(page.getByText(value, { exact: true })).toHaveCount(0);
     const metadata = await read<S["AuditListResponse"]>(page, "/api/v1/audit-events?limit=200");
-    expect(metadata.items).toHaveLength(52);
+    const logins = metadata.items.filter((row) => row.entity_type === "registered_device");
+    const seeded = metadata.items.filter((row) => row.entity_type !== "registered_device");
+    expect(shown).toBe(metadata.items.length);
+    expect(seeded).toHaveLength(52);
+    expect(logins.length).toBeGreaterThan(0);
     expect(
-      metadata.items.every(
+      logins.every((row) => row.action === "login" && row.actor_member_id === member.member_id),
+    ).toBe(true);
+    expect(
+      seeded.every(
         (row) => row.actor_member_id === member.member_id && own.includes(row.entity_id),
       ),
     ).toBe(true);

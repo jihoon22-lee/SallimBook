@@ -57,6 +57,9 @@ export const entityLabels: Record<string, string> = {
   document: "문서",
   document_link: "문서 연결",
   user_export: "자료 내보내기",
+  registered_device: "기기 로그인",
+  passkey: "패스키",
+  invitation: "초대·연결 코드",
 };
 export const actionLabels: Record<string, string> = {
   create: "등록",
@@ -78,6 +81,9 @@ export const actionLabels: Record<string, string> = {
   settle: "납부 처리",
   void_settlement: "납부 취소",
   export: "서버 파일 발급",
+  login: "로그인",
+  revoke: "폐기",
+  accept: "수락",
 };
 export function auditDate(value: string) {
   const date = new Date(value);

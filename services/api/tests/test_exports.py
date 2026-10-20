@@ -259,8 +259,10 @@ def test_all_rows_not_ui_pagination_and_repeated_requests_are_fresh(export_app, 
         second = decoded(export(client, actor, formats=["json"]))
     assert len(first["json/assets.json"]) == 205
     assert first["manifest.json"]["export_id"] != second["manifest.json"]["export_id"]
-    assert len(first["json/audit_events.json"]) == 0
-    assert len(second["json/audit_events.json"]) == 1
+    # Fixture sign-ins are audited; the only new event is the first export itself.
+    before = first["json/audit_events.json"]
+    assert {row["entity_type"] for row in before} <= {"registered_device"}
+    assert len(second["json/audit_events.json"]) == len(before) + 1
 
 
 def test_repeatable_read_is_consistent_across_concurrent_account_asset_change(
@@ -477,12 +479,14 @@ def test_audit_keyset_ties_filters_cross_household_and_no_raw_diff(export_app, a
         session.commit()
     with TestClient(export_app) as client:
         path = "/api/v1/audit-events"
-        first = client.get(path, headers=actor.headers, params={"limit": 2}).json()
+        # Fixture sign-ins are audited too; page only the synthetic asset events.
+        query = {"limit": 2, "entity_type": "asset"}
+        first = client.get(path, headers=actor.headers, params=query).json()
         second = client.get(
-            path, headers=actor.headers, params={"limit": 2, "cursor": first["next_cursor"]}
+            path, headers=actor.headers, params=query | {"cursor": first["next_cursor"]}
         ).json()
         third = client.get(
-            path, headers=actor.headers, params={"limit": 2, "cursor": second["next_cursor"]}
+            path, headers=actor.headers, params=query | {"cursor": second["next_cursor"]}
         ).json()
         items = first["items"] + second["items"] + third["items"]
         assert [row["id"] for row in items] == [str(value) for value in identifiers]
@@ -491,10 +495,13 @@ def test_audit_keyset_ties_filters_cross_household_and_no_raw_diff(export_app, a
             for row in items
         )
         assert third["next_cursor"] is None
-        assert client.get(path, headers=foreign.headers).json()["items"] == []
+        foreign_assets = {"entity_type": "asset"}
+        assert (
+            client.get(path, headers=foreign.headers, params=foreign_assets).json()["items"] == []
+        )
         assert (
             client.get(
-                path, headers=foreign.headers, params={"cursor": first["next_cursor"]}
+                path, headers=foreign.headers, params=query | {"cursor": first["next_cursor"]}
             ).status_code
             == 400
         )

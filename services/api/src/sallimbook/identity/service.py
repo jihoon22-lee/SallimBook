@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from sallimbook.core.audit import append_event, record_event
 from sallimbook.core.authorization import Principal, require_owner, require_recent_login
 from sallimbook.core.errors import DomainError
 from sallimbook.identity.auth_models import (
@@ -487,6 +488,15 @@ def create_partner_invitation(
     )
     session.add(invitation)
     session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="invitation",
+        entity_id=invitation.id,
+        action="create",
+        before_version=None,
+        after_version=invitation.version,
+    )
     result = InvitationResponse(id=invitation.id, token=token, expires_at=invitation.expires_at)
     session.commit()
     return result
@@ -636,8 +646,21 @@ def _accept_invitation_locked(
             status="active",
         )
         session.add(member)
+        before = invitation.version
         invitation.used_at = now
         session.flush()
+        # The new member is the actor; acceptance does not sign anyone in.
+        append_event(
+            session,
+            household_id=invitation.household_id,
+            actor_id=user.id,
+            entity_type="invitation",
+            entity_id=invitation.id,
+            action="accept",
+            before_version=before,
+            after_version=invitation.version,
+            changed_fields=("used_at",),
+        )
     except IntegrityError:
         session.rollback()
         raise DomainError("REGISTRATION_CONFLICT", "등록 상태를 다시 확인해 주세요.", 409) from None
@@ -857,6 +880,24 @@ def issue_session(
             refresh_expires_at=auth.expires_at,
         )
     session.flush()
+    record_event(
+        session,
+        Principal(
+            user_id=user.id,
+            member_id=member.id,
+            household_id=member.household_id,
+            session_id=auth.id,
+            device_id=device.id,
+            role=member.role,
+            transport=transport,
+            authenticated_at=now,
+        ),
+        entity_type="registered_device",
+        entity_id=device.id,
+        action="login",
+        before_version=None,
+        after_version=device.version,
+    )
     return LoginResult(
         member=member_response(user, member),
         expires_at=auth.expires_at,
@@ -945,8 +986,20 @@ def revoke_device(session: Session, principal: Principal, device: RegisteredDevi
     if device.household_id != principal.household_id or device.user_id != principal.user_id:
         raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
     now = utcnow()
+    before = device.version
     device.status = "revoked"
     device.revoked_at = now
+    session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="registered_device",
+        entity_id=device.id,
+        action="revoke",
+        before_version=before,
+        after_version=device.version,
+        changed_fields=("revoked_at", "status"),
+    )
     # This is the authoritative barrier for ALL sessions/refresh tokens on this device.
     # Updating target session rows here would invert the request's session->device lock order.
     session.commit()
@@ -956,7 +1009,7 @@ def logout(session: Session, principal: Principal) -> None:
     now = utcnow()
     auth = session.get(AuthSession, principal.session_id)
     auth.revoked_at = now
-    session.execute(
+    revoked = session.execute(
         update(RegisteredDevice)
         .where(
             RegisteredDevice.id == principal.device_id,
@@ -967,4 +1020,16 @@ def logout(session: Session, principal: Principal) -> None:
         .values(status="revoked", revoked_at=now, version=RegisteredDevice.version + 1)
         .execution_options(synchronize_session=False)
     )
+    if revoked.rowcount:
+        # A bulk UPDATE has no loaded row, so the versions are not recorded.
+        record_event(
+            session,
+            principal,
+            entity_type="registered_device",
+            entity_id=principal.device_id,
+            action="revoke",
+            before_version=None,
+            after_version=None,
+            changed_fields=("revoked_at", "status"),
+        )
     session.commit()
