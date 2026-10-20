@@ -1,7 +1,7 @@
 import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import { mockCashflow, incomeRow } from "./support/cashflow";
-import { uid } from "./support/finance";
+import { closedAccount, uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
@@ -220,4 +220,30 @@ test("history pagination keeps every version of the same record", async ({ page 
   await page.getByRole("button", { name: "수입 이력 더 보기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "버전 1 · 등록", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "버전 3 · 정정", exact: true })).toBeVisible();
+});
+
+test("an income can use an account through the day it closed", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.finance.accounts.push(closedAccount(33, "2025-02-15"));
+  await page.goto("/income/new");
+  const closed = page.getByRole("option", {
+    name: /^합성 종료 계좌 자산 · .* · 2025\.02\.15 사용 종료$/,
+  });
+  await page.getByRole("combobox", { name: "수입 구성원", exact: true }).selectOption(uid(2));
+  await page.getByRole("combobox", { name: "날짜 정밀도", exact: true }).selectOption("day");
+  await page.getByLabel("실제 입금일", { exact: true }).fill("2025-02-16");
+  await expect(closed).toHaveCount(0);
+  await page.getByLabel("실제 입금일", { exact: true }).fill("2025-02-15");
+  await expect(closed).toHaveJSProperty("disabled", false);
+  await page.getByRole("combobox", { name: "날짜 정밀도", exact: true }).selectOption("month");
+  await expect(closed).toHaveJSProperty("disabled", false);
+  await page.getByLabel("수입 금액 (원)", { exact: true }).fill("1000");
+  await page.getByRole("combobox", { name: "입금계좌", exact: true }).selectOption(uid(33));
+  await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(state.writes[0]!.body).toMatchObject({
+    date_precision: "month",
+    period_month: "2025-02",
+    account_id: uid(33),
+  });
 });

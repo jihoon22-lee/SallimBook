@@ -33,7 +33,8 @@ export function CashflowError({ error }: { error: ApiError | null }) {
   if (!error) return null;
   const messages: Partial<Record<ApiError["code"], string>> = {
     LOAN_UNAVAILABLE: "사용 중인 부채 항목을 선택해 주세요.",
-    CARD_UNAVAILABLE: "사용 중인 납부 카드를 선택해 주세요.",
+    CARD_UNAVAILABLE:
+      "기록 날짜에 사용하던 카드를 선택해 주세요. 종료된 카드는 종료일까지의 기록에만 연결할 수 있어요.",
     RULE_PERIOD_OVERLAP:
       "기존 마지막 적용일 뒤이면서 종료 적용일 전인 날짜를 선택해 주세요. 종료일을 연장하거나 지난 규칙을 덮어쓰지 않아요.",
     PAST_RULE_CHANGE: "지난 적용기간은 덮어쓸 수 없어요. 오늘 이후의 새 적용일을 선택해 주세요.",
@@ -60,7 +61,7 @@ export function CashflowError({ error }: { error: ApiError | null }) {
       "같은 범위의 수입이 변경됐어요. 원본 전체를 다시 불러와 전환 내용을 검토해 주세요.",
     INVALID_CONVERSION: "같은 월·구성원·종류의 모든 활성 수입을 반대 날짜 정밀도로 전환해 주세요.",
     ACCOUNT_UNAVAILABLE:
-      "사용 중인 계좌를 선택해 주세요. 종료된 계좌에는 새 기록을 연결할 수 없어요.",
+      "기록 날짜에 사용하던 계좌를 선택해 주세요. 종료된 계좌는 종료일까지의 기록에만 연결할 수 있어요.",
     MEMBER_UNAVAILABLE: "현재 가계의 구성원을 선택해 주세요.",
     INVALID_OCCURRED_DATE: "실제 발생일은 서울 기준 오늘을 넘을 수 없어요.",
     INVALID_INCOME: "수입 종류·구성원·날짜 정밀도와 금액을 확인해 주세요.",

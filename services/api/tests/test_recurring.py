@@ -17,7 +17,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
-from test_income import CATALOG, headers, make_account
+from test_income import CATALOG, close_account, headers, make_account
 
 from sallimbook.audit.service import KNOWN_FIELDS
 from sallimbook.cashflow import recurring_service as service
@@ -238,6 +238,38 @@ def test_revocation_column_reuses_known_audit_field():
 
 @pytest.mark.database
 class TestRecurringDatabase:
+    def test_settlement_accepts_closed_account_through_its_end_date(
+        self, recurring_app, actors, db_engine
+    ):
+        actor = actors[0]
+        account = make_account(db_engine, actor)
+        close_account(db_engine, actor, account, "2026-01-31")
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            row = obligation_for(client, actor, "2026-02")
+            late = client.post(
+                f"/api/v1/obligations/{row['id']}/settlements",
+                headers=headers(actor, version=row["version"]),
+                json={
+                    "amount_krw": "33000",
+                    "occurred_on": "2026-02-01",
+                    "account_id": str(account.id),
+                },
+            )
+            assert late.status_code == 422
+            assert late.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            paid = settle(client, actor, row, amount="33000", account_id=str(account.id)).json()
+            assert paid["cash"]["account_id"] == str(account.id)
+            assert paid["cash"]["occurred_on"] == "2026-01-31"
+            planned = client.post(
+                "/api/v1/recurring-rules",
+                headers=headers(actor),
+                json=rule_payload() | {"account_id": str(account.id)},
+            )
+            assert planned.status_code == 422
+            assert planned.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+
     def test_end_before_pending_version_revokes_it(self, recurring_app, actors, db_engine):
         from sallimbook.cards import service as cards
         from sallimbook.cards.schemas import CardCreate
@@ -1685,18 +1717,22 @@ class TestRecurringDatabase:
                     archive=True,
                 )
             next_row = obligation_for(client, actor, "2026-02")
+            late = {"amount_krw": "100", "card_id": str(own_card.id)}
             result = client.post(
                 f"/api/v1/obligations/{next_row['id']}/settlements",
                 headers=headers(actor, version=1),
-                json={
-                    "amount_krw": "100",
-                    "occurred_on": "2026-01-31",
-                    "card_id": str(own_card.id),
-                },
+                json=late | {"occurred_on": "2026-02-01"},
             )
             assert (
                 result.status_code == 422 and result.json()["error"]["code"] == "CARD_UNAVAILABLE"
             )
+            # A payment made on the card's last day can still be entered after the closure.
+            result = client.post(
+                f"/api/v1/obligations/{next_row['id']}/settlements",
+                headers=headers(actor, version=1),
+                json=late | {"occurred_on": "2026-01-31"},
+            )
+            assert result.status_code == 201, result.text
             result = client.post(
                 "/api/v1/recurring-rules",
                 headers=headers(actor),

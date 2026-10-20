@@ -20,7 +20,9 @@ from test_accounts import make_actor
 from sallimbook.accounts import service as accounts
 from sallimbook.accounts.schemas import AccountCreate
 from sallimbook.assets import month_service
+from sallimbook.assets import service as asset_service
 from sallimbook.assets.month_schemas import MonthDraft, MonthValueUpdate
+from sallimbook.assets.schemas import AssetArchive
 from sallimbook.cashflow import service
 from sallimbook.cashflow.calculations import IncomeValue, income_totals
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision, IncomeConversion
@@ -229,6 +231,13 @@ def make_account(engine, actor):
         )
 
 
+def close_account(engine, actor, account, ended_on):
+    with Session(engine) as session:
+        asset_service.archive_asset(
+            session, actor.principal, account.asset_id, AssetArchive(ended_on=ended_on), '"1"'
+        )
+
+
 def post_income(client, actor, *, key=None, **overrides):
     response = client.post(
         "/api/v1/income", json=income_payload(actor, **overrides), headers=headers(actor, key)
@@ -239,6 +248,46 @@ def post_income(client, actor, *, key=None, **overrides):
 
 @pytest.mark.database
 class TestIncomeDatabase:
+    def test_closed_account_accepts_records_dated_through_its_end(
+        self, income_app, income_actors, db_engine
+    ):
+        actor = income_actors[0]
+        account = make_account(db_engine, actor)
+        with TestClient(income_app) as client:
+            kept = post_income(client, actor, period_month="2026-02", account_id=str(account.id))
+            other = post_income(client, actor, period_month="2026-02", kind="bonus")
+            close_account(db_engine, actor, account, "2026-01-15")
+
+            def create(**fields):
+                body = income_payload(
+                    actor, account_id=str(account.id), duplicate_acknowledged=True
+                )
+                return client.post("/api/v1/income", json=body | fields, headers=headers(actor))
+
+            # Money that moved while the account was open can be entered later.
+            assert create(date_precision="day", occurred_on="2026-01-15").status_code == 201
+            assert create(period_month="2026-01").status_code == 201
+            for late in (
+                create(date_precision="day", occurred_on="2026-01-16"),
+                create(period_month="2026-02"),
+            ):
+                assert late.status_code == 422
+                assert late.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            # A correction keeps its original link; moving another record onto it does not.
+            changed = client.patch(
+                f"/api/v1/income/{kept.json()['id']}",
+                headers=headers(actor, version=1),
+                json={"amount_krw": "3100000", "reason": "합성 금액 정정"},
+            )
+            assert changed.status_code == 200, changed.text
+            moved = client.patch(
+                f"/api/v1/income/{other.json()['id']}",
+                headers=headers(actor, version=1),
+                json={"account_id": str(account.id), "reason": "합성 계좌 정정"},
+            )
+            assert moved.status_code == 422
+            assert moved.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+
     def test_t08_income_never_mutates_real_monthly_snapshot(
         self, income_app, income_actors, db_engine
     ):

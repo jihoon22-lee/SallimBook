@@ -308,6 +308,7 @@ export function SettlementForm({
                 setMethod(next);
                 setMethodId(id);
               }}
+              on={date}
             />
             <div className="form-field">
               <label>

@@ -85,7 +85,11 @@ def _audit(session, principal, row, entity, action, fields, before=None, after=N
     )
 
 
-def _validate_method(session, principal, account_id, card_id, loan_asset_id=None):
+def _validate_method(session, principal, account_id, card_id, loan_asset_id=None, *, on=None):
+    # Plans (on=None) need a method still in use; an actual payment only needs it on that day.
+    def closed(ended_on):
+        return ended_on is not None and (on is None or ended_on < on)
+
     account = None
     asset_ids = set()
     if account_id is not None:
@@ -103,13 +107,13 @@ def _validate_method(session, principal, account_id, card_id, loan_asset_id=None
             raise DomainError("LOAN_UNAVAILABLE", "사용 중인 부채를 선택해 주세요.", 422)
     if account is not None:
         scoped_entity(session, FinancialAccount, account_id, principal, for_update=True)
-        if assets[account.asset_id].ended_on is not None:
+        if closed(assets[account.asset_id].ended_on):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 납부 계좌를 선택해 주세요.", 422)
     if card_id is not None:
         from sallimbook.cards.models import Card
 
         card = scoped_entity(session, Card, card_id, principal, for_update=True)
-        if card.ended_on is not None:
+        if closed(card.ended_on):
             raise DomainError("CARD_UNAVAILABLE", "사용 중인 납부 카드를 선택해 주세요.", 422)
 
 
@@ -851,7 +855,9 @@ def settle(session, principal, obligation_id, payload, if_match, key):
             raise DomainError(
                 "INVALID_PAYMENT_SPLIT", "원금·이자 합계와 실제 납부액을 확인해 주세요.", 422
             ) from None
-        _validate_method(session, principal, payload.account_id, payload.card_id)
+        _validate_method(
+            session, principal, payload.account_id, payload.card_id, on=payload.occurred_on
+        )
         cash_values = dict(
             amount_krw=payload.amount_krw,
             occurred_on=payload.occurred_on,

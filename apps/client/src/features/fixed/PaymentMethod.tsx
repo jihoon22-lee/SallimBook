@@ -1,10 +1,18 @@
 import { useCallback } from "react";
 import { useCardsApi } from "../cards/api";
 import { useAssetsApi } from "../assets/api";
-import { AccountSelect } from "../finance/AccountChoices";
+import { AccountSelect, endedSuffix, methodUsable } from "../finance/AccountChoices";
 import { CashflowError } from "../finance/FinancialFeedback";
 import { allPages, useResource } from "../finance/queries";
-function CardSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+function CardSelect({
+  value,
+  onChange,
+  on,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  on?: string;
+}) {
   const api = useCardsApi();
   const resource = useResource(
     useCallback(
@@ -27,11 +35,15 @@ function CardSelect({ value, onChange }: { value: string; onChange: (id: string)
         >
           <option value="">카드 선택</option>
           {resource.data
-            ?.filter((row) => row.status === "active" || row.id === value)
+            ?.filter((row) => row.id === value || methodUsable(row.status, row.ended_on, on))
             .map((row) => (
-              <option value={row.id} key={row.id} disabled={row.status !== "active"}>
+              <option
+                value={row.id}
+                key={row.id}
+                disabled={!methodUsable(row.status, row.ended_on, on)}
+              >
                 {row.alias || row.product_name} · {row.masked_number || "네 자리 미입력"}
-                {row.status === "closed" ? " · 사용 종료" : ""}
+                {endedSuffix(row.status, row.ended_on)}
               </option>
             ))}
           {value && !resource.data?.some((row) => row.id === value) && (
@@ -52,10 +64,13 @@ export function PaymentMethod({
   method,
   id,
   onChange,
+  on,
 }: {
   method: "none" | "account" | "card";
   id: string;
   onChange: (method: "none" | "account" | "card", id: string) => void;
+  /** The actual payment date; plans leave it out and only see methods still in use. */
+  on?: string;
 }) {
   return (
     <>
@@ -77,9 +92,12 @@ export function PaymentMethod({
           label="납부 계좌"
           value={id}
           onChange={(value) => onChange("account", value)}
+          on={on}
         />
       )}
-      {method === "card" && <CardSelect value={id} onChange={(value) => onChange("card", value)} />}
+      {method === "card" && (
+        <CardSelect value={id} onChange={(value) => onChange("card", value)} on={on} />
+      )}
       {method === "card" && (
         <p className="muted">카드 승인 기록이에요. 카드 대금의 실제 계좌 출금과는 달라요.</p>
       )}

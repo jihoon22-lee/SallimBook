@@ -243,7 +243,9 @@ def _simple_cash_responses(session, principal, rows, schema):
     ]
 
 
-def _new_expense(session, principal, payload, *, correction_of=None, correction_reason=None):
+def _new_expense(
+    session, principal, payload, *, correction_of=None, correction_reason=None, previous_cash=None
+):
     scoped_entity(session, InsuranceCase, payload.case_id, principal)
     node = scoped_entity(session, MedicalNode, payload.node_id, principal)
     if node.case_id != payload.case_id:
@@ -253,7 +255,12 @@ def _new_expense(session, principal, payload, *, correction_of=None, correction_
             "PRESCRIPTION_HAS_NO_PAYMENT", "처방전에는 비용을 입력할 수 없습니다.", 422
         )
     source = cash.prepare_cash_record(
-        session, principal, _actual(payload), kind="medical_payment", reason=correction_reason
+        session,
+        principal,
+        _actual(payload),
+        kind="medical_payment",
+        reason=correction_reason,
+        previous=previous_cash,
     )
     fields = {
         "case_id",
@@ -385,8 +392,15 @@ def correct_expense(session, principal, expense_id, payload, if_match, key):
         row = scoped_entity(session, MedicalExpense, expense_id, principal, for_update=True)
         require_version(row, if_match)
         _void_expense(session, principal, row, payload.reason)
+        # The voided fact's account or card stays usable for its own correction.
+        previous_cash = _source(session, principal, row, "medical_payment", active=False)
         replacement = _new_expense(
-            session, principal, payload, correction_of=row.id, correction_reason=payload.reason
+            session,
+            principal,
+            payload,
+            correction_of=row.id,
+            correction_reason=payload.reason,
+            previous_cash=previous_cash,
         )
         return _reference(replacement, "medical_expense")
 
@@ -402,7 +416,7 @@ def correct_expense(session, principal, expense_id, payload, if_match, key):
     )
 
 
-def _new_refund(session, principal, expense, payload, *, correction_of=None):
+def _new_refund(session, principal, expense, payload, *, correction_of=None, previous_cash=None):
     original = _source(session, principal, expense, "medical_payment", lock=True)
     source = cash.prepare_cash_record(
         session,
@@ -411,6 +425,7 @@ def _new_refund(session, principal, expense, payload, *, correction_of=None):
         kind="medical_refund",
         reverses_id=original.id,
         reason=payload.reason,
+        previous=previous_cash,
     )
     row = MedicalRefund(
         expense_id=expense.id,
@@ -507,8 +522,16 @@ def correct_refund(session, principal, refund_id, payload, if_match, key):
         row = scoped_entity(session, MedicalRefund, refund_id, principal, for_update=True)
         require_version(row, if_match)
         expense = _void_refund(session, principal, row, payload.reason)
+        previous_cash = _source(session, principal, row, "medical_refund", active=False)
         return _reference(
-            _new_refund(session, principal, expense, payload, correction_of=row.id),
+            _new_refund(
+                session,
+                principal,
+                expense,
+                payload,
+                correction_of=row.id,
+                previous_cash=previous_cash,
+            ),
             "medical_refund",
         )
 
@@ -846,11 +869,23 @@ def _payout_responses(session, principal, rows, *, detail=False):
 
 
 def _new_payout(
-    session, principal, payload, *, correction_of=None, correction_reason=None, previous=()
+    session,
+    principal,
+    payload,
+    *,
+    correction_of=None,
+    correction_reason=None,
+    previous=(),
+    previous_cash=None,
 ):
     _allocation_targets(session, principal, payload.allocations, previous=previous)
     source = cash.prepare_cash_record(
-        session, principal, _actual(payload), kind="insurance_receipt", reason=correction_reason
+        session,
+        principal,
+        _actual(payload),
+        kind="insurance_receipt",
+        reason=correction_reason,
+        previous=previous_cash,
     )
     row = InsurancePayout(
         cash_record_id=source.id,
@@ -981,6 +1016,7 @@ def correct_payout(session, principal, payout_id, payload, if_match, key):
             )
         )
         _void_payout(session, principal, row, payload.reason)
+        previous_cash = _source(session, principal, row, "insurance_receipt", active=False)
         replacement = _new_payout(
             session,
             principal,
@@ -988,6 +1024,7 @@ def correct_payout(session, principal, payout_id, payload, if_match, key):
             correction_of=row.id,
             correction_reason=payload.reason,
             previous=previous,
+            previous_cash=previous_cash,
         )
         return _reference(replacement, "insurance_payout")
 
@@ -1074,7 +1111,7 @@ def allocation_history(session, principal, allocation_id, *, cursor=None, limit=
     )
 
 
-def _new_return(session, principal, payout, payload, *, correction_of=None):
+def _new_return(session, principal, payout, payload, *, correction_of=None, previous_cash=None):
     source = _source(session, principal, payout, "insurance_receipt", lock=True)
     allocation = scoped_entity(
         session, PayoutAllocation, payload.original_allocation_id, principal, for_update=True
@@ -1105,6 +1142,7 @@ def _new_return(session, principal, payout, payload, *, correction_of=None):
         kind="insurance_return",
         reverses_id=source.id,
         reason=payload.reason,
+        previous=previous_cash,
     )
     row = InsuranceReturn(
         payout_id=payout.id,
@@ -1202,8 +1240,16 @@ def correct_return(session, principal, return_id, payload, if_match, key):
         row = scoped_entity(session, InsuranceReturn, return_id, principal, for_update=True)
         require_version(row, if_match)
         payout = _void_return(session, principal, row, payload.reason)
+        previous_cash = _source(session, principal, row, "insurance_return", active=False)
         return _reference(
-            _new_return(session, principal, payout, payload, correction_of=row.id),
+            _new_return(
+                session,
+                principal,
+                payout,
+                payload,
+                correction_of=row.id,
+                previous_cash=previous_cash,
+            ),
             "insurance_return",
         )
 

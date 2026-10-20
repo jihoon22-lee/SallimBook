@@ -39,7 +39,7 @@ test("claim payout-list action preserves its case policy and claim through recei
   await page.goto(`/insurance/claims/${currentClaim.id}`);
   await expect(page.getByRole("link", { name: "입금 원본 10,000원", exact: true })).toBeVisible();
 });
-import { uid } from "./support/finance";
+import { closedAccount, uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
@@ -360,4 +360,18 @@ test("payout correction uses the domain version and preserves the prior original
   expect(state.payouts.at(-1)!.cash.amount_krw).toBe("610000");
   expect(state.writes[0]!.version).toBe('"5"');
   expect(state.writes.every((w) => w.path.includes("/insurance/"))).toBe(true);
+});
+
+test("an expense dated on an account's last day can use that account", async ({ page }) => {
+  const state = await mockInsuranceEvents(page);
+  state.cashflow.finance.accounts.push(closedAccount(33, "2025-02-15"));
+  await newExpense(page);
+  const closed = page.getByRole("option", {
+    name: /^합성 종료 계좌 자산 · .* · 2025\.02\.15 사용 종료$/,
+  });
+  await page.getByRole("combobox", { name: "납부수단 구분", exact: true }).selectOption("account");
+  await page.getByLabel("의료비 지불 실제 날짜", { exact: true }).fill("2025-02-16");
+  await expect(closed).toHaveCount(0);
+  await page.getByLabel("의료비 지불 실제 날짜", { exact: true }).fill("2025-02-15");
+  await expect(closed).toHaveJSProperty("disabled", false);
 });

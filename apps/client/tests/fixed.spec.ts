@@ -2,7 +2,7 @@ import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import fixtures from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
-import { mockCashflow } from "./support/cashflow";
+import { mockCashflow, sampleCard } from "./support/cashflow";
 import { uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
@@ -375,4 +375,39 @@ test("a pending change with handled occurrences explains why it cannot be withdr
   await expect(page.getByLabel("규칙 종료 적용일", { exact: true })).toHaveValue("2025-11-15");
   expect(state.rules[0]!.versions).toHaveLength(2);
   expect(state.rules[0]!.ended_on).toBeNull();
+});
+
+test("a card closed after the payment date can still record that payment", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.cards.push({
+    ...structuredClone(sampleCard),
+    id: uid(52),
+    alias: "합성 종료 카드",
+    last_four: "2222",
+    masked_number: "•••• 2222",
+    ended_on: "2025-02-15",
+    status: "closed",
+  });
+  const closed = page.getByRole("option", {
+    name: "합성 종료 카드 · •••• 2222 · 2025.02.15 사용 종료",
+    exact: true,
+  });
+  await page.goto(`/fixed-payments/${uid(70)}`);
+  await page.getByRole("button", { name: "실제 납부 기록", exact: true }).click();
+  await page.getByLabel("실제 납부금액 (원)", { exact: true }).fill("33000");
+  await page.getByLabel("실제 납부일", { exact: true }).fill("2025-02-16");
+  await expect(closed).toHaveCount(0);
+  await page.getByLabel("실제 납부일", { exact: true }).fill("2025-02-15");
+  await expect(closed).toHaveJSProperty("disabled", false);
+  await page.getByRole("combobox", { name: "납부 카드", exact: true }).selectOption(uid(52));
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "실제 납부 기록", exact: true })).toHaveCount(0);
+  expect(state.writes.at(-1)!.body).toMatchObject({
+    occurred_on: "2025-02-15",
+    card_id: uid(52),
+    account_id: null,
+  });
+  await page.goto("/fixed-payments/rules/new");
+  await page.getByRole("combobox", { name: "납부수단 구분", exact: true }).selectOption("card");
+  await expect(closed).toHaveCount(0);
 });

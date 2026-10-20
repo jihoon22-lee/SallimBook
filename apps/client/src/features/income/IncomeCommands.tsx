@@ -5,7 +5,7 @@ import { toApiError } from "../../platform/api";
 import { isValidMonth, useMonth } from "../../shared/MonthContext";
 import { useIdempotencyKey, useMonthCommand } from "../assets/months/useMonthCommand";
 import { formatKrw, parseKrw } from "../assets/months/model";
-import { AccountSelect } from "../finance/AccountChoices";
+import { AccountSelect, linkDate } from "../finance/AccountChoices";
 import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { isDateOnly, todaySeoul } from "../finance/dates";
 import type { Income, IncomeReturn } from "./model";
@@ -145,7 +145,12 @@ export function IncomeCommand({
                     </label>
                   </div>
                 )}
-                <AccountSelect label="반환 계좌" value={account} onChange={setAccount} />
+                <AccountSelect
+                  label="반환 계좌"
+                  value={account}
+                  onChange={setAccount}
+                  on={linkDate(precision, date, period)}
+                />
                 <div className="form-field">
                   <label>
                     반환 메모
