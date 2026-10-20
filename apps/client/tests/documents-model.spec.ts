@@ -1,3 +1,35 @@
 import { expect, test } from "@playwright/test";
 import { mockDocuments } from "./support/documents";
-test("document strict filename MIME bounds and UTF-8 codepoint limits", async ({ page }) => { await mockDocuments(page); await page.goto("/"); const results = await page.evaluate(async () => { const module = await import(/* @vite-ignore */ "/src/features/documents/model.ts"); const check = (name: string, type = "image/png", size = 1) => module.fileProblem({ name, type, size }); return { valid: [check("receipt.PNG"), check("receipt.jpeg", "image/jpeg"), check("receipt.pdf", "application/pdf"), check("a".repeat(251) + ".png", "image/png", 20 * 1024 * 1024)], invalid: [check("a.png", "image/png", 0), check("a.png", "image/png", 20 * 1024 * 1024 + 1), check("a".repeat(252) + ".png"), check(" receipt.png"), check("receipt.png "), check("a/b.png"), check("a\\b.png"), check("a\u202eb.png"), check("a\u0001b.png"), check("a.pdf"), check("png"), check("a.svg", "image/svg+xml")] }; }); expect(results.valid).toEqual([null, null, null, null]); expect(results.invalid.every(Boolean)).toBe(true); });
+test("document strict filename MIME bounds and UTF-8 codepoint limits", async ({ page }) => {
+  await mockDocuments(page);
+  await page.goto("/");
+  const results = await page.evaluate(async () => {
+    const module = await import(/* @vite-ignore */ "/src/features/documents/model.ts");
+    const check = (name: string, type = "image/png", size = 1) =>
+      module.fileProblem({ name, type, size });
+    return {
+      valid: [
+        check("receipt.PNG"),
+        check("receipt.jpeg", "image/jpeg"),
+        check("receipt.pdf", "application/pdf"),
+        check("a".repeat(251) + ".png", "image/png", 20 * 1024 * 1024),
+      ],
+      invalid: [
+        check("a.png", "image/png", 0),
+        check("a.png", "image/png", 20 * 1024 * 1024 + 1),
+        check("a".repeat(252) + ".png"),
+        check(" receipt.png"),
+        check("receipt.png "),
+        check("a/b.png"),
+        check("a\\b.png"),
+        check("a\u202eb.png"),
+        check("a\u0001b.png"),
+        check("a.pdf"),
+        check("png"),
+        check("a.svg", "image/svg+xml"),
+      ],
+    };
+  });
+  expect(results.valid).toEqual([null, null, null, null]);
+  expect(results.invalid.every(Boolean)).toBe(true);
+});

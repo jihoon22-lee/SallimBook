@@ -9,30 +9,514 @@ import { allPages, useResource } from "../../finance/queries";
 import { NodeMoneySummary } from "../events/EventSupport";
 import { ExpenseList } from "../events/EventPages";
 import { useInsuranceApi } from "../api";
-import { ancestors, changedFields, descendants, nodeKinds, optional, preserveDraft, validPeriod } from "../model";
+import {
+  ancestors,
+  changedFields,
+  descendants,
+  nodeKinds,
+  optional,
+  preserveDraft,
+  validPeriod,
+} from "../model";
 import type { MedicalNode, Schema } from "../model";
-import { ConflictReview, InsuranceError, MetadataFeedback, useMetadataCommand } from "../InsuranceSupport";
-type Draft = { parent: string; kind: MedicalNode["kind"]; label: string; provider: string; start: string; end: string; order: string; note: string };
-const draftOf = (row?: MedicalNode, parent = ""): Draft => ({ parent: row?.parent_id ?? parent, kind: row?.kind ?? "outpatient", label: row?.label ?? "", provider: row?.provider_name ?? "", start: row?.start_on ?? "", end: row?.end_on ?? "", order: String(row?.sort_order ?? 0), note: row?.note ?? "" });
+import {
+  ConflictReview,
+  InsuranceError,
+  MetadataFeedback,
+  useMetadataCommand,
+} from "../InsuranceSupport";
+type Draft = {
+  parent: string;
+  kind: MedicalNode["kind"];
+  label: string;
+  provider: string;
+  start: string;
+  end: string;
+  order: string;
+  note: string;
+};
+const draftOf = (row?: MedicalNode, parent = ""): Draft => ({
+  parent: row?.parent_id ?? parent,
+  kind: row?.kind ?? "outpatient",
+  label: row?.label ?? "",
+  provider: row?.provider_name ?? "",
+  start: row?.start_on ?? "",
+  end: row?.end_on ?? "",
+  order: String(row?.sort_order ?? 0),
+  note: row?.note ?? "",
+});
 export function medicalInput(d: Draft): Schema["MedicalNodeInput"] | null {
-  if (!d.label.trim() || d.label.trim().length > 120 || d.provider.trim().length > 120 || d.note.length > 2000 || !validPeriod(d.start, d.end) || d.start > todaySeoul() || d.end > todaySeoul() || !/^(?:0|[1-9]\d{0,6})$/.test(d.order) || Number(d.order) > 1000000) return null;
-  return { parent_id: optional(d.parent), kind: d.kind, label: d.label.trim(), provider_name: optional(d.provider), start_on: optional(d.start), end_on: optional(d.end), sort_order: Number(d.order), note: optional(d.note) };
+  if (
+    !d.label.trim() ||
+    d.label.trim().length > 120 ||
+    d.provider.trim().length > 120 ||
+    d.note.length > 2000 ||
+    !validPeriod(d.start, d.end) ||
+    d.start > todaySeoul() ||
+    d.end > todaySeoul() ||
+    !/^(?:0|[1-9]\d{0,6})$/.test(d.order) ||
+    Number(d.order) > 1000000
+  )
+    return null;
+  return {
+    parent_id: optional(d.parent),
+    kind: d.kind,
+    label: d.label.trim(),
+    provider_name: optional(d.provider),
+    start_on: optional(d.start),
+    end_on: optional(d.end),
+    sort_order: Number(d.order),
+    note: optional(d.note),
+  };
 }
-function NodeSummary({ row }: { row: MedicalNode }) { return <><dl className="metadata-grid"><div><dt>진료 이름·종류</dt><dd>{row.label} · {nodeKinds[row.kind]}</dd></div><div><dt>의료기관·약국</dt><dd>{row.provider_name || "미입력"}</dd></div><div><dt>진료 기간</dt><dd>{dateLabel(row.start_on ?? null)} ~ {dateLabel(row.end_on ?? null)}</dd></div><div><dt>표시 순서</dt><dd>{row.sort_order}</dd></div><div><dt>진료 메모</dt><dd>{row.note || "미입력"}</dd></div></dl>{row.kind === "prescription" && <p>처방은 비용 없이 기록할 수 있어요. 약국 실제 결제는 약국 노드의 비용으로 별도 기록해요.</p>}</>; }
-function NodeEditor({ caseId, initial, parent, nodes, saved, cancel }: { caseId: string; initial?: MedicalNode; parent: string; nodes: MedicalNode[]; saved: (id: string) => void; cancel: () => void }) {
-  const api = useInsuranceApi(); const command = useMetadataCommand(); const [base, setBase] = useState(initial); const [draft, setDraft] = useState(() => draftOf(initial, parent)); const [latest, setLatest] = useState<MedicalNode | null>(null); const forbidden = base ? descendants(nodes, base.id) : new Set<string>(); const input = medicalInput(draft); const changes = input && base ? changedFields(medicalInput(draftOf(base))!, input) : null; const valid = !!input && !forbidden.has(draft.parent) && (!changes || Object.keys(changes).length > 0);
-  const change = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((old) => ({ ...old, [key]: value }));
-  async function submit(event: FormEvent) { event.preventDefault(); if (!input || !valid || command.error?.status === 409) return; const result = await command.run(() => base && changes ? api.updateNode(caseId, base.id, changes, base.version) : api.createNode(caseId, input), !base); if (result && command.mounted.current) saved(result.id); }
-  async function compare() { if (!base) return; try { const row = await api.node(caseId, base.id); if (command.mounted.current) setLatest(row); } catch (error) { if (command.mounted.current) command.setError(toApiError(error)); } }
-  function adopt(keep: boolean) { if (!latest) return; setDraft(keep ? preserveDraft(draftOf(base), draft, draftOf(latest)) : draftOf(latest)); setBase(latest); setLatest(null); command.setError(null); }
-  return <section className="card"><h3>{base ? "진료 내용·위치 수정" : "진료·약국 추가"}</h3><form onSubmit={(e) => void submit(e)}><fieldset disabled={command.busy}><legend>진료 내용</legend><div className="form-grid"><div className="form-field"><label>진료 종류<select value={draft.kind} onChange={(e) => change("kind", e.target.value as Draft["kind"])}>{Object.entries(nodeKinds).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label></div><div className="form-field"><label>진료 이름<input required maxLength={120} value={draft.label} onChange={(e) => change("label", e.target.value)} /></label></div><div className="form-field"><label>의료기관·약국 이름<input maxLength={120} value={draft.provider} onChange={(e) => change("provider", e.target.value)} /></label></div><div className="form-field"><label>상위 진료<select value={draft.parent} onChange={(e) => change("parent", e.target.value)}><option value="">사건 바로 아래</option>{nodes.filter((row) => !forbidden.has(row.id)).map((row) => <option key={row.id} value={row.id}>{ancestors(nodes, row.id).map((n) => n.label).join(" / ")}</option>)}</select></label><p className="muted">같은 사건에서 부모를 선택해 이동해요. 자신과 하위 진료는 선택할 수 없어요.</p></div><div className="form-field"><label>진료 시작일<input type="date" max={todaySeoul()} value={draft.start} onChange={(e) => change("start", e.target.value)} /></label></div><div className="form-field"><label>진료 종료일<input type="date" max={todaySeoul()} min={draft.start || undefined} value={draft.end} onChange={(e) => change("end", e.target.value)} /></label></div><div className="form-field"><label>진료 표시 순서<input inputMode="numeric" value={draft.order} onChange={(e) => change("order", e.target.value)} /></label></div><div className="form-field"><label>진료 메모<textarea maxLength={2000} value={draft.note} onChange={(e) => change("note", e.target.value)} /></label></div></div></fieldset><MetadataFeedback command={command} listPath={`/insurance/cases/${caseId}`} /><ConflictReview error={command.error} compare={() => void compare()} latest={!!latest} adopt={() => adopt(true)} replace={() => adopt(false)}>{latest && <><NodeSummary row={latest} /><p>현재 상위 진료: {nodes.find((n) => n.id === latest.parent_id)?.label ?? "사건 바로 아래"}</p></>}</ConflictReview><div className="form-actions"><button type="submit" disabled={!valid || command.busy || command.uncertain || command.error?.status === 409}>진료 기록 저장</button><button type="button" onClick={cancel} disabled={command.busy}>진료 편집 취소</button></div></form></section>;
+function NodeSummary({ row }: { row: MedicalNode }) {
+  return (
+    <>
+      <dl className="metadata-grid">
+        <div>
+          <dt>진료 이름·종류</dt>
+          <dd>
+            {row.label} · {nodeKinds[row.kind]}
+          </dd>
+        </div>
+        <div>
+          <dt>의료기관·약국</dt>
+          <dd>{row.provider_name || "미입력"}</dd>
+        </div>
+        <div>
+          <dt>진료 기간</dt>
+          <dd>
+            {dateLabel(row.start_on ?? null)} ~ {dateLabel(row.end_on ?? null)}
+          </dd>
+        </div>
+        <div>
+          <dt>표시 순서</dt>
+          <dd>{row.sort_order}</dd>
+        </div>
+        <div>
+          <dt>진료 메모</dt>
+          <dd>{row.note || "미입력"}</dd>
+        </div>
+      </dl>
+      {row.kind === "prescription" && (
+        <p>
+          처방은 비용 없이 기록할 수 있어요. 약국 실제 결제는 약국 노드의 비용으로 별도 기록해요.
+        </p>
+      )}
+    </>
+  );
 }
-function TreeBranch({ row, nodes, depth = 0 }: { row: MedicalNode; nodes: MedicalNode[]; depth?: number }) {
-  const children = nodes.filter((node) => node.parent_id === row.id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id.localeCompare(b.id)); const [expanded, setExpanded] = useState(depth < 2);
-  return <li><div className="tree-row"><Link to={`/insurance/cases/${row.case_id}/nodes/${row.id}`}>{row.label}</Link><span>{nodeKinds[row.kind]}</span>{children.length > 0 && depth < 3 && <button type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{row.label} 하위 {children.length}개 {expanded ? "접기" : "펼치기"}</button>}</div>{children.length > 0 && depth >= 3 && <Link to={`/insurance/cases/${row.case_id}/nodes/${row.id}`}>하위 진료는 상세에서 보기</Link>}{expanded && depth < 3 && children.length > 0 && <ul>{children.map((child) => <TreeBranch key={child.id} row={child} nodes={nodes} depth={depth + 1} />)}</ul>}</li>;
+function NodeEditor({
+  caseId,
+  initial,
+  parent,
+  nodes,
+  saved,
+  cancel,
+}: {
+  caseId: string;
+  initial?: MedicalNode;
+  parent: string;
+  nodes: MedicalNode[];
+  saved: (id: string) => void;
+  cancel: () => void;
+}) {
+  const api = useInsuranceApi();
+  const command = useMetadataCommand();
+  const [base, setBase] = useState(initial);
+  const [draft, setDraft] = useState(() => draftOf(initial, parent));
+  const [latest, setLatest] = useState<MedicalNode | null>(null);
+  const forbidden = base ? descendants(nodes, base.id) : new Set<string>();
+  const input = medicalInput(draft);
+  const changes = input && base ? changedFields(medicalInput(draftOf(base))!, input) : null;
+  const valid =
+    !!input && !forbidden.has(draft.parent) && (!changes || Object.keys(changes).length > 0);
+  const change = <K extends keyof Draft>(key: K, value: Draft[K]) =>
+    setDraft((old) => ({ ...old, [key]: value }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!input || !valid || command.error?.status === 409) return;
+    const result = await command.run(
+      () =>
+        base && changes
+          ? api.updateNode(caseId, base.id, changes, base.version)
+          : api.createNode(caseId, input),
+      !base,
+    );
+    if (result && command.mounted.current) saved(result.id);
+  }
+  async function compare() {
+    if (!base) return;
+    try {
+      const row = await api.node(caseId, base.id);
+      if (command.mounted.current) setLatest(row);
+    } catch (error) {
+      if (command.mounted.current) command.setError(toApiError(error));
+    }
+  }
+  function adopt(keep: boolean) {
+    if (!latest) return;
+    setDraft(keep ? preserveDraft(draftOf(base), draft, draftOf(latest)) : draftOf(latest));
+    setBase(latest);
+    setLatest(null);
+    command.setError(null);
+  }
+  return (
+    <section className="card">
+      <h3>{base ? "진료 내용·위치 수정" : "진료·약국 추가"}</h3>
+      <form onSubmit={(e) => void submit(e)}>
+        <fieldset disabled={command.busy}>
+          <legend>진료 내용</legend>
+          <div className="form-grid">
+            <div className="form-field">
+              <label>
+                진료 종류
+                <select
+                  value={draft.kind}
+                  onChange={(e) => change("kind", e.target.value as Draft["kind"])}
+                >
+                  {Object.entries(nodeKinds).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                진료 이름
+                <input
+                  required
+                  maxLength={120}
+                  value={draft.label}
+                  onChange={(e) => change("label", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                의료기관·약국 이름
+                <input
+                  maxLength={120}
+                  value={draft.provider}
+                  onChange={(e) => change("provider", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                상위 진료
+                <select value={draft.parent} onChange={(e) => change("parent", e.target.value)}>
+                  <option value="">사건 바로 아래</option>
+                  {nodes
+                    .filter((row) => !forbidden.has(row.id))
+                    .map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {ancestors(nodes, row.id)
+                          .map((n) => n.label)
+                          .join(" / ")}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <p className="muted">
+                같은 사건에서 부모를 선택해 이동해요. 자신과 하위 진료는 선택할 수 없어요.
+              </p>
+            </div>
+            <div className="form-field">
+              <label>
+                진료 시작일
+                <input
+                  type="date"
+                  max={todaySeoul()}
+                  value={draft.start}
+                  onChange={(e) => change("start", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                진료 종료일
+                <input
+                  type="date"
+                  max={todaySeoul()}
+                  min={draft.start || undefined}
+                  value={draft.end}
+                  onChange={(e) => change("end", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                진료 표시 순서
+                <input
+                  inputMode="numeric"
+                  value={draft.order}
+                  onChange={(e) => change("order", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                진료 메모
+                <textarea
+                  maxLength={2000}
+                  value={draft.note}
+                  onChange={(e) => change("note", e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+        </fieldset>
+        <MetadataFeedback command={command} listPath={`/insurance/cases/${caseId}`} />
+        <ConflictReview
+          error={command.error}
+          compare={() => void compare()}
+          latest={!!latest}
+          adopt={() => adopt(true)}
+          replace={() => adopt(false)}
+        >
+          {latest && (
+            <>
+              <NodeSummary row={latest} />
+              <p>
+                현재 상위 진료:{" "}
+                {nodes.find((n) => n.id === latest.parent_id)?.label ?? "사건 바로 아래"}
+              </p>
+            </>
+          )}
+        </ConflictReview>
+        <div className="form-actions">
+          <button
+            type="submit"
+            disabled={!valid || command.busy || command.uncertain || command.error?.status === 409}
+          >
+            진료 기록 저장
+          </button>
+          <button type="button" onClick={cancel} disabled={command.busy}>
+            진료 편집 취소
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+function TreeBranch({
+  row,
+  nodes,
+  depth = 0,
+}: {
+  row: MedicalNode;
+  nodes: MedicalNode[];
+  depth?: number;
+}) {
+  const children = nodes
+    .filter((node) => node.parent_id === row.id)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id.localeCompare(b.id));
+  const [expanded, setExpanded] = useState(depth < 2);
+  return (
+    <li>
+      <div className="tree-row">
+        <Link to={`/insurance/cases/${row.case_id}/nodes/${row.id}`}>{row.label}</Link>
+        <span>{nodeKinds[row.kind]}</span>
+        {children.length > 0 && depth < 3 && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {row.label} 하위 {children.length}개 {expanded ? "접기" : "펼치기"}
+          </button>
+        )}
+      </div>
+      {children.length > 0 && depth >= 3 && (
+        <Link to={`/insurance/cases/${row.case_id}/nodes/${row.id}`}>
+          하위 진료는 상세에서 보기
+        </Link>
+      )}
+      {expanded && depth < 3 && children.length > 0 && (
+        <ul>
+          {children.map((child) => (
+            <TreeBranch key={child.id} row={child} nodes={nodes} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
 }
 export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId?: string }) {
-  const api = useInsuranceApi(); const navigate = useNavigate(); const editorTrigger = useRef<HTMLButtonElement>(null); const command = useMetadataCommand(); const list = useResource(useCallback(() => allPages((cursor) => api.nodes(caseId, cursor)), [api, caseId])); const [editing, setEditing] = useState<{ row?: MedicalNode; parent: string } | null>(null); const [deleting, setDeleting] = useState(false); const [ack, setAck] = useState(false); const nodes = list.data ?? []; const selected = nodes.find((n) => n.id === selectedId); const roots = nodes.filter((n) => selected ? n.parent_id === selected.id : !n.parent_id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id.localeCompare(b.id));
-  async function remove() { if (!selected || !ack) return; const result = await command.run(async () => { await api.deleteNode(caseId, selected.id, selected.version); return true; }); if (result && command.mounted.current) { setDeleting(false); setAck(false); void list.reload(); navigate(`/insurance/cases/${caseId}`); } }
-  return <section className="card" aria-label="사건 진료 트리"><h2>진료·처방·약국</h2><p>진료를 추가해도 지출은 생기지 않아요. 실제 비용 원본만 합산해요.</p><InsuranceError error={list.error} />{list.error && <button onClick={() => void list.reload()}>진료 트리 다시 확인</button>}{list.loading && <p className="loading-state" role="status">전체 진료 연결을 불러오고 있어요.</p>}{!list.loading && !list.error && <><button className="primary-button" onClick={(event) => { editorTrigger.current = event.currentTarget; setEditing({ parent: "" }); }}>사건 아래 진료 추가</button>{!nodes.length && <p>아직 진료 기록이 없어요. 외래·입원·수술·처방·약국을 직접 추가해 주세요.</p>}<ul className="medical-tree">{roots.map((row) => <TreeBranch key={row.id} row={row} nodes={nodes} />)}</ul>{selectedId && !selected && <InsuranceError error={new ApiError(404, "NOT_FOUND")} />}{selected && <TaskPanel key={selected.id} label="선택한 진료 작업"><section className="review-panel" aria-label="선택한 진료"><nav aria-label="진료 상위 경로"><Link to={`/insurance/cases/${caseId}`}>사건</Link>{ancestors(nodes, selected.id).map((node) => <span key={node.id}> / <Link to={`/insurance/cases/${caseId}/nodes/${node.id}`}>{node.label}</Link></span>)}</nav><h3>{selected.label}</h3><NodeSummary row={selected} /><DocumentPanel key={selected.id} kind="medical_node" id={selected.id} /><NodeMoneySummary caseId={caseId} nodeId={selected.id} />{selected.kind !== "prescription" && <ExpenseList caseId={caseId} nodeId={selected.id} />}<div className="form-actions"><button onClick={(event) => { editorTrigger.current = event.currentTarget; setEditing({ parent: selected.id }); }}>이 진료 아래 추가</button><button onClick={(event) => { editorTrigger.current = event.currentTarget; setEditing({ row: selected, parent: selected.parent_id ?? "" }); }}>진료 내용·위치 수정</button><button className="danger-button" onClick={() => { setDeleting(true); setAck(false); }}>오등록 진료 삭제 검토</button>{selected.parent_id && <Link to={`/insurance/cases/${caseId}/nodes/${selected.parent_id}`}>상위 진료로 이동</Link>}</div></section></TaskPanel>}{editing && <TaskPanel key={`${editing.row?.id ?? "new"}:${editing.parent}`} label="진료·약국 입력"><NodeEditor caseId={caseId} initial={editing.row} parent={editing.parent} nodes={nodes} cancel={() => { setEditing(null); editorTrigger.current?.focus(); }} saved={(id) => { setEditing(null); void list.reload(); navigate(`/insurance/cases/${caseId}/nodes/${id}`); }} /></TaskPanel>}{deleting && selected && <section className="review-panel"><h3>오등록 진료 삭제</h3><p>하위 진료나 비용이 있는 항목은 삭제할 수 없어요.</p><label className="checkbox-field"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />오등록 항목 {selected.label} 삭제를 확인했어요.</label><InsuranceError error={command.error} /><button className="danger-button" disabled={!ack || command.busy} onClick={() => void remove()}>오등록 진료 삭제</button><button onClick={() => { setDeleting(false); setAck(false); }}>진료 삭제 취소</button>{command.error?.status === 409 && <button onClick={() => { setAck(false); command.setError(null); void list.reload(); }}>삭제 전 진료 다시 확인</button>}</section>}</>}</section>;
+  const api = useInsuranceApi();
+  const navigate = useNavigate();
+  const editorTrigger = useRef<HTMLButtonElement>(null);
+  const command = useMetadataCommand();
+  const list = useResource(
+    useCallback(() => allPages((cursor) => api.nodes(caseId, cursor)), [api, caseId]),
+  );
+  const [editing, setEditing] = useState<{ row?: MedicalNode; parent: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [ack, setAck] = useState(false);
+  const nodes = list.data ?? [];
+  const selected = nodes.find((n) => n.id === selectedId);
+  const roots = nodes
+    .filter((n) => (selected ? n.parent_id === selected.id : !n.parent_id))
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id.localeCompare(b.id));
+  async function remove() {
+    if (!selected || !ack) return;
+    const result = await command.run(async () => {
+      await api.deleteNode(caseId, selected.id, selected.version);
+      return true;
+    });
+    if (result && command.mounted.current) {
+      setDeleting(false);
+      setAck(false);
+      void list.reload();
+      navigate(`/insurance/cases/${caseId}`);
+    }
+  }
+  return (
+    <section className="card" aria-label="사건 진료 트리">
+      <h2>진료·처방·약국</h2>
+      <p>진료를 추가해도 지출은 생기지 않아요. 실제 비용 원본만 합산해요.</p>
+      <InsuranceError error={list.error} />
+      {list.error && <button onClick={() => void list.reload()}>진료 트리 다시 확인</button>}
+      {list.loading && (
+        <p className="loading-state" role="status">
+          전체 진료 연결을 불러오고 있어요.
+        </p>
+      )}
+      {!list.loading && !list.error && (
+        <>
+          <button
+            className="primary-button"
+            onClick={(event) => {
+              editorTrigger.current = event.currentTarget;
+              setEditing({ parent: "" });
+            }}
+          >
+            사건 아래 진료 추가
+          </button>
+          {!nodes.length && (
+            <p>아직 진료 기록이 없어요. 외래·입원·수술·처방·약국을 직접 추가해 주세요.</p>
+          )}
+          <ul className="medical-tree">
+            {roots.map((row) => (
+              <TreeBranch key={row.id} row={row} nodes={nodes} />
+            ))}
+          </ul>
+          {selectedId && !selected && <InsuranceError error={new ApiError(404, "NOT_FOUND")} />}
+          {selected && (
+            <TaskPanel key={selected.id} label="선택한 진료 작업">
+              <section className="review-panel" aria-label="선택한 진료">
+                <nav aria-label="진료 상위 경로">
+                  <Link to={`/insurance/cases/${caseId}`}>사건</Link>
+                  {ancestors(nodes, selected.id).map((node) => (
+                    <span key={node.id}>
+                      {" "}
+                      / <Link to={`/insurance/cases/${caseId}/nodes/${node.id}`}>{node.label}</Link>
+                    </span>
+                  ))}
+                </nav>
+                <h3>{selected.label}</h3>
+                <NodeSummary row={selected} />
+                <DocumentPanel key={selected.id} kind="medical_node" id={selected.id} />
+                <NodeMoneySummary caseId={caseId} nodeId={selected.id} />
+                {selected.kind !== "prescription" && (
+                  <ExpenseList caseId={caseId} nodeId={selected.id} />
+                )}
+                <div className="form-actions">
+                  <button
+                    onClick={(event) => {
+                      editorTrigger.current = event.currentTarget;
+                      setEditing({ parent: selected.id });
+                    }}
+                  >
+                    이 진료 아래 추가
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      editorTrigger.current = event.currentTarget;
+                      setEditing({ row: selected, parent: selected.parent_id ?? "" });
+                    }}
+                  >
+                    진료 내용·위치 수정
+                  </button>
+                  <button
+                    className="danger-button"
+                    onClick={() => {
+                      setDeleting(true);
+                      setAck(false);
+                    }}
+                  >
+                    오등록 진료 삭제 검토
+                  </button>
+                  {selected.parent_id && (
+                    <Link to={`/insurance/cases/${caseId}/nodes/${selected.parent_id}`}>
+                      상위 진료로 이동
+                    </Link>
+                  )}
+                </div>
+              </section>
+            </TaskPanel>
+          )}
+          {editing && (
+            <TaskPanel key={`${editing.row?.id ?? "new"}:${editing.parent}`} label="진료·약국 입력">
+              <NodeEditor
+                caseId={caseId}
+                initial={editing.row}
+                parent={editing.parent}
+                nodes={nodes}
+                cancel={() => {
+                  setEditing(null);
+                  editorTrigger.current?.focus();
+                }}
+                saved={(id) => {
+                  setEditing(null);
+                  void list.reload();
+                  navigate(`/insurance/cases/${caseId}/nodes/${id}`);
+                }}
+              />
+            </TaskPanel>
+          )}
+          {deleting && selected && (
+            <section className="review-panel">
+              <h3>오등록 진료 삭제</h3>
+              <p>하위 진료나 비용이 있는 항목은 삭제할 수 없어요.</p>
+              <label className="checkbox-field">
+                <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+                오등록 항목 {selected.label} 삭제를 확인했어요.
+              </label>
+              <InsuranceError error={command.error} />
+              <button
+                className="danger-button"
+                disabled={!ack || command.busy}
+                onClick={() => void remove()}
+              >
+                오등록 진료 삭제
+              </button>
+              <button
+                onClick={() => {
+                  setDeleting(false);
+                  setAck(false);
+                }}
+              >
+                진료 삭제 취소
+              </button>
+              {command.error?.status === 409 && (
+                <button
+                  onClick={() => {
+                    setAck(false);
+                    command.setError(null);
+                    void list.reload();
+                  }}
+                >
+                  삭제 전 진료 다시 확인
+                </button>
+              )}
+            </section>
+          )}
+        </>
+      )}
+    </section>
+  );
 }

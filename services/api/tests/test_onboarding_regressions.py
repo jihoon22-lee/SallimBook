@@ -98,12 +98,11 @@ def test_connection_session_failure_rolls_back_code_and_all_enrollment_rows(
         assert enrollment_counts(db_engine) == baseline
         assert_unused_code(db_engine, code)
 
-        retried = partner.post(
-            f"/api/v1/auth/{transport}/connect", json=payload, headers=headers
-        )
+        retried = partner.post(f"/api/v1/auth/{transport}/connect", json=payload, headers=headers)
         assert retried.status_code == 201
         me_headers = (
-            {} if transport == "web"
+            {}
+            if transport == "web"
             else {"Authorization": "Bearer " + retried.json()["access_token"]}
         )
         me = partner.get("/api/v1/me", headers=me_headers)
@@ -128,7 +127,8 @@ def test_concurrent_web_native_redemption_creates_only_one_partner_and_session(
             )
             if response.status_code == 201:
                 headers = (
-                    {} if transport == "web"
+                    {}
+                    if transport == "web"
                     else {"Authorization": "Bearer " + response.json()["access_token"]}
                 )
                 assert client.get("/api/v1/me", headers=headers).json()["role"] == "member"
@@ -226,9 +226,7 @@ def test_connection_rejects_a_code_whose_owner_is_no_longer_active(
         assert enrollment_counts(db_engine) == (1, 1, 1, 1, 0)
 
 
-def test_code_creation_requires_authentication_valid_csrf_and_owner_role(
-    onboarding_app, db_engine
-):
+def test_code_creation_requires_authentication_valid_csrf_and_owner_role(onboarding_app, db_engine):
     with client_for(onboarding_app) as owner, client_for(onboarding_app) as partner:
         anonymous = owner.post("/api/v1/household/connection-code", headers=WEB)
         assert anonymous.status_code == 401
@@ -259,8 +257,8 @@ def test_code_creation_requires_recent_authentication(onboarding_app, db_engine)
     with client_for(onboarding_app) as owner:
         started = start(owner)
         with Session(db_engine) as session:
-            session.scalar(select(AuthSession)).authenticated_at = (
-                service.utcnow() - timedelta(minutes=6)
+            session.scalar(select(AuthSession)).authenticated_at = service.utcnow() - timedelta(
+                minutes=6
             )
             session.commit()
         assert owner.get("/api/v1/me").status_code == 200
@@ -271,9 +269,7 @@ def test_code_creation_requires_recent_authentication(onboarding_app, db_engine)
             assert session.scalar(select(func.count()).select_from(Invitation)) == 0
 
 
-def test_legacy_owner_named_partner_can_use_existing_invitation_flow(
-    onboarding_app, db_engine
-):
+def test_legacy_owner_named_partner_can_use_existing_invitation_flow(onboarding_app, db_engine):
     with Session(db_engine) as session:
         bootstrap = service.create_bootstrap_invitation(session, "합성 기존 가계", "partner")
         session.commit()

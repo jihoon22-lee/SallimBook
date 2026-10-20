@@ -72,6 +72,17 @@ Python 3.10 이상 요구를 확인하고, 프로젝트 Python 3.14.7에서 합�
 [FastAPI 변경 기록](https://fastapi.tiangolo.com/release-notes/),
 [Android 공식 SDK·체크섬](https://developer.android.com/studio#command-tools).
 
+### 서식 도구
+
+TS/JS 서식은 Prettier **3.9.10**(2026-10-10 배포)으로 고정했다. [공식 변경 기록](https://github.com/prettier/prettier/blob/main/CHANGELOG.md)과
+npm 배포 메타데이터를 확인했고, 루트 devDependency와 pnpm lockfile에 정확한 버전으로 기록했다. 의존성과 peer는 없다.
+설정은 `.prettierrc.json`이다(한 줄 100자, 큰따옴표, 세미콜론, 후행 쉼표 all, 템플릿 문자열 내부 서식 끔).
+대상은 `pnpm format`·`pnpm format:check`의 TS/JS glob뿐이다. 생성 API client, Android 프로젝트, CSS·Markdown·JSON·YAML·HTML은
+`.prettierignore`로 제외한다. CSS는 기존의 규칙당 한 줄 형식을 유지한다.
+Python은 기존 ruff 0.17.1의 `ruff format`을 `services/api`의 src·tests·migrations에만 적용한다. `scripts/`는 문서 manifest 해시 대상이라 범위에서 뺐다.
+CI는 `types-contract` job에서 `pnpm format:check`를, `api-unit` job에서 `ruff format --check`를 실행한다.
+일괄 서식 커밋은 `.git-blame-ignore-revs`에 기록했다. 로컬 blame에는 `git config blame.ignoreRevsFile .git-blame-ignore-revs`를 한 번 설정한다.
+
 ## 4. 저장소와 실행 환경
 
 WSL의 Linux 파일시스템에 clone을 두고 프로젝트별 의존성을 관리한다.

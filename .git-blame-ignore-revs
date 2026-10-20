@@ -1,0 +1,6 @@
+# Formatting-only commits (no behaviour change). GitHub blame skips them automatically.
+# Local blame: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# chore(format): apply Prettier to TypeScript sources
+8db8c1418a40ceaf5f06c44984c96a23cef0b70b
+# chore(format): apply ruff format to services/api
+7a321c57f1b136b9d19407bf18799b35bd3d0d3e

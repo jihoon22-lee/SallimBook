@@ -7,10 +7,14 @@ import type { AuditQuery } from "./model";
 
 export function useAuditApi() {
   const { domainApi } = useAuth();
-  return useMemo(() => ({
-    list: (query: AuditQuery, signal?: AbortSignal) => domainApi.read<components["schemas"]["AuditListResponse"]>(
-      (client) => client.GET("/api/v1/audit-events", { params: { query }, signal }),
-      () => cancellableNative(signal, () => nativeAudit.list({ query })),
-    ),
-  }), [domainApi]);
+  return useMemo(
+    () => ({
+      list: (query: AuditQuery, signal?: AbortSignal) =>
+        domainApi.read<components["schemas"]["AuditListResponse"]>(
+          (client) => client.GET("/api/v1/audit-events", { params: { query }, signal }),
+          () => cancellableNative(signal, () => nativeAudit.list({ query })),
+        ),
+    }),
+    [domainApi],
+  );
 }

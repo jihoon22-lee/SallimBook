@@ -16,19 +16,406 @@ import { actualDraft, actualInput, exactSum } from "./model";
 import type { ActualDraft } from "./model";
 import { useInsuranceEventsApi } from "./api";
 type Line = { label: string; amount: string; type: string };
-type Draft = { actual: ActualDraft; caseId: string; nodeId: string; provider: string; receipt: string; gross: string; publicCoverage: string; lines: Line[] };
-function draftOf(row?: Schema["ExpenseResponse"], caseId = "", nodeId = ""): Draft { return { actual: actualDraft(row?.cash), caseId: row?.case_id ?? caseId, nodeId: row?.node_id ?? nodeId, provider: row?.provider_name ?? "", receipt: row?.receipt_reference ?? "", gross: row?.gross_medical_krw ?? "", publicCoverage: row?.public_coverage_krw ?? "", lines: row?.lines.map((l) => ({ label: l.label, amount: l.amount_krw, type: l.detail_type })) ?? [] }; }
-export function expenseInput(d: Draft): Schema["ExpenseCreate"] | null {
-  const actual = actualInput(d.actual); const lines = d.lines.map((line) => ({ label: line.label.trim(), amount_krw: parseKrw(line.amount), detail_type: line.type.trim() }));
-  if (!actual || !isUuid(d.caseId) || !isUuid(d.nodeId) || d.provider.length > 120 || d.receipt.length > 120 || d.gross && parseKrw(d.gross) === null || d.publicCoverage && parseKrw(d.publicCoverage) === null || lines.length > 200 || lines.some((l) => !l.label || l.label.length > 120 || !l.detail_type || l.detail_type.length > 40 || l.amount_krw === null) || lines.length && exactSum(d.lines.map((l) => l.amount)) !== actual.amount_krw) return null;
-  return { ...actual, case_id: d.caseId, node_id: d.nodeId, provider_name: optional(d.provider), receipt_reference: optional(d.receipt), gross_medical_krw: d.gross ? parseKrw(d.gross) : null, public_coverage_krw: d.publicCoverage ? parseKrw(d.publicCoverage) : null, lines: lines.map((l) => ({ ...l, amount_krw: l.amount_krw! })) };
+type Draft = {
+  actual: ActualDraft;
+  caseId: string;
+  nodeId: string;
+  provider: string;
+  receipt: string;
+  gross: string;
+  publicCoverage: string;
+  lines: Line[];
+};
+function draftOf(row?: Schema["ExpenseResponse"], caseId = "", nodeId = ""): Draft {
+  return {
+    actual: actualDraft(row?.cash),
+    caseId: row?.case_id ?? caseId,
+    nodeId: row?.node_id ?? nodeId,
+    provider: row?.provider_name ?? "",
+    receipt: row?.receipt_reference ?? "",
+    gross: row?.gross_medical_krw ?? "",
+    publicCoverage: row?.public_coverage_krw ?? "",
+    lines:
+      row?.lines.map((l) => ({ label: l.label, amount: l.amount_krw, type: l.detail_type })) ?? [],
+  };
 }
-export function ExpenseEditor({ initial, caseId = "", nodeId = "" }: { initial?: Schema["ExpenseResponse"]; caseId?: string; nodeId?: string }) {
-  const api = useInsuranceEventsApi(); const core = useInsuranceApi(); const command = useMonthCommand(); const navigate = useNavigate(); const [base, setBase] = useState(initial); const [draft, setDraft] = useState(() => draftOf(initial, caseId, nodeId)); const [reason, setReason] = useState(""); const [ack, setAck] = useState(false); const [latest, setLatest] = useState<Schema["ExpenseResponse"] | null>(null);
-  const nodes = useResource(useCallback(() => isUuid(draft.caseId) ? allPages((cursor) => core.nodes(draft.caseId, cursor)) : Promise.resolve([]), [core, draft.caseId])); const selected = nodes.data?.find((n) => n.id === draft.nodeId); const input = expenseInput(draft); const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, input, reason.trim()])); const ready = !!input && selected?.kind !== "prescription" && !!selected && !nodes.loading && !nodes.error && (!base || base.cash.state === "active" && !!reason.trim() && ack);
-  const change = <K extends keyof Draft>(field: K, value: Draft[K]) => { setDraft((d) => ({ ...d, [field]: value })); setAck(false); };
-  async function submit(event: FormEvent) { event.preventDefault(); if (!input || !ready || command.error?.status === 409) return; const result = await command.run((signal) => base ? api.correctMedicalExpense({ resourceId: base.id, input: { ...input, reason: reason.trim() }, ifMatch: `"${base.version}"`, idempotencyKey: key }, signal) : api.createMedicalExpense({ input, idempotencyKey: key }, signal)); if (result.ok && command.mounted.current) navigate(`/insurance/expenses/${result.value.id}`); }
-  async function compare() { if (!base) return; try { const row = await api.getMedicalExpense({ resourceId: base.id }); if (command.mounted.current) setLatest(row); } catch (error) { command.setError(toApiError(error)); } }
-  return <section className="card"><h2>{base ? "의료비 원본 정정" : "실제 의료비 기록"}</h2><RecordedMoneyNotice /><form onSubmit={(e) => void submit(e)}><fieldset disabled={command.busy}><legend>어떤 진료의 비용인가요</legend><CaseSelect label="비용 사건" value={draft.caseId} onChange={(id) => { setDraft((d) => ({ ...d, caseId: id, nodeId: "" })); setAck(false); }} /><div className="form-field"><label>비용 귀속 진료<select required disabled={nodes.loading} value={draft.nodeId} onChange={(e) => change("nodeId", e.target.value)}><option value="">진료 선택</option>{nodes.data?.map((n) => <option key={n.id} value={n.id} disabled={n.kind === "prescription"}>{ancestors(nodes.data!, n.id).map((p) => p.label).join(" / ")}{n.kind === "prescription" ? " · 무금액 처방" : ""}</option>)}</select></label><InsuranceError error={nodes.error} />{nodes.error && <button type="button" onClick={() => void nodes.reload()}>진료 선택 다시 확인</button>}</div></fieldset><ActualFields title="의료비 지불" draft={draft.actual} onChange={(d) => change("actual", d)} disabled={command.busy} /><details className="optional-fields" open={!!initial && !!(initial.provider_name || initial.receipt_reference || initial.gross_medical_krw !== null || initial.public_coverage_krw !== null)}><summary>영수증 참고 정보 (선택)</summary><fieldset disabled={command.busy}><legend className="sr-only">영수증 참고 정보</legend><div className="form-field"><label>지불 의료기관 (선택)<input maxLength={120} value={draft.provider} onChange={(e) => change("provider", e.target.value)} /></label></div><div className="form-field"><label>영수증 참고번호 (선택)<input maxLength={120} value={draft.receipt} onChange={(e) => change("receipt", e.target.value)} /></label></div><div className="form-grid"><div className="form-field"><label>병원 총진료비 참고 (원)<input inputMode="numeric" value={draft.gross} onChange={(e) => change("gross", e.target.value)} /></label></div><div className="form-field"><label>공단 부담액 참고 (원)<input inputMode="numeric" value={draft.publicCoverage} onChange={(e) => change("publicCoverage", e.target.value)} /></label></div></div><p>총진료비와 공단 부담액은 설명용이에요. 실제로 본인이 지불한 금액과 구분해 기록해요.</p></fieldset></details>
-    <fieldset disabled={command.busy}><legend>실제 지불금의 설명용 분해</legend><p>선택 사항이에요. 명세 합계는 실제 지불금과 같아야 하며 원본 지출에 다시 더하지 않아요.</p>{draft.lines.map((line, index) => <section className="conversion-row" key={index} aria-label={`영수증 명세 ${index + 1}`}><div className="form-grid"><div className="form-field"><label>명세 이름<input required maxLength={120} value={line.label} onChange={(e) => change("lines", draft.lines.map((l, i) => i === index ? { ...l, label: e.target.value } : l))} /></label></div><div className="form-field"><label>명세 금액 (원)<input required inputMode="numeric" value={line.amount} onChange={(e) => change("lines", draft.lines.map((l, i) => i === index ? { ...l, amount: e.target.value } : l))} /></label></div><div className="form-field"><label>명세 분류<input required maxLength={40} value={line.type} onChange={(e) => change("lines", draft.lines.map((l, i) => i === index ? { ...l, type: e.target.value } : l))} /></label></div></div><button type="button" onClick={() => change("lines", draft.lines.filter((_, i) => i !== index))}>명세 {index + 1} 제거</button></section>)}<button type="button" disabled={draft.lines.length >= 200} onClick={() => change("lines", [...draft.lines, { label: "", amount: "", type: "other" }])}>영수증 명세 추가</button>{draft.lines.length > 0 && <p>명세 합계 {formatKrw(exactSum(draft.lines.map((l) => l.amount)))} / 실제 지불 {formatKrw(parseKrw(draft.actual.amount))}</p>}{draft.lines.length > 0 && exactSum(draft.lines.map((l) => l.amount)) !== parseKrw(draft.actual.amount) && <p role="alert">명세 합계와 실제 지불금이 같아야 해요.</p>}{base && <><div className="form-field"><label>의료비 정정 사유<textarea maxLength={500} required value={reason} onChange={(e) => { setReason(e.target.value); setAck(false); }} /></label></div><label className="checkbox-field"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />기존 의료비는 무효로 보존하고 새 원본으로 정정하는 것을 확인했어요.</label></>}</fieldset><InsuranceError error={command.error} />{base && command.error?.status === 409 && <button type="button" onClick={() => void compare()}>의료비 현재 원본 비교</button>}{latest && <section className="review-panel"><ExpenseSummary row={latest} /><button type="button" disabled={latest.cash.state !== "active"} onClick={() => { const current = draftOf(latest); setDraft({ ...preserveDraft(draftOf(base), draft, current), actual: preserveDraft(draftOf(base).actual, draft.actual, current.actual) }); setBase(latest); setLatest(null); setAck(false); command.setError(null); }}>비교한 의료비 정정 유지</button></section>}<SaveControls backTo={base ? `/insurance/expenses/${base.id}` : isUuid(caseId) ? `/insurance/cases/${caseId}` : "/insurance/cases"} busy={command.busy} cancel={command.cancel} disabled={!ready || command.error?.status === 409} label={base ? "의료비 정정 저장" : "실제 의료비 저장"} /></form></section>;
+export function expenseInput(d: Draft): Schema["ExpenseCreate"] | null {
+  const actual = actualInput(d.actual);
+  const lines = d.lines.map((line) => ({
+    label: line.label.trim(),
+    amount_krw: parseKrw(line.amount),
+    detail_type: line.type.trim(),
+  }));
+  if (
+    !actual ||
+    !isUuid(d.caseId) ||
+    !isUuid(d.nodeId) ||
+    d.provider.length > 120 ||
+    d.receipt.length > 120 ||
+    (d.gross && parseKrw(d.gross) === null) ||
+    (d.publicCoverage && parseKrw(d.publicCoverage) === null) ||
+    lines.length > 200 ||
+    lines.some(
+      (l) =>
+        !l.label ||
+        l.label.length > 120 ||
+        !l.detail_type ||
+        l.detail_type.length > 40 ||
+        l.amount_krw === null,
+    ) ||
+    (lines.length && exactSum(d.lines.map((l) => l.amount)) !== actual.amount_krw)
+  )
+    return null;
+  return {
+    ...actual,
+    case_id: d.caseId,
+    node_id: d.nodeId,
+    provider_name: optional(d.provider),
+    receipt_reference: optional(d.receipt),
+    gross_medical_krw: d.gross ? parseKrw(d.gross) : null,
+    public_coverage_krw: d.publicCoverage ? parseKrw(d.publicCoverage) : null,
+    lines: lines.map((l) => ({ ...l, amount_krw: l.amount_krw! })),
+  };
+}
+export function ExpenseEditor({
+  initial,
+  caseId = "",
+  nodeId = "",
+}: {
+  initial?: Schema["ExpenseResponse"];
+  caseId?: string;
+  nodeId?: string;
+}) {
+  const api = useInsuranceEventsApi();
+  const core = useInsuranceApi();
+  const command = useMonthCommand();
+  const navigate = useNavigate();
+  const [base, setBase] = useState(initial);
+  const [draft, setDraft] = useState(() => draftOf(initial, caseId, nodeId));
+  const [reason, setReason] = useState("");
+  const [ack, setAck] = useState(false);
+  const [latest, setLatest] = useState<Schema["ExpenseResponse"] | null>(null);
+  const nodes = useResource(
+    useCallback(
+      () =>
+        isUuid(draft.caseId)
+          ? allPages((cursor) => core.nodes(draft.caseId, cursor))
+          : Promise.resolve([]),
+      [core, draft.caseId],
+    ),
+  );
+  const selected = nodes.data?.find((n) => n.id === draft.nodeId);
+  const input = expenseInput(draft);
+  const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, input, reason.trim()]));
+  const ready =
+    !!input &&
+    selected?.kind !== "prescription" &&
+    !!selected &&
+    !nodes.loading &&
+    !nodes.error &&
+    (!base || (base.cash.state === "active" && !!reason.trim() && ack));
+  const change = <K extends keyof Draft>(field: K, value: Draft[K]) => {
+    setDraft((d) => ({ ...d, [field]: value }));
+    setAck(false);
+  };
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!input || !ready || command.error?.status === 409) return;
+    const result = await command.run((signal) =>
+      base
+        ? api.correctMedicalExpense(
+            {
+              resourceId: base.id,
+              input: { ...input, reason: reason.trim() },
+              ifMatch: `"${base.version}"`,
+              idempotencyKey: key,
+            },
+            signal,
+          )
+        : api.createMedicalExpense({ input, idempotencyKey: key }, signal),
+    );
+    if (result.ok && command.mounted.current) navigate(`/insurance/expenses/${result.value.id}`);
+  }
+  async function compare() {
+    if (!base) return;
+    try {
+      const row = await api.getMedicalExpense({ resourceId: base.id });
+      if (command.mounted.current) setLatest(row);
+    } catch (error) {
+      command.setError(toApiError(error));
+    }
+  }
+  return (
+    <section className="card">
+      <h2>{base ? "의료비 원본 정정" : "실제 의료비 기록"}</h2>
+      <RecordedMoneyNotice />
+      <form onSubmit={(e) => void submit(e)}>
+        <fieldset disabled={command.busy}>
+          <legend>어떤 진료의 비용인가요</legend>
+          <CaseSelect
+            label="비용 사건"
+            value={draft.caseId}
+            onChange={(id) => {
+              setDraft((d) => ({ ...d, caseId: id, nodeId: "" }));
+              setAck(false);
+            }}
+          />
+          <div className="form-field">
+            <label>
+              비용 귀속 진료
+              <select
+                required
+                disabled={nodes.loading}
+                value={draft.nodeId}
+                onChange={(e) => change("nodeId", e.target.value)}
+              >
+                <option value="">진료 선택</option>
+                {nodes.data?.map((n) => (
+                  <option key={n.id} value={n.id} disabled={n.kind === "prescription"}>
+                    {ancestors(nodes.data!, n.id)
+                      .map((p) => p.label)
+                      .join(" / ")}
+                    {n.kind === "prescription" ? " · 무금액 처방" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <InsuranceError error={nodes.error} />
+            {nodes.error && (
+              <button type="button" onClick={() => void nodes.reload()}>
+                진료 선택 다시 확인
+              </button>
+            )}
+          </div>
+        </fieldset>
+        <ActualFields
+          title="의료비 지불"
+          draft={draft.actual}
+          onChange={(d) => change("actual", d)}
+          disabled={command.busy}
+        />
+        <details
+          className="optional-fields"
+          open={
+            !!initial &&
+            !!(
+              initial.provider_name ||
+              initial.receipt_reference ||
+              initial.gross_medical_krw !== null ||
+              initial.public_coverage_krw !== null
+            )
+          }
+        >
+          <summary>영수증 참고 정보 (선택)</summary>
+          <fieldset disabled={command.busy}>
+            <legend className="sr-only">영수증 참고 정보</legend>
+            <div className="form-field">
+              <label>
+                지불 의료기관 (선택)
+                <input
+                  maxLength={120}
+                  value={draft.provider}
+                  onChange={(e) => change("provider", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                영수증 참고번호 (선택)
+                <input
+                  maxLength={120}
+                  value={draft.receipt}
+                  onChange={(e) => change("receipt", e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-grid">
+              <div className="form-field">
+                <label>
+                  병원 총진료비 참고 (원)
+                  <input
+                    inputMode="numeric"
+                    value={draft.gross}
+                    onChange={(e) => change("gross", e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="form-field">
+                <label>
+                  공단 부담액 참고 (원)
+                  <input
+                    inputMode="numeric"
+                    value={draft.publicCoverage}
+                    onChange={(e) => change("publicCoverage", e.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+            <p>
+              총진료비와 공단 부담액은 설명용이에요. 실제로 본인이 지불한 금액과 구분해 기록해요.
+            </p>
+          </fieldset>
+        </details>
+        <fieldset disabled={command.busy}>
+          <legend>실제 지불금의 설명용 분해</legend>
+          <p>
+            선택 사항이에요. 명세 합계는 실제 지불금과 같아야 하며 원본 지출에 다시 더하지 않아요.
+          </p>
+          {draft.lines.map((line, index) => (
+            <section className="conversion-row" key={index} aria-label={`영수증 명세 ${index + 1}`}>
+              <div className="form-grid">
+                <div className="form-field">
+                  <label>
+                    명세 이름
+                    <input
+                      required
+                      maxLength={120}
+                      value={line.label}
+                      onChange={(e) =>
+                        change(
+                          "lines",
+                          draft.lines.map((l, i) =>
+                            i === index ? { ...l, label: e.target.value } : l,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="form-field">
+                  <label>
+                    명세 금액 (원)
+                    <input
+                      required
+                      inputMode="numeric"
+                      value={line.amount}
+                      onChange={(e) =>
+                        change(
+                          "lines",
+                          draft.lines.map((l, i) =>
+                            i === index ? { ...l, amount: e.target.value } : l,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="form-field">
+                  <label>
+                    명세 분류
+                    <input
+                      required
+                      maxLength={40}
+                      value={line.type}
+                      onChange={(e) =>
+                        change(
+                          "lines",
+                          draft.lines.map((l, i) =>
+                            i === index ? { ...l, type: e.target.value } : l,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  change(
+                    "lines",
+                    draft.lines.filter((_, i) => i !== index),
+                  )
+                }
+              >
+                명세 {index + 1} 제거
+              </button>
+            </section>
+          ))}
+          <button
+            type="button"
+            disabled={draft.lines.length >= 200}
+            onClick={() =>
+              change("lines", [...draft.lines, { label: "", amount: "", type: "other" }])
+            }
+          >
+            영수증 명세 추가
+          </button>
+          {draft.lines.length > 0 && (
+            <p>
+              명세 합계 {formatKrw(exactSum(draft.lines.map((l) => l.amount)))} / 실제 지불{" "}
+              {formatKrw(parseKrw(draft.actual.amount))}
+            </p>
+          )}
+          {draft.lines.length > 0 &&
+            exactSum(draft.lines.map((l) => l.amount)) !== parseKrw(draft.actual.amount) && (
+              <p role="alert">명세 합계와 실제 지불금이 같아야 해요.</p>
+            )}
+          {base && (
+            <>
+              <div className="form-field">
+                <label>
+                  의료비 정정 사유
+                  <textarea
+                    maxLength={500}
+                    required
+                    value={reason}
+                    onChange={(e) => {
+                      setReason(e.target.value);
+                      setAck(false);
+                    }}
+                  />
+                </label>
+              </div>
+              <label className="checkbox-field">
+                <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+                기존 의료비는 무효로 보존하고 새 원본으로 정정하는 것을 확인했어요.
+              </label>
+            </>
+          )}
+        </fieldset>
+        <InsuranceError error={command.error} />
+        {base && command.error?.status === 409 && (
+          <button type="button" onClick={() => void compare()}>
+            의료비 현재 원본 비교
+          </button>
+        )}
+        {latest && (
+          <section className="review-panel">
+            <ExpenseSummary row={latest} />
+            <button
+              type="button"
+              disabled={latest.cash.state !== "active"}
+              onClick={() => {
+                const current = draftOf(latest);
+                setDraft({
+                  ...preserveDraft(draftOf(base), draft, current),
+                  actual: preserveDraft(draftOf(base).actual, draft.actual, current.actual),
+                });
+                setBase(latest);
+                setLatest(null);
+                setAck(false);
+                command.setError(null);
+              }}
+            >
+              비교한 의료비 정정 유지
+            </button>
+          </section>
+        )}
+        <SaveControls
+          backTo={
+            base
+              ? `/insurance/expenses/${base.id}`
+              : isUuid(caseId)
+                ? `/insurance/cases/${caseId}`
+                : "/insurance/cases"
+          }
+          busy={command.busy}
+          cancel={command.cancel}
+          disabled={!ready || command.error?.status === 409}
+          label={base ? "의료비 정정 저장" : "실제 의료비 저장"}
+        />
+      </form>
+    </section>
+  );
 }

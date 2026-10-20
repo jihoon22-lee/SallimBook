@@ -55,9 +55,7 @@ def test_catalog_covers_documented_ids_without_claiming_application_passes():
     assert set(VECTORS) == documented == {f"T-{n:02}" for n in range(1, 25)}
     assert CATALOG["synthetic"] is IDENTITIES["synthetic"] is True
     assert CATALOG["schema_version"] == IDENTITIES["schema_version"] == 1
-    assert {v["kind"] for v in VECTORS.values()} == {
-        "calculation_vector", "integration_scenario"
-    }
+    assert {v["kind"] for v in VECTORS.values()} == {"calculation_vector", "integration_scenario"}
 
 
 @pytest.mark.parametrize("vector", CATALOG["vectors"], ids=lambda v: v["id"])
@@ -117,9 +115,21 @@ def test_identities_are_deterministic_separate_two_member_households():
 
 def test_fixture_payloads_have_no_secret_or_real_world_identifier_fields():
     forbidden = {
-        "pan", "cvc", "cvv", "password", "password_hash", "access_token", "refresh_token",
-        "recovery_code", "account_number", "policy_number", "diagnosis_note", "diagnosis_code",
-        "email", "phone", "address",
+        "pan",
+        "cvc",
+        "cvv",
+        "password",
+        "password_hash",
+        "access_token",
+        "refresh_token",
+        "recovery_code",
+        "account_number",
+        "policy_number",
+        "diagnosis_note",
+        "diagnosis_code",
+        "email",
+        "phone",
+        "address",
     }
     for data in [CATALOG, IDENTITIES]:
         for path, value in walk(data):
@@ -180,9 +190,11 @@ def test_benefit_types_match_the_documented_contract():
 
 def test_net_assets_ownership_and_reference_holdings_examples():
     inputs, expected = parts(1)
-    assert int(inputs["assets_krw"]) - int(inputs["liabilities_krw"]) == int(
-        expected["net_assets_krw"]
-    ) == 70_000_000
+    assert (
+        int(inputs["assets_krw"]) - int(inputs["liabilities_krw"])
+        == int(expected["net_assets_krw"])
+        == 70_000_000
+    )
     inputs, expected = parts(2)
     assert inputs["asset_id"] == inputs["account_asset_id"]
     assert expected["included_source_count"] == 1
@@ -213,9 +225,11 @@ def test_comparison_missing_first_month_and_scope_change_expectations():
     previous = {row["asset_id"]: int(row["amount_krw"]) for row in inputs["previous"]}
     current = {row["asset_id"]: int(row["amount_krw"]) for row in inputs["current"]}
     assert sum(current.values()) - sum(previous.values()) == int(expected["total_delta_krw"])
-    assert sum(current[k] - previous[k] for k in previous.keys() & current.keys()) == int(
-        expected["common_scope_delta_krw"]
-    ) == 0
+    assert (
+        sum(current[k] - previous[k] for k in previous.keys() & current.keys())
+        == int(expected["common_scope_delta_krw"])
+        == 0
+    )
     assert current.keys() != previous.keys() and expected["scope_changed"]
     assert expected["inferred_savings_krw"] is None
 
@@ -225,9 +239,12 @@ def test_income_and_fixed_payment_examples_preserve_snapshot_expectations():
     assert inputs["income_krw"] == "3000000"
     assert inputs["snapshot_before_krw"] == expected["snapshot_after_krw"] == "5000000"
     inputs, expected = parts(9)
-    assert int(inputs["principal_krw"]) + int(inputs["interest_krw"]) == int(
-        expected["cash_payment_krw"]
-    ) == int(inputs["payment_krw"]) == 1_000_000
+    assert (
+        int(inputs["principal_krw"]) + int(inputs["interest_krw"])
+        == int(expected["cash_payment_krw"])
+        == int(inputs["payment_krw"])
+        == 1_000_000
+    )
     assert inputs["interest_krw"] == expected["consumption_krw"] == "300000"
     assert inputs["liability_snapshot_before_krw"] == expected["liability_snapshot_after_krw"]
     inputs, expected = parts(11)
@@ -326,13 +343,18 @@ def test_insurance_example_arithmetic(number, refund, returned):
 
 def test_negative_burden_and_multi_case_allocation_examples():
     inputs, expected = parts(17)
-    assert int(inputs["medical_krw"]) - int(inputs["received_krw"]) == int(
-        expected["net_burden_krw"]
-    ) == -50_000
+    assert (
+        int(inputs["medical_krw"]) - int(inputs["received_krw"])
+        == int(expected["net_burden_krw"])
+        == -50_000
+    )
     inputs, expected = parts(18)
-    assert amounts(inputs["allocations"]) == int(inputs["receipt_krw"]) == int(
-        expected["monthly_inflow_krw"]
-    ) == 500_000
+    assert (
+        amounts(inputs["allocations"])
+        == int(inputs["receipt_krw"])
+        == int(expected["monthly_inflow_krw"])
+        == 500_000
+    )
     assert {a["case_id"]: a["amount_krw"] for a in inputs["allocations"]} == {
         a["case_id"]: a["amount_krw"] for a in expected["case_totals"]
     }
@@ -346,9 +368,11 @@ def test_negative_burden_and_multi_case_allocation_examples():
 
 def test_stock_example_arithmetic_and_concurrency_acceptance_expectations():
     inputs, expected = parts(20)
-    assert inputs["initial_stock"] + sum(m["quantity_delta"] for m in inputs["movements"]) == (
-        expected["final_stock"]
-    ) == 2
+    assert (
+        inputs["initial_stock"] + sum(m["quantity_delta"] for m in inputs["movements"])
+        == (expected["final_stock"])
+        == 2
+    )
     assert inputs["last_replaced_on"] == expected["last_replaced_after_receipt"]
     assert expected["last_replaced_after_replacement"] == inputs["movements"][1]["occurred_on"]
     inputs, expected = parts(21)
@@ -362,8 +386,9 @@ def test_retry_and_conflict_are_pending_acceptance_expectations():
     inputs, expected = parts(22)
     assert inputs["payout"]["attempts"] == inputs["replacement"]["attempts"] == 2
     assert inputs["payout"]["amount_krw"] == expected["received_krw"]
-    assert inputs["replacement"]["initial_stock"] - inputs["replacement"]["quantity"] == (
-        expected["final_stock"]
+    assert (
+        inputs["replacement"]["initial_stock"] - inputs["replacement"]["quantity"]
+        == (expected["final_stock"])
     )
     assert expected["payout_count"] == expected["replacement_count"] == 1
     inputs, expected = parts(23)
@@ -375,9 +400,7 @@ def test_retry_and_conflict_are_pending_acceptance_expectations():
 def test_today_and_historical_asset_month_have_different_clock_sources():
     inputs, expected = parts(24)
     today = (
-        datetime.fromisoformat(inputs["now_utc"])
-        .astimezone(ZoneInfo(inputs["timezone"]))
-        .date()
+        datetime.fromisoformat(inputs["now_utc"]).astimezone(ZoneInfo(inputs["timezone"])).date()
     )
     assert today.isoformat() == expected["consumables_as_of"] == "2026-10-17"
     assert expected["asset_month"] == inputs["selected_asset_month"]

@@ -39,7 +39,8 @@ def test_deployed_defaults_have_no_allowed_origins(environment):
 @pytest.mark.parametrize("environment", ["development", "test"])
 def test_development_defaults_keep_only_the_dedicated_local_origins(environment):
     assert Settings(environment=environment, _env_file=None).allowed_origins == [
-        "http://localhost:18742", "http://127.0.0.1:18742"
+        "http://localhost:18742",
+        "http://127.0.0.1:18742",
     ]
 
 
@@ -50,8 +51,7 @@ def test_explicit_empty_origins_disable_development_defaults():
 
 def test_settings_load_only_the_working_directory_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(
-        'SALLIMBOOK_ENVIRONMENT=staging\n'
-        'SALLIMBOOK_ALLOWED_ORIGINS=["https://dotenv.invalid"]\n',
+        'SALLIMBOOK_ENVIRONMENT=staging\nSALLIMBOOK_ALLOWED_ORIGINS=["https://dotenv.invalid"]\n',
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
@@ -67,8 +67,7 @@ def test_settings_load_only_the_working_directory_dotenv(tmp_path, monkeypatch):
 
 def test_explicit_inputs_then_environment_take_precedence_over_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(
-        'SALLIMBOOK_ENVIRONMENT=staging\n'
-        'SALLIMBOOK_ALLOWED_ORIGINS=["https://dotenv.invalid"]\n',
+        'SALLIMBOOK_ENVIRONMENT=staging\nSALLIMBOOK_ALLOWED_ORIGINS=["https://dotenv.invalid"]\n',
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
@@ -92,7 +91,7 @@ def test_dotenv_deployment_mode_does_not_inherit_local_origins(tmp_path, monkeyp
 
 def test_dotenv_origins_are_used_only_as_explicit_configuration(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(
-        'SALLIMBOOK_ENVIRONMENT=production\n'
+        "SALLIMBOOK_ENVIRONMENT=production\n"
         'SALLIMBOOK_ALLOWED_ORIGINS=["http://localhost:18742"]\n',
         encoding="utf-8",
     )

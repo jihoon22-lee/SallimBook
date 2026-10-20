@@ -1,0 +1,23 @@
+# Prettier formats TS/JS only; package scripts pass that glob explicitly.
+# Generated API client: regenerate with `pnpm api:generate`, never hand-format.
+packages/api-client/src/schema.d.ts
+packages/api-client/openapi.json
+# Android Gradle project and instrumentation assets.
+apps/client/android/
+# Build, test and cache outputs.
+**/dist/
+**/coverage/
+**/playwright-report/
+**/test-results/
+**/.cache/
+# Lockfiles.
+pnpm-lock.yaml
+services/api/uv.lock
+# Formats Prettier must not touch here: WP10-owned CSS, manifest-hashed docs,
+# generated JSON, CI YAML and the Vite HTML entry.
+*.css
+*.md
+*.json
+*.yml
+*.yaml
+*.html

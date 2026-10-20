@@ -9,10 +9,19 @@ export function isDateOnly(value: string): boolean {
 }
 
 export function todaySeoul(): string {
-  const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-  return ["year", "month", "day"].map((kind) => parts.find((part) => part.type === kind)!.value).join("-");
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  return ["year", "month", "day"]
+    .map((kind) => parts.find((part) => part.type === kind)!.value)
+    .join("-");
 }
 
 export function dateLabel(value: string | null): string {
-  return value && isDateOnly(value) ? `${value.slice(0, 4)}.${value.slice(5, 7)}.${value.slice(8, 10)}` : "미입력";
+  return value && isDateOnly(value)
+    ? `${value.slice(0, 4)}.${value.slice(5, 7)}.${value.slice(8, 10)}`
+    : "미입력";
 }

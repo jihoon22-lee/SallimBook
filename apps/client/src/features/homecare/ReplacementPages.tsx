@@ -10,25 +10,333 @@ import { usePagedList, useResource } from "../finance/queries";
 import { useHomecareApi } from "./api";
 import { etag, optional, quantity } from "./model";
 import type { Appliance, Consumable, DeviceLink, Replacement } from "./model";
-import { HomecareError, HomecarePage, ListFeedback, recordedLabel, ResourceFeedback } from "./HomecareSupport";
+import {
+  HomecareError,
+  HomecarePage,
+  ListFeedback,
+  recordedLabel,
+  ResourceFeedback,
+} from "./HomecareSupport";
 import { DeviceStatus } from "./DeviceLinks";
 import { CancelStock, StockSummary } from "./StockPages";
 type Context = { link: DeviceLink; appliance: Appliance; consumable: Consumable };
 export function ReplacementEditor({ initial, saved }: { initial: Context; saved: () => void }) {
-  const api = useHomecareApi(); const command = useMonthCommand(); const [base, setBase] = useState(initial); const [latest, setLatest] = useState<Context | null>(null); const [date, setDate] = useState(todaySeoul()); const [amount, setAmount] = useState(String(initial.link.quantity_per_replacement)); const [override, setOverride] = useState(initial.link.next_check_override ? "" : "keep"); const [note, setNote] = useState(""); const [ack, setAck] = useState(false);
-  const parsed = quantity(amount, true); const valid = isDateOnly(date) && date <= todaySeoul() && parsed !== null && !!override && note.length <= 2000 && ack && base.link.active && base.appliance.status === "active" && base.consumable.status === "active";
-  const input = { replaced_on: date, quantity: parsed ?? 0, link_version: base.link.version, clear_next_check_override: override === "clear", note: optional(note) }; const key = useIdempotencyKey(JSON.stringify({ id: base.link.id, stockVersion: base.consumable.version, input }));
-  async function submit(e: FormEvent) { e.preventDefault(); if (!valid || command.error?.status === 409) return; const result = await command.run((signal) => api.createConsumableReplacement({ linkId: base.link.id, input, ifMatch: etag(base.consumable.version), idempotencyKey: key }, signal)); if (result.ok && command.mounted.current) saved(); }
-  async function compare() { try { const [link, appliance, consumable] = await Promise.all([api.getApplianceConsumable({ linkId: base.link.id }), api.getAppliance({ applianceId: base.appliance.id }), api.getConsumable({ consumableId: base.consumable.id })]); if (command.mounted.current) setLatest({ link, appliance, consumable }); } catch (e) { if (command.mounted.current) command.setError(toApiError(e)); } }
-  return <section className="card"><h2>실제 교체와 재고 사용</h2><StockSummary row={base.consumable} /><p>{base.appliance.name}에서 {base.consumable.name}을 실제 사용한 수량만 차감해요. 지난 주기를 놓쳤더라도 놓친 횟수만큼 재고를 자동 차감하지 않아요.</p><form onSubmit={(e) => void submit(e)}><fieldset disabled={command.busy || !base.link.active || base.appliance.status !== "active" || base.consumable.status !== "active"}><legend>실제 교체 내용</legend><div className="form-grid"><div className="form-field"><label>실제 교체일<input type="date" required max={todaySeoul()} value={date} onChange={(e) => { setDate(e.target.value); setAck(false); }} /></label></div><div className="form-field"><label>실제 사용 수량<input required inputMode="numeric" value={amount} onChange={(e) => { setAmount(e.target.value); setAck(false); }} /></label><p className="muted">기기별 기준 {base.link.quantity_per_replacement} {base.consumable.unit} · 저장 시 서버에서 공용 재고를 다시 검증해요.</p></div>{base.link.next_check_override ? <div className="form-field"><label>직접 지정한 다음 확인일 처리<select required value={override} onChange={(e) => { setOverride(e.target.value); setAck(false); }}><option value="">직접 선택해 주세요</option><option value="keep">직접 지정일 유지</option><option value="clear">직접 지정일 해제·교체 기준 적용</option></select></label><p>현재 직접 지정일 {dateLabel(base.link.next_check_override)}</p></div> : <p>직접 지정일이 없어요. 실제 교체 기록과 기기별 주기로 다음 확인일을 계산해요.</p>}<div className="form-field"><label>교체 메모<textarea maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} /></label></div></div><label className="checkbox-field"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요</label></fieldset><HomecareError error={command.error} />{command.error?.status === 409 && <section className="review-panel"><p>입력한 교체 기록은 유지했어요. 다른 기기의 사용과 현재 설정을 확인해 주세요.</p><button type="button" onClick={() => void compare()}>현재 공용 재고·기기 설정 비교</button>{latest && <><StockSummary row={latest.consumable} /><DeviceStatus row={latest.link} unit={latest.consumable.unit} /><p>가전 상태: {latest.appliance.status === "active" ? "사용 중" : "사용 종료"}</p><button type="button" onClick={() => { setBase(latest); setLatest(null); setOverride(latest.link.next_check_override ? "" : "keep"); setAck(false); command.setError(null); }}>교체 입력 유지하고 현재 상태 적용</button></>}</section>}<SaveControls backTo={`/appliance-consumables/${base.link.id}`} busy={command.busy} cancel={command.cancel} label="실제 교체·재고 사용 저장" disabled={!valid || command.error?.status === 409} /></form></section>;
+  const api = useHomecareApi();
+  const command = useMonthCommand();
+  const [base, setBase] = useState(initial);
+  const [latest, setLatest] = useState<Context | null>(null);
+  const [date, setDate] = useState(todaySeoul());
+  const [amount, setAmount] = useState(String(initial.link.quantity_per_replacement));
+  const [override, setOverride] = useState(initial.link.next_check_override ? "" : "keep");
+  const [note, setNote] = useState("");
+  const [ack, setAck] = useState(false);
+  const parsed = quantity(amount, true);
+  const valid =
+    isDateOnly(date) &&
+    date <= todaySeoul() &&
+    parsed !== null &&
+    !!override &&
+    note.length <= 2000 &&
+    ack &&
+    base.link.active &&
+    base.appliance.status === "active" &&
+    base.consumable.status === "active";
+  const input = {
+    replaced_on: date,
+    quantity: parsed ?? 0,
+    link_version: base.link.version,
+    clear_next_check_override: override === "clear",
+    note: optional(note),
+  };
+  const key = useIdempotencyKey(
+    JSON.stringify({ id: base.link.id, stockVersion: base.consumable.version, input }),
+  );
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!valid || command.error?.status === 409) return;
+    const result = await command.run((signal) =>
+      api.createConsumableReplacement(
+        {
+          linkId: base.link.id,
+          input,
+          ifMatch: etag(base.consumable.version),
+          idempotencyKey: key,
+        },
+        signal,
+      ),
+    );
+    if (result.ok && command.mounted.current) saved();
+  }
+  async function compare() {
+    try {
+      const [link, appliance, consumable] = await Promise.all([
+        api.getApplianceConsumable({ linkId: base.link.id }),
+        api.getAppliance({ applianceId: base.appliance.id }),
+        api.getConsumable({ consumableId: base.consumable.id }),
+      ]);
+      if (command.mounted.current) setLatest({ link, appliance, consumable });
+    } catch (e) {
+      if (command.mounted.current) command.setError(toApiError(e));
+    }
+  }
+  return (
+    <section className="card">
+      <h2>실제 교체와 재고 사용</h2>
+      <StockSummary row={base.consumable} />
+      <p>
+        {base.appliance.name}에서 {base.consumable.name}을 실제 사용한 수량만 차감해요. 지난 주기를
+        놓쳤더라도 놓친 횟수만큼 재고를 자동 차감하지 않아요.
+      </p>
+      <form onSubmit={(e) => void submit(e)}>
+        <fieldset
+          disabled={
+            command.busy ||
+            !base.link.active ||
+            base.appliance.status !== "active" ||
+            base.consumable.status !== "active"
+          }
+        >
+          <legend>실제 교체 내용</legend>
+          <div className="form-grid">
+            <div className="form-field">
+              <label>
+                실제 교체일
+                <input
+                  type="date"
+                  required
+                  max={todaySeoul()}
+                  value={date}
+                  onChange={(e) => {
+                    setDate(e.target.value);
+                    setAck(false);
+                  }}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                실제 사용 수량
+                <input
+                  required
+                  inputMode="numeric"
+                  value={amount}
+                  onChange={(e) => {
+                    setAmount(e.target.value);
+                    setAck(false);
+                  }}
+                />
+              </label>
+              <p className="muted">
+                기기별 기준 {base.link.quantity_per_replacement} {base.consumable.unit} · 저장 시
+                서버에서 공용 재고를 다시 검증해요.
+              </p>
+            </div>
+            {base.link.next_check_override ? (
+              <div className="form-field">
+                <label>
+                  직접 지정한 다음 확인일 처리
+                  <select
+                    required
+                    value={override}
+                    onChange={(e) => {
+                      setOverride(e.target.value);
+                      setAck(false);
+                    }}
+                  >
+                    <option value="">직접 선택해 주세요</option>
+                    <option value="keep">직접 지정일 유지</option>
+                    <option value="clear">직접 지정일 해제·교체 기준 적용</option>
+                  </select>
+                </label>
+                <p>현재 직접 지정일 {dateLabel(base.link.next_check_override)}</p>
+              </div>
+            ) : (
+              <p>직접 지정일이 없어요. 실제 교체 기록과 기기별 주기로 다음 확인일을 계산해요.</p>
+            )}
+            <div className="form-field">
+              <label>
+                교체 메모
+                <textarea maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
+              </label>
+            </div>
+          </div>
+          <label className="checkbox-field">
+            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+            실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요
+          </label>
+        </fieldset>
+        <HomecareError error={command.error} />
+        {command.error?.status === 409 && (
+          <section className="review-panel">
+            <p>입력한 교체 기록은 유지했어요. 다른 기기의 사용과 현재 설정을 확인해 주세요.</p>
+            <button type="button" onClick={() => void compare()}>
+              현재 공용 재고·기기 설정 비교
+            </button>
+            {latest && (
+              <>
+                <StockSummary row={latest.consumable} />
+                <DeviceStatus row={latest.link} unit={latest.consumable.unit} />
+                <p>가전 상태: {latest.appliance.status === "active" ? "사용 중" : "사용 종료"}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBase(latest);
+                    setLatest(null);
+                    setOverride(latest.link.next_check_override ? "" : "keep");
+                    setAck(false);
+                    command.setError(null);
+                  }}
+                >
+                  교체 입력 유지하고 현재 상태 적용
+                </button>
+              </>
+            )}
+          </section>
+        )}
+        <SaveControls
+          backTo={`/appliance-consumables/${base.link.id}`}
+          busy={command.busy}
+          cancel={command.cancel}
+          label="실제 교체·재고 사용 저장"
+          disabled={!valid || command.error?.status === 409}
+        />
+      </form>
+    </section>
+  );
 }
 export function ReplacementList({ link, unit }: { link: DeviceLink; unit: string }) {
-  const api = useHomecareApi(); const list = usePagedList(useCallback((cursor?: string) => api.listConsumableReplacements({ linkId: link.id, query: { cursor, limit: 50 } }), [api, link.id]));
-  return <section className="card"><h2>기기별 교체 이력</h2><p>교체일을 잘못 입력했다면 원본을 취소한 뒤 올바른 날짜로 새 교체를 기록해요. 취소된 이력도 남아요.</p><ul className="finance-list">{list.items.map((row) => <li key={row.id}><Link to={`/appliance-consumables/${link.id}/replacements/${row.id}`}>{dateLabel(row.replaced_on)} · {row.quantity} {unit} 교체 · {row.cancelled_by_movement_id ? "취소됨" : "반영됨"}</Link></li>)}</ul><ListFeedback list={list} empty="아직 실제 교체 이력이 없어요. 구매일이나 입고일로 추정하지 않아요." /></section>;
+  const api = useHomecareApi();
+  const list = usePagedList(
+    useCallback(
+      (cursor?: string) =>
+        api.listConsumableReplacements({ linkId: link.id, query: { cursor, limit: 50 } }),
+      [api, link.id],
+    ),
+  );
+  return (
+    <section className="card">
+      <h2>기기별 교체 이력</h2>
+      <p>
+        교체일을 잘못 입력했다면 원본을 취소한 뒤 올바른 날짜로 새 교체를 기록해요. 취소된 이력도
+        남아요.
+      </p>
+      <ul className="finance-list">
+        {list.items.map((row) => (
+          <li key={row.id}>
+            <Link to={`/appliance-consumables/${link.id}/replacements/${row.id}`}>
+              {dateLabel(row.replaced_on)} · {row.quantity} {unit} 교체 ·{" "}
+              {row.cancelled_by_movement_id ? "취소됨" : "반영됨"}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <ListFeedback
+        list={list}
+        empty="아직 실제 교체 이력이 없어요. 구매일이나 입고일로 추정하지 않아요."
+      />
+    </section>
+  );
 }
-function ReplacementSummary({ row, unit }: { row: Replacement; unit: string }) { return <><dl className="metadata-grid"><div><dt>실제 교체일</dt><dd>{dateLabel(row.replaced_on)}</dd></div><div><dt>사용 수량</dt><dd>{row.quantity.toLocaleString("ko-KR")} {unit}</dd></div><div><dt>교체 상태</dt><dd>{row.cancelled_by_movement_id ? "취소됨 · 원본 보존" : "반영됨"}</dd></div><div><dt>교체 메모</dt><dd>{row.note || "미입력"}</dd></div></dl><p className="muted">작성 시각 {recordedLabel(row.created_at)}</p><p><Link to={`/consumables/${row.consumable_id}/stock/${row.stock_movement_id}`}>연결 재고 사용 원본</Link>{row.cancelled_by_movement_id && <> · <Link to={`/consumables/${row.consumable_id}/stock/${row.cancelled_by_movement_id}`}>취소 보정 기록</Link></>}</p></>; }
+function ReplacementSummary({ row, unit }: { row: Replacement; unit: string }) {
+  return (
+    <>
+      <dl className="metadata-grid">
+        <div>
+          <dt>실제 교체일</dt>
+          <dd>{dateLabel(row.replaced_on)}</dd>
+        </div>
+        <div>
+          <dt>사용 수량</dt>
+          <dd>
+            {row.quantity.toLocaleString("ko-KR")} {unit}
+          </dd>
+        </div>
+        <div>
+          <dt>교체 상태</dt>
+          <dd>{row.cancelled_by_movement_id ? "취소됨 · 원본 보존" : "반영됨"}</dd>
+        </div>
+        <div>
+          <dt>교체 메모</dt>
+          <dd>{row.note || "미입력"}</dd>
+        </div>
+      </dl>
+      <p className="muted">작성 시각 {recordedLabel(row.created_at)}</p>
+      <p>
+        <Link to={`/consumables/${row.consumable_id}/stock/${row.stock_movement_id}`}>
+          연결 재고 사용 원본
+        </Link>
+        {row.cancelled_by_movement_id && (
+          <>
+            {" "}
+            ·{" "}
+            <Link to={`/consumables/${row.consumable_id}/stock/${row.cancelled_by_movement_id}`}>
+              취소 보정 기록
+            </Link>
+          </>
+        )}
+      </p>
+    </>
+  );
+}
 function ReplacementDetail({ linkId, id }: { linkId: string; id: string }) {
-  const api = useHomecareApi(); const navigate = useNavigate(); const members = useHouseholdMembers(); const [cancelling, setCancelling] = useState(false); const resource = useResource(useCallback(async () => { if (!isUuid(linkId) || !isUuid(id)) throw new ApiError(404, "NOT_FOUND"); const replacement = await api.getConsumableReplacement({ linkId, replacementId: id }); const stock = await api.getConsumable({ consumableId: replacement.consumable_id }); return { replacement, stock }; }, [api, linkId, id])); const data = resource.data;
-  return <><ResourceFeedback resource={resource} />{data && !resource.error && !resource.loading && <><section className="card"><h2>교체 원본</h2><StockSummary row={data.stock} /><ReplacementSummary row={data.replacement} unit={data.stock.unit} /><p>작성자: {members.members.find((m) => m.member_id === data.replacement.created_by_member_id)?.display_name ?? "구성원 확인 필요"}</p><MemberLoadError error={members.error} retry={members.retry} /><div className="form-actions"><Link to={`/appliance-consumables/${linkId}`}>현재 기기별 일정·교체 이력</Link>{!data.replacement.cancelled_by_movement_id && <button type="button" onClick={() => setCancelling(true)}>교체 기록 취소 검토</button>}</div></section>{cancelling && <CancelStock initialStock={data.stock} replacement={data.replacement} cancel={() => setCancelling(false)} saved={(movementId) => navigate(`/consumables/${data.stock.id}/stock/${movementId}`)} />}</>}</>;
+  const api = useHomecareApi();
+  const navigate = useNavigate();
+  const members = useHouseholdMembers();
+  const [cancelling, setCancelling] = useState(false);
+  const resource = useResource(
+    useCallback(async () => {
+      if (!isUuid(linkId) || !isUuid(id)) throw new ApiError(404, "NOT_FOUND");
+      const replacement = await api.getConsumableReplacement({ linkId, replacementId: id });
+      const stock = await api.getConsumable({ consumableId: replacement.consumable_id });
+      return { replacement, stock };
+    }, [api, linkId, id]),
+  );
+  const data = resource.data;
+  return (
+    <>
+      <ResourceFeedback resource={resource} />
+      {data && !resource.error && !resource.loading && (
+        <>
+          <section className="card">
+            <h2>교체 원본</h2>
+            <StockSummary row={data.stock} />
+            <ReplacementSummary row={data.replacement} unit={data.stock.unit} />
+            <p>
+              작성자:{" "}
+              {members.members.find((m) => m.member_id === data.replacement.created_by_member_id)
+                ?.display_name ?? "구성원 확인 필요"}
+            </p>
+            <MemberLoadError error={members.error} retry={members.retry} />
+            <div className="form-actions">
+              <Link to={`/appliance-consumables/${linkId}`}>현재 기기별 일정·교체 이력</Link>
+              {!data.replacement.cancelled_by_movement_id && (
+                <button type="button" onClick={() => setCancelling(true)}>
+                  교체 기록 취소 검토
+                </button>
+              )}
+            </div>
+          </section>
+          {cancelling && (
+            <CancelStock
+              initialStock={data.stock}
+              replacement={data.replacement}
+              cancel={() => setCancelling(false)}
+              saved={(movementId) => navigate(`/consumables/${data.stock.id}/stock/${movementId}`)}
+            />
+          )}
+        </>
+      )}
+    </>
+  );
 }
-export function ReplacementDetailPage() { const { id = "", replacementId = "" } = useParams(); return <HomecarePage title="소모품 교체 상세" description="기기의 실제 교체와 연결된 재고 사용 원본을 확인해요."><ReplacementDetail key={`${id}:${replacementId}`} linkId={id} id={replacementId} /></HomecarePage>; }
+export function ReplacementDetailPage() {
+  const { id = "", replacementId = "" } = useParams();
+  return (
+    <HomecarePage
+      title="소모품 교체 상세"
+      description="기기의 실제 교체와 연결된 재고 사용 원본을 확인해요."
+    >
+      <ReplacementDetail key={`${id}:${replacementId}`} linkId={id} id={replacementId} />
+    </HomecarePage>
+  );
+}

@@ -82,7 +82,6 @@ __all__ = [
     "VaultShareOffer",
     "VaultState",
     "VaultVersion",
-
     "Appliance",
     "Consumable",
     "ApplianceConsumable",

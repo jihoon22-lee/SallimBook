@@ -10,14 +10,28 @@ test("unimplemented security adapters fail closed for all seven mutating or secr
     const results = await Promise.all([
       adapter.openCardSecretEditor({ ...card, mode: "create" }),
       adapter.showCardSecrets({ ...card, includeLocalCvc: true }),
-      adapter.editLocalCvc(card), adapter.deleteLocalCvc(card),
-      adapter.enrollDeviceVault(), adapter.lockVault(), adapter.forgetDeviceVault(),
+      adapter.editLocalCvc(card),
+      adapter.deleteLocalCvc(card),
+      adapter.enrollDeviceVault(),
+      adapter.lockVault(),
+      adapter.forgetDeviceVault(),
     ]);
-    for (const result of results) expect(result).toEqual({ ok: false, code: platform === "android" ? "AUTH_UNAVAILABLE" : "UNSUPPORTED_PLATFORM" });
-    expect(await adapter.getCapabilities()).toEqual({ ok: true, value: {
-      platform, available: false, supportedBiometrics: [], deviceSecure: null,
-      vaultEnrolled: null, localCvcSupported: false,
-    } });
+    for (const result of results)
+      expect(result).toEqual({
+        ok: false,
+        code: platform === "android" ? "AUTH_UNAVAILABLE" : "UNSUPPORTED_PLATFORM",
+      });
+    expect(await adapter.getCapabilities()).toEqual({
+      ok: true,
+      value: {
+        platform,
+        available: false,
+        supportedBiometrics: [],
+        deviceSecure: null,
+        vaultEnrolled: null,
+        localCvcSupported: false,
+      },
+    });
   }
 });
 

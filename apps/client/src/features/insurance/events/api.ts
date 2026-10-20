@@ -5,40 +5,475 @@ import { cancellableNative } from "../../../platform/cancellableNative";
 
 export function useInsuranceEventsApi() {
   const { domainApi } = useAuth();
-  return useMemo(() => ({
-    medicalNodeSummary: (options: Parameters<typeof nativeFinance.medicalNodeSummary>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/cases/{case_id}/nodes/{node_id}/summary", { params: { path: { case_id: options.caseId, node_id: options.nodeId } }, signal }), () => cancellableNative(signal, () => nativeFinance.medicalNodeSummary(options))),
-    insuranceCaseSummary: (options: Parameters<typeof nativeFinance.insuranceCaseSummary>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/cases/{case_id}/summary", { params: { path: { case_id: options.caseId } }, signal }), () => cancellableNative(signal, () => nativeFinance.insuranceCaseSummary(options))),
-    listInsuranceClaims: (options: Parameters<typeof nativeFinance.listInsuranceClaims>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/claims", { params: { query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listInsuranceClaims(options))),
-    createInsuranceClaim: (options: Parameters<typeof nativeFinance.createInsuranceClaim>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/claims", { body: options.input, signal }), () => cancellableNative(signal, () => nativeFinance.createInsuranceClaim(options))),
-    getInsuranceClaim: (options: Parameters<typeof nativeFinance.getInsuranceClaim>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/claims/{claim_id}", { params: { path: { claim_id: options.claimId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getInsuranceClaim(options))),
-    updateInsuranceClaim: (options: Parameters<typeof nativeFinance.updateInsuranceClaim>[0], signal?: AbortSignal) => domainApi.write((c) => c.PATCH("/api/v1/insurance/claims/{claim_id}", { body: options.input, params: { path: { claim_id: options.claimId }, header: { "If-Match": options.ifMatch } }, signal }), () => cancellableNative(signal, () => nativeFinance.updateInsuranceClaim(options))),
-    insuranceClaimHistory: (options: Parameters<typeof nativeFinance.insuranceClaimHistory>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/claims/{claim_id}/history", { params: { path: { claim_id: options.claimId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.insuranceClaimHistory(options))),
-    listMedicalExpenses: (options: Parameters<typeof nativeFinance.listMedicalExpenses>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/medical-expenses", { params: { query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listMedicalExpenses(options))),
-    createMedicalExpense: (options: Parameters<typeof nativeFinance.createMedicalExpense>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/medical-expenses", { body: options.input, params: { header: { "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.createMedicalExpense(options))),
-    getMedicalExpense: (options: Parameters<typeof nativeFinance.getMedicalExpense>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/medical-expenses/{resource_id}", { params: { path: { resource_id: options.resourceId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getMedicalExpense(options))),
-    correctMedicalExpense: (options: Parameters<typeof nativeFinance.correctMedicalExpense>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/medical-expenses/{resource_id}/correct", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.correctMedicalExpense(options))),
-    medicalExpenseHistory: (options: Parameters<typeof nativeFinance.medicalExpenseHistory>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/medical-expenses/{resource_id}/history", { params: { path: { resource_id: options.resourceId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.medicalExpenseHistory(options))),
-    listMedicalRefunds: (options: Parameters<typeof nativeFinance.listMedicalRefunds>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/medical-expenses/{resource_id}/refunds", { params: { path: { resource_id: options.resourceId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listMedicalRefunds(options))),
-    createMedicalRefund: (options: Parameters<typeof nativeFinance.createMedicalRefund>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/medical-expenses/{resource_id}/refunds", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.createMedicalRefund(options))),
-    voidMedicalExpense: (options: Parameters<typeof nativeFinance.voidMedicalExpense>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/medical-expenses/{resource_id}/void", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.voidMedicalExpense(options))),
-    getMedicalRefund: (options: Parameters<typeof nativeFinance.getMedicalRefund>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/medical-refunds/{resource_id}", { params: { path: { resource_id: options.resourceId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getMedicalRefund(options))),
-    correctMedicalRefund: (options: Parameters<typeof nativeFinance.correctMedicalRefund>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/medical-refunds/{resource_id}/correct", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.correctMedicalRefund(options))),
-    medicalRefundHistory: (options: Parameters<typeof nativeFinance.medicalRefundHistory>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/medical-refunds/{resource_id}/history", { params: { path: { resource_id: options.resourceId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.medicalRefundHistory(options))),
-    voidMedicalRefund: (options: Parameters<typeof nativeFinance.voidMedicalRefund>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/medical-refunds/{resource_id}/void", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.voidMedicalRefund(options))),
-    getPayoutAllocation: (options: Parameters<typeof nativeFinance.getPayoutAllocation>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/payout-allocations/{allocation_id}", { params: { path: { allocation_id: options.allocationId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getPayoutAllocation(options))),
-    linkPayoutAllocation: (options: Parameters<typeof nativeFinance.linkPayoutAllocation>[0], signal?: AbortSignal) => domainApi.write((c) => c.PATCH("/api/v1/insurance/payout-allocations/{allocation_id}", { body: options.input, params: { path: { allocation_id: options.allocationId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.linkPayoutAllocation(options))),
-    payoutAllocationHistory: (options: Parameters<typeof nativeFinance.payoutAllocationHistory>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/payout-allocations/{allocation_id}/history", { params: { path: { allocation_id: options.allocationId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.payoutAllocationHistory(options))),
-    listInsurancePayouts: (options: Parameters<typeof nativeFinance.listInsurancePayouts>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/payouts", { params: { query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listInsurancePayouts(options))),
-    createInsurancePayout: (options: Omit<Parameters<typeof nativeFinance.createInsurancePayout>[0], "input"> & { input: Omit<Parameters<typeof nativeFinance.createInsurancePayout>[0]["input"], "card_id"> }, signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/payouts", { body: options.input, params: { header: { "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.createInsurancePayout(options))),
-    getInsurancePayout: (options: Parameters<typeof nativeFinance.getInsurancePayout>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/payouts/{resource_id}", { params: { path: { resource_id: options.resourceId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getInsurancePayout(options))),
-    correctInsurancePayout: (options: Omit<Parameters<typeof nativeFinance.correctInsurancePayout>[0], "input"> & { input: Omit<Parameters<typeof nativeFinance.correctInsurancePayout>[0]["input"], "card_id"> }, signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/payouts/{resource_id}/correct", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.correctInsurancePayout(options))),
-    insurancePayoutHistory: (options: Parameters<typeof nativeFinance.insurancePayoutHistory>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/payouts/{resource_id}/history", { params: { path: { resource_id: options.resourceId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.insurancePayoutHistory(options))),
-    listInsuranceReturns: (options: Parameters<typeof nativeFinance.listInsuranceReturns>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/payouts/{resource_id}/returns", { params: { path: { resource_id: options.resourceId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.listInsuranceReturns(options))),
-    createInsuranceReturn: (options: Omit<Parameters<typeof nativeFinance.createInsuranceReturn>[0], "input"> & { input: Omit<Parameters<typeof nativeFinance.createInsuranceReturn>[0]["input"], "card_id"> }, signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/payouts/{resource_id}/returns", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.createInsuranceReturn(options))),
-    voidInsurancePayout: (options: Parameters<typeof nativeFinance.voidInsurancePayout>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/payouts/{resource_id}/void", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.voidInsurancePayout(options))),
-    getInsuranceReturn: (options: Parameters<typeof nativeFinance.getInsuranceReturn>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/returns/{resource_id}", { params: { path: { resource_id: options.resourceId } }, signal }), () => cancellableNative(signal, () => nativeFinance.getInsuranceReturn(options))),
-    correctInsuranceReturn: (options: Omit<Parameters<typeof nativeFinance.correctInsuranceReturn>[0], "input"> & { input: Omit<Parameters<typeof nativeFinance.correctInsuranceReturn>[0]["input"], "card_id"> }, signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/returns/{resource_id}/correct", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.correctInsuranceReturn(options))),
-    insuranceReturnHistory: (options: Parameters<typeof nativeFinance.insuranceReturnHistory>[0], signal?: AbortSignal) => domainApi.read((c) => c.GET("/api/v1/insurance/returns/{resource_id}/history", { params: { path: { resource_id: options.resourceId }, query: options.query }, signal }), () => cancellableNative(signal, () => nativeFinance.insuranceReturnHistory(options))),
-    voidInsuranceReturn: (options: Parameters<typeof nativeFinance.voidInsuranceReturn>[0], signal?: AbortSignal) => domainApi.write((c) => c.POST("/api/v1/insurance/returns/{resource_id}/void", { body: options.input, params: { path: { resource_id: options.resourceId }, header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey } }, signal }), () => cancellableNative(signal, () => nativeFinance.voidInsuranceReturn(options))),
-  }), [domainApi]);
+  return useMemo(
+    () => ({
+      medicalNodeSummary: (
+        options: Parameters<typeof nativeFinance.medicalNodeSummary>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/cases/{case_id}/nodes/{node_id}/summary", {
+              params: { path: { case_id: options.caseId, node_id: options.nodeId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.medicalNodeSummary(options)),
+        ),
+      insuranceCaseSummary: (
+        options: Parameters<typeof nativeFinance.insuranceCaseSummary>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/cases/{case_id}/summary", {
+              params: { path: { case_id: options.caseId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.insuranceCaseSummary(options)),
+        ),
+      listInsuranceClaims: (
+        options: Parameters<typeof nativeFinance.listInsuranceClaims>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/insurance/claims", { params: { query: options.query }, signal }),
+          () => cancellableNative(signal, () => nativeFinance.listInsuranceClaims(options)),
+        ),
+      createInsuranceClaim: (
+        options: Parameters<typeof nativeFinance.createInsuranceClaim>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) => c.POST("/api/v1/insurance/claims", { body: options.input, signal }),
+          () => cancellableNative(signal, () => nativeFinance.createInsuranceClaim(options)),
+        ),
+      getInsuranceClaim: (
+        options: Parameters<typeof nativeFinance.getInsuranceClaim>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/claims/{claim_id}", {
+              params: { path: { claim_id: options.claimId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getInsuranceClaim(options)),
+        ),
+      updateInsuranceClaim: (
+        options: Parameters<typeof nativeFinance.updateInsuranceClaim>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/insurance/claims/{claim_id}", {
+              body: options.input,
+              params: {
+                path: { claim_id: options.claimId },
+                header: { "If-Match": options.ifMatch },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.updateInsuranceClaim(options)),
+        ),
+      insuranceClaimHistory: (
+        options: Parameters<typeof nativeFinance.insuranceClaimHistory>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/claims/{claim_id}/history", {
+              params: { path: { claim_id: options.claimId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.insuranceClaimHistory(options)),
+        ),
+      listMedicalExpenses: (
+        options: Parameters<typeof nativeFinance.listMedicalExpenses>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/medical-expenses", {
+              params: { query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.listMedicalExpenses(options)),
+        ),
+      createMedicalExpense: (
+        options: Parameters<typeof nativeFinance.createMedicalExpense>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/medical-expenses", {
+              body: options.input,
+              params: { header: { "Idempotency-Key": options.idempotencyKey } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.createMedicalExpense(options)),
+        ),
+      getMedicalExpense: (
+        options: Parameters<typeof nativeFinance.getMedicalExpense>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/medical-expenses/{resource_id}", {
+              params: { path: { resource_id: options.resourceId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getMedicalExpense(options)),
+        ),
+      correctMedicalExpense: (
+        options: Parameters<typeof nativeFinance.correctMedicalExpense>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/medical-expenses/{resource_id}/correct", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.correctMedicalExpense(options)),
+        ),
+      medicalExpenseHistory: (
+        options: Parameters<typeof nativeFinance.medicalExpenseHistory>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/medical-expenses/{resource_id}/history", {
+              params: { path: { resource_id: options.resourceId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.medicalExpenseHistory(options)),
+        ),
+      listMedicalRefunds: (
+        options: Parameters<typeof nativeFinance.listMedicalRefunds>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/medical-expenses/{resource_id}/refunds", {
+              params: { path: { resource_id: options.resourceId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.listMedicalRefunds(options)),
+        ),
+      createMedicalRefund: (
+        options: Parameters<typeof nativeFinance.createMedicalRefund>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/medical-expenses/{resource_id}/refunds", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.createMedicalRefund(options)),
+        ),
+      voidMedicalExpense: (
+        options: Parameters<typeof nativeFinance.voidMedicalExpense>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/medical-expenses/{resource_id}/void", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.voidMedicalExpense(options)),
+        ),
+      getMedicalRefund: (
+        options: Parameters<typeof nativeFinance.getMedicalRefund>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/medical-refunds/{resource_id}", {
+              params: { path: { resource_id: options.resourceId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getMedicalRefund(options)),
+        ),
+      correctMedicalRefund: (
+        options: Parameters<typeof nativeFinance.correctMedicalRefund>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/medical-refunds/{resource_id}/correct", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.correctMedicalRefund(options)),
+        ),
+      medicalRefundHistory: (
+        options: Parameters<typeof nativeFinance.medicalRefundHistory>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/medical-refunds/{resource_id}/history", {
+              params: { path: { resource_id: options.resourceId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.medicalRefundHistory(options)),
+        ),
+      voidMedicalRefund: (
+        options: Parameters<typeof nativeFinance.voidMedicalRefund>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/medical-refunds/{resource_id}/void", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.voidMedicalRefund(options)),
+        ),
+      getPayoutAllocation: (
+        options: Parameters<typeof nativeFinance.getPayoutAllocation>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/payout-allocations/{allocation_id}", {
+              params: { path: { allocation_id: options.allocationId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getPayoutAllocation(options)),
+        ),
+      linkPayoutAllocation: (
+        options: Parameters<typeof nativeFinance.linkPayoutAllocation>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.PATCH("/api/v1/insurance/payout-allocations/{allocation_id}", {
+              body: options.input,
+              params: {
+                path: { allocation_id: options.allocationId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.linkPayoutAllocation(options)),
+        ),
+      payoutAllocationHistory: (
+        options: Parameters<typeof nativeFinance.payoutAllocationHistory>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/payout-allocations/{allocation_id}/history", {
+              params: { path: { allocation_id: options.allocationId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.payoutAllocationHistory(options)),
+        ),
+      listInsurancePayouts: (
+        options: Parameters<typeof nativeFinance.listInsurancePayouts>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/insurance/payouts", { params: { query: options.query }, signal }),
+          () => cancellableNative(signal, () => nativeFinance.listInsurancePayouts(options)),
+        ),
+      createInsurancePayout: (
+        options: Omit<Parameters<typeof nativeFinance.createInsurancePayout>[0], "input"> & {
+          input: Omit<
+            Parameters<typeof nativeFinance.createInsurancePayout>[0]["input"],
+            "card_id"
+          >;
+        },
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/payouts", {
+              body: options.input,
+              params: { header: { "Idempotency-Key": options.idempotencyKey } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.createInsurancePayout(options)),
+        ),
+      getInsurancePayout: (
+        options: Parameters<typeof nativeFinance.getInsurancePayout>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/payouts/{resource_id}", {
+              params: { path: { resource_id: options.resourceId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getInsurancePayout(options)),
+        ),
+      correctInsurancePayout: (
+        options: Omit<Parameters<typeof nativeFinance.correctInsurancePayout>[0], "input"> & {
+          input: Omit<
+            Parameters<typeof nativeFinance.correctInsurancePayout>[0]["input"],
+            "card_id"
+          >;
+        },
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/payouts/{resource_id}/correct", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.correctInsurancePayout(options)),
+        ),
+      insurancePayoutHistory: (
+        options: Parameters<typeof nativeFinance.insurancePayoutHistory>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/payouts/{resource_id}/history", {
+              params: { path: { resource_id: options.resourceId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.insurancePayoutHistory(options)),
+        ),
+      listInsuranceReturns: (
+        options: Parameters<typeof nativeFinance.listInsuranceReturns>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/payouts/{resource_id}/returns", {
+              params: { path: { resource_id: options.resourceId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.listInsuranceReturns(options)),
+        ),
+      createInsuranceReturn: (
+        options: Omit<Parameters<typeof nativeFinance.createInsuranceReturn>[0], "input"> & {
+          input: Omit<
+            Parameters<typeof nativeFinance.createInsuranceReturn>[0]["input"],
+            "card_id"
+          >;
+        },
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/payouts/{resource_id}/returns", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.createInsuranceReturn(options)),
+        ),
+      voidInsurancePayout: (
+        options: Parameters<typeof nativeFinance.voidInsurancePayout>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/payouts/{resource_id}/void", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.voidInsurancePayout(options)),
+        ),
+      getInsuranceReturn: (
+        options: Parameters<typeof nativeFinance.getInsuranceReturn>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/returns/{resource_id}", {
+              params: { path: { resource_id: options.resourceId } },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.getInsuranceReturn(options)),
+        ),
+      correctInsuranceReturn: (
+        options: Omit<Parameters<typeof nativeFinance.correctInsuranceReturn>[0], "input"> & {
+          input: Omit<
+            Parameters<typeof nativeFinance.correctInsuranceReturn>[0]["input"],
+            "card_id"
+          >;
+        },
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/returns/{resource_id}/correct", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.correctInsuranceReturn(options)),
+        ),
+      insuranceReturnHistory: (
+        options: Parameters<typeof nativeFinance.insuranceReturnHistory>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.read(
+          (c) =>
+            c.GET("/api/v1/insurance/returns/{resource_id}/history", {
+              params: { path: { resource_id: options.resourceId }, query: options.query },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.insuranceReturnHistory(options)),
+        ),
+      voidInsuranceReturn: (
+        options: Parameters<typeof nativeFinance.voidInsuranceReturn>[0],
+        signal?: AbortSignal,
+      ) =>
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/insurance/returns/{resource_id}/void", {
+              body: options.input,
+              params: {
+                path: { resource_id: options.resourceId },
+                header: { "If-Match": options.ifMatch, "Idempotency-Key": options.idempotencyKey },
+              },
+              signal,
+            }),
+          () => cancellableNative(signal, () => nativeFinance.voidInsuranceReturn(options)),
+        ),
+    }),
+    [domainApi],
+  );
 }
