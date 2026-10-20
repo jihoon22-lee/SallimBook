@@ -18,6 +18,7 @@ from sallimbook.accounts.schemas import (
     AccountRevealResponse,
     AccountType,
 )
+from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
 from sallimbook.assets.service import asset_response, prepare_asset
 from sallimbook.core.audit import record_event
@@ -260,6 +261,40 @@ def update_account(
     result = account_response(account, asset)
     session.commit()
     return result
+
+
+def delete_account(
+    session: Session, principal: Principal, account_id: UUID, if_match: str | None
+) -> None:
+    """Delete a mistaken account and its asset together; any reference keeps both."""
+    lock_asset_scope(session, principal)
+    account, asset = _account_and_asset(session, principal, account_id, lock=True)
+    require_version(account, if_match)
+    for entity_type, row in (("financial_account", account), ("asset", asset)):
+        record_event(
+            session,
+            principal,
+            entity_type=entity_type,
+            entity_id=row.id,
+            action="delete",
+            before_version=row.version,
+            after_version=None,
+        )
+    try:
+        # The account row goes first so financial_accounts.asset_id no longer blocks the asset.
+        session.delete(account)
+        session.flush()
+        session.delete(asset)
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        if getattr(exc.orig, "sqlstate", None) in {"23001", "23503"}:
+            raise DomainError(
+                "ACCOUNT_IN_USE",
+                "연결된 기록이 있어 삭제할 수 없습니다. 계좌 사용 종료를 선택해 주세요.",
+                409,
+            ) from None
+        raise
 
 
 def reveal_number(

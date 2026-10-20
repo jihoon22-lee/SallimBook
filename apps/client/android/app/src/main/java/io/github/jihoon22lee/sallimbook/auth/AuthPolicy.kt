@@ -314,6 +314,7 @@ internal object AuthPolicy {
             "ASSET_END_IN_FUTURE" to (422 to "실제로 보유를 종료한 날짜를 입력해 주세요."),
             "ASSET_IN_USE" to (409 to "연결된 기록이 있는 자산입니다."),
             "ASSET_ALREADY_LINKED" to (409 to "이미 계좌와 연결된 자산입니다."),
+            "ACCOUNT_IN_USE" to (409 to "연결된 기록이 있는 계좌입니다."),
             "FINANCIAL_ASSET_REQUIRED" to (422 to "금융 자산을 선택해 주세요."),
             "INVALID_ACCOUNT_DATES" to (422 to "개설일과 종료일을 확인해 주세요."),
             "ACCOUNT_NUMBER_NOT_SET" to (409 to "등록된 계좌번호가 없습니다."),
