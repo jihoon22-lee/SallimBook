@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { supportsWebAuthn } from "../../platform/webauthn";
@@ -8,6 +7,7 @@ import { AuthError, useMounted } from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
 import type { Passkey } from "./AuthProvider";
 import { useAuthCeremony } from "./useAuthCeremony";
+import { ReturnLoginLink } from "./ReturnLoginLink";
 
 function dateLabel(value: string | null): string {
   if (!value) return "사용 기록 없음";
@@ -137,9 +137,7 @@ export function PasskeyPanel() {
         패스키로 이 계정에 로그인하고 중요한 작업을 확인할 수 있어요. 패스키 등록과 해제에는 5분
         이내의 계정 로그인이 필요해요.
       </p>
-      <Link className="button-link" to="/login">
-        패스키 관리 전 다시 로그인
-      </Link>
+      <ReturnLoginLink className="button-link">패스키 관리 전 다시 로그인</ReturnLoginLink>
       {!native &&
         (supported ? (
           <form className="auth-form" onSubmit={(event) => void register(event)}>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Link } from "react-router";
 import { ApiError } from "../../platform/api";
 import { useAuth } from "./AuthProvider";
+import { ReturnLoginLink } from "./ReturnLoginLink";
 
 export function authErrorMessage(error: ApiError, login = false): string {
   if (login && error.status === 401) return "로그인 이름이나 비밀번호를 확인해 주세요.";
@@ -84,9 +84,7 @@ export function AuthError({ error, login = false }: { error: ApiError | null; lo
     <div className="auth-message" role="alert">
       <p>{authErrorMessage(error, login)}</p>
       {error.code === "REAUTHENTICATION_REQUIRED" && (
-        <Link className="button-link" to="/login">
-          다시 로그인
-        </Link>
+        <ReturnLoginLink className="button-link">다시 로그인</ReturnLoginLink>
       )}
       {error.code === "CSRF_FAILED" && (
         <button type="button" onClick={() => void reloadSession()}>
@@ -135,9 +133,7 @@ export function SessionStatus() {
           </p>
         )}
         <p>계정과 등록 기기를 확인하려면 로그인해 주세요.</p>
-        <Link className="button-link" to="/login">
-          로그인하기
-        </Link>
+        <ReturnLoginLink className="button-link">로그인하기</ReturnLoginLink>
       </section>
     );
   return null;

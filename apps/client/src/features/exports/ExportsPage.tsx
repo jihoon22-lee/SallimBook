@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { supportsWebAuthn } from "../../platform/webauthn";
@@ -14,6 +13,7 @@ import { saveExport } from "./download";
 import type { ExportFile, ExportProgress } from "./download";
 import { byteLabel, exportable, EXPORT_TIMEOUT_MS, selectionProblem } from "./model";
 import type { ExportFormat } from "./model";
+import { ReturnLoginLink } from "../auth/ReturnLoginLink";
 
 function ExportForm() {
   const api = useExportsApi();
@@ -301,7 +301,7 @@ function ExportForm() {
               내보내기 대기 중단
             </button>
           )}
-          <Link to="/login">계정 다시 인증</Link>
+          <ReturnLoginLink>계정 다시 인증</ReturnLoginLink>
         </div>
         <p className="muted">
           최대 100,000행·업무 기록 16MiB·ZIP 64MiB까지 준비해요. 한도를 넘으면 일부 파일만 성공

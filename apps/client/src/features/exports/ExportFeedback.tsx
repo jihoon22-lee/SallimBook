@@ -1,6 +1,6 @@
-import { Link } from "react-router";
 import type { ApiError } from "../../platform/api";
 import { authErrorMessage } from "../auth/AuthFeedback";
+import { ReturnLoginLink } from "../auth/ReturnLoginLink";
 export function ExportError({ error }: { error: ApiError | null }) {
   if (!error) return null;
   const messages: Partial<Record<ApiError["code"], string>> = {
@@ -37,7 +37,7 @@ export function ExportError({ error }: { error: ApiError | null }) {
     <div className="auth-message" role="alert">
       <p>{messages[error.code] ?? fallback}</p>
       {(error.code === "REAUTHENTICATION_REQUIRED" || error.code === "STEP_UP_REQUIRED") && (
-        <Link to="/login">비밀번호로 다시 인증</Link>
+        <ReturnLoginLink>비밀번호로 다시 인증</ReturnLoginLink>
       )}
     </div>
   );

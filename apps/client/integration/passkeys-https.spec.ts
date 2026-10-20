@@ -19,6 +19,10 @@ async function passwordLogin(page: Page, label: string) {
   await page.getByText("기기 이름 변경", { exact: true }).click();
   await page.getByLabel("이 기기 이름", { exact: true }).fill(label);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+  ).toBeVisible();
+  await page.goto("/settings/auth");
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
 }
 
@@ -84,6 +88,10 @@ test("real passkey registration login scoped actions and revocation keep their s
     console.log("SAFE_PHASE=BEFORE_LOGOUT");
     await page.getByRole("button", { name: "로그아웃", exact: true }).click();
     await passkeyLogin(page, "합성 패스키 로그인 브라우저");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+    ).toBeVisible();
+    await page.goto("/settings/auth");
     await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
     expect(
       (await context.cookies()).some(
@@ -138,6 +146,10 @@ test("real passkey registration login scoped actions and revocation keep their s
     // A full login is started only after explicit sign-out; existing sessions use password reauth.
     await page.getByRole("button", { name: "로그아웃", exact: true }).click();
     await passkeyLogin(page, "합성 패스키 관리 재로그인");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+    ).toBeVisible();
+    await page.goto("/settings/auth");
     await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
     await page
       .getByRole("button", { name: "합성 실제 검증 패스키 패스키 해제", exact: true })

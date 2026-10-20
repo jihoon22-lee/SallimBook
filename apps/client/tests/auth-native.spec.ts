@@ -217,7 +217,9 @@ async function noWebCredentials(page: Page) {
 
 test("native login uses parameterless UI and restores only metadata", async ({ page }) => {
   await nativeMock(page);
-  await page.goto("/login");
+  await page.goto("/settings/auth");
+  await page.getByRole("link", { name: "로그인하기", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
   await page.getByRole("button", { name: "앱에서 로그인", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/auth$/);
   await expect(page.getByRole("main").getByText("합성 앱 구성원", { exact: true })).toBeVisible();
@@ -230,7 +232,9 @@ for (const cancelled of [false, true])
     page,
   }) => {
     await nativeMock(page, { authenticated: true, cancelled });
-    await page.goto("/login");
+    await page.goto("/settings/auth");
+    await page.getByRole("link", { name: "최근 로그인 다시 확인", exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole("button", { name: "앱 패스키로 로그인", exact: true })).toHaveCount(
       0,
     );
@@ -329,7 +333,8 @@ for (const cancelled of [true, false])
     page,
   }) => {
     await nativeMock(page, { cancelled });
-    await page.goto("/login");
+    await page.goto("/settings/auth");
+    await page.getByRole("link", { name: "로그인하기", exact: true }).click();
     await page.getByRole("button", { name: "앱 패스키로 로그인", exact: true }).click();
     if (cancelled)
       await expect(

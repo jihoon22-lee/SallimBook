@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { nativeAuth } from "../../platform/nativeAuth";
 import { AuthError, useMounted } from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
+import { safeReturnPath } from "./returnPath";
 
 export function NativeAuthAction({ mode }: { mode: "login" | "accept" | "invite" }) {
   const { state, loginNative } = useAuth();
   const mounted = useMounted();
   const navigate = useNavigate();
+  const returnTo = safeReturnPath(useLocation().state?.from) ?? "/";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [done, setDone] = useState(false);
@@ -30,7 +32,7 @@ export function NativeAuthAction({ mode }: { mode: "login" | "accept" | "invite"
     try {
       if (mode === "login") {
         const signedIn = await loginNative(passkey);
-        if (signedIn && mounted.current) navigate("/settings/auth", { replace: true });
+        if (signedIn && mounted.current) navigate(returnTo, { replace: true });
       } else {
         const result =
           mode === "accept"

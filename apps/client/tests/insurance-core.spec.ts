@@ -132,6 +132,19 @@ test("late policy reveal is discarded after pagehide and denied freshness reveal
   await expect(page.getByRole("link", { name: "비밀번호로 다시 인증", exact: true })).toBeVisible();
   expect(await page.evaluate(() => !document.querySelector("output")?.textContent)).toBe(true);
 });
+test("reauthentication returns to the screen that asked for it", async ({ page }) => {
+  const state = await mockInsurance(page);
+  state.revealDenied = true;
+  await page.goto(`/insurance/policies/${uid(80)}`);
+  const member = await page.evaluate(() => fetch("/api/v1/me").then((r) => r.json()));
+  await page.route("**/api/v1/auth/web/reauthenticate", (route) => route.fulfill({ json: member }));
+  await page.getByRole("button", { name: "전체 증권번호 30초 보기", exact: true }).click();
+  await page.getByRole("link", { name: "비밀번호로 다시 인증", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
+  await page.getByRole("button", { name: "다시 인증", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/insurance/policies/${uid(80)}$`));
+});
 test("case list omits diagnosis and creation does not require a contract", async ({ page }) => {
   const state = await mockInsurance(page);
   await page.goto("/insurance/cases");

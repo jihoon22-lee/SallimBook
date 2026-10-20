@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import type { components } from "@sallimbook/api-client";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
@@ -17,11 +17,13 @@ import {
   useSensitiveForm,
 } from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
+import { safeReturnPath } from "./returnPath";
 
 function LoginForm() {
   const { state, login, loginPasskey } = useAuth();
   const ceremony = useAuthCeremony();
   const navigate = useNavigate();
+  const returnTo = safeReturnPath(useLocation().state?.from) ?? "/";
   const formRef = useSensitiveForm();
   const mounted = useMounted();
   const [busy, setBusy] = useState(false);
@@ -53,7 +55,7 @@ function LoginForm() {
     setBusy(true);
     try {
       await login(input);
-      if (mounted.current) navigate("/settings/auth", { replace: true });
+      if (mounted.current) navigate(returnTo, { replace: true });
     } catch (failure) {
       if (mounted.current) setError(toApiError(failure));
     } finally {
@@ -74,7 +76,7 @@ function LoginForm() {
     setBusy(true);
     try {
       await ceremony.run((signal) => loginPasskey(input, signal));
-      if (mounted.current) navigate("/settings/auth", { replace: true });
+      if (mounted.current) navigate(returnTo, { replace: true });
     } catch (failure) {
       if (mounted.current) setError(toApiError(failure));
     } finally {
