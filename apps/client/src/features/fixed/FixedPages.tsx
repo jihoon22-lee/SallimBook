@@ -43,7 +43,10 @@ import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 export function FixedSummaryPanel({ refresh = 0 }: { refresh?: number }) {
   const api = useFixedApi();
   const { month } = useMonth();
-  const summary = useResource(useCallback(() => api.summary(month), [api, month, refresh]));
+  const summary = useResource(
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` is a reload trigger; a new value must re-run the read.
+    useCallback(() => api.summary(month), [api, month, refresh]),
+  );
   return (
     <section className="card task-summary" aria-label="고정 납부 월 요약">
       <h2>{formatMonth(month)} 고정 납부</h2>
@@ -290,6 +293,7 @@ function FixedList() {
   const list = usePagedList(
     useCallback(
       (cursor?: string) => api.obligations({ month, limit: 50, ...(cursor ? { cursor } : {}) }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` is a reload trigger; a new value must re-run the read.
       [api, month, refresh],
     ),
     undefined,
@@ -710,6 +714,7 @@ function SettlementList({
 }) {
   const api = useFixedApi();
   const list = usePagedList(
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` is a reload trigger; a new value must re-run the read.
     useCallback((cursor?: string) => api.payments(id, cursor), [api, id, refresh]),
   );
   return (

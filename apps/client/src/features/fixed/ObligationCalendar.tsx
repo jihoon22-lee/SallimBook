@@ -14,6 +14,7 @@ export function ObligationCalendar({ month, refresh }: { month: string; refresh:
     useCallback(
       () =>
         allPages((cursor) => api.obligations({ month, limit: 200, ...(cursor ? { cursor } : {}) })),
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` is a reload trigger; a new value must re-run the read.
       [api, month, refresh],
     ),
   );

@@ -15,6 +15,7 @@ function WebPolicyNumber({ policy, refresh }: { policy: Policy; refresh: () => v
   const { domainApi } = useAuth();
   const mounted = useMounted();
   const ceremony = useAuthCeremony();
+  const cancelCeremony = ceremony.cancel;
   const input = useRef<HTMLInputElement>(null);
   const output = useRef<HTMLOutputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -26,7 +27,7 @@ function WebPolicyNumber({ policy, refresh }: { policy: Policy; refresh: () => v
   const [notice, setNotice] = useState("");
   const clear = useCallback(() => {
     generation.current++;
-    ceremony.cancel();
+    cancelCeremony();
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     if (input.current) input.current.value = "";
@@ -35,7 +36,7 @@ function WebPolicyNumber({ policy, refresh }: { policy: Policy; refresh: () => v
       setVisible(false);
       setBusy(false);
     }
-  }, [ceremony.cancel, mounted]);
+  }, [cancelCeremony, mounted]);
   useEffect(() => {
     const hidden = () => {
       if (document.visibilityState !== "visible") clear();

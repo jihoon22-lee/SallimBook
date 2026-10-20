@@ -191,6 +191,7 @@ export function purchaseUrl(value: string): boolean {
       !!url.hostname &&
       !url.username &&
       !url.password &&
+      // eslint-disable-next-line no-control-regex -- control characters are exactly what this rejects.
       !/[\s\x00-\x1f]/.test(value) &&
       value.length <= 2048
     );

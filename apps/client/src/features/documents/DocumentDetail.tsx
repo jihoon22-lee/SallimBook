@@ -4,12 +4,12 @@ import { useHouseholdMembers } from "../finance/FinanceSupport";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { ApiError } from "../../platform/api";
 import { allPages, usePagedList, useResource } from "../finance/queries";
-import { recordedLabel } from "../homecare/HomecareSupport";
 import type { DocumentsApi } from "./api";
 import { checksum, etag, expired, stateLabel, targetLabels } from "./model";
 import type { Document, DocumentLink, Target } from "./model";
 import { CommandFeedback, DocumentError, useDocumentCommand } from "./DocumentSupport";
 import { WebUpload } from "./WebUpload";
+import { formatSeoulDateTime } from "../../shared/format";
 export function DocumentMetadata({ row }: { row: Document }) {
   return (
     <dl className="metadata-grid">
@@ -33,30 +33,30 @@ export function DocumentMetadata({ row }: { row: Document }) {
       </div>
       <div>
         <dt>등록 시각</dt>
-        <dd>{recordedLabel(row.created_at)}</dd>
+        <dd>{formatSeoulDateTime(row.created_at)}</dd>
       </div>
       {row.stored_at && (
         <div>
           <dt>보관 시각</dt>
-          <dd>{recordedLabel(row.stored_at)}</dd>
+          <dd>{formatSeoulDateTime(row.stored_at)}</dd>
         </div>
       )}
       {row.state === "pending" && (
         <div>
           <dt>업로드 기한</dt>
-          <dd>{recordedLabel(row.pending_expires_at)}</dd>
+          <dd>{formatSeoulDateTime(row.pending_expires_at)}</dd>
         </div>
       )}
       {row.orphaned_at && (
         <div>
           <dt>마지막 연결 종료</dt>
-          <dd>{recordedLabel(row.orphaned_at)}</dd>
+          <dd>{formatSeoulDateTime(row.orphaned_at)}</dd>
         </div>
       )}
       {row.deleted_at && (
         <div>
           <dt>삭제 시각</dt>
-          <dd>{recordedLabel(row.deleted_at)}</dd>
+          <dd>{formatSeoulDateTime(row.deleted_at)}</dd>
         </div>
       )}
       <div>
@@ -291,12 +291,12 @@ export function DocumentDetail({
                   {entry.active ? "연결 중" : "연결 종료"}
                 </p>
                 <p>
-                  연결 {recordedLabel(entry.created_at)} · 작성자{" "}
+                  연결 {formatSeoulDateTime(entry.created_at)} · 작성자{" "}
                   {memberName(entry.created_by_member_id)}
                 </p>
                 {entry.ended_at && (
                   <p>
-                    종료 {recordedLabel(entry.ended_at)} · {entry.end_reason} · 변경자{" "}
+                    종료 {formatSeoulDateTime(entry.ended_at)} · {entry.end_reason} · 변경자{" "}
                     {memberName(entry.updated_by_member_id)}
                   </p>
                 )}

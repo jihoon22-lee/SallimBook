@@ -4,7 +4,7 @@ import { version } from "../../../package.json";
 import { toApiError } from "../../platform/api";
 import type { ApiError } from "../../platform/api";
 import { isNativeAuth, nativeAuth } from "../../platform/nativeAuth";
-import { RelatedLinks } from "../../shared/PlannedPage";
+import { RelatedLinks } from "../../shared/RelatedLinks";
 import { AuthError, SessionStatus } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import { MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport";

@@ -86,16 +86,6 @@ export const actionLabels: Record<string, string> = {
   revoke: "폐기",
   accept: "수락",
 };
-export function auditDate(value: string) {
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat("ko-KR", {
-        timeZone: "Asia/Seoul",
-        dateStyle: "medium",
-        timeStyle: "medium",
-      }).format(date)
-    : "시각 확인 필요";
-}
 export function queryFromFilters(
   draft: AuditFilterDraft,
 ): { query: AuditQuery; error?: never } | { error: string; query?: never } {

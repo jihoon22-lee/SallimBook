@@ -3,6 +3,7 @@ import type { ApiError } from "../../../platform/api";
 import { FinanceError } from "../../finance/FinanceSupport";
 import type { MonthRecord } from "./model";
 import { formatKrw, monthStates } from "./model";
+import { formatSeoulDateTime } from "../../../shared/format";
 export function MonthError({ error }: { error: ApiError | null }) {
   if (!error) return null;
   const messages: Partial<Record<ApiError["code"], string>> = {
@@ -101,17 +102,7 @@ export function MonthSummary({ record }: { record: MonthRecord }) {
       {!totals.provisional && record.state !== "confirmed" && (
         <p>포함 항목의 금액 확인을 마쳤어요. 월 확정 전 기준일과 비교 범위를 확인해 주세요.</p>
       )}
-      {record.confirmed_at && (
-        <p>
-          확정 시각:{" "}
-          {new Intl.DateTimeFormat("ko-KR", {
-            timeZone: "Asia/Seoul",
-            dateStyle: "medium",
-            timeStyle: "short",
-          }).format(new Date(record.confirmed_at))}{" "}
-          (서울)
-        </p>
-      )}
+      {record.confirmed_at && <p>확정 시각: {formatSeoulDateTime(record.confirmed_at)} (서울)</p>}
       {record.reopened_reason && <p>정정 사유: {record.reopened_reason}</p>}
     </section>
   );

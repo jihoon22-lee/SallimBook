@@ -9,7 +9,7 @@ SB-004의 [공유 합성 fixture](../packages/test-fixtures/README.md)는 H1/H2�
 입력·기대 결과를 JSON으로 제공한다. fixture 구조·금액·관계 검사 47개는 예제 자체의 일관성 검사이며,
 아래 제품 인수 완료를 뜻하지 않는다. 각 vector의 제품 인수 상태는 현재 `pending`이다.
 
-GitHub Actions는 문서·도구, API lint/단위, 격리 문서 검사 도구, 타입·OpenAPI 생성 drift,
+GitHub Actions는 문서·도구, API lint/단위, 격리 문서 검사 도구, 웹 린트(ESLint·jsx-a11y)·타입·OpenAPI 생성 drift,
 PostgreSQL migration/API, PC·모바일 viewport 웹 동작·실제 HTTPS, Android 개발 빌드의 7개 job을 정의한다.
 동일 PostgreSQL 이미지 digest와 frozen 의존성을 사용하며 저장소 비밀·서명키·실데이터를 주입하지 않는다.
 DB 테스트 미설정 skip, Android `NO-SOURCE`, 모바일 viewport는 각각 실제 DB·단위·실기기 통과와 구분한다.
@@ -85,7 +85,7 @@ DB 테스트 미설정 skip, Android `NO-SOURCE`, 모바일 viewport는 각각 �
 ## 6. CI와 실제 실행 결과 구분
 
 현재 [.github/workflows/ci.yml](../.github/workflows/ci.yml)은 문서·도구, API lint/unit, 격리 문서 검사 도구,
-타입·생성 계약, PostgreSQL API/migration, 웹 UI·실제 HTTPS, Android compile/unit job을 정의한다.
+웹 린트(ESLint·jsx-a11y)·타입·생성 계약, PostgreSQL API/migration, 웹 UI·실제 HTTPS, Android compile/unit job을 정의한다.
 실기기 보안 테스트와 운영 복구는 별도 릴리스 게이트다.
 lockfile 고정 설치, Action commit 고정, 최소 token 권한을 사용하고 외부 PR에 저장소 비밀을
 주입하지 않는다. 이를 별도 의존성 취약점 검사나 전용 비밀 탐지 도구의 실행 결과로 표시하지 않는다.

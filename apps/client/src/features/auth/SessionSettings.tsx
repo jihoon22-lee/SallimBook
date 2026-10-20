@@ -20,16 +20,7 @@ import { useAuth } from "./AuthProvider";
 import type { Device, Member, PasswordChange } from "./AuthProvider";
 import { FormError } from "../../shared/formValidation";
 import { ReturnLoginLink } from "./ReturnLoginLink";
-
-function localDate(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "확인되지 않음";
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
+import { formatSeoulDateTime } from "../../shared/format";
 
 function InvitationPanel() {
   const { createPartnerInvitation } = useAuth();
@@ -160,7 +151,8 @@ function InvitationPanel() {
       {invitation && (
         <div className="invitation-result">
           <p role="status">
-            초대를 만들었어요. 만료: {localDate(invitation.expires_at)} (서울 기준)
+            초대를 만들었어요. 만료:{" "}
+            {formatSeoulDateTime(invitation.expires_at, { fallback: "확인되지 않음" })} (서울 기준)
           </p>
           <p>
             초대받는 사람에게 코드를 전달하고 공동 가계 시작 화면에 직접 입력하도록 안내해 주세요.
@@ -324,10 +316,15 @@ function DevicePanel() {
   const [error, setError] = useState<ApiError | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
   const [revoking, setRevoking] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signedOut, setSignedOut] = useState(false);
   const signOutForm = useSensitiveForm();
+  useEffect(() => {
+    // The 연결 해제 button that opened the confirmation unmounts, so focus moves to its replacement.
+    if (confirming) confirmButton.current?.focus();
+  }, [confirming]);
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -446,7 +443,10 @@ function DevicePanel() {
               {device.platform === "android" ? "Android 앱" : "웹 브라우저"} ·{" "}
               {device.status === "active" ? "연결됨" : "연결 해제됨"}
             </p>
-            <p className="muted">최근 사용: {localDate(device.last_seen_at)} (서울 기준)</p>
+            <p className="muted">
+              최근 사용: {formatSeoulDateTime(device.last_seen_at, { fallback: "확인되지 않음" })}{" "}
+              (서울 기준)
+            </p>
             {device.status === "active" &&
               (confirming === device.id ? (
                 <div role="group" aria-label={`${device.label} 연결 해제 확인`}>
@@ -458,7 +458,7 @@ function DevicePanel() {
                   <div className="form-actions">
                     <button
                       type="button"
-                      autoFocus
+                      ref={confirmButton}
                       disabled={revoking || loading || Boolean(error)}
                       onClick={() => void revoke(device)}
                     >

@@ -392,6 +392,13 @@ test("failed login clears the password and never renders raw server messages", a
   await expectNoPersistence(page);
 });
 
+test("device revoke confirmation takes focus when it opens", async ({ page }) => {
+  await mockIdentity(page, true);
+  await page.goto("/settings/auth");
+  await page.getByRole("button", { name: "합성 다른 기기 연결 해제", exact: true }).click();
+  await expect(page.getByRole("button", { name: "연결 해제 확인", exact: true })).toBeFocused();
+});
+
 test("device version conflict preserves the row and requires an explicit refetch before retry", async ({
   page,
 }) => {

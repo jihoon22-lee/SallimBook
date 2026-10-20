@@ -7,9 +7,10 @@ import { MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport"
 import type { HouseholdMember } from "../finance/FinanceSupport";
 import { usePagedList } from "../finance/queries";
 import { useAuditApi } from "./api";
-import { actionLabels, auditDate, emptyFilters, entityLabels, queryFromFilters } from "./model";
+import { actionLabels, emptyFilters, entityLabels, queryFromFilters } from "./model";
 import type { AuditFilterDraft, AuditQuery } from "./model";
 import "./audit.css";
+import { formatSeoulDateTime } from "../../shared/format";
 
 function AuditError({ error }: { error: ApiError | null }) {
   if (!error) return null;
@@ -67,7 +68,10 @@ function AuditResults({ query, members }: { query: AuditQuery; members: Househol
                 {actionLabels[row.action] ?? row.action}
               </h3>
               <p>
-                <time dateTime={row.occurred_at}>{auditDate(row.occurred_at)}</time> (서울 기준)
+                <time dateTime={row.occurred_at}>
+                  {formatSeoulDateTime(row.occurred_at, { seconds: true })}
+                </time>{" "}
+                (서울 기준)
               </p>
               <p>
                 작업 구성원:{" "}

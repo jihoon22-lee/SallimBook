@@ -41,6 +41,12 @@ git rebase origin/main
 rebase 중 충돌이 남으면 양쪽이 모두 Prettier 서식이므로 내용 차이만 해결하고 `pnpm format`을 다시 실행합니다.
 로컬 `git blame`이 서식 커밋을 건너뛰게 하려면 `git config blame.ignoreRevsFile .git-blame-ignore-revs`를 설정합니다.
 
+## 린트
+
+커밋 전에 `pnpm lint`를 실행합니다. ESLint(TypeScript·React Hooks·jsx-a11y 규칙)가 경고 0개로 끝나야 하며 CI도 같은 명령을 실행합니다.
+규칙을 끄는 주석은 꼭 필요한 줄에만 `// eslint-disable-next-line <규칙 이름> -- <이유>` 형식으로 답니다.
+규칙 이름과 이유를 반드시 적고, 파일 전체를 끄는 `/* eslint-disable */`는 쓰지 않습니다. 쓰이지 않는 disable 주석은 린트 오류입니다.
+
 ## 출시
 
 v1의 모든 마일스톤과 인수 기준을 통과해야 v1.0.0을 부여합니다.
