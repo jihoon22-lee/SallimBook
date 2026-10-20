@@ -291,3 +291,17 @@ export function compareAttention(
     a.id.localeCompare(b.id)
   );
 }
+
+const warrantyRank = { active: 0, expired: 1, unknown: 2 } as const;
+
+/** Server warranty status first: active by nearest end, expired by latest end, then unknown. */
+export function compareWarranty(a: Appliance, b: Appliance): number {
+  const rank = warrantyRank[a.warranty_status] - warrantyRank[b.warranty_status];
+  if (rank) return rank;
+  const until = (a.warranty_until ?? "").localeCompare(b.warranty_until ?? "");
+  return (
+    (a.warranty_status === "expired" ? -until : until) ||
+    a.name.localeCompare(b.name, "ko") ||
+    a.id.localeCompare(b.id)
+  );
+}

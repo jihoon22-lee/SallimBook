@@ -554,3 +554,28 @@ test("home today card ranks due, purchase, soon, low stock and unknown links and
   await region.getByLabel("오늘 소모품 보기").selectOption("soon");
   await expect(region.locator(".care-row h3")).toHaveText(["합성 세탁기 · 합성 공용 필터"]);
 });
+test("home warranty card shows the soonest active expiries before the most recent expired one", async ({
+  page,
+}) => {
+  const state = await mockHomecare(page);
+  state.links = [];
+  state.replacements = [];
+  state.appliances = [
+    applianceRow(120, { name: "합성 김치냉장고", warranty_until: "2025-12-31" }),
+    applianceRow(121, { name: "합성 건조기", warranty_until: "2026-10-16" }),
+    applianceRow(122, { name: "합성 식기세척기", warranty_until: "2027-03-01" }),
+    applianceRow(123, { name: "합성 로봇청소기", warranty_until: "2026-11-01" }),
+    applianceRow(124, { name: "합성 안마의자", warranty_until: null }),
+  ];
+  await page.goto("/");
+  await page.getByText("가전 보증 기한 확인", { exact: true }).click();
+  const card = page.locator("details.home-warranties");
+  await expect(card.locator("li a")).toHaveText([
+    "합성 로봇청소기 · 보증기간 안",
+    "합성 식기세척기 · 보증기간 안",
+    "합성 건조기 · 보증기간 지남",
+  ]);
+  await expect(
+    card.getByText("이외 2개 가전의 기한은 가전 목록에서 확인해 주세요.", { exact: true }),
+  ).toBeVisible();
+});

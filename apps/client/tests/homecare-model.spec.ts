@@ -4,6 +4,7 @@ import {
   applianceDraft,
   attentionRank,
   compareAttention,
+  compareWarranty,
   dueSoon,
   matchesTodayFilter,
   applianceInput,
@@ -16,7 +17,7 @@ import {
   purchaseUrl,
 } from "../src/features/homecare/model";
 import type { Schema } from "../src/features/homecare/model";
-import { linkRow } from "./support/homecare";
+import { applianceRow, linkRow } from "./support/homecare";
 import { uid } from "./support/finance";
 
 test("appliance purchase money preserves missing and explicit zero without financial fields", () => {
@@ -156,4 +157,42 @@ test("attention ranks due, purchase, soon, low stock and unknown before ready li
     uid(316),
   ]);
   expect(rows.filter((r) => matchesTodayFilter(r, "all"))).toHaveLength(7);
+});
+test("warranty order puts the soonest active expiry first then the most recent expiry then unknown", () => {
+  const rows = [
+    applianceRow(120, {
+      name: "합성 김치냉장고",
+      warranty_until: "2025-12-31",
+      warranty_status: "expired",
+    }),
+    applianceRow(121, {
+      name: "합성 건조기",
+      warranty_until: "2026-10-16",
+      warranty_status: "expired",
+    }),
+    applianceRow(122, {
+      name: "합성 식기세척기",
+      warranty_until: "2027-03-01",
+      warranty_status: "active",
+    }),
+    applianceRow(123, {
+      name: "합성 로봇청소기",
+      warranty_until: "2026-11-01",
+      warranty_status: "active",
+    }),
+    applianceRow(124, { name: "합성 안마의자", warranty_until: null, warranty_status: "unknown" }),
+    applianceRow(125, {
+      name: "합성 가스레인지",
+      warranty_until: "2026-11-01",
+      warranty_status: "active",
+    }),
+  ];
+  expect([...rows].sort(compareWarranty).map((r) => r.name)).toEqual([
+    "합성 가스레인지",
+    "합성 로봇청소기",
+    "합성 식기세척기",
+    "합성 건조기",
+    "합성 김치냉장고",
+    "합성 안마의자",
+  ]);
 });
