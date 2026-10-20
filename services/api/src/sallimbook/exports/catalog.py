@@ -438,6 +438,7 @@ PUBLIC_COLUMNS = {
         "currency_reference",
         "foreign_amount_reference",
         "note",
+        "revoked_at",
     ),
     "cash_record_revisions": (
         "cash_record_id",

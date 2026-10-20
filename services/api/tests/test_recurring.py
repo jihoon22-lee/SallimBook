@@ -3,10 +3,13 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from threading import Barrier
 from uuid import UUID, uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -16,6 +19,7 @@ from sqlalchemy.orm import Session
 from test_accounts import make_actor
 from test_income import CATALOG, headers, make_account
 
+from sallimbook.audit.service import KNOWN_FIELDS
 from sallimbook.cashflow import recurring_service as service
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision
 from sallimbook.cashflow.payment_links import get_usage
@@ -37,6 +41,7 @@ from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.core.idempotency import IdempotencyRecord
 from sallimbook.core.types import MAX_KRW
+from sallimbook.exports.catalog import PUBLIC_COLUMNS
 
 
 def vector(identifier):
@@ -218,8 +223,167 @@ def settle(client, actor, obligation, *, amount="35000", key=None, **extra):
     return result
 
 
+def alembic_config(connection):
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.attributes["connection"] = connection
+    return config
+
+
+def test_revocation_column_reuses_known_audit_field():
+    # Android NativeAuditWire.knownFields mirrors KNOWN_FIELDS exactly; keep the name already known.
+    assert "revoked_at" in RecurringRuleVersion.__table__.columns
+    assert "revoked_at" in PUBLIC_COLUMNS["recurring_rule_versions"]
+    assert "revoked_at" in KNOWN_FIELDS
+
+
 @pytest.mark.database
 class TestRecurringDatabase:
+    def test_revocation_is_one_way_and_frees_the_period(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            changed = client.patch(
+                f"/api/v1/recurring-rules/{rule['id']}",
+                headers=headers(actor, version=1),
+                json=rule_payload()
+                | {
+                    "effective_from": "2026-04-01",
+                    "expected_amount_krw": "50000",
+                    "reason": "합성 예정 변경",
+                },
+            )
+            assert changed.status_code == 200, changed.text
+        with Session(db_engine) as session:
+            first, pending = session.scalars(
+                select(RecurringRuleVersion).order_by(RecurringRuleVersion.effective_from)
+            ).all()
+            target = update(RecurringRuleVersion).where(RecurringRuleVersion.id == pending.id)
+            for statement in (
+                update(RecurringRuleVersion)
+                .where(RecurringRuleVersion.id == first.id)
+                .values(revoked_at=func.now()),
+                target.values(revoked_at=func.now(), expected_amount_krw=1),
+            ):
+                with pytest.raises(DBAPIError) as rejected:
+                    session.execute(statement)
+                assert rejected.value.orig.sqlstate == "55000"
+                session.rollback()
+            session.execute(target.values(revoked_at=func.now()))
+            session.commit()
+            for values in ({"revoked_at": None}, {"effective_until": date(2026, 5, 1)}):
+                with pytest.raises(DBAPIError) as rejected:
+                    session.execute(target.values(**values))
+                assert rejected.value.orig.sqlstate == "55000"
+                session.rollback()
+            terms = {
+                column.name: getattr(pending, column.name)
+                for column in pending.__table__.columns
+                if column.name not in {"id", "created_at", "revoked_at"}
+            }
+            session.add(RecurringRuleVersion(**(terms | {"expected_amount_krw": 45000})))
+            session.commit()  # The revoked row's start date and period are free again.
+            session.add(RecurringRuleVersion(**(terms | {"effective_from": date(2026, 4, 15)})))
+            with pytest.raises(IntegrityError) as rejected:
+                session.flush()
+            assert rejected.value.orig.sqlstate == "23P01"
+
+    def test_manual_override_must_match_live_exception(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            generate(client, actor, post_rule(client, actor)["id"])
+        with Session(db_engine) as session:
+            march = update(ScheduledObligation).where(
+                ScheduledObligation.nominal_date == date(2026, 3, 31)
+            )
+            for values in ({"manual_override": True}, {"skipped": True}):
+                with pytest.raises(IntegrityError) as rejected:
+                    session.execute(march.values(**values))
+                assert rejected.value.orig.sqlstate == "23514"
+                session.rollback()
+            session.execute(march.values(skipped=True, manual_override=True))
+            session.commit()
+
+    def test_upgrade_normalizes_stale_manual_override_rows(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            jan = obligation_for(client, actor, "2026-01")
+            skipped = client.post(
+                f"/api/v1/obligations/{jan['id']}/skip",
+                headers=headers(actor, version=1),
+                json={"reason": "합성 건너뛰기"},
+            )
+            assert skipped.status_code == 200, skipped.text
+        with db_engine.connect() as connection:
+            config = alembic_config(connection)
+            command.downgrade(config, "0014_vault")
+            connection.commit()
+            # What the pre-fix code left: March restored but still pinned, then the rule was
+            # ended on 2026-02-15 and only the unpinned February row was superseded.
+            for statement in (
+                "UPDATE scheduled_obligations SET manual_override = true "
+                "WHERE nominal_date = '2026-03-31'",
+                "UPDATE recurring_rule_versions SET effective_until = '2026-02-15'",
+                "UPDATE recurring_rules SET ended_on = '2026-02-15', end_reason = '합성 이전 해지'",
+                "UPDATE scheduled_obligations SET schedule_state = 'superseded' "
+                "WHERE nominal_date = '2026-02-28'",
+            ):
+                connection.execute(text(statement))
+            connection.commit()
+            command.upgrade(config, "head")
+            connection.commit()
+        with Session(db_engine) as session:
+            flags = dict(
+                session.execute(
+                    select(ScheduledObligation.nominal_date, ScheduledObligation.manual_override)
+                ).all()
+            )
+        assert flags == {
+            date(2026, 1, 31): True,
+            date(2026, 2, 28): False,
+            date(2026, 3, 31): False,
+        }
+        with TestClient(recurring_app) as client:
+            generate(client, actor, rule["id"])  # The catch-up the PR asks the household to run.
+            assert obligation_for(client, actor, "2026-03")["status"] == "superseded"
+            summary = client.get(
+                "/api/v1/obligations/summary?month=2026-03", headers=actor.headers
+            ).json()
+            assert summary["obligation_count"] == 0
+
+    def test_downgrade_refuses_revoked_rule_versions(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            changed = client.patch(
+                f"/api/v1/recurring-rules/{rule['id']}",
+                headers=headers(actor, version=1),
+                json=rule_payload() | {"effective_from": "2026-04-01", "reason": "합성 예정 변경"},
+            )
+            assert changed.status_code == 200, changed.text
+        with Session(db_engine) as session:
+            session.execute(
+                update(RecurringRuleVersion)
+                .where(RecurringRuleVersion.effective_from == date(2026, 4, 1))
+                .values(revoked_at=func.now())
+            )
+            session.commit()
+        with db_engine.connect() as connection:
+            with pytest.raises(DBAPIError) as refused:
+                command.downgrade(alembic_config(connection), "0014_vault")
+            assert refused.value.orig.sqlstate == "55000"
+            connection.rollback()
+        with Session(db_engine) as session:
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(RecurringRuleVersion)
+                    .where(RecurringRuleVersion.revoked_at.is_not(None))
+                )
+                == 1
+            )
+
     def test_manual_override_tracks_only_live_exceptions(self, recurring_app, actors):
         actor = actors[0]
         with TestClient(recurring_app) as client:
