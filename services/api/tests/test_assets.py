@@ -7,7 +7,7 @@ not substitute metadata.create_all for the actual assets migration.
 
 import secrets
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -19,6 +19,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from sallimbook.assets import service
 from sallimbook.assets.models import Asset
 from sallimbook.assets.router import router
 from sallimbook.assets.schemas import (
@@ -265,6 +266,67 @@ def create(client, actor, **overrides):
 
 @pytest.mark.database
 class TestAssetsDatabase:
+    def test_future_end_date_is_rejected_at_the_seoul_day_boundary(
+        self, asset_client, asset_actors, monkeypatch
+    ):
+        a = asset_actors[0]
+        # 2026-03-31 23:59:59 Asia/Seoul
+        monkeypatch.setattr(
+            service, "utcnow", lambda: datetime(2026, 3, 31, 14, 59, 59, tzinfo=UTC)
+        )
+        future = asset_client.post(
+            "/api/v1/assets", headers=a.headers, json=joint_payload(ended_on="2026-04-01")
+        )
+        assert future.status_code == 422
+        assert future.json()["error"]["code"] == "ASSET_END_IN_FUTURE"
+        assert create(asset_client, a, ended_on="2026-03-31").json()["status"] == "archived"
+        url = create(asset_client, a, name="합성 사용 중").headers["location"]
+        for method, path in [("PATCH", url), ("POST", url + "/archive")]:
+            rejected = asset_client.request(
+                method,
+                path,
+                headers={**a.headers, "If-Match": '"1"'},
+                json={"ended_on": "2026-04-01"},
+            )
+            assert rejected.status_code == 422
+            assert rejected.json()["error"]["code"] == "ASSET_END_IN_FUTURE"
+        # 2026-04-01 00:00 Asia/Seoul: the same date is now today.
+        monkeypatch.setattr(service, "utcnow", lambda: datetime(2026, 3, 31, 15, 0, tzinfo=UTC))
+        archived = asset_client.post(
+            url + "/archive",
+            headers={**a.headers, "If-Match": '"1"'},
+            json={"ended_on": "2026-04-01"},
+        )
+        assert archived.status_code == 200 and archived.json()["status"] == "archived"
+
+    def test_legacy_future_end_stays_readable_and_editable_until_changed(
+        self, asset_client, asset_actors, db_engine, monkeypatch
+    ):
+        a = asset_actors[0]
+        monkeypatch.setattr(service, "utcnow", lambda: datetime(2026, 10, 19, 3, 0, tzinfo=UTC))
+        created = create(asset_client, a)
+        with db_engine.begin() as connection:  # an existing production row
+            connection.execute(
+                text(
+                    "UPDATE assets SET ended_on = '2045-01-31', archived_at = now() WHERE id = :id"
+                ),
+                {"id": created.json()["id"]},
+            )
+        url = created.headers["location"]
+        assert asset_client.get(url, headers=a.headers).json()["ended_on"] == "2045-01-31"
+        noted = asset_client.patch(
+            url, headers={**a.headers, "If-Match": '"1"'}, json={"note": "합성 메모"}
+        )
+        assert noted.status_code == 200
+        moved = asset_client.patch(
+            url, headers={**a.headers, "If-Match": '"2"'}, json={"ended_on": "2045-02-28"}
+        )
+        assert moved.json()["error"]["code"] == "ASSET_END_IN_FUTURE"
+        cleared = asset_client.patch(
+            url, headers={**a.headers, "If-Match": '"2"'}, json={"ended_on": None}
+        )
+        assert cleared.json()["status"] == "active" and cleared.json()["archived_at"] is None
+
     def test_asset_audit_preserves_actor_and_versions_without_copying_entered_values(
         self, asset_client, asset_actors, db_engine
     ):

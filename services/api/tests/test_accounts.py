@@ -7,7 +7,7 @@ import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from threading import Event
 from uuid import UUID, uuid4
 
@@ -27,6 +27,7 @@ from sallimbook.accounts.crypto import KeyRing, decrypt_number, encrypt_number
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.accounts.router import router
 from sallimbook.accounts.schemas import AccountCreate, AccountNumber, AccountPatch, AccountType
+from sallimbook.assets import service as asset_service
 from sallimbook.assets.models import Asset
 from sallimbook.assets.router import router as asset_router
 from sallimbook.config import Settings
@@ -414,6 +415,24 @@ def account_grant(session, actor, target):
 
 @pytest.mark.database
 class TestAccountsDatabase:
+    def test_nested_asset_future_end_creates_neither_account_nor_asset(
+        self, accounts_app, account_actor, db_engine, monkeypatch
+    ):
+        monkeypatch.setattr(
+            asset_service, "utcnow", lambda: datetime(2026, 3, 31, 14, 59, 59, tzinfo=UTC)
+        )
+        with TestClient(accounts_app) as client:
+            response = client.post(
+                "/api/v1/accounts",
+                headers=account_actor.headers,
+                json=account_payload(asset=asset_payload(ended_on="2026-04-01")),
+            )
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "ASSET_END_IN_FUTURE"
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 0
+            assert session.scalar(select(func.count()).select_from(Asset)) == 0
+
     @pytest.mark.parametrize("change", [{"kind": "liability"}, {"category": "real_estate"}])
     def test_linked_asset_keeps_financial_kind(self, accounts_app, account_actor, change):
         with TestClient(accounts_app) as client:
