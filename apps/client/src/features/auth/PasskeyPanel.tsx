@@ -61,9 +61,11 @@ export function PasskeyPanel() {
   );
 
   useEffect(() => {
+    // The ref is a request counter, so bumping its latest value on cleanup is intended.
+    const counter = generation;
     void load();
     return () => {
-      generation.current++;
+      counter.current++;
     };
   }, [load]);
 

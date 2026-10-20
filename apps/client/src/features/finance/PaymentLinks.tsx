@@ -88,6 +88,8 @@ export function useClosureReview(kind: Kind | null, id: string, date: string, ac
   const [loadedStamp, setLoadedStamp] = useState("");
   const generation = useRef(0);
   useEffect(() => {
+    // The ref is a request counter, so bumping its latest value on cleanup is intended.
+    const counter = generation;
     const current = ++generation.current;
     setData(null);
     setError(null);
@@ -127,7 +129,7 @@ export function useClosureReview(kind: Kind | null, id: string, date: string, ac
         if (current === generation.current) setLoading(false);
       });
     return () => {
-      generation.current++;
+      counter.current++;
     };
   }, [domainApi, kind, id, date, active, retry, stamp]);
   const required = active && kind !== null;
@@ -154,7 +156,8 @@ export function useAssetClosure(asset: Asset | undefined | null, date: string, a
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupStamp, setLookupStamp] = useState("");
   const [retry, setRetry] = useState(0);
-  const stamp = `${asset?.id}:${required}:${retry}`;
+  const assetId = asset?.id;
+  const stamp = `${assetId}:${required}:${retry}`;
   useEffect(() => {
     let current = true;
     setAccount(null);
@@ -170,7 +173,7 @@ export function useAssetClosure(asset: Asset | undefined | null, date: string, a
     )
       .then((rows) => {
         if (current) {
-          setAccount(rows.find((row) => row.asset_id === asset!.id)?.id ?? null);
+          setAccount(rows.find((row) => row.asset_id === assetId)?.id ?? null);
           setLookupStamp(stamp);
         }
       })
@@ -183,7 +186,7 @@ export function useAssetClosure(asset: Asset | undefined | null, date: string, a
     return () => {
       current = false;
     };
-  }, [api, asset?.id, required, retry, stamp]);
+  }, [api, assetId, required, retry, stamp]);
   const review = useClosureReview(
     account ? "account" : null,
     account ?? "",

@@ -183,9 +183,11 @@ function MonthHistory({ month, refresh }: { month: string; refresh: string }) {
     [api, month, mounted],
   );
   useEffect(() => {
+    // The ref is a request counter, so bumping its latest value on cleanup is intended.
+    const counter = generation;
     void load();
     return () => {
-      generation.current++;
+      counter.current++;
     };
   }, [load, refresh]);
   return (
@@ -280,9 +282,11 @@ function MonthWorkspace({
     }
   }, [api, month, revisionNo, mounted]);
   useEffect(() => {
+    // The ref is a request counter, so bumping its latest value on cleanup is intended.
+    const counter = generation;
     void reload().catch(() => undefined);
     return () => {
-      generation.current++;
+      counter.current++;
     };
   }, [reload]);
   useEffect(() => {

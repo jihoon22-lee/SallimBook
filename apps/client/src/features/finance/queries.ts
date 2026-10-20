@@ -46,10 +46,12 @@ export function useResource<T>(read: () => Promise<T>) {
     }
   }, [read]);
   useEffect(() => {
+    // The ref is a request counter, so bumping its latest value on cleanup is intended.
+    const counter = generation;
     setData(null);
     void reload();
     return () => {
-      generation.current++;
+      counter.current++;
     };
   }, [reload]);
   return { data, loading, error, reload };
@@ -125,9 +127,11 @@ export function usePagedList<T extends { id: string }, C extends string | number
     [read, keyOf, restoreAs],
   );
   useEffect(() => {
+    // The ref is a request counter, so bumping its latest value on cleanup is intended.
+    const counter = generation;
     void load();
     return () => {
-      generation.current++;
+      counter.current++;
     };
   }, [load]);
   return {

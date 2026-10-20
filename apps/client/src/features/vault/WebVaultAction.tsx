@@ -156,6 +156,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
       flight.current = false;
     };
     // IDs and the authenticated identity define the operation. Parent callback identity does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `me` and `request` are tracked by the fields above.
   }, [api, me?.household_id, me?.member_id, me?.user_id, requestKey, reload]);
 
   const needsPassword = [

@@ -20,6 +20,8 @@ export function ConnectionCodePanel({ onLegacyInvitation }: { onLegacyInvitation
   const [error, setError] = useState<ApiError | null>(null);
   const [code, setCode] = useState<components["schemas"]["ConnectionCodeResponse"] | null>(null);
   useEffect(() => {
+    // The ref is a request counter, so bumping its latest value on cleanup is intended.
+    const counter = generation;
     const clear = () => {
       generation.current++;
       setCode(null);
@@ -32,7 +34,7 @@ export function ConnectionCodePanel({ onLegacyInvitation }: { onLegacyInvitation
     window.addEventListener("pagehide", clear);
     document.addEventListener("visibilitychange", hidden);
     return () => {
-      generation.current++;
+      counter.current++;
       window.removeEventListener("pagehide", clear);
       document.removeEventListener("visibilitychange", hidden);
     };
