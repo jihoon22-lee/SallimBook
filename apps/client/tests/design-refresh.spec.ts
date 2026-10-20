@@ -289,3 +289,52 @@ test("narrow home keeps the month label, 12px status text and 48px segmented but
   for (const button of await page.locator(".segmented-control button").all())
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
 });
+
+const styleOf = (page: import("@playwright/test").Page, selector: string, props: string[]) =>
+  page.evaluate(
+    ([sel, names]) =>
+      [...document.querySelectorAll(sel as string)].map((el) => {
+        const s = getComputedStyle(el);
+        return Object.fromEntries((names as string[]).map((n) => [n, s.getPropertyValue(n)]));
+      }),
+    [selector, props] as const,
+  );
+for (const [width, actions] of [
+  [390, { "margin-top": "6px", "padding-top": "6px", "row-gap": "5px", "column-gap": "12px" }],
+  [1280, { "margin-top": "12px", "padding-top": "12px", "row-gap": "8px", "column-gap": "8px" }],
+] as const)
+  test(`cleanup keeps computed sizes of formerly important rules at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockOnboarding(page);
+    await page.goto("/");
+    await page.locator(".home-card-actions").first().waitFor();
+    for (const style of await styleOf(page, ".home-card-actions", Object.keys(actions)))
+      expect(style).toEqual(actions);
+    if (width === 1280) {
+      await page.goto("/login");
+      await page.locator(".auth-story-foot").waitFor();
+      expect(await styleOf(page, ".auth-story-foot", ["font-size", "padding-top"])).toEqual([
+        { "font-size": "12px", "padding-top": "30px" },
+      ]);
+    }
+  });
+test("cleanup keeps computed sizes of formerly important homecare rules", async ({ page }) => {
+  await homeData(page);
+  await page.goto("/");
+  await page.locator(".care-item-actions a").first().waitFor();
+  for (const style of await styleOf(page, ".care-intro", ["font-size", "margin-bottom"]))
+    expect(style).toEqual({ "font-size": "12px", "margin-bottom": "10px" });
+  for (const style of await styleOf(page, ".care-item-actions a", ["font-size"]))
+    expect(style).toEqual({ "font-size": "12px" });
+  await page.goto("/consumables");
+  await page.locator(".stock-card").first().waitFor();
+  for (const style of await styleOf(page, ".care-intro", ["font-size", "margin-bottom"]))
+    expect(style).toEqual({ "font-size": "12px", "margin-bottom": "14px" });
+  const margins = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
+  for (const style of await styleOf(page, ".stock-card", margins))
+    expect(Object.values(style)).toEqual(["0px", "0px", "0px", "0px"]);
+  for (const style of await styleOf(page, ".stock-count", ["font-size", "padding-top"]))
+    expect(style).toEqual({ "font-size": "12px", "padding-top": "16px" });
+});
