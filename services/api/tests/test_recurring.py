@@ -20,6 +20,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
 from test_income import CATALOG, close_account, headers, make_account
+from test_pagination import api_pages, ids, pairs
 
 from sallimbook.audit.service import KNOWN_FIELDS
 from sallimbook.cashflow import recurring_service as service
@@ -259,6 +260,38 @@ def test_history_action_contract_matches_database_check():
 
 @pytest.mark.database
 class TestRecurringDatabase:
+    def test_obligations_list_by_date_then_creation_across_pages(self, recurring_app, actors):
+        actor = actors[0]
+        anchors = ["2026-01-10", "2026-01-20", "2026-01-10", "2026-01-10", "2026-01-31"]
+        with TestClient(recurring_app) as client:
+            rules = [post_rule(client, actor, anchor_date=day)["id"] for day in anchors]
+            for rule in rules[:2]:
+                generate(client, actor, rule, end="2026-01-31")
+            generate(client, actor, None, end="2026-01-31")  # rules 2-4 share one transaction
+            pages = api_pages(client, actor, "/api/v1/obligations", month="2026-01")
+            by_rule = {row["rule_id"]: row["id"] for page in pages for row in page}
+            batch = sorted(by_rule[rule] for rule in rules[2:4])
+            expected = [by_rule[rules[0]], *batch, by_rule[rules[1]], by_rule[rules[4]]]
+            assert ids(pages) == pairs(expected)
+
+    def test_rules_newest_first_and_settlements_by_payment_date_across_pages(
+        self, recurring_app, actors
+    ):
+        actor = actors[0]
+        days = ["2026-01-30", "2026-01-29", "2026-01-30", "2026-01-31", "2026-01-29"]
+        with TestClient(recurring_app) as client:
+            rules = [post_rule(client, actor, title=f"합성 규칙 {n}")["id"] for n in range(5)]
+            assert ids(api_pages(client, actor, "/api/v1/recurring-rules")) == pairs(rules[::-1])
+            generate(client, actor, rules[0], end="2026-01-31")
+            payments = []
+            for day in days:
+                obligation = obligation_for(client, actor, "2026-01")
+                response = settle(client, actor, obligation, amount="100", occurred_on=day)
+                payments.append(response.json()["id"])
+            path = f"/api/v1/obligations/{obligation['id']}/settlements"
+            expected = [payments[i] for i in (3, 2, 0, 4, 1)]
+            assert ids(api_pages(client, actor, path)) == pairs(expected)
+
     def test_settlement_accepts_closed_account_through_its_end_date(
         self, recurring_app, actors, db_engine
     ):
