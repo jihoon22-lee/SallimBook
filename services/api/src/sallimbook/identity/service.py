@@ -4,7 +4,9 @@ import hashlib
 import hmac
 import re
 import secrets
-from collections.abc import Iterable
+import threading
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -18,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from sallimbook.core.audit import append_event, record_event
 from sallimbook.core.authorization import Principal, require_owner, require_recent_login
 from sallimbook.core.errors import DomainError
 from sallimbook.identity.auth_models import (
@@ -60,6 +63,9 @@ PASSWORD_HASHER = PasswordHasher(
 )
 # Unknown logins do the same expensive verification without any usable default account.
 _DUMMY_HASH = PASSWORD_HASHER.hash(secrets.token_urlsafe(32))
+# Each Argon2 call needs about 64 MiB; the single API worker runs at most two at once.
+PASSWORD_WORK_SLOTS = 2
+_password_slots = threading.BoundedSemaphore(PASSWORD_WORK_SLOTS)
 
 
 def utcnow() -> datetime:
@@ -127,11 +133,88 @@ def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: dateti
         raise DomainError("RATE_LIMITED", "잠시 후 다시 시도해 주세요.", 429)
 
 
-def _verify_password(encoded: str, password: str) -> bool:
+@contextmanager
+def _password_work() -> Iterator[None]:
+    """Hold one password work slot, failing fast instead of queueing more Argon2 memory."""
+    slots = _password_slots
+    if not slots.acquire(blocking=False):
+        raise DomainError(
+            "AUTH_BUSY", "로그인 확인 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.", 429
+        )
     try:
-        return PASSWORD_HASHER.verify(encoded, password)
-    except InvalidHashError, VerificationError:
+        yield
+    finally:
+        slots.release()
+
+
+def hash_password(password: str) -> str:
+    with _password_work():
+        return PASSWORD_HASHER.hash(password)
+
+
+def _verify_password(encoded: str, password: str) -> bool:
+    with _password_work():
+        try:
+            return PASSWORD_HASHER.verify(encoded, password)
+        except InvalidHashError, VerificationError:
+            return False
+
+
+def _upgrade_hash(user: User, password: str) -> None:
+    """Rehash with current parameters when a slot is free; a busy server keeps the old hash."""
+    if not PASSWORD_HASHER.check_needs_rehash(user.password_hash):
+        return
+    try:
+        user.password_hash = hash_password(password)
+    except DomainError as error:
+        if error.code != "AUTH_BUSY":
+            raise
+
+
+def _login_buckets(login_name: str, source: str) -> list[tuple[str, int]]:
+    return [(f"login-account:{login_name}", 5), (f"login-source:{source}", 30)]
+
+
+def _reauth_buckets(user_id: UUID, source: str) -> list[tuple[str, int]]:
+    return [(f"reauth-account:{user_id}", 5), (f"reauth-source:{source}", 30)]
+
+
+def _refund_attempts(session: Session, keys: Iterable[str]) -> None:
+    """Return one admitted attempt per key after a verified password; the caller commits.
+
+    Keys are updated one at a time in the admission lock order. A success right after a
+    window reset may refund nothing, so it can count at most once.
+    """
+    window_start = utcnow() - THROTTLE_WINDOW
+    for key in sorted(set(keys)):
+        session.execute(
+            update(LoginThrottle)
+            .where(
+                LoginThrottle.key_hash == token_hash("throttle", key),
+                LoginThrottle.attempts > 0,
+                LoginThrottle.window_started_at > window_start,
+            )
+            .values(attempts=LoginThrottle.attempts - 1)
+        )
+
+
+def _verify_admitted(
+    session: Session, buckets: list[tuple[str, int]], encoded: str, password: str
+) -> bool:
+    """Verify after admission; only failed verifications keep counting toward the limits."""
+    keys = [key for key, _ in buckets]
+    try:
+        verified = _verify_password(encoded, password)
+    except DomainError as error:
+        if error.code == "AUTH_BUSY":
+            # Nothing was verified, so the admitted attempt is returned before refusing.
+            _refund_attempts(session, keys)
+            session.commit()
+        raise
+    if not verified:
         return False
+    _refund_attempts(session, keys)
+    return True
 
 
 def member_response(user: User, member: HouseholdMember) -> MemberResponse:
@@ -405,6 +488,15 @@ def create_partner_invitation(
     )
     session.add(invitation)
     session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="invitation",
+        entity_id=invitation.id,
+        action="create",
+        before_version=None,
+        after_version=invitation.version,
+    )
     result = InvitationResponse(id=invitation.id, token=token, expires_at=invitation.expires_at)
     session.commit()
     return result
@@ -541,7 +633,7 @@ def _accept_invitation_locked(
     user = User(
         login_name=invitation.intended_login,
         display_name=request.display_name,
-        password_hash=PASSWORD_HASHER.hash(request.password.get_secret_value()),
+        password_hash=hash_password(request.password.get_secret_value()),
     )
     session.add(user)
     try:
@@ -554,8 +646,21 @@ def _accept_invitation_locked(
             status="active",
         )
         session.add(member)
+        before = invitation.version
         invitation.used_at = now
         session.flush()
+        # The new member is the actor; acceptance does not sign anyone in.
+        append_event(
+            session,
+            household_id=invitation.household_id,
+            actor_id=user.id,
+            entity_type="invitation",
+            entity_id=invitation.id,
+            action="accept",
+            before_version=before,
+            after_version=invitation.version,
+            changed_fields=("used_at",),
+        )
     except IntegrityError:
         session.rollback()
         raise DomainError("REGISTRATION_CONFLICT", "등록 상태를 다시 확인해 주세요.", 409) from None
@@ -575,17 +680,14 @@ def login(
     session: Session, request: LoginRequest, source: str, transport: Literal["web", "native"]
 ) -> LoginResult:
     now = utcnow()
-    _admit_attempt(
-        session,
-        [
-            (f"login-account:{request.login_name}", 5),
-            (f"login-source:{source}", 30),
-        ],
-        now,
-    )
+    buckets = _login_buckets(request.login_name, source)
+    _admit_attempt(session, buckets, now)
     user = session.scalar(select(User).where(User.login_name == request.login_name))
-    verified = _verify_password(
-        user.password_hash if user else _DUMMY_HASH, request.password.get_secret_value()
+    verified = _verify_admitted(
+        session,
+        buckets,
+        user.password_hash if user else _DUMMY_HASH,
+        request.password.get_secret_value(),
     )
     member = (
         None
@@ -599,8 +701,7 @@ def login(
     )
     if not verified or user is None or user.disabled_at is not None or member is None:
         raise _unauthenticated()
-    if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
-        user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
+    _upgrade_hash(user, request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
     result = issue_session(session, user, member, request.device_label, transport)
     session.commit()
@@ -645,7 +746,7 @@ def setup_household(
     user = User(
         login_name="owner",
         display_name=request.display_name,
-        password_hash=PASSWORD_HASHER.hash(request.password.get_secret_value()),
+        password_hash=hash_password(request.password.get_secret_value()),
     )
     session.add(user)
     try:
@@ -681,23 +782,21 @@ def reauthenticate(
     session: Session, principal: Principal, request: ReauthenticationRequest, source: str
 ) -> MemberResponse:
     """Verify the current account again without creating a device or extending session expiry."""
-    _admit_attempt(
-        session,
-        [(f"reauth-account:{principal.user_id}", 5), (f"reauth-source:{source}", 30)],
-        utcnow(),
-    )
+    buckets = _reauth_buckets(principal.user_id, source)
+    _admit_attempt(session, buckets, utcnow())
     # Admission intentionally commits failures. Reacquire session -> device in this
     # order and recheck live state before elevating the existing session's recency.
     auth, devices = lock_session_devices(session, principal)
     user, member, _ = _active_identity(session, auth)
-    if not _verify_password(user.password_hash, request.password.get_secret_value()):
+    if not _verify_admitted(
+        session, buckets, user.password_hash, request.password.get_secret_value()
+    ):
         raise DomainError("REAUTHENTICATION_FAILED", "비밀번호를 확인해 주세요.", 403)
     # Password verification can take time; no previously expired access/session is revived.
     now = validate_locked_session(principal, auth, devices[principal.device_id])
     auth.authenticated_at = now
     auth.last_seen_at = now
-    if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
-        user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
+    _upgrade_hash(user, request.password.get_secret_value())
     result = member_response(user, member)
     session.commit()
     return result
@@ -781,6 +880,24 @@ def issue_session(
             refresh_expires_at=auth.expires_at,
         )
     session.flush()
+    record_event(
+        session,
+        Principal(
+            user_id=user.id,
+            member_id=member.id,
+            household_id=member.household_id,
+            session_id=auth.id,
+            device_id=device.id,
+            role=member.role,
+            transport=transport,
+            authenticated_at=now,
+        ),
+        entity_type="registered_device",
+        entity_id=device.id,
+        action="login",
+        before_version=None,
+        after_version=device.version,
+    )
     return LoginResult(
         member=member_response(user, member),
         expires_at=auth.expires_at,
@@ -869,8 +986,20 @@ def revoke_device(session: Session, principal: Principal, device: RegisteredDevi
     if device.household_id != principal.household_id or device.user_id != principal.user_id:
         raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
     now = utcnow()
+    before = device.version
     device.status = "revoked"
     device.revoked_at = now
+    session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="registered_device",
+        entity_id=device.id,
+        action="revoke",
+        before_version=before,
+        after_version=device.version,
+        changed_fields=("revoked_at", "status"),
+    )
     # This is the authoritative barrier for ALL sessions/refresh tokens on this device.
     # Updating target session rows here would invert the request's session->device lock order.
     session.commit()
@@ -880,7 +1009,7 @@ def logout(session: Session, principal: Principal) -> None:
     now = utcnow()
     auth = session.get(AuthSession, principal.session_id)
     auth.revoked_at = now
-    session.execute(
+    revoked = session.execute(
         update(RegisteredDevice)
         .where(
             RegisteredDevice.id == principal.device_id,
@@ -891,4 +1020,16 @@ def logout(session: Session, principal: Principal) -> None:
         .values(status="revoked", revoked_at=now, version=RegisteredDevice.version + 1)
         .execution_options(synchronize_session=False)
     )
+    if revoked.rowcount:
+        # A bulk UPDATE has no loaded row, so the versions are not recorded.
+        record_event(
+            session,
+            principal,
+            entity_type="registered_device",
+            entity_id=principal.device_id,
+            action="revoke",
+            before_version=None,
+            after_version=None,
+            changed_fields=("revoked_at", "status"),
+        )
     session.commit()

@@ -206,6 +206,7 @@ const knownCodes = [
   "MONTH_IN_FUTURE",
   "PREVIOUS_MONTH_UNCONFIRMED",
   "ACCOUNT_IN_USE",
+  "AUTH_BUSY",
 ] as const;
 
 export type ApiErrorCode = (typeof knownCodes)[number];

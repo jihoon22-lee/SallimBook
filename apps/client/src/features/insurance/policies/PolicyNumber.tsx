@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router";
 import { ApiError, toApiError } from "../../../platform/api";
 import { isNativeAuth } from "../../../platform/nativeAuth";
 import { nativeFinance } from "../../../platform/nativeFinance";
@@ -9,6 +8,7 @@ import { useMounted } from "../../auth/AuthFeedback";
 import { useAuthCeremony } from "../../auth/useAuthCeremony";
 import { InsuranceError } from "../InsuranceSupport";
 import type { Policy } from "../model";
+import { ReturnLoginLink } from "../../auth/ReturnLoginLink";
 
 /** Only this mounted web component can receive a full number; it never enters React state. */
 function WebPolicyNumber({ policy, refresh }: { policy: Policy; refresh: () => void }) {
@@ -204,7 +204,7 @@ function WebPolicyNumber({ policy, refresh }: { policy: Policy; refresh: () => v
       {notice && <p role="status">{notice}</p>}
       {error?.code === "REAUTHENTICATION_REQUIRED" && (
         <div className="form-actions">
-          <Link to="/login">비밀번호로 다시 인증</Link>
+          <ReturnLoginLink>비밀번호로 다시 인증</ReturnLoginLink>
         </div>
       )}
       {error?.code === "VERSION_CONFLICT" && (
@@ -269,7 +269,7 @@ function NativePolicyNumber({ policy, refresh }: { policy: Policy; refresh: () =
       {notice && <p role="status">{notice}</p>}
       {error?.code === "REAUTHENTICATION_REQUIRED" && (
         <div className="form-actions">
-          <Link to="/login">다시 인증</Link>
+          <ReturnLoginLink>다시 인증</ReturnLoginLink>
         </div>
       )}
       {error?.code === "VERSION_CONFLICT" && (

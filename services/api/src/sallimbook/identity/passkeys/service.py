@@ -41,6 +41,7 @@ from webauthn.helpers.structs import (
 from webauthn.registration.verify_registration_response import VerifiedRegistration
 
 from sallimbook.config import Settings
+from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_recent_login
 from sallimbook.core.errors import DomainError
 from sallimbook.identity import service as identity
@@ -277,15 +278,15 @@ def _active_account(
 
 
 def _descriptors(
-    session: Session, principal: Principal, rp_id: str, *, include_revoked: bool = False
+    session: Session, principal: Principal, rp_id: str
 ) -> list[PublicKeyCredentialDescriptor]:
+    # Revoked credentials stay out so the same authenticator can register again.
     query = select(AuthCredential).where(
         AuthCredential.household_id == principal.household_id,
         AuthCredential.user_id == principal.user_id,
         AuthCredential.rp_id == rp_id,
+        AuthCredential.revoked_at.is_(None),
     )
-    if not include_revoked:
-        query = query.where(AuthCredential.revoked_at.is_(None))
     return [
         PublicKeyCredentialDescriptor(
             id=credential.credential_id,
@@ -342,7 +343,7 @@ def registration_options(
             require_resident_key=True,
             user_verification=UserVerificationRequirement.REQUIRED,
         ),
-        exclude_credentials=_descriptors(session, principal, policy.rp_id, include_revoked=True),
+        exclude_credentials=_descriptors(session, principal, policy.rp_id),
     )
     session.add(challenge)
     session.flush()
@@ -567,6 +568,15 @@ def register_credential(
         raise DomainError("CREDENTIAL_UNAVAILABLE", "다른 패스키를 등록해 주세요.", 409) from None
     except DomainError:
         _failed_proof(session)
+    record_event(
+        session,
+        principal,
+        entity_type="passkey",
+        entity_id=credential.id,
+        action="create",
+        before_version=None,
+        after_version=credential.version,
+    )
     result = credential_response(credential)
     session.commit()
     return result

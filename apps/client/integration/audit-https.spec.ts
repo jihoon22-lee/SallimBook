@@ -23,6 +23,10 @@ async function login(page: Page, foreign = false) {
   await page.getByText("기기 이름 변경", { exact: true }).click();
   await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 감사 HTTPS");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+  ).toBeVisible();
+  await page.goto("/settings/auth");
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
 }
 async function read<T>(page: Page, path: string): Promise<T> {
@@ -110,7 +114,11 @@ test("real audit UI paginates metadata filters current household and rejects exp
     const list = page.getByRole("region", { name: "감사 기록 목록", exact: true });
     await expect(list.getByRole("listitem")).toHaveCount(50);
     await page.getByRole("button", { name: "감사 기록 더 보기", exact: true }).click();
-    await expect(list.getByRole("listitem")).toHaveCount(52);
+    // Sign-ins are audited too, so the second page holds the seeded rows plus this user's logins.
+    await expect(page.getByRole("button", { name: "감사 기록 더 보기", exact: true })).toHaveCount(
+      0,
+    );
+    const shown = await list.getByRole("listitem").count();
     expect(requests.slice(0, 2).map((item) => !!item.query.cursor)).toEqual([false, true]);
     for (const value of [
       "SYNTHETIC_PRIVATE_AUDIT_VALUE",
@@ -121,9 +129,21 @@ test("real audit UI paginates metadata filters current household and rejects exp
     ])
       await expect(page.getByText(value, { exact: true })).toHaveCount(0);
     const metadata = await read<S["AuditListResponse"]>(page, "/api/v1/audit-events?limit=200");
-    expect(metadata.items).toHaveLength(52);
+    // Security events (sign-ins, the setup invitation) sit beside the seeded appliance rows.
+    const seeded = metadata.items.filter((row) => row.entity_type === "appliance");
+    const security = metadata.items.filter((row) => row.entity_type !== "appliance");
+    expect(shown).toBe(metadata.items.length);
+    expect(seeded).toHaveLength(52);
+    expect(security.some((row) => row.entity_type === "registered_device")).toBe(true);
     expect(
-      metadata.items.every(
+      security.every(
+        (row) =>
+          ["registered_device", "invitation", "passkey"].includes(row.entity_type) &&
+          row.actor_member_id === member.member_id,
+      ),
+    ).toBe(true);
+    expect(
+      seeded.every(
         (row) => row.actor_member_id === member.member_id && own.includes(row.entity_id),
       ),
     ).toBe(true);

@@ -138,6 +138,11 @@ class AuthPolicyTest {
         assertEquals(8, conflict["current_version"])
         val invalidVersion = mapOf("error" to mapOf("current_version" to "synthetic-sensitive-input"))
         assertFalse((AuthPolicy.safeError(409, invalidVersion, uuid)!!["error"] as Map<*, *>).containsKey("current_version"))
+        val busy = mapOf("error" to mapOf("code" to "AUTH_BUSY"))
+        val busyError = AuthPolicy.safeError(429, busy, uuid)!!["error"] as Map<*, *>
+        assertEquals("AUTH_BUSY", busyError["code"])
+        assertEquals("로그인 확인 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.", busyError["message"])
+        assertEquals("REQUEST_FAILED", (AuthPolicy.safeError(503, busy, uuid)!!["error"] as Map<*, *>)["code"])
     }
 
     @Test fun assetKindRestrictionIsNotAStaleVersionConflict() {

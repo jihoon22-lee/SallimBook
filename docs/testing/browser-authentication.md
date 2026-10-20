@@ -1,7 +1,8 @@
 # 브라우저 인증 검증
 
 `apps/client/tests/auth.spec.ts`와 `auth-native.spec.ts`는 합성 응답·Capacitor 모의 플러그인으로
-UI 분기, 취소, 기기 목록 충돌과 로그아웃 안내를 검사한다. 서버 권한·쿠키·Android 암호화를 증명하지 않는다.
+UI 분기, 취소, 기기 목록 충돌과 로그아웃 안내, 로그인 뒤 복귀 경로 검증(`safeReturnPath`)과
+`AUTH_BUSY`·로그인 제한 안내를 검사한다. 서버 권한·쿠키·Android 암호화를 증명하지 않는다.
 
 실제 HTTPS 브라우저와 FastAPI/PostgreSQL을 연결하는 검증은 별도로 실행한다.
 
@@ -27,6 +28,8 @@ Vite 빌드 결과를 실제 API와 같은 임시 loopback HTTPS origin에서 �
 - UI 로그아웃 후 쿠키 제거와 실제 `/me`의 401 응답
 - 비밀번호 재확인 후 같은 세션 쿠키와 단일 등록 기기 유지
 - CSRF 토큰 누락·이전 토큰 거부, 새 토큰으로 로그아웃 성공, 재전송 시 401
+- 화면 응답의 운영 보안 헤더(`PRIVATE_WEB_HEADERS`) 적용과 로그인·보관함 흐름의 CSP 위반 0건
+- 계정 화면의 "최근 로그인 다시 확인"·내보내기 화면의 재인증 뒤 요청한 화면으로 복귀
 
 응답 가로채기나 HTTP mock은 사용하지 않는다. 비밀번호는 매 실행 임의 생성하며 owner 전용 임시 파일로
 테스트에 전달한다. trace·스크린샷·영상은 끄고, Playwright 출력과 실패 산출물은 외부에 노출하지 않고

@@ -12,12 +12,29 @@ test("real browser login restores HttpOnly Secure Strict cookie and logout revok
   page,
   context,
 }) => {
-  await page.goto("/login");
+  const violations: string[] = [];
+  await page.exposeFunction("reportCspViolation", (value: string) => {
+    violations.push(value);
+  });
+  await page.addInitScript(() =>
+    document.addEventListener("securitypolicyviolation", (event) => {
+      void (
+        window as unknown as { reportCspViolation: (value: string) => Promise<void> }
+      ).reportCspViolation(`${event.violatedDirective} ${event.blockedURI}`);
+    }),
+  );
+  const screen = await page.goto("/login");
+  // The harness serves screens with the production private web headers.
+  expect(screen?.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
   await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login);
   await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
   await page.getByText("기기 이름 변경", { exact: true }).click();
   await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 HTTPS 브라우저");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+  ).toBeVisible();
+  await page.goto("/settings/auth");
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
   const cookies = await context.cookies();
   expect(
@@ -34,7 +51,8 @@ test("real browser login restores HttpOnly Secure Strict cookie and logout revok
   await page.reload();
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "합성 HTTPS 브라우저 현재 기기" })).toBeVisible();
-  await page.goto("/login");
+  await page.getByRole("link", { name: "최근 로그인 다시 확인", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByLabel("로그인 이름", { exact: true })).toHaveCount(0);
   await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
   await page.getByRole("button", { name: "다시 인증", exact: true }).click();
@@ -73,6 +91,7 @@ test("real browser login restores HttpOnly Secure Strict cookie and logout revok
   expect(await page.evaluate(() => localStorage.length === 0 && sessionStorage.length === 0)).toBe(
     true,
   );
+  expect(violations).toEqual([]);
 });
 
 test("real CSRF rejects mutation without token and rotated token only succeeds once", async ({
@@ -82,6 +101,10 @@ test("real CSRF rejects mutation without token and rotated token only succeeds o
   await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login);
   await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+  ).toBeVisible();
+  await page.goto("/settings/auth");
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
   const statuses = await page.evaluate(async () => {
     const logout = (token?: string) =>

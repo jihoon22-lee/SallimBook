@@ -7,6 +7,7 @@ No existing server, system trust store, or production configuration is changed.
 import argparse
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -38,6 +39,14 @@ from sqlalchemy import text, update
 from sqlalchemy.orm import Session
 from test_database import COMPOSE, ROOT, test_service_lock, validate_test_url
 from test_document_runtime import document_runtime
+
+# Screens run under the production private web policy, read from its one definition.
+_deploy_spec = importlib.util.spec_from_file_location(
+    "sallimbook_ops_deploy", ROOT / "ops/deploy.py"
+)
+_deploy = importlib.util.module_from_spec(_deploy_spec)
+_deploy_spec.loader.exec_module(_deploy)
+PRIVATE_WEB_HEADERS = dict(_deploy.PRIVATE_WEB_HEADERS)
 
 
 def execute(
@@ -274,7 +283,7 @@ def run_browser(
                     candidate = (dist / path).resolve()
                     if not candidate.is_relative_to(dist) or not candidate.is_file():
                         candidate = dist / "index.html"
-                    return FileResponse(candidate)
+                    return FileResponse(candidate, headers=PRIVATE_WEB_HEADERS)
 
                 server = uvicorn.Server(
                     uvicorn.Config(

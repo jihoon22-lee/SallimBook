@@ -8,6 +8,23 @@ import re
 from pathlib import Path
 
 APP_ID = "io.github.jihoon22lee.sallimbook"
+# The one definition of the private web security headers; Caddy and the HTTPS test harness
+# both render it. Page-only headers skip /api/*, whose responses set their own policies.
+PRIVATE_WEB_HEADERS = (
+    (
+        "Content-Security-Policy",
+        (
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
+            "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+            "form-action 'self'; frame-ancestors 'none'"
+        ),
+    ),
+    ("Strict-Transport-Security", "max-age=31536000"),
+    ("X-Frame-Options", "DENY"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "no-referrer"),
+)
+PAGE_ONLY_HEADERS = frozenset({"Content-Security-Policy", "X-Frame-Options"})
 CADDY = (
     "caddy:2.11.7-alpine@sha256:"
     "d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f"
@@ -137,6 +154,10 @@ http://:8081 {
     }
 }
 """
+    security_headers = "\n".join(
+        f'    header {"@page " if name in PAGE_ONLY_HEADERS else ""}{name} "{value}"'
+        for name, value in PRIVATE_WEB_HEADERS
+    )
     private_caddy = f"""{{
     admin off
     auto_https off
@@ -145,8 +166,8 @@ http://:8080 {{
     bind 127.0.0.1
     @wrong_host not host {fqdn}
     respond @wrong_host 421
-    header X-Content-Type-Options nosniff
-    header Referrer-Policy no-referrer
+    @page not path /api/*
+{security_headers}
     @apk {{
         method GET HEAD
         path /downloads/SallimBook.apk

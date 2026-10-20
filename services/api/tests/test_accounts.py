@@ -685,7 +685,14 @@ class TestAccountsDatabase:
             with Session(db_engine) as session:
                 assert session.scalar(select(func.count()).select_from(Asset)) == 0
                 assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 0
-                assert session.scalar(select(func.count()).select_from(AuditEvent)) == 0
+                assert (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(AuditEvent)
+                        .where(AuditEvent.entity_type != "registered_device")  # fixture sign-ins
+                    )
+                    == 0
+                )
             item = create_account(client, account_actor, account_number=None)
             assert item["masked_number"] is None and item["has_number"] is False
             assert (

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router";
 import { ApiError, requireWebAuth } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { useAuth } from "../auth/AuthProvider";
@@ -11,6 +10,7 @@ import { VaultLifetime } from "./lifetime";
 import { usePrivateVaultApi } from "./privateApi";
 import { needsReauthentication, VaultWorkflow } from "./workflow";
 import type { VaultInputs, VaultPublicContext } from "./workflow";
+import { ReturnLoginLink } from "../auth/ReturnLoginLink";
 
 const titles = {
   setup: "보관함 처음 설정",
@@ -647,7 +647,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
             최신 보관함 상태 다시 확인
           </button>
           {error instanceof ApiError && error.status === 401 && (
-            <Link to="/login">계정 다시 로그인</Link>
+            <ReturnLoginLink>계정 다시 로그인</ReturnLoginLink>
           )}
         </div>
       )}

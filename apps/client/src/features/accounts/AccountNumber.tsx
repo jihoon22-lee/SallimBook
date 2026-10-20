@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { nativeFinance } from "../../platform/nativeFinance";
@@ -9,6 +8,7 @@ import { useMounted } from "../auth/AuthFeedback";
 import { useAuthCeremony } from "../auth/useAuthCeremony";
 import { FinanceError } from "../finance/FinanceSupport";
 import type { Account } from "./model";
+import { ReturnLoginLink } from "../auth/ReturnLoginLink";
 
 /** Only this mounted web component can receive a full number; it never enters React state. */
 function WebAccountNumber({ account, refresh }: { account: Account; refresh: () => void }) {
@@ -210,7 +210,7 @@ function WebAccountNumber({ account, refresh }: { account: Account; refresh: () 
           <button type="button" disabled={busy} onClick={() => void reveal(true)}>
             패스키로 이 계좌번호만 확인
           </button>
-          <Link to="/login">비밀번호로 다시 인증</Link>
+          <ReturnLoginLink>비밀번호로 다시 인증</ReturnLoginLink>
         </div>
       )}
       {error?.code === "VERSION_CONFLICT" && (
@@ -282,7 +282,7 @@ function NativeAccountNumber({ account, refresh }: { account: Account; refresh: 
       {notice && <p role="status">{notice}</p>}
       {error?.code === "REAUTHENTICATION_REQUIRED" && (
         <div className="form-actions">
-          <Link to="/login">다시 인증</Link>
+          <ReturnLoginLink>다시 인증</ReturnLoginLink>
         </div>
       )}
       {error?.code === "VERSION_CONFLICT" && (

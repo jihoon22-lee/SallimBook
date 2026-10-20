@@ -126,6 +126,10 @@ test("real scanner OCR original-byte attachments seven parents history conflicts
   await page.getByText("기기 이름 변경", { exact: true }).click();
   await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 첨부 HTTPS");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+  ).toBeVisible();
+  await page.goto("/settings/auth");
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
   const member = await read<S["MemberResponse"]>(page, "/api/v1/me");
   const a = await write<S["ApplianceResponse"]>(page, "/api/v1/appliances", {

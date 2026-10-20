@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Route } from "@playwright/test";
 import type { components } from "@sallimbook/api-client";
+import { safeReturnPath } from "../src/features/auth/returnPath";
 
 // UI-only synthetic mocks. These do not establish cookie, server authorization or native security.
 // Avoid recording credential form bodies in browser artifacts, including failed tests.
@@ -19,6 +20,7 @@ async function mockIdentity(page: Page, loggedIn = false) {
     loggedIn,
     meOffline: false,
     rejectLogin: false,
+    loginFailure: null as { status: number; code: string } | null,
     devicesUnauthorized: false,
     inviteError: null as string | null,
     revokeConflictOnce: false,
@@ -119,6 +121,8 @@ async function mockIdentity(page: Page, loggedIn = false) {
       return route.fulfill({ json: { csrf_token: state.csrf } });
     }
     if (path === "/api/v1/auth/web/login") {
+      if (state.loginFailure)
+        return failure(route, state.loginFailure.status, state.loginFailure.code);
       state.loginAttempts += 1;
       const body = route.request().postDataJSON();
       state.validLoginShape =
@@ -226,7 +230,9 @@ test("current web account reauthenticates without another login or changing devi
 }) => {
   const api = await mockIdentity(page, true);
   api.rejectReauth = true;
-  await page.goto("/login");
+  await page.goto("/settings/auth");
+  await page.getByRole("link", { name: "패스키 관리 전 다시 로그인", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("button", { name: "패스키로 로그인", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("로그인 이름", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("이 기기 이름", { exact: true })).toHaveCount(0);
@@ -238,10 +244,34 @@ test("current web account reauthenticates without another login or changing devi
   await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
   await page.getByRole("button", { name: "다시 인증", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/auth$/);
+  await expect(page.getByRole("heading", { name: "현재 계정" })).toBeVisible();
   expect(api.validReauthShape).toBe(true);
   expect(api.reauthAttempts).toBe(2);
   expect(api.loginAttempts).toBe(0);
   await expectNoPersistence(page);
+});
+
+test("return path accepts only same-app paths", () => {
+  expect(safeReturnPath("/insurance/policies/1?tab=number#top")).toBe(
+    "/insurance/policies/1?tab=number#top",
+  );
+  for (const value of [
+    "//evil.example",
+    "/\\evil.example",
+    "https://evil.example/x",
+    "javascript:alert(1)",
+    "/login",
+    "/login?next=/",
+    "/login/",
+    "/a/../login",
+    "/a\nb",
+    "",
+    "settings",
+    `/${"a".repeat(2048)}`,
+    null,
+    42,
+  ])
+    expect(safeReturnPath(value)).toBeNull();
 });
 
 test("revealed invitation disappears within thirty seconds", async ({ page }) => {
@@ -272,7 +302,8 @@ test("web login uses generated request fields and logout clears the displayed me
   );
   await fillLogin(page);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings\/auth$/);
+  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/$/);
+  await page.goto("/settings/auth");
   await expect(page.getByRole("heading", { name: "현재 계정" })).toBeVisible();
   await expect(page.getByRole("main").getByText("합성 구성원", { exact: true })).toBeVisible();
   expect(api.validLoginShape).toBe(true);
@@ -470,4 +501,15 @@ test("native Android shows an unavailable state without JS credential requests o
   }
   expect(api.paths).toEqual([]);
   await expectNoPersistence(page);
+});
+test("login rate limit shows a wait message instead of a credential error", async ({ page }) => {
+  const api = await mockIdentity(page);
+  for (const code of ["RATE_LIMITED", "AUTH_BUSY"]) {
+    api.loginFailure = { status: 429, code };
+    await page.goto("/login");
+    await fillLogin(page);
+    await page.getByRole("button", { name: "로그인", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("잠시 후 다시 시도해 주세요");
+    await expect(page.getByRole("alert")).not.toContainText("로그인 이름이나 비밀번호");
+  }
 });

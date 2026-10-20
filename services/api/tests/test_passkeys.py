@@ -620,6 +620,73 @@ def seed_expired_ceremonies(session, account, credential_id, count):
 
 @pytest.mark.database
 class TestPasskeyDatabase:
+    def test_passkey_registration_and_revocation_are_audited(
+        self, passkey_app, db_engine, passkey_account
+    ):
+        from sallimbook.core.audit import AuditEvent
+
+        authenticator = SyntheticAuthenticator.create()
+        with TestClient(passkey_app, base_url="https://testserver") as client:
+            options = client.post(
+                "/api/v1/auth/passkeys/register/options",
+                headers=passkey_account.headers,
+                json={"label": "합성 감사 키"},
+            )
+            assert options.status_code == 200
+            data = options.json()
+            nonce = base64url_to_bytes(data["public_key"]["challenge"])
+            proof = authenticator.registration(nonce, origin=NATIVE_ORIGIN)
+            result = client.post(
+                "/api/v1/auth/passkeys/register/verify",
+                headers=passkey_account.headers,
+                json={
+                    "challenge_id": data["challenge_id"],
+                    "credential": proof.model_dump(mode="json", exclude_none=True),
+                },
+            )
+            assert result.status_code == 201
+            created = result.json()
+            revoked = client.delete(
+                f"/api/v1/auth/passkeys/{created['id']}",
+                headers={**passkey_account.headers, "If-Match": f'"{created["version"]}"'},
+            )
+            assert revoked.status_code == 204, revoked.text
+        with Session(db_engine) as session:
+            rows = session.execute(
+                select(
+                    AuditEvent.entity_type,
+                    AuditEvent.action,
+                    AuditEvent.safe_diff,
+                    AuditEvent.entity_id,
+                ).where(AuditEvent.entity_type == "passkey")
+            ).all()
+        assert sorted((t, a, d["changed_fields"]) for t, a, d, _ in rows) == [
+            ("passkey", "create", []),
+            ("passkey", "revoke", ["revoked_at"]),
+        ]
+        assert {str(entity) for *_, entity in rows} == {created["id"]}
+
+    def test_registration_excludes_only_active_credentials(
+        self, db_engine, passkey_account, enrolled
+    ):
+        authenticator, credential_id = enrolled
+
+        def excluded():
+            with Session(db_engine) as session:
+                options = service.registration_options(
+                    session,
+                    passkey_account.principal,
+                    RegisterOptionsRequest(label="합성 재등록 키"),
+                    NATIVE_POLICY,
+                )
+            return [item["id"] for item in options.public_key.get("excludeCredentials", [])]
+
+        assert excluded() == [bytes_to_base64url(authenticator.credential_id)]
+        with Session(db_engine) as session:
+            session.get(AuthCredential, credential_id).revoked_at = identity.utcnow()
+            session.commit()
+        assert excluded() == []
+
     def test_device_and_passkey_lists_are_newest_first_and_owner_scoped(
         self, passkey_app, passkey_account, db_engine
     ):

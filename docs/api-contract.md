@@ -35,6 +35,8 @@ Issue #87의 기본 시작/연결 경로는 아래와 같다. `/api/v1` 접두�
 새 가계 이름은 우리 가계이며 기존 빈 가계는 보존한다. 계정/구성원/기기/세션은 함께 commit한다.
 연결 코드 불일치·만료·사용·폐기는 400 INVALID_CONNECTION_CODE, 설치 단위 15분/5회 한도는
 429 RATE_LIMITED다. Origin/native transport와 두 계정 제한을 서버에서 검사한다.
+로그인·재인증·첫 시작·초대/연결 수락의 비밀번호 작업이 프로세스 한도(동시 2개)를 넘으면 429 `AUTH_BUSY`다.
+RATE_LIMITED와 달리 실패 횟수를 늘리지 않으며 클라이언트는 같은 입력으로 잠시 뒤 다시 시도할 수 있다.
 구체적인 신뢰 경계는 [모바일 직접 시작 ADR](adr/mobile-first-start.md)에 기록한다.
 
 웹은 `POST /auth/web/login`, `GET /auth/web/csrf`, `POST /auth/web/logout`을 사용한다.
@@ -88,6 +90,7 @@ native의 바인딩 비밀·토큰은 Kotlin 인증 adapter에서만 처리하�
 `503 PASSKEY_CONFIGURATION_INVALID`로 거부한다. 허용 origin 위반은 403,
 만료·재사용·다른 요청 범위의 challenge 또는 검증 실패는 인증 오류로 처리한다.
 PC의 WebAuthn UI와 Android Credential Manager·Digital Asset Links·실제 서명 인증서 연결은 아직 완료하지 않았다.
+등록 옵션의 `excludeCredentials`에는 본인의 **미폐기** 패스키만 넣는다. 폐기한 인증기는 같은 기기에서 다시 등록할 수 있다.
 
 ### 목적별 step-up 소비
 
@@ -571,5 +574,7 @@ JSON 금액은 정밀한 십진 문자열, 월은 `YYYY-MM`, 날짜는 ISO 날�
 기본 한도는 전체 100,000행, JSON+CSV+manifest 합산 16MiB, 선택 문서 10개/합산 40MiB, ZIP 64MiB다. 초과 시 413으로 전체 실패하며 일부 자료를 성공 응답으로 내보내지 않는다. 준비/발급 시한은 30초이며 세션·재인증·grant가 먼저 만료되면 먼저 거부한다. 전송은 최대 120초다. API 프로세스당 준비와 전송을 합쳐 한 요청만 허용하고 중복 작업은 503을 반환한다. 취소돼도 실제 동기 작업이 끝나기 전에는 슬롯을 풀지 않는다. 발급 시한은 서버에서 새 파일을 발급할 수 있는 시한이며 이미 저장된 로컬 파일을 만료·회수하지 않는다.
 
 `GET /api/v1/audit-events`는 현재 가계의 감사 메타데이터만 반환한다. `limit` 1..200, `cursor`, `entity_type`, `entity_id`, `actor_member_id`, `action`, timezone을 포함한 `since`/`until` 필터를 지원한다. 기간은 `[since, until)`이다. 시각 내림차순·UUID 내림차순 keyset cursor에 가계/필터 바인딩을 검사한다. 삭제된 엔티티의 감사 이력도 조회할 수 있다. 응답은 ID, actor member ID, 엔티티/동작, 요청 ID, 전후 버전, UTC 시각, 알려진 변경 필드 이름만 제공한다. 원본 `safe_diff`나 전후 값은 반환하지 않으며 잘못된 메타데이터는 503으로 실패한다. 여러 HTTP 페이지 전체를 하나의 DB 스냅샷으로 보장하지 않는다.
+
+계정 보안 동작도 같은 감사 어휘(`core/audit.py`의 `AuditEntityType`·`AuditAction`, 38개·22개)로 기록한다. `registered_device/login`(로그인으로 기기 세션 시작), `registered_device/revoke`(기기 연결 해제·로그아웃으로 실제 세션 폐기), `passkey/create`·`passkey/revoke`, `invitation/create`·`invitation/accept`이다. 비밀번호·토큰·초대 코드·자격증명 원문은 기록하지 않는다.
 
 `user_export/export` 감사는 완성된 파일의 **서버 발급**을 뜻하며 클라이언트 저장 완료를 뜻하지 않는다. 선택 문서 열람 감사도 같은 요청 ID로 기록한다. 일반 audit API에는 최근 재인증을 추가로 요구하지 않지만 현재 세션·기기·활성 가계 구성원 권한은 검사한다. 이 API PR은 Android/웹 내보내기 화면, 운영 백업 스케줄과 실제 새 서버 복원 완료를 의미하지 않는다.

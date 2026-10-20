@@ -31,6 +31,10 @@ async function login(page: Page, login: string, password: string) {
   await page.getByText("기기 이름 변경", { exact: true }).click();
   await page.getByLabel("이 기기 이름", { exact: true }).fill("합성 HTTPS 보관함");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+  ).toBeVisible();
+  await page.goto("/settings/auth");
   await expect(page.getByRole("heading", { name: "현재 계정", exact: true })).toBeVisible();
 }
 async function newPassword(page: Page, name: string, value: string) {
@@ -83,6 +87,17 @@ test("real HTTPS WebCrypto setup sharing recovery all-card rotation revocation a
   page,
   browser,
 }) => {
+  const violations: string[] = [];
+  await page.exposeFunction("reportCspViolation", (value: string) => {
+    violations.push(value);
+  });
+  await page.addInitScript(() =>
+    document.addEventListener("securitypolicyviolation", (event) => {
+      void (
+        window as unknown as { reportCspViolation: (value: string) => Promise<void> }
+      ).reportCspViolation(`${event.violatedDirective} ${event.blockedURI}`);
+    }),
+  );
   let noStore = true,
     opaqueOnly = true;
   page.on("response", (r) => {
@@ -286,4 +301,5 @@ test("real HTTPS WebCrypto setup sharing recovery all-card rotation revocation a
   } finally {
     await partnerContext.close();
   }
+  expect(violations).toEqual([]);
 });

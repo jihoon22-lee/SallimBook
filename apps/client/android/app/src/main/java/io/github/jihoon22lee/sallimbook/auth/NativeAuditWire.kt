@@ -129,12 +129,13 @@ internal object NativeAuditWire {
         "insurance_policy","insurance_return","medical_expense","medical_node","medical_refund","obligation",
         "payout_allocation","policy_premium_link","recurring_rule","stock_movement","user_export","vault",
         "vault_member_wrapping","vault_membership","vault_recovery_wrapping","vault_rotation","vault_share",
+        "registered_device","passkey","invitation",
     )
     val actions=setOf(
         "archive","complete","confirm","convert","correct","create",
         "delete","export","regenerate","reopen","reschedule","reveal",
         "settle","skip","sync_scope","unskip","update","void",
-        "void_settlement",
+        "void_settlement","login","revoke","accept",
     )
     val knownFields=setOf(
         "aaguid","aborted_at","access_expires_at","account_id","account_number","account_number_ciphertext",

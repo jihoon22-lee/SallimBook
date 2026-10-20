@@ -24,7 +24,7 @@ changed_fields의 정확한 10개 필드만 새 객체로 투영한다. 원본 `
 추가 필드는 거절한다. `changed_fields`는 서버의 알려진 **필드 이름** 목록이다. `password_hash`,
 `wrapped_hvk` 같은 이름이 들어갈 수 있지만 그 값이나 암호문은 반환하지 않는다.
 
-`NativeAuditWire`는 현재 서버의 35개 entity type·19개 action·307개 필드 이름을 대조한 명시적
+`NativeAuditWire`는 현재 서버의 38개 entity type·22개 action·307개 필드 이름을 대조한 명시적
 목록을 사용한다. 서버의 감사 메타데이터 목록이 바뀌면 이 보안 투영도 같은 변경에서 검토한다.
 생성 API DTO를 대체하는 별도 업무 모델을 만들지 않는다.
 UUID·상관 ID 형식, 안전한 정수 범위의 양수 version 또는 null, UTC timestamp, 정렬된 중복 없는

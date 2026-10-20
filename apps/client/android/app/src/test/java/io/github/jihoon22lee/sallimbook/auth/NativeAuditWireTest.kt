@@ -54,7 +54,15 @@ class NativeAuditWireTest {
         // Names of sensitive columns are metadata, never their stored values.
         val fields=listOf("account_number","password_hash","wrapped_hvk")
         assertEquals(fields,((NativeAuditWire.response(request(),200,page(row()+mapOf("changed_fields" to fields)))["items"] as List<*>)[0] as Map<*,*>)["changed_fields"])
-        assertEquals(35,NativeAuditWire.entityTypes.size); assertEquals(19,NativeAuditWire.actions.size); assertEquals(307,NativeAuditWire.knownFields.size)
+        assertEquals(38,NativeAuditWire.entityTypes.size); assertEquals(22,NativeAuditWire.actions.size); assertEquals(307,NativeAuditWire.knownFields.size)
+    }
+    @Test fun securityEventTypesAreAcceptedAndCounted() {
+        assertEquals(38, NativeAuditWire.entityTypes.size); assertEquals(22, NativeAuditWire.actions.size)
+        assertTrue(NativeAuditWire.entityTypes.containsAll(setOf("registered_device", "passkey", "invitation")))
+        assertTrue(NativeAuditWire.actions.containsAll(setOf("login", "revoke", "accept")))
+        val login=row()+mapOf("entity_type" to "registered_device","action" to "login","changed_fields" to emptyList<String>())
+        val parsed=(NativeAuditWire.response(request(),200,page(login))["items"] as List<*>)[0] as Map<*,*>
+        assertEquals("registered_device" to "login",parsed["entity_type"] to parsed["action"])
     }
     @Test fun everyResponseFieldIsRequiredAndAnyRawDiffOrUnknownChangedFieldFailsClosed() {
         for(field in row().keys) bad(AuthCode.ACCESS_DENIED) { NativeAuditWire.response(request(),200,page(row()-field)) }

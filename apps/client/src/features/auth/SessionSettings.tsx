@@ -12,6 +12,7 @@ import { supportsWebAuthn } from "../../platform/webauthn";
 import { AuthError, SessionStatus, useMounted } from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
 import type { Device, Member } from "./AuthProvider";
+import { ReturnLoginLink } from "./ReturnLoginLink";
 
 function localDate(value: string) {
   const date = new Date(value);
@@ -387,9 +388,7 @@ function AuthenticatedSettings({ member }: { member: Member }) {
           <button type="button" disabled={busy} onClick={() => void signOut()}>
             {busy ? "로그아웃 중…" : "로그아웃"}
           </button>
-          <Link className="button-link" to="/login">
-            최근 로그인 다시 확인
-          </Link>
+          <ReturnLoginLink className="button-link">최근 로그인 다시 확인</ReturnLoginLink>
         </div>
       </section>
       {member.role === "owner" && (
