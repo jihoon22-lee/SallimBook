@@ -29,6 +29,9 @@ import { DeleteHomecare } from "./DeleteHomecare";
 import { completeToday } from "./TodayConsumables";
 import { DeviceLinks } from "./DeviceLinks";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { AmountField } from "../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { krwFieldError } from "../../shared/krw";
 export function ApplianceSummary({ row }: { row: Appliance }) {
   return (
     <>
@@ -92,6 +95,8 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
   const [draft, setDraft] = useState(() => applianceDraft(initial));
   const [latest, setLatest] = useState<Appliance | null>(null);
   const [ack, setAck] = useState(false);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const input = applianceInput(draft);
   const changed =
     base && input ? changedFields(applianceInput(applianceDraft(base))!, input) : null;
@@ -101,15 +106,22 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
     if (key === "ended") setAck(false);
     if (!base && !command.uncertain) command.setError(null);
   };
-  async function submit(e: FormEvent) {
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
     e.preventDefault();
-    if (
-      !input ||
-      (ending && !ack) ||
-      (base && !Object.keys(changed ?? {}).length) ||
-      command.error?.status === 409
-    )
+    if (command.error?.status === 409) return;
+    const problem = !input
+      ? "가전 이름·날짜·구매 금액을 확인해 주세요. 날짜는 오늘을 넘을 수 없고 사용 종료일은 구매일 이후여야 해요."
+      : ending && !ack
+        ? "사용 종료 확인란을 선택해 주세요."
+        : base && !Object.keys(changed ?? {}).length
+          ? "바꾼 가전 정보가 없어요."
+          : "";
+    if (problem || !input) {
+      setMessage(problem);
+      attempt.reject(form);
       return;
+    }
     const row = await command.run(
       () =>
         base
@@ -151,7 +163,13 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
     <section className="card">
       <h2>제품·구매·보증 정보</h2>
       <p>구매 금액은 자산과 수입·지출 기록에 자동 합산하지 않아요.</p>
-      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setDirty(true);
+          setMessage("");
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy}>
           <legend>가전 정보</legend>
           <div className="form-grid">
@@ -187,17 +205,17 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
                 />
               </label>
             </div>
-            <div className="form-field">
-              <label>
-                구매 금액 (원)
-                <input
-                  inputMode="numeric"
-                  value={draft.price}
-                  onChange={(e) => change("price", e.target.value)}
-                />
-              </label>
-              <p className="muted">미입력과 0원을 구분해요.</p>
-            </div>
+            <AmountField
+              label="구매 금액 (원)"
+              value={draft.price}
+              hint="미입력과 0원을 구분해요."
+              error={
+                attempt.attempted
+                  ? krwFieldError(draft.price, { required: false, positive: false })
+                  : null
+              }
+              onChange={(value) => change("price", value)}
+            />
             <div className="form-field">
               <label>
                 보증기한
@@ -239,6 +257,7 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
             </label>
           )}
         </fieldset>
+        <FormError message={message} />
         <MetadataFeedback command={command} listPath="/appliances?status=all" />
         <ConflictReview
           error={base ? command.error : null}
@@ -251,14 +270,7 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
         </ConflictReview>
         <button
           type="submit"
-          disabled={
-            !input ||
-            (ending && !ack) ||
-            (!!base && !Object.keys(changed ?? {}).length) ||
-            command.busy ||
-            command.uncertain ||
-            command.error?.status === 409
-          }
+          disabled={command.busy || command.uncertain || command.error?.status === 409}
         >
           {base ? "가전 수정 저장" : "가전 등록"}
         </button>

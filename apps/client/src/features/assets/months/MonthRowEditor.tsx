@@ -19,6 +19,9 @@ import {
 import type { MonthRecord, MonthValue, ValueDraft } from "./model";
 import { useMonthCommand } from "./useMonthCommand";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
+import { AmountField } from "../../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { krwFieldError } from "../../../shared/krw";
 export type EditingValue = { revisionId: string; row: MonthValue };
 export function MonthRowEditor({
   month,
@@ -43,6 +46,7 @@ export function MonthRowEditor({
   const [latest, setLatest] = useState<MonthRecord | null>(null);
   const [ackScope, setAckScope] = useState(false);
   const [formError, setFormError] = useState("");
+  const attempt = useSubmitAttempt();
   const [dirty, setDirty] = useState(false);
   useUnsavedChangesGuard(dirty);
   const section = useRef<HTMLElement>(null);
@@ -60,7 +64,8 @@ export function MonthRowEditor({
           base.row.household_share,
           base.row.amount_basis,
         );
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
     if (command.busy || conflict) return;
     const body = valueInput(base.revisionId, base.row, draft, month);
@@ -68,6 +73,7 @@ export function MonthRowEditor({
       setFormError(
         "금액은 0 이상의 정수 원으로 입력하고, 선택한 월의 실제 확인 날짜를 정해 주세요.",
       );
+      attempt.reject(form);
       return;
     }
     setFormError("");
@@ -150,22 +156,18 @@ export function MonthRowEditor({
             </select>
           </div>
           {draft.mode === "amount" && (
-            <div className="form-field">
-              <label htmlFor="month-value-amount">확인 금액 (원)</label>
-              <input
-                id="month-value-amount"
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={20}
-                required
-                value={draft.amount}
-                onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
-              />
-              <p className="muted">
-                쉼표 없이 정수 원 단위로 입력해 주세요. 0원도 직접 확인한 값으로 저장해요.
-              </p>
-            </div>
+            <AmountField
+              label="확인 금액 (원)"
+              required
+              value={draft.amount}
+              hint="세 자리마다 쉼표를 써도 돼요. 0원도 직접 확인한 값으로 저장해요."
+              error={
+                attempt.attempted
+                  ? krwFieldError(draft.amount, { required: true, positive: false })
+                  : null
+              }
+              onChange={(amount) => setDraft({ ...draft, amount })}
+            />
           )}
           {draft.mode === "unchanged" && (
             <p>
@@ -208,7 +210,7 @@ export function MonthRowEditor({
             저장 전 가계 보유분 참고: {formatKrw(preview)} · 최종 계산은 서버에서 확인해요.
           </p>
         )}
-        {formError && <p role="alert">{formError}</p>}
+        <FormError message={formError} />
         <MonthError error={command.error} />
         {conflict && (
           <section className="conflict-panel">

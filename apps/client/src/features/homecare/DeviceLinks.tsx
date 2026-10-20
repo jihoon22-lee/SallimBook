@@ -18,6 +18,7 @@ import {
 } from "./HomecareSupport";
 import { DeleteHomecare } from "./DeleteHomecare";
 import { ReplacementList, ReplacementEditor } from "./ReplacementPages";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 export function DeviceStatus({ row, unit = "단위" }: { row: DeviceLink; unit?: string }) {
   return (
     <>
@@ -104,6 +105,8 @@ function LinkEditor({
   const [latest, setLatest] = useState<DeviceLink | null>(null);
   const [selected, setSelected] = useState("");
   const [clearAck, setClearAck] = useState(false);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const choices = useResource(
     useCallback(
       async () =>
@@ -127,15 +130,25 @@ function LinkEditor({
     if (key === "override") setClearAck(false);
     if (!base && !command.uncertain) command.setError(null);
   };
-  async function submit(e: FormEvent) {
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
     e.preventDefault();
-    if (
-      !input ||
-      (clearing && !clearAck) ||
-      command.error?.status === 409 ||
-      (!base && !choices.data?.some((row) => row.id === selected))
-    )
+    if (command.error?.status === 409) return;
+    const problem =
+      !base && !choices.data?.some((row) => row.id === selected)
+        ? "연결할 소모품이나 가전을 선택해 주세요."
+        : !input
+          ? "확인 주기 간격·교체당 사용 수량·다음 확인일을 확인해 주세요."
+          : clearing && !clearAck
+            ? "직접 지정한 다음 확인일 해제 확인란을 선택해 주세요."
+            : base && !Object.keys(changed ?? {}).length
+              ? "바꾼 설정이 없어요."
+              : "";
+    if (problem || !input) {
+      setMessage(problem);
+      attempt.reject(form);
       return;
+    }
     const result = await command.run(
       () =>
         base
@@ -175,7 +188,7 @@ function LinkEditor({
   return (
     <section className="card">
       <h3>{base ? "기기별 주기·연결 수정" : "호환 기기와 소모품 연결"}</h3>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>기기별 교체 기준</legend>
           {!base && (
@@ -294,6 +307,7 @@ function LinkEditor({
             </label>
           )}
         </fieldset>
+        <FormError message={message} />
         <MetadataFeedback
           command={command}
           listPath={
@@ -317,10 +331,7 @@ function LinkEditor({
           <button
             type="submit"
             disabled={
-              !input ||
-              (clearing && !clearAck) ||
-              (!!base && !Object.keys(changed ?? {}).length) ||
-              (!base && (!selected || choices.loading || !!choices.error)) ||
+              (!base && (choices.loading || !!choices.error)) ||
               command.busy ||
               command.uncertain ||
               command.error?.status === 409

@@ -512,3 +512,15 @@ test("carry-previous fills only untouched missing rows and reuses its key after 
     change_reason: "합성 확인 불가",
   });
 });
+
+test("month value accepts a grouped amount and saves digits", async ({ page }) => {
+  const state = await mockMonths(page);
+  await page.goto("/assets/months/2025-02");
+  await page.getByRole("button", { name: "합성 종료 대출 금액 확인", exact: true }).click();
+  await page.getByLabel("확인 금액 (원)", { exact: true }).fill("1,234,567");
+  await expect(page.getByText("1,234,567원", { exact: true })).toBeVisible();
+  await page.getByLabel("실제 확인 기준일", { exact: true }).fill("2025-02-28");
+  await page.getByRole("button", { name: "금액 확인 저장", exact: true }).click();
+  await expect(page.getByText("확인한 금액과 기준일을 저장했어요.", { exact: true })).toBeVisible();
+  expect(state.writes.at(-1)?.body.input_amount_krw).toBe("1234567");
+});
