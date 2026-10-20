@@ -188,9 +188,8 @@ test("precision conversion requires equal totals and records all source versions
   await second.getByLabel("실제 입금일", { exact: true }).fill("2025-02-10");
   await page.getByLabel("전환 사유", { exact: true }).fill("합성 입금일별 내역 확인");
   await page.getByLabel("원본 전체와 같은 합계의 대체 기록을 확인했어요.", { exact: true }).check();
-  await expect(
-    page.getByRole("button", { name: "합계를 유지하고 전환", exact: true }),
-  ).toBeDisabled();
+  await page.getByRole("button", { name: "합계를 유지하고 전환", exact: true }).click();
+  await expect(page.getByText("전환 전후 합계가 같아야 해요.", { exact: true })).toBeFocused();
   expect(state.writes).toHaveLength(0);
   await second.getByLabel("수입 금액 (원)", { exact: true }).fill("2000000");
   await page.getByLabel("원본 전체와 같은 합계의 대체 기록을 확인했어요.", { exact: true }).check();

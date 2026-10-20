@@ -21,6 +21,9 @@ import type { Rule, RuleDraft } from "./model";
 import { LiabilitySelect, PaymentMethod } from "./PaymentMethod";
 import { RuleSummary } from "./RuleSummary";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { AmountField } from "../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { krwFieldError } from "../../shared/krw";
 const lastTerms = (row: Rule) =>
   [...row.versions].sort((a, b) => a.effective_from.localeCompare(b.effective_from)).at(-1)!;
 export function RuleCommandError({ error }: { error: ApiError | null }) {
@@ -57,6 +60,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
   const [conflict, setConflict] = useState(false);
   const [validation, setValidation] = useState("");
   const [reviewAck, setReviewAck] = useState(false);
+  const attempt = useSubmitAttempt();
   const input = ruleInput(draft);
   const changed: components["schemas"]["RuleChange"] | null = input
     ? (({ effective_until: _until, end_reason: _endReason, ...terms }) => ({
@@ -86,10 +90,12 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
     setReviewAck(false);
     setValidation("");
   }
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
     if (conflict || !valid || !input || !changed) {
       setValidation("필수 정보·날짜·금액과 적용 범위를 확인해 주세요.");
+      attempt.reject(form);
       return;
     }
     const result = await command.run((signal) =>
@@ -182,21 +188,21 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
                 </select>
               </label>
             </div>
-            <div className="form-field">
-              <label>
-                원화 예정금액 (원)
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]+"
-                  maxLength={20}
-                  value={draft.amount}
-                  required={draft.amountMode === "fixed"}
-                  onChange={(event) => change("amount", event.target.value)}
-                />
-              </label>
-              <p className="muted">변동 금액을 비우면 미정이에요. 0원과 구분해요.</p>
-            </div>
+            <AmountField
+              label="원화 예정금액 (원)"
+              value={draft.amount}
+              required={draft.amountMode === "fixed"}
+              hint="변동 금액을 비우면 미정이에요. 0원과 구분해요."
+              error={
+                attempt.attempted
+                  ? krwFieldError(draft.amount, {
+                      required: draft.amountMode === "fixed",
+                      positive: false,
+                    })
+                  : null
+              }
+              onChange={(value) => change("amount", value)}
+            />
             <div className="form-field">
               <label>
                 반복 주기
@@ -363,7 +369,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
             </>
           )}
         </fieldset>
-        {validation && <p role="alert">{validation}</p>}
+        <FormError message={validation} />
         <RuleCommandError error={command.error} />
         {conflict && (
           <section className="review-panel">
@@ -402,7 +408,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
           backTo={base ? `/fixed-payments/rules/${base.id}` : "/fixed-payments/rules"}
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!valid || conflict}
+          disabled={conflict}
           label={base ? "새 적용기간 저장" : "납부 규칙 저장"}
         />
       </form>

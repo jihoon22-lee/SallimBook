@@ -39,6 +39,7 @@ import {
   VoidSettlement,
 } from "./ObligationCommands";
 import type { ObligationAction } from "./ObligationCommands";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 export function FixedSummaryPanel({ refresh = 0 }: { refresh?: number }) {
   const api = useFixedApi();
   const { month } = useMonth();
@@ -107,9 +108,16 @@ function GenerateForm({ month, onSaved }: { month: string; onSaved: () => void }
   const [sequence, setSequence] = useState(0);
   const key = useIdempotencyKey(JSON.stringify([payload, sequence]));
   const [done, setDone] = useState(false);
-  async function submit(event: FormEvent) {
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!generationValid(start, end)) return;
+    if (!generationValid(start, end)) {
+      setMessage("회차 생성 기간은 시작일부터 1년 이내로 정해 주세요.");
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) => api.generate(payload, key, signal));
     if (result.ok && command.mounted.current) {
       setDone(true);
@@ -124,7 +132,7 @@ function GenerateForm({ month, onSaved }: { month: string; onSaved: () => void }
         명시한 기간만 만들어요. 같은 규칙의 같은 회차는 다시 요청해도 중복 생성하지 않아요. 한 번에
         최대 366일이에요.
       </p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setMessage("")} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={command.busy}>
           <legend>생성할 기간</legend>
           <div className="form-grid">
@@ -184,6 +192,7 @@ function GenerateForm({ month, onSaved }: { month: string; onSaved: () => void }
             규칙 목록 다시 확인
           </button>
         )}
+        <FormError message={message} />
         <CashflowError error={command.error} />
         {done && (
           <p role="status">요청한 기간의 회차 생성을 확인했어요. 예정 월 목록에서 확인해 주세요.</p>
@@ -191,7 +200,7 @@ function GenerateForm({ month, onSaved }: { month: string; onSaved: () => void }
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!generationValid(start, end) || rules.loading || !!rules.error}
+          disabled={rules.loading || !!rules.error}
           label="선택 기간 회차 생성"
         />
       </form>
@@ -456,6 +465,8 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Rule | null>(null);
   const [ack, setAck] = useState(false);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const key = useIdempotencyKey(JSON.stringify([row.id, row.version, date, reason.trim()]));
   const plan = withdrawalPlan(row, date);
   const valid =
@@ -465,9 +476,16 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
     date > plan.floor &&
     !!reason.trim() &&
     ack;
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!valid) return;
+    if (!valid) {
+      setMessage(
+        "종료 적용일·종료 사유·확인란을 확인해 주세요. 종료 적용일은 오늘 이후, 마지막 적용 시작일 뒤, 기존 종료일 전이어야 해요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       api.endRule(row.id, { effective_on: date, reason: reason.trim() }, row.version, key, signal),
     );
@@ -491,7 +509,7 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
           ? ` 현재 종료 적용일 ${dateLabel(row.ended_on)}보다 앞당기는 것만 가능해요.`
           : ""}
       </p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setMessage("")} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={command.busy}>
           <legend>종료 내용</legend>
           <div className="form-field">
@@ -557,12 +575,8 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
             </button>
           </section>
         )}
-        <SaveControls
-          busy={command.busy}
-          cancel={command.cancel}
-          disabled={!valid}
-          label="납부 규칙 종료 저장"
-        />
+        <FormError message={message} />
+        <SaveControls busy={command.busy} cancel={command.cancel} label="납부 규칙 종료 저장" />
       </form>
     </section>
   );

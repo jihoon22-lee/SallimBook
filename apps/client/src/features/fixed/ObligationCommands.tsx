@@ -10,6 +10,9 @@ import { useFixedApi } from "./api";
 import { economicTypes, obligationStates, paymentSplit } from "./model";
 import type { Obligation, Settlement } from "./model";
 import { PaymentMethod } from "./PaymentMethod";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { AmountField } from "../../shared/AmountField";
+import { krwFieldError } from "../../shared/krw";
 export type ObligationAction = "reschedule" | "skip" | "unskip" | "complete" | "reopen";
 export const actionLabels: Record<ObligationAction, string> = {
   reschedule: "예정일 변경",
@@ -55,6 +58,8 @@ export function ObligationActionForm({
   const [reason, setReason] = useState("");
   const [date, setDate] = useState(initial.scheduled_date);
   const [latest, setLatest] = useState<Obligation | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const valid =
     !!reason.trim() &&
     reason.length <= 500 &&
@@ -65,9 +70,18 @@ export function ObligationActionForm({
       ? { scheduled_date: date, reason: reason.trim() }
       : { reason: reason.trim() };
   const key = useIdempotencyKey(JSON.stringify([row.id, row.version, action, payload]));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!valid) return;
+    if (!valid) {
+      setMessage(
+        action === "reschedule"
+          ? "기존과 다른 예정일과 회차 변경 사유를 입력해 주세요."
+          : "회차 변경 사유를 입력해 주세요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       action === "reschedule"
         ? api.reschedule(
@@ -99,7 +113,7 @@ export function ObligationActionForm({
           있어요.
         </p>
       )}
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setMessage("")} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={command.busy}>
           <legend>변경 내용</legend>
           {action === "reschedule" && (
@@ -127,6 +141,7 @@ export function ObligationActionForm({
             </label>
           </div>
         </fieldset>
+        <FormError message={message} />
         <CashflowError error={command.error} />
         {command.error?.status === 409 && (
           <button type="button" onClick={() => void compare()}>
@@ -153,7 +168,7 @@ export function ObligationActionForm({
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!valid}
+          disabled={!actionAllowed(row, action)}
           label={`${actionLabels[action]} 저장`}
         />
       </form>
@@ -186,6 +201,8 @@ export function SettlementForm({
   const [note, setNote] = useState("");
   const [latest, setLatest] = useState<Obligation | null>(null);
   const [reviewedChangedType, setReviewedChangedType] = useState(false);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const split = paymentSplit(amount, principal, interest, row.economic_type);
   const parsed = parseKrw(amount);
   const allowed = row.schedule_state === "active" && !row.skipped && !row.manually_completed;
@@ -205,9 +222,16 @@ export function SettlementForm({
     note: note.trim() || null,
   };
   const key = useIdempotencyKey(JSON.stringify([row.id, row.version, payload]));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!valid) return;
+    if (!valid) {
+      setMessage(
+        "실제 납부금액·납부일·납부 수단을 확인해 주세요. 대출 상환은 원금과 이자의 합이 납부금액과 같아야 해요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       api.settle(row.id, payload, row.version, key, signal),
     );
@@ -231,24 +255,19 @@ export function SettlementForm({
       <p>
         한 회차를 여러 번 나누어 납부할 수 있어요. 예정액보다 적거나 많아도 실제 금액을 기록해요.
       </p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setMessage("")} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={command.busy}>
           <legend>실제로 납부한 내용</legend>
           <div className="form-grid">
-            <div className="form-field">
-              <label>
-                실제 납부금액 (원)
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]+"
-                  maxLength={20}
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                  required
-                />
-              </label>
-            </div>
+            <AmountField
+              label="실제 납부금액 (원)"
+              required
+              value={amount}
+              onChange={setAmount}
+              error={
+                attempt.attempted ? krwFieldError(amount, { required: true, positive: true }) : null
+              }
+            />
             <div className="form-field">
               <label>
                 실제 납부일
@@ -263,32 +282,28 @@ export function SettlementForm({
             </div>
             {row.economic_type === "loan" && (
               <>
-                <div className="form-field">
-                  <label>
-                    실제 원금 상환액 (원)
-                    <input
-                      inputMode="numeric"
-                      pattern="[0-9]+"
-                      maxLength={20}
-                      value={principal}
-                      onChange={(event) => setPrincipal(event.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
-                <div className="form-field">
-                  <label>
-                    실제 이자 (원)
-                    <input
-                      inputMode="numeric"
-                      pattern="[0-9]+"
-                      maxLength={20}
-                      value={interest}
-                      onChange={(event) => setInterest(event.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
+                <AmountField
+                  label="실제 원금 상환액 (원)"
+                  required
+                  value={principal}
+                  onChange={setPrincipal}
+                  error={
+                    attempt.attempted
+                      ? krwFieldError(principal, { required: true, positive: false })
+                      : null
+                  }
+                />
+                <AmountField
+                  label="실제 이자 (원)"
+                  required
+                  value={interest}
+                  onChange={setInterest}
+                  error={
+                    attempt.attempted
+                      ? krwFieldError(interest, { required: true, positive: false })
+                      : null
+                  }
+                />
                 <p className="muted">
                   원금과 이자의 합계가 실제 납부액과 같아야 해요. 이자만 소비성 비용으로 분류하고
                   부채 잔액은 자동 변경하지 않아요.
@@ -322,6 +337,7 @@ export function SettlementForm({
             </div>
           </div>
         </fieldset>
+        <FormError message={message} />
         <CashflowError error={command.error} />
         {command.error?.status === 409 && (
           <button type="button" onClick={() => void compare()}>
@@ -363,7 +379,7 @@ export function SettlementForm({
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!valid}
+          disabled={!allowed}
           label="실제 납부 저장"
         />
       </form>
@@ -387,10 +403,18 @@ export function VoidSettlement({
   const [payment, setPayment] = useState(initial);
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Settlement | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const key = useIdempotencyKey(JSON.stringify([payment.id, payment.cash.version, reason.trim()]));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!reason.trim() || payment.cash.state !== "active") return;
+    if (payment.cash.state !== "active") return;
+    if (!reason.trim()) {
+      setMessage("무효 사유를 입력해 주세요.");
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       api.voidPayment(payment.id, { reason: reason.trim() }, payment.cash.version, key, signal),
     );
@@ -412,7 +436,7 @@ export function VoidSettlement({
         버전 {payment.cash.version}
       </p>
       <p>잘못 기록한 납부를 무효로 남겨요. 예정 회차와 과거 이력을 삭제하지 않아요.</p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setMessage("")} onSubmit={(event) => void submit(event)}>
         <div className="form-field">
           <label>
             납부 무효 사유
@@ -425,6 +449,7 @@ export function VoidSettlement({
             />
           </label>
         </div>
+        <FormError message={message} />
         <CashflowError error={command.error} />
         {command.error?.status === 409 && (
           <button type="button" onClick={() => void compare()}>
@@ -453,7 +478,7 @@ export function VoidSettlement({
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!reason.trim() || payment.cash.state !== "active"}
+          disabled={payment.cash.state !== "active"}
           label="사유와 함께 납부 무효 처리"
         />
       </form>
