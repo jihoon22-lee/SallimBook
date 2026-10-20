@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from test_accounts import key_file as key_file
 from test_accounts import make_actor
 from test_income import headers, make_account
+from test_pagination import api_pages, ids, pairs
 from test_recurring import generate, obligation_for, post_rule, rule_payload, settle
 
 from sallimbook.assets.models import Asset
@@ -491,6 +492,43 @@ class TestInsurancePolicy:
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             assert sorted(pool.map(link, policies)) == ["PREMIUM_RULE_ALREADY_LINKED", "created"]
+
+    def test_metadata_lists_follow_entry_and_case_dates_across_pages(self, app, actors):
+        actor = actors[0]
+        days = ["2026-01-02", "2026-01-01", "2026-01-02", "2026-01-03", "2026-01-01"]
+        with TestClient(app) as client:
+            policies = [create(client, actor, "/policies", policy_payload())["id"] for _ in days]
+            coverages_path = f"/policies/{policies[0]}/coverages"
+            coverages = [
+                create(
+                    client,
+                    actor,
+                    coverages_path,
+                    {"name": f"합성 보장 {n}", "benefit_type": "reimbursement"},
+                )["id"]
+                for n in range(5)
+            ]
+            premiums_path = f"/policies/{policies[0]}/premium-links"
+            premiums = [
+                create(
+                    client,
+                    actor,
+                    premiums_path,
+                    {"rule_id": post_rule(client, actor, category="insurance")["id"]},
+                )["id"]
+                for _ in days
+            ]
+            cases = [
+                create(client, actor, "/cases", case_payload(actor, start_on=day))["id"]
+                for day in days
+            ]
+            for path, rows in (
+                ("/policies", policies[::-1]),
+                (coverages_path, coverages),
+                (premiums_path, premiums[::-1]),
+                ("/cases", [cases[i] for i in (3, 2, 0, 4, 1)]),
+            ):
+                assert ids(api_pages(client, actor, BASE + path)) == pairs(rows), path
 
 
 @pytest.mark.database
