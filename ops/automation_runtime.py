@@ -375,7 +375,7 @@ class Runtime:
             if rows.strip().startswith("[")
             else [json.loads(line) for line in rows.splitlines() if line]
         )
-        expected = {"api", "db", "scanner", "node", "web", "public"}
+        expected = {"api", "db", "scanner", "inspector", "node", "web", "public"}
         if {row["Service"] for row in rows} != expected or len(rows) != len(expected):
             raise AutomationError("SERVICE_SET")
         result = {}
@@ -391,12 +391,12 @@ class Runtime:
                 raise AutomationError("SERVICE_IDENTITY")
             if not value["running"] or (
                 require_healthy
-                and service in {"api", "db", "scanner"}
+                and service in {"api", "db", "scanner", "inspector"}
                 and value["health"] != "healthy"
             ):
                 raise AutomationError("SERVICE_UNHEALTHY")
-            role = "api" if service in {"api", "scanner"} else "web"
-            if service in {"api", "scanner", "web", "public"} and (
+            role = "api" if service in {"api", "scanner", "inspector"} else "web"
+            if service in {"api", "scanner", "inspector", "web", "public"} and (
                 value["image"] != self.manifest[role + "_image"]
             ):
                 raise AutomationError("SERVICE_IMAGE_CHANGED")
@@ -785,6 +785,7 @@ class Runtime:
                 "--wait-timeout",
                 "240",
                 "scanner",
+                "inspector",
                 "api",
                 binding=binding,
                 timeout=300,
@@ -825,6 +826,7 @@ class Runtime:
                     "--wait-timeout",
                     "240",
                     "scanner",
+                    "inspector",
                     "api",
                     timeout=300,
                 )
@@ -871,6 +873,7 @@ class Runtime:
                         "--wait-timeout",
                         "240",
                         "scanner",
+                        "inspector",
                         "api",
                         timeout=300,
                     )

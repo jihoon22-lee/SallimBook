@@ -30,7 +30,7 @@ from pypdf.generic import (
 
 from sallimbook.core.errors import DomainError
 from sallimbook.documents import _validation_worker as worker
-from sallimbook.documents import validation
+from sallimbook.documents import inspector, validation
 
 VERSION = b"ClamAV 1.4.6/28000/Sat Oct 17 00:00:00 2026 | COMMANDS: PING VERSION INSTREAM END\0"
 TSV_HEADER = (
@@ -981,3 +981,101 @@ def test_client_page_limit_constants_match_worker():
         assert re.search(r"MAX_PDF_PAGES = (\d+)", (root / path).read_text())[1] == str(
             worker.MAX_PAGES
         )
+
+
+@contextmanager
+def remote_inspector(monkeypatch, reply=b'{"content_type":"image/png","page_count":1}'):
+    calls = []
+
+    def run(command, data, **options):
+        calls.append((command, data))
+        if isinstance(reply, BaseException):
+            raise reply
+        return reply
+
+    def local(*args, **kwargs):
+        raise AssertionError("The API process must not start the parser worker")
+
+    monkeypatch.setattr(inspector, "bounded_process", run)
+    monkeypatch.setattr(validation, "bounded_process", local)
+    with tempfile.TemporaryDirectory(prefix="sbr-", dir="/tmp") as directory:
+        path = str(Path(directory) / "inspector.sock")
+        server = inspector.make_server(path)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield path, calls
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+
+def test_remote_inspection_matches_the_local_result_without_a_local_worker(tmp_path, monkeypatch):
+    data = image_bytes()
+    with scanner(tmp_path) as (scan_path, received), remote_inspector(monkeypatch) as (path, calls):
+        result = validation.validate_document(
+            data, "image/png", scanner_socket=scan_path, inspector_socket=path
+        )
+    assert result == validation.ValidatedDocument(
+        "image/png", len(data), hashlib.sha256(data).hexdigest(), 1
+    )
+    assert received == [data] and calls[0][1] == data
+    assert calls[0][0][-3:] == ["image/png", "/usr/bin/tesseract", "-"]
+
+
+@pytest.mark.parametrize(
+    ("reply", "code", "status"),
+    [
+        (worker.ProcessTimeout(), "DOCUMENT_TOO_COMPLEX", 422),
+        (worker.ProcessFailure(), "DOCUMENT_SCAN_UNAVAILABLE", 503),
+        (b'{"error":"DOCUMENT_CARD_DATA"}', "DOCUMENT_CARD_DATA", 422),
+        (
+            b'{"content_type":"image/png","page_count":1,"text":"x"}',
+            "DOCUMENT_SCAN_UNAVAILABLE",
+            503,
+        ),
+        (b"not-json", "DOCUMENT_SCAN_UNAVAILABLE", 503),
+    ],
+)
+def test_remote_inspection_keeps_api_side_result_validation(
+    tmp_path, monkeypatch, reply, code, status
+):
+    with scanner(tmp_path) as (scan_path, _), remote_inspector(monkeypatch, reply) as (path, _):
+        assert_domain(
+            code,
+            lambda: validation.validate_document(
+                image_bytes(), "image/png", scanner_socket=scan_path, inspector_socket=path
+            ),
+            status,
+        )
+
+
+def test_missing_world_writable_or_silent_inspector_fails_closed(tmp_path, monkeypatch):
+    def local(*args, **kwargs):
+        raise AssertionError("The API process must not start the parser worker")
+
+    data = image_bytes()
+    monkeypatch.setattr(validation, "bounded_process", local)
+    # The silent peer accepts nothing; a short transport deadline keeps the test fast.
+    monkeypatch.setattr(validation, "WORKER_SECONDS", 0.2)
+    monkeypatch.setattr(validation, "INSPECTOR_MARGIN_SECONDS", 0.2)
+    with (
+        tempfile.TemporaryDirectory(prefix="sbs-", dir="/tmp") as directory,
+        socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as silent,
+        socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as shared,
+        scanner(tmp_path) as (scan_path, _),
+    ):
+        silent_path, shared_path = Path(directory) / "silent.sock", Path(directory) / "open.sock"
+        silent.bind(str(silent_path))
+        silent.listen()
+        shared.bind(str(shared_path))
+        os.chmod(shared_path, 0o666)
+        for path in (Path(directory) / "missing.sock", shared_path, silent_path):
+            assert_domain(
+                "DOCUMENT_SCAN_UNAVAILABLE",
+                lambda p=str(path): validation.validate_document(
+                    data, "image/png", scanner_socket=scan_path, inspector_socket=p
+                ),
+                503,
+            )

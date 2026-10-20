@@ -54,6 +54,12 @@ API/파서/OCR는 원문과 결과를 메모리 파이프로만 전달한다. �
 ForceToDisk/LeaveTemporaryFiles/메타데이터 생성·상세 로그는 비활성화하고 daemon 출력은 버린다.
 원문 경로나 파일명은 daemon에 전달하지 않는다. private Unix socket의 INSTREAM만 사용한다.
 
+실제 HTTPS 문서 시험(`scripts/test_web_auth.py --documents`·`--exports`)은 같은 이미지로 ClamAV 컨테이너와
+inspector 컨테이너(`sallimbook-document-https-inspector-*`)를 하나씩 띄우고 끝나면 둘 다 제거한다. inspector는
+network none, 읽기 전용 rootfs, capability 전부 제거, no-new-privileges, 운영과 같은 메모리 한도
+(`ops/deploy.py`의 `INSPECTOR_MEMORY`)와 PID 32 제한이며 private socket 디렉터리 하나만 공유한다.
+OCR·렌더 도구는 운영과 같이 워커 RLIMIT 안의 자식 프로세스로 실행된다.
+
 ClamAV 설정은 StreamMaxLength 20MiB, MaxScanSize 64MiB, MaxScanTime 10초,
 AlertExceedsMax/AlertEncrypted 활성화다. 제한 초과를 검사 성공으로 취급하지 않는다.
 PING/VERSIONCOMMANDS, 검증한 engine 1.4.6, INSTREAM 지원과 서명 DB 날짜를 매 업로드에 확인한다.

@@ -36,6 +36,13 @@ class HealthResponse(BaseModel):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
+    if (
+        settings.environment == "production"
+        and settings.document_storage_directory is not None
+        and settings.document_inspector_socket is None
+    ):
+        # Parsers and OCR must not share the API's keyring, storage and database network.
+        raise RuntimeError("Isolated document inspector is required in production")
     development = settings.environment in ("development", "test")
 
     @asynccontextmanager

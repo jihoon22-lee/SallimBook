@@ -22,7 +22,8 @@ RUN printf '%s\n' \
 ADD --checksum=sha256:d3ee9e401974855a1edc1761b1425417d126de618d5f0c91cd51209f69f6fcc2 https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.4.6/clamav-1.4.6.linux.x86_64.deb /opt/clamav.deb
 RUN dpkg -i /opt/clamav.deb && rm /opt/clamav.deb \
     && install -d -o 65534 -g 65534 /var/lib/clamav \
-    && install -d -o 10001 -g 10001 -m 0700 /run/scanner /srv/documents
+    && install -d -o 10001 -g 10001 -m 0700 /run/scanner /srv/documents \
+    && install -d -o 10002 -g 10003 -m 0750 /run/inspector
 COPY freshclam.conf /etc/sallimbook/freshclam.conf
 ARG SALLIMBOOK_CVD_REFRESH
 RUN test -n "$SALLIMBOOK_CVD_REFRESH" \

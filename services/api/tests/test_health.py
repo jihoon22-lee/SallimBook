@@ -55,3 +55,15 @@ def test_explicit_production_browser_origin_is_allowed():
         )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://synthetic.invalid"
+
+
+def test_production_documents_require_the_isolated_inspector(tmp_path):
+    base = {
+        "environment": "production",
+        "allowed_origins": [],
+        "_env_file": None,
+        "document_storage_directory": tmp_path,
+    }
+    with pytest.raises(RuntimeError):
+        create_app(Settings(**base))
+    create_app(Settings(**base, document_inspector_socket=tmp_path / "inspector.sock"))

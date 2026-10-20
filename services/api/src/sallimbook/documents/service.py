@@ -270,6 +270,11 @@ def upload_content(session, principal, document_id, content, if_match, key, sett
             ),
             tesseract_path=str(settings.document_tesseract_path),
             pdftoppm_path=str(settings.document_pdftoppm_path),
+            inspector_socket=(
+                str(settings.document_inspector_socket)
+                if settings.document_inspector_socket is not None
+                else None
+            ),
         )
     recheck = _lock(session, principal)
     store = PrivateStore(settings.document_storage_directory)

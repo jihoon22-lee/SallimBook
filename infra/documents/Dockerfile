@@ -32,7 +32,7 @@ RUN test -n "$SALLIMBOOK_CVD_REFRESH" \
     && chmod -R a+rX /var/lib/clamav
 COPY infra/documents/clamd.conf /etc/sallimbook/clamd.conf
 COPY services/api/src/sallimbook/core/errors.py /opt/sallimbook/sallimbook/core/errors.py
-COPY services/api/src/sallimbook/documents/validation.py services/api/src/sallimbook/documents/_validation_worker.py /opt/sallimbook/sallimbook/documents/
+COPY services/api/src/sallimbook/documents/validation.py services/api/src/sallimbook/documents/_validation_worker.py services/api/src/sallimbook/documents/inspector.py /opt/sallimbook/sallimbook/documents/
 COPY infra/documents/run_checks.py /opt/sallimbook/run_checks.py
 ENV PYTHONPATH=/opt/sallimbook PYTHONDONTWRITEBYTECODE=1 TZ=Etc/UTC
 WORKDIR /opt/sallimbook

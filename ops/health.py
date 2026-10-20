@@ -1,8 +1,10 @@
-"""Container readiness: the same private scanner policy used for every upload."""
+"""Container readiness: the same private scanner and inspector policy used for every upload."""
 
 import argparse
 import os
 import urllib.request
+
+INSPECTOR_SOCKET = "/run/inspector/inspector.sock"
 
 
 def scanner_ready(path):
@@ -11,11 +13,22 @@ def scanner_ready(path):
     check_scanner_availability(path)
 
 
+def inspector_ready(path):
+    from sallimbook.documents.validation import check_inspector_availability
+
+    check_inspector_availability(path)
+
+
 def check(mode):
-    if mode not in {"scanner", "api"}:
+    if mode not in {"scanner", "inspector", "api"}:
         raise ValueError("Unknown container readiness mode")
+    inspector = os.environ.get("SALLIMBOOK_DOCUMENT_INSPECTOR_SOCKET", INSPECTOR_SOCKET)
+    if mode == "inspector":
+        inspector_ready(inspector)
+        return
     scanner_ready(os.environ.get("SALLIMBOOK_DOCUMENT_SCANNER_SOCKET", "/run/scanner/clamd.sock"))
     if mode == "api":
+        inspector_ready(inspector)
         with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/ready", timeout=2) as response:
             if response.status != 200:
                 raise RuntimeError("API database readiness failed")
@@ -23,7 +36,7 @@ def check(mode):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("scanner", "api"))
+    parser.add_argument("mode", choices=("scanner", "inspector", "api"))
     try:
         check(parser.parse_args().mode)
     except Exception:

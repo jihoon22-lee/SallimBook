@@ -186,3 +186,27 @@ uv run --project services/api --frozen python scripts/test_document_tools.py --m
 `--measure`는 합성 입력별 결과 코드·시간·메모리 숫자만 출력한다. 검사 container는
 `sallimbook-document-test-*` 이름만 만들고 끝나면 제거한다. 실제 HTTPS `test_web_auth.py --documents`와
 `--exports`도 통과했다. 실제 Galaxy 카메라 사진 확인은 [첨부 UI 검증](documents-client.md)에 기록한다.
+
+## 문서 검사 격리(M15) — 2026-10-20
+
+구조 검사·렌더링·OCR을 API 컨테이너 밖의 검사 전용 `inspector` 컨테이너로 옮겼다
+([ADR 0010](../adr/document-inspection-isolation.md)). inspector는 API와 같은 이미지를 UID 10002·GID 10003으로
+실행하며 네트워크·비밀·문서 저장소·scanner socket이 없다. API와는 전용 볼륨의 Unix socket 하나만 공유하고,
+연결마다 요청 하나(종류·길이 머리말과 문서 bytes)를 받아 기존 `_validation_worker.py`를 기존 RLIMIT로 새로 실행한다.
+응답은 1KiB 이하 고정 JSON이다. 시간 초과는 `DOCUMENT_TOO_COMPLEX`, 그 밖의 실패와 동시 검사는
+`DOCUMENT_SCAN_UNAVAILABLE`로 답하고, ping은 검사 중에도 바로 답한다. API는 ClamAV 검사, 결과 형식 재검증,
+암호화·저장을 지금처럼 맡는다. 개발·테스트는 inspector 설정이 없으면 로컬 워커를 쓰고, 운영은 inspector 없이
+시작하지 않는다. API 응답 형태·오류 코드·워커 규칙·RLIMIT는 바뀌지 않았다.
+
+실행한 시험과 결과:
+
+| 시험 | 결과 |
+|---|---|
+| `services/api/tests/test_document_inspector.py`(프로토콜·분류·검사 중 ping·잘못된 요청·socket 교체 거부) | 11 passed |
+| `test_document_validation.py`의 원격 검사 시험(로컬과 같은 결과, API 측 결과 검증, 없음·world-writable·무응답 inspector의 503) | 7 passed |
+| `python3 -m ops.test_runtime --image <로컬 빌드 이미지 ID>` | inspector 프로브(UID·네트워크·비밀·저장소·capability·socket 권한), 메모리 소진 격리(합성 할당이 137로 종료되고 API는 healthy·재시작 0), inspector 중지 시 API unhealthy와 복구 모두 PASS |
+| `scripts/test_document_tools.py` | 31개 검사 PASS |
+| `scripts/test_web_auth.py --documents`·`--exports` | 통과(도구가 운영과 같이 워커 RLIMIT 안에서 실행) |
+
+운영 배포와 확인표는 [운영 runbook](../operations-runbook.md)의 "문서 검사기 배포와 되돌리기"를 따른다.
+운영 배포 결과는 아직 없다.
