@@ -230,3 +230,18 @@ def test_inspect_document_reaches_ocr_for_pdf_with_stream_markers():
         ),
         "DOCUMENT_OCR_UNAVAILABLE",
     )
+
+
+def test_zip_end_of_directory_hidden_in_excluded_tail_data_is_rejected():
+    # ZIP/JAR readers locate the end-of-central-directory record in the last 64 KiB, so it
+    # must stay visible even inside an IDAT payload or JPEG scan data near the end.
+    eocd = b"PK\x05\x06" + b"\x00" * 16 + struct.pack("<H", 16)
+    png = stored_png(b"\x80" * 8)
+    at = png.index(b"IDAT")
+    length = struct.unpack("!I", png[at - 4 : at])[0]
+    payload = png[at + 4 : at + 4 + length] + b"\x80" * 32 + eocd
+    forged = png[: at - 4] + chunk(b"IDAT", payload) + png[at + 8 + length :]
+    assert_rejected(lambda: worker._polyglot(forged, "image/png"))
+    jpeg = noise_jpeg()
+    hidden = jpeg[:-2] + b"\x00" * 32 + eocd[:-2] + struct.pack("<H", 2) + jpeg[-2:]
+    assert_rejected(lambda: worker._polyglot(hidden, "image/jpeg"))

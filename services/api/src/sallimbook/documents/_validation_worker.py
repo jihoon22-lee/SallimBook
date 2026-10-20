@@ -181,6 +181,9 @@ def _card_text(value: str) -> None:
 # Each scanned range widens by the longest marker minus one so a marker that continues into
 # attacker-chosen bytes next to an excluded range (e.g. a PNG CRC) is still found.
 _MARKER_OVERLAP = 13
+# ZIP/JAR readers search the last 64 KiB plus the 22-byte record for the end of the central
+# directory, so that tail is always scanned for it, excluded ranges or not.
+_ZIP_TAIL = 65_557
 
 
 def _merge(ranges: list[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
@@ -319,6 +322,8 @@ def _polyglot(data: bytes, mime: str, ranges: tuple[tuple[int, int], ...] | None
     # Reject append/prepend containers and executable signatures. Structural parsing
     # below additionally requires exact format termination and known container chunks.
     # Compressed image/stream data is excluded: random bytes there are not interpretable.
+    if b"PK\x05\x06" in data[-_ZIP_TAIL:]:
+        raise Rejected
     for start, end in _scannable_ranges(data, mime) if ranges is None else ranges:
         part = data[max(0, start - _MARKER_OVERLAP) : min(len(data), end + _MARKER_OVERLAP)]
         if any(
