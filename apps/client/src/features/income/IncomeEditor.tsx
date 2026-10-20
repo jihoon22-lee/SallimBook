@@ -12,6 +12,7 @@ import { IncomeFields } from "./IncomeFields";
 import { useIncomeApi } from "./api";
 import { excludeSelf, incomeDraft, incomeInput, incomePatch, preserveIncomeChanges } from "./model";
 import type { DuplicateResponse, Income, IncomeDraft, IncomeInput } from "./model";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 
 export function IncomeEditor({ initial }: { initial?: Income }) {
   const api = useIncomeApi();
@@ -26,6 +27,8 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
   const [checking, setChecking] = useState(false);
   const [latest, setLatest] = useState<Income | null>(null);
   const [validation, setValidation] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const input = incomeInput(draft);
   const body = base
     ? incomePatch(incomeDraft(base.period_month, base), draft, reason, acknowledged)
@@ -93,7 +96,10 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
           )
         : api.create(body as IncomeInput, key, signal),
     );
-    if (result.ok && command.mounted.current) navigate(`/income/${result.value.id}`);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/income/${result.value.id}`, { replace: true });
+    }
   }
   async function compareLatest() {
     if (!base) return;
@@ -111,7 +117,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
     <section className="card">
       <h2>{base ? "수입 정정" : "새 수입 기록"}</h2>
       <RecordedMoneyNotice />
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setDirty(true)} onSubmit={(event) => void submit(event)}>
         <IncomeFields draft={draft} onChange={change} disabled={command.busy || checking} />
         {base && (
           <div className="form-field">

@@ -112,7 +112,7 @@ export function SaveControls({
           입력 취소
         </button>
       ) : backTo ? (
-        <Link className="button-link secondary-button" to={backTo}>
+        <Link className="button-link secondary-button" to={backTo} replace>
           입력 취소
         </Link>
       ) : null}

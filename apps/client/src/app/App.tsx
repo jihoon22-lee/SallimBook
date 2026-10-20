@@ -79,6 +79,7 @@ import { MonthProvider } from "../shared/MonthContext";
 import { RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 import { useHistoryScroll } from "../shared/historyRestore";
+import { UnsavedChangesProvider, useLeavePrompt } from "../shared/UnsavedChanges";
 
 const screens = [
   {
@@ -779,6 +780,15 @@ function NotFound() {
 }
 
 function AppShell() {
+  return (
+    <UnsavedChangesProvider>
+      <ShellFrame />
+    </UnsavedChangesProvider>
+  );
+}
+
+function ShellFrame() {
+  const leave = useLeavePrompt();
   const { state } = useAuth();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -816,6 +826,11 @@ function AppShell() {
   useEffect(
     () =>
       registerAndroidBackHandler(() => {
+        // A second back press while the leave prompt is open keeps the person editing.
+        if (leave.open) {
+          leave.stay();
+          return true;
+        }
         if (canGoBackWithinApp(window.history.state)) {
           navigate(-1);
           return true;
@@ -826,7 +841,7 @@ function AppShell() {
         }
         return false;
       }),
-    [navigate, location.pathname, parent],
+    [navigate, location.pathname, parent, leave],
   );
 
   return (
