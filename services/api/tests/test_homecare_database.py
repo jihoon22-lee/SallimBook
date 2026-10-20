@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from test_accounts import make_actor
 from test_homecare import vector
 from test_income import headers
+from test_pagination import api_pages, ids, pairs
 
 from sallimbook.assets.models import Asset
 from sallimbook.cashflow.models import CashRecord
@@ -411,7 +412,7 @@ def test_cancelling_older_and_latest_replacements_recomputes_surviving_schedule(
         assert session.scalar(select(func.sum(StockMovement.quantity_delta))) == 5
 
 
-def test_same_day_replacements_have_stable_id_tie_and_cancel_does_not_lose_other(
+def test_same_day_replacements_prefer_latest_entry_and_cancel_does_not_lose_other(
     homecare_app, actors
 ):
     actor = actors[0]
@@ -420,7 +421,6 @@ def test_same_day_replacements_have_stable_id_tie_and_cancel_does_not_lose_other
         link = post_link(client, actor, post_appliance(client, actor), stock)
         receipt(client, actor, stock, quantity=2)
         records = [replace(client, actor, link, replaced_on=TODAY) for _ in range(2)]
-        records.sort(key=lambda row: row["replacement_id"])
         assert (
             link_at(client, actor, link["id"])["last_replacement_id"]
             == records[-1]["replacement_id"]
@@ -1013,6 +1013,39 @@ def test_every_foreign_household_target_and_relationship_is_not_found(homecare_a
         assert link_at(client, foreign, link_id)["last_replacement_id"] == r
 
 
+def test_homecare_lists_follow_business_dates_across_pages(homecare_app, actors):
+    actor = actors[0]
+    days = ["2025-03-02", "2025-03-01", "2025-03-02", "2025-03-03", "2025-03-01"]
+    by_date = (3, 2, 0, 4, 1)  # 03-03, 03-02 later then earlier, 03-01 later then earlier
+    with TestClient(homecare_app) as client:
+        appliances = [post_appliance(client, actor, name=f"합성 기기 {n}") for n in range(5)]
+        stocks = [post_consumable(client, actor, name=f"합성 필터 {n}") for n in range(5)]
+        links = [post_link(client, actor, row, stocks[0])["id"] for row in appliances]
+        movements = [
+            receipt(client, actor, stocks[1], quantity=1, occurred_on=day)["id"] for day in days
+        ]
+        receipt(client, actor, stocks[0], quantity=5)
+        replaced = [
+            replace(client, actor, {"id": links[0]}, replaced_on=day)["replacement_id"]
+            for day in days
+        ]
+        expected = {
+            "/api/v1/appliances": [row["id"] for row in reversed(appliances)],
+            "/api/v1/consumables": [row["id"] for row in reversed(stocks)],
+            "/api/v1/appliance-consumables": links[::-1],
+            "/api/v1/homecare/status": links[::-1],
+            f"/api/v1/consumables/{stocks[1]['id']}/stock-movements": [
+                movements[i] for i in by_date
+            ],
+            f"/api/v1/appliance-consumables/{links[0]}/replacements": [
+                replaced[i] for i in by_date
+            ],
+        }
+        for path, rows in expected.items():
+            assert ids(api_pages(client, actor, path)) == pairs(rows), path
+        assert link_at(client, actor, links[0])["last_replacement_id"] == replaced[3]
+
+
 def test_pagination_is_bounded_stable_and_parent_scoped(homecare_app, actors):
     actor = actors[0]
     with TestClient(homecare_app) as client:
@@ -1032,7 +1065,7 @@ def test_pagination_is_bounded_stable_and_parent_scoped(homecare_app, actors):
             f"/api/v1/consumables/{stock['id']}/stock-movements",
             f"/api/v1/appliance-consumables/{links[0]['id']}/replacements",
         ):
-            ids, cursor = [], None
+            seen_ids, cursor = [], None
             while True:
                 response = client.get(
                     path,
@@ -1042,12 +1075,14 @@ def test_pagination_is_bounded_stable_and_parent_scoped(homecare_app, actors):
                 assert response.status_code == 200, response.text
                 page = response.json()
                 assert len(page["items"]) <= 1
-                ids.extend(row["id"] for row in page["items"])
+                seen_ids.extend(row["id"] for row in page["items"])
                 cursor = page["next_cursor"]
                 if cursor is None:
                     break
                 assert cursor == page["items"][-1]["id"]
-            assert len(ids) == len(set(ids)) and ids == sorted(ids, reverse=True)
+            whole = client.get(path, headers=actor.headers, params={"limit": 200}).json()
+            assert len(seen_ids) == len(set(seen_ids)) == len(whole["items"])
+            assert seen_ids == [row["id"] for row in whole["items"]]
             assert client.get(path, headers=actor.headers, params={"limit": 201}).status_code == 422
         wrong_link = f"/api/v1/appliance-consumables/{links[1]['id']}/replacements"
         assert client.get(wrong_link, headers=actor.headers).json()["items"] == []

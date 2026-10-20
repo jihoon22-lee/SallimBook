@@ -103,3 +103,27 @@ def test_page_after_continues_after_the_cursor_row_and_rejects_unknown_cursor():
     with pytest.raises(DomainError) as error:
         page_after(rows, cursor=uid(9), limit=2, key=lambda row: row)
     assert (error.value.code, error.value.status) == ("NOT_FOUND", 404)
+
+
+def api_pages(client, actor, path, *, items="items", cursor_key="id", **params):
+    """Read every limit=2 page; each next_cursor must be the last row of its page."""
+    pages, cursor = [], None
+    while True:
+        query = params | {"limit": 2} | ({"cursor": cursor} if cursor else {})
+        response = client.get(path, headers=actor.headers, params=query)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        pages.append(body[items])
+        cursor = body["next_cursor"]
+        if cursor is None:
+            return pages
+        assert cursor == body[items][-1][cursor_key]
+        assert len(pages) < 10, "pagination did not finish"
+
+
+def ids(pages, key="id"):
+    return [[row[key] for row in page] for page in pages]
+
+
+def pairs(values):
+    return [list(values[index : index + 2]) for index in range(0, len(values), 2)]
