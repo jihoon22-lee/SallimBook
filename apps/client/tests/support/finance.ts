@@ -116,6 +116,9 @@ export async function mockFinance(page: Page) {
     revealDelay: 0,
     revealCalls: 0,
     accountGets: 0,
+    deletes: [] as { path: string; version: string }[],
+    deleteInUse: false,
+    deleteFailureAfter: false,
   };
   const error = (route: Route, status: number, code: string) =>
     route.fulfill({
@@ -210,6 +213,43 @@ export async function mockFinance(page: Page) {
           obligations: { items: [], total_count: 0, next_cursor: null },
           cards: { items: [], total_count: 0, next_cursor: null },
         },
+      });
+    }
+    const removed = async (
+      record: { id: string; version: number } | undefined,
+      inUse: string,
+      remove: () => void,
+    ) => {
+      const version = route.request().headers()["if-match"] ?? "";
+      state.deletes.push({ path, version });
+      if (!record) return error(route, 404, "NOT_FOUND");
+      if (version !== `"${record.version}"`) return error(route, 409, "VERSION_CONFLICT");
+      if (state.deleteInUse) return error(route, 409, inUse);
+      remove();
+      if (state.deleteFailureAfter) {
+        state.deleteFailureAfter = false;
+        return route.abort("failed");
+      }
+      return route.fulfill({ status: 204, body: "" });
+    };
+    if (path.startsWith("/api/v1/accounts/") && method === "DELETE") {
+      const account = state.accounts.find((item) => item.id === path.split("/")[4]);
+      return removed(account, "ACCOUNT_IN_USE", () => {
+        state.accounts.splice(state.accounts.indexOf(account!), 1);
+        const index = state.assets.findIndex((item) => item.id === account!.asset_id);
+        if (index >= 0) state.assets.splice(index, 1);
+      });
+    }
+    if (path.startsWith("/api/v1/assets/") && method === "DELETE") {
+      const asset = state.assets.find((item) => item.id === path.split("/")[4]);
+      // An asset with an account is referenced, like the server's foreign key.
+      const linked = state.accounts.some((item) => item.asset_id === asset?.id);
+      if (asset && linked) {
+        state.deletes.push({ path, version: route.request().headers()["if-match"] ?? "" });
+        return error(route, 409, "ASSET_IN_USE");
+      }
+      return removed(asset, "ASSET_IN_USE", () => {
+        state.assets.splice(state.assets.indexOf(asset!), 1);
       });
     }
     if (path.startsWith("/api/v1/accounts/")) {

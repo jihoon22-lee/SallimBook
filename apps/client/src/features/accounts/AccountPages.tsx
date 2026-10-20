@@ -1,7 +1,7 @@
 import { FilterPanel } from "../../shared/TaskLayout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { useAuth } from "../auth/AuthProvider";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
@@ -19,6 +19,8 @@ import { ClosureReview, useClosureReview } from "../finance/PaymentLinks";
 import { AssetMonthlyData } from "../assets/comparison/AssetMonthlyData";
 import { AssetSummary, ownerLabel } from "../assets/AssetPages";
 import { useAssetsApi } from "../assets/api";
+import { futureEndMessage, StoredFutureEnd } from "../assets/AssetFields";
+import { MisregistrationDelete } from "../assets/MisregistrationDelete";
 import { AccountEditor } from "./AccountEditor";
 import { AccountNumber } from "./AccountNumber";
 import { useAccountsApi } from "./api";
@@ -265,6 +267,9 @@ function useAccount(id: string) {
 function AccountDetail({ id }: { id: string }) {
   const state = useAccount(id);
   const api = useAssetsApi();
+  const accounts = useAccountsApi();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
   const members = useHouseholdMembers();
   const mounted = useMounted();
   const location = useLocation();
@@ -283,6 +288,10 @@ function AccountDetail({ id }: { id: string }) {
       (state.account.opened_on && endedOn < state.account.opened_on)
     ) {
       setFormError("종료일은 보유 시작일과 계좌 개설일 이후의 실제 날짜로 입력해 주세요.");
+      return;
+    }
+    if (endedOn > todaySeoul()) {
+      setFormError(futureEndMessage);
       return;
     }
     setBusy(true);
@@ -354,6 +363,9 @@ function AccountDetail({ id }: { id: string }) {
             <dd>{account.status === "closed" ? "종료" : "사용 중"}</dd>
           </div>
         </dl>
+        {account.closed_on && account.closed_on > todaySeoul() && (
+          <StoredFutureEnd to={`/assets/${account.asset_id}/edit`} />
+        )}
         <div className="form-actions">
           <Link className="button-link" to={`/accounts/${id}/edit`}>
             계좌 정보 수정
@@ -363,12 +375,24 @@ function AccountDetail({ id }: { id: string }) {
               type="button"
               onClick={() => {
                 setError(null);
+                setDeleting(false);
                 setClosing(true);
               }}
             >
               계좌 사용 종료하기
             </button>
           )}
+          <button
+            type="button"
+            className="danger-button"
+            onClick={() => {
+              setError(null);
+              setClosing(false);
+              setDeleting(true);
+            }}
+          >
+            오등록 삭제 검토
+          </button>
           <Link to="/accounts">계좌 목록</Link>
         </div>
       </section>
@@ -395,7 +419,7 @@ function AccountDetail({ id }: { id: string }) {
                 id="account-closed"
                 type="date"
                 required
-                max="9999-12-31"
+                max={todaySeoul()}
                 min={
                   account.opened_on && account.opened_on > account.asset.started_on
                     ? account.opened_on
@@ -434,6 +458,24 @@ function AccountDetail({ id }: { id: string }) {
           </form>
         </section>
       )}
+      {deleting && (
+        <MisregistrationDelete
+          id="account-delete"
+          title="오등록 계좌 삭제 확인"
+          ackLabel="잘못 등록한 계좌이며 연결된 금융 자산과 함께 삭제할 것을 확인했어요."
+          actionLabel="오등록 계좌 삭제"
+          inUseCode="ACCOUNT_IN_USE"
+          remove={() => accounts.delete(account.id, account.version)}
+          done={() => navigate("/accounts", { replace: true, state: { deleted: "account" } })}
+          cancel={() => setDeleting(false)}
+        >
+          <p>
+            다른 기록이 연결되지 않은 오등록 계좌만 실제로 삭제할 수 있어요. 연결된 금융 자산 「
+            {account.asset.name}」과 저장한 계좌번호도 함께 지워져요. 사용 이력이 있으면 계좌 사용
+            종료를 이용해 주세요.
+          </p>
+        </MisregistrationDelete>
+      )}
     </>
   );
 }
@@ -453,6 +495,7 @@ function AccountEdit({ id }: { id: string }) {
 }
 export function AccountListPage() {
   const { state } = useAuth();
+  const location = useLocation();
   return (
     <>
       <div className="intro">
@@ -460,6 +503,9 @@ export function AccountListPage() {
         <h1>계좌 관리</h1>
         <p>은행·증권·연금저축·IRP·DC·ISA를 한곳에서 관리해요.</p>
       </div>
+      {location.state?.deleted === "account" && (
+        <p role="status">계좌와 연결된 금융 자산이 삭제된 것을 확인했어요.</p>
+      )}
       {state.status === "authenticated" ? <AccountList /> : <SessionStatus />}
     </>
   );

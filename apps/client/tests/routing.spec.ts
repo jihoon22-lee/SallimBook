@@ -190,3 +190,27 @@ test("keyboard skip link, dark mode and enlarged narrow layout remain usable", a
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("소모품 관리");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test("selected month follows the Seoul month at midnight unless another month was chosen", async ({
+  page,
+}) => {
+  // 2026-12-31 23:59:30 Asia/Seoul
+  await page.clock.install({ time: new Date("2026-12-31T14:59:30Z") });
+  await page.goto("/");
+  const picker = page.getByLabel("확인할 월");
+  await expect(picker).toHaveValue("2026-12");
+  // 2027-01-01 00:00:30 Asia/Seoul crosses the year and month boundary.
+  await page.clock.runFor(60_000);
+  await expect(picker).toHaveValue("2027-01");
+  await expect(page.getByText("월간 기록 · 2027년 1월")).toBeVisible();
+  // Another month chosen by hand stays.
+  await picker.fill("2026-09");
+  await page.clock.setSystemTime(new Date("2027-01-31T14:59:30Z"));
+  await page.clock.runFor(60_000);
+  await expect(picker).toHaveValue("2026-09");
+  // Choosing the current month again follows it again, here on return to the app.
+  await picker.fill("2027-02");
+  await page.clock.setSystemTime(new Date("2027-02-28T15:00:30Z"));
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(picker).toHaveValue("2027-03");
+});

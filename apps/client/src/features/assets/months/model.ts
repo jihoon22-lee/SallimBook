@@ -144,3 +144,43 @@ export function scopeIdentity(row: MonthValue): string {
     row.ended_on,
   ]);
 }
+
+/** A carried note only while a carried amount remains; cleared rows say nothing. */
+export function carriedNote(row: MonthValue): string | null {
+  if (row.verification_state === "carried_unconfirmed")
+    return row.origin === "carried"
+      ? "이전 기록에서 불러온 금액이에요. 이번 달 실제 값과 기준일을 확인해 주세요."
+      : "자산 범위를 반영해 다시 확인할 금액이에요. 이번 달 실제 값과 기준일을 확인해 주세요.";
+  if (row.verification_state === "verified" && row.origin === "carried")
+    return "이전 기록에서 불러온 금액이에요. 직접 확인을 마쳤어요.";
+  return null;
+}
+
+/** Mirrors the server's untouched-missing rule; a reasonless clear looks the same. */
+export function untouchedMissing(row: MonthValue): boolean {
+  return (
+    row.verification_state === "missing" &&
+    row.origin === "manual" &&
+    row.origin_revision_id === null &&
+    row.as_of_date === null &&
+    row.change_reason === null
+  );
+}
+
+/** Rows carry-previous would fill, for display only; the server does the filling. */
+export function carryCandidates(
+  record: MonthRecord,
+  prior: MonthRecord | null,
+): { row: MonthValue; source: MonthValue }[] {
+  if (prior?.state !== "confirmed") return [];
+  const sources = new Map(prior.values.map((value) => [value.asset_id, value]));
+  return record.values.flatMap((row) => {
+    const source = sources.get(row.asset_id);
+    return source &&
+      untouchedMissing(row) &&
+      source.amount_basis === row.amount_basis &&
+      source.input_amount_krw !== null
+      ? [{ row, source }]
+      : [];
+  });
+}

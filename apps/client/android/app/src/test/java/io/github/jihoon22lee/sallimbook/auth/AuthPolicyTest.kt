@@ -109,6 +109,18 @@ class AuthPolicyTest {
         assertFalse(applied)
     }
 
+    @Test fun assetMonthAndAccountErrorsKeepTheirCode() {
+        for ((status, code) in listOf(
+            422 to "ASSET_END_IN_FUTURE", 422 to "MONTH_IN_FUTURE", 409 to "PREVIOUS_MONTH_UNCONFIRMED", 409 to "ACCOUNT_IN_USE",
+        )) {
+            val error = AuthPolicy.safeError(
+                status, mapOf("error" to mapOf("code" to code, "message" to "synthetic")), uuid,
+            )!!["error"] as Map<*, *>
+            assertEquals(code, error["code"])
+            assertFalse(error["message"].toString().contains("synthetic"))
+        }
+    }
+
     @Test fun errorResponsesKeepOnlyRecognizedCodeCorrelationAndPositiveConflictVersion() {
         val input = mapOf("error" to mapOf(
             "code" to "REAUTHENTICATION_REQUIRED", "message" to "synthetic-sensitive-input",

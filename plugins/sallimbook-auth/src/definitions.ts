@@ -338,6 +338,10 @@ export interface SallimBookAuth {
     input: NativeAccountPatch;
     ifMatch: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
+  deleteAccount(options: {
+    accountId: string;
+    ifMatch: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   getAssetMonth(options: {
     month: string;
     query?: NonNullable<operations["getAssetMonth"]["parameters"]["query"]>;
@@ -378,6 +382,12 @@ export interface SallimBookAuth {
   reopenAssetMonth(options: {
     month: string;
     input: components["schemas"]["MonthReopen"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  carryPreviousAssetMonth(options: {
+    month: string;
+    input: components["schemas"]["MonthCarryPrevious"];
     ifMatch: string;
     idempotencyKey: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;

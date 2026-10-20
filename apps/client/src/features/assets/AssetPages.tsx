@@ -2,7 +2,7 @@ import { Icon } from "../../shared/Icon";
 import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { MonthPicker, useMonth, formatMonth } from "../../shared/MonthContext";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
@@ -21,6 +21,8 @@ import type { HouseholdMember } from "../finance/FinanceSupport";
 import { ClosureReview, useAssetClosure } from "../finance/PaymentLinks";
 import { AssetMonthlyData } from "./comparison/AssetMonthlyData";
 import { AssetEditor } from "./AssetEditor";
+import { futureEndMessage, StoredFutureEnd } from "./AssetFields";
+import { MisregistrationDelete } from "./MisregistrationDelete";
 import { useAssetsApi } from "./api";
 import { amountBases, assetKinds, categories, shareToPercent } from "./model";
 import type { Asset, AssetQuery } from "./model";
@@ -381,6 +383,8 @@ function AssetDetail({ id }: { id: string }) {
   const api = useAssetsApi();
   const mounted = useMounted();
   const [closing, setClosing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   const [endedOn, setEndedOn] = useState(todaySeoul);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -392,6 +396,10 @@ function AssetDetail({ id }: { id: string }) {
     if (!state.asset || busy || !closure.ready) return;
     if (!isDateOnly(endedOn) || endedOn < state.asset.started_on) {
       setFormError("종료일은 보유 시작일 이후의 실제 날짜로 입력해 주세요.");
+      return;
+    }
+    if (endedOn > todaySeoul()) {
+      setFormError(futureEndMessage);
       return;
     }
     setBusy(true);
@@ -442,6 +450,9 @@ function AssetDetail({ id }: { id: string }) {
         <h2>{asset.name}</h2>
         <AssetSummary asset={asset} members={members.members} />
         <MemberLoadError error={members.error} retry={members.retry} />
+        {asset.ended_on && asset.ended_on > todaySeoul() && (
+          <StoredFutureEnd to={`/assets/${id}/edit`} />
+        )}
         {asset.note && (
           <div className="plain-note">
             <h3>메모</h3>
@@ -458,17 +469,51 @@ function AssetDetail({ id }: { id: string }) {
               className="secondary-button"
               onClick={() => {
                 setError(null);
+                setDeleting(false);
                 setClosing(true);
               }}
             >
               사용 종료하기
             </button>
           )}
+          <button
+            type="button"
+            className="danger-button"
+            onClick={() => {
+              setError(null);
+              setClosing(false);
+              setDeleting(true);
+            }}
+          >
+            오등록 삭제 검토
+          </button>
           <Link className="button-link secondary-button" to="/assets">
             자산 목록
           </Link>
         </div>
       </section>
+      {deleting && (
+        <MisregistrationDelete
+          id="asset-delete"
+          title="오등록 자산 삭제 확인"
+          ackLabel="잘못 등록한 자산이며 실제 삭제할 것을 확인했어요."
+          actionLabel="오등록 자산 삭제"
+          inUseCode="ASSET_IN_USE"
+          remove={() => api.delete(asset.id, asset.version)}
+          done={() => navigate("/assets", { replace: true, state: { deleted: "asset" } })}
+          cancel={() => setDeleting(false)}
+        >
+          <p>
+            월 기록·계좌·납부 규칙·문서에 연결되지 않은 오등록 자산만 실제로 삭제할 수 있어요. 사용
+            이력이 있으면 사용 종료를 이용해 주세요.
+          </p>
+          {asset.category === "financial" && (
+            <p className="muted">
+              계좌로 등록한 금융 자산은 계좌 상세에서 계좌와 함께 삭제할 수 있어요.
+            </p>
+          )}
+        </MisregistrationDelete>
+      )}
       <DocumentPanel kind="asset" id={id} />
       <AssetMonthlyData assetId={id} />
       {closing && (
@@ -484,7 +529,7 @@ function AssetDetail({ id }: { id: string }) {
                 value={endedOn}
                 onChange={(event) => setEndedOn(event.target.value)}
                 min={asset.started_on}
-                max="9999-12-31"
+                max={todaySeoul()}
                 required
                 disabled={busy}
               />
@@ -544,6 +589,7 @@ function AssetEdit({ id }: { id: string }) {
 export function AssetListPage() {
   const { state } = useAuth();
   const { month } = useMonth();
+  const location = useLocation();
   return (
     <>
       <div className="intro">
@@ -551,6 +597,7 @@ export function AssetListPage() {
         <h1>자산과 부채</h1>
         <p>소유자와 지분, 보유 기간을 함께 관리해요.</p>
       </div>
+      {location.state?.deleted === "asset" && <p role="status">자산이 삭제된 것을 확인했어요.</p>}
       <MonthPicker />
       <p className="month-action">
         <Link to={`/assets/months/${month}`}>{formatMonth(month)} 월 기록 확인</Link>

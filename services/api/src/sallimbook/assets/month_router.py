@@ -5,6 +5,7 @@ from fastapi import APIRouter, Header, Path, Query, Response
 
 from sallimbook.assets import month_service as service
 from sallimbook.assets.month_schemas import (
+    MonthCarryPrevious,
     MonthConfirm,
     MonthDraft,
     MonthHistoryResponse,
@@ -135,6 +136,26 @@ def confirm_month(
     idempotency_key: IdempotencyHeader,
 ) -> MonthReference:
     result = service.confirm_month(session, principal, month, payload, if_match, idempotency_key)
+    _reference_headers(response, result)
+    return result
+
+
+@router.post(
+    "/{month}/carry-previous",
+    response_model=MonthReference,
+    operation_id="carryPreviousAssetMonth",
+    responses={200: {"headers": REFERENCE_HEADERS}},
+)
+def carry_previous(
+    month: YearMonth,
+    payload: MonthCarryPrevious,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    response: Response,
+    if_match: VersionHeader,
+    idempotency_key: IdempotencyHeader,
+) -> MonthReference:
+    result = service.carry_previous(session, principal, month, payload, if_match, idempotency_key)
     _reference_headers(response, result)
     return result
 

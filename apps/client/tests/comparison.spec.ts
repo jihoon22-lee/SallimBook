@@ -3,6 +3,8 @@ import { mockComparison } from "./support/comparison";
 import { uid } from "./support/finance";
 import {
   chartCoordinates,
+  deltaSign,
+  latestConfirmedMonth,
   monthsBefore,
   percentLabel,
   signedKrw,
@@ -247,3 +249,158 @@ for (const mode of ["available", "unconfirmed"] as const)
       await expect(page.getByText("합계 제외", { exact: true }).first()).toBeVisible();
     }
   });
+
+test("delta signs come from server decimal strings without numeric conversion", () => {
+  expect(["-1", "-0.01", "-99999999999999999999"].map(deltaSign)).toEqual([
+    "negative",
+    "negative",
+    "negative",
+  ]);
+  expect(["0", "0.00", "-0.00"].map(deltaSign)).toEqual(["zero", "zero", "zero"]);
+  expect(["1", "191.43", "99999999999999999999"].map(deltaSign)).toEqual([
+    "positive",
+    "positive",
+    "positive",
+  ]);
+  expect([null, "1e3", "1,000", ""].map(deltaSign)).toEqual([
+    "unavailable",
+    "unavailable",
+    "unavailable",
+    "unavailable",
+  ]);
+});
+
+test("net asset decreases are marked negative on home and comparison screens", async ({ page }) => {
+  const state = await mockComparison(page);
+  await page.clock.setFixedTime(new Date("2025-02-20T00:00:00Z"));
+  // Net assets 700원 → 40원.
+  state.after[0]!.owned_amount_krw = "0";
+  state.after[3]!.owned_amount_krw = "0";
+  await page.goto("/");
+  const hero = page.locator(".asset-hero-change .money-delta");
+  await expect(hero).toHaveText("-660원");
+  await expect(hero).toHaveAttribute("data-sign", "negative");
+  await expect(hero).toHaveCSS("color", "rgb(163, 53, 63)");
+  await page.goto(path);
+  await expect(
+    page.locator('.money-delta[data-sign="negative"]').filter({ hasText: "-660원" }),
+  ).toHaveCount(1);
+  // The joint home's net-asset effect.
+  await expect(
+    page.locator('.money-delta[data-sign="negative"]').filter({ hasText: "-500원" }),
+  ).toHaveCount(1);
+  // An asset increase and a liability decrease.
+  await expect(
+    page.locator('.money-delta[data-sign="positive"]').filter({ hasText: "+20원" }),
+  ).toHaveCount(2);
+  // A liability's own amount change is not colored.
+  await expect(page.locator(".money-delta").filter({ hasText: "-20원" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "월별 추이 금액 표" })
+      .getByRole("columnheader", { name: "관찰 금액", exact: true }),
+  ).toBeVisible();
+});
+
+test("latest confirmed month needs two consecutive confirmed months", () => {
+  const point = (month: string, state: TrendPoint["state"]) => ({ month, state }) as TrendPoint;
+  expect(
+    latestConfirmedMonth([
+      point("2024-11", "confirmed"),
+      point("2024-12", "confirmed"),
+      point("2025-01", "confirmed"),
+      point("2025-02", "reopened"),
+      point("2025-03", "draft"),
+    ]),
+  ).toBe("2025-01");
+  // Across a year boundary.
+  expect(latestConfirmedMonth([point("2024-12", "confirmed"), point("2025-01", "confirmed")])).toBe(
+    "2025-01",
+  );
+  expect(
+    latestConfirmedMonth([
+      point("2024-10", "confirmed"),
+      point("2024-11", "missing"),
+      point("2024-12", "confirmed"),
+    ]),
+  ).toBeNull();
+  expect(latestConfirmedMonth([point("2025-01", "confirmed")])).toBeNull();
+  expect(latestConfirmedMonth([])).toBeNull();
+});
+
+test("home switches between this month and the latest confirmed comparison", async ({ page }) => {
+  const state = await mockComparison(page);
+  await page.clock.setFixedTime(new Date("2025-03-05T03:00:00Z"));
+  await page.goto("/");
+  const summary = page.getByRole("region", { name: "자산의 변화", exact: true });
+  const views = summary.getByRole("group", { name: "자산 변화 보기" });
+  await expect(views.getByRole("button", { name: "이번 달", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect.poll(() => state.queries.at(-1)?.get("to")).toBe("2025-03");
+  await views.getByRole("button", { name: "최근 확정 비교", exact: true }).click();
+  await expect
+    .poll(() => [state.trendQueries.at(-1)?.get("from"), state.trendQueries.at(-1)?.get("to")])
+    .toEqual(["2023-04", "2025-03"]);
+  await expect.poll(() => state.queries.at(-1)?.get("to")).toBe("2025-02");
+  await expect(
+    summary.getByText("2025년 1월 → 2025년 2월 확정 기록 비교", { exact: true }),
+  ).toBeVisible();
+  await expect(summary).toContainText("+1,340원");
+  await expect(summary.getByRole("link", { name: "월간 비교 자세히 보기" })).toHaveAttribute(
+    "href",
+    "/assets/compare?to=2025-02",
+  );
+  await views.getByRole("button", { name: "이번 달", exact: true }).click();
+  await expect.poll(() => state.queries.at(-1)?.get("to")).toBe("2025-03");
+  // 2025-02 is being corrected, so the range has no two consecutive confirmed months.
+  state.mode = "unconfirmed";
+  await views.getByRole("button", { name: "최근 확정 비교", exact: true }).click();
+  await expect(
+    summary.getByText("최근 24개월 안에 연속으로 확정한 두 달이 없어요", { exact: false }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(views.getByRole("button", { name: "이번 달", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
+test("home record action starts or continues the month and asks for an asset first", async ({
+  page,
+}) => {
+  const state = await mockComparison(page);
+  await page.clock.setFixedTime(new Date("2025-03-05T03:00:00Z"));
+  state.mode = "current_missing";
+  await page.goto("/");
+  const summary = page.getByRole("region", { name: "자산의 변화", exact: true });
+  const start = summary.getByRole("link", { name: "이번 달 기록 시작", exact: true });
+  await expect(start).toHaveAttribute("href", "/assets/months/2025-03");
+  await expect(start).toHaveClass(/button-link/);
+  await expect(
+    summary.locator("details").getByRole("link", { name: /기록|자산 관리/ }),
+  ).toHaveCount(0);
+  state.mode = "unconfirmed";
+  await page.reload();
+  await expect(
+    summary.getByRole("link", { name: "이번 달 기록 이어서 확인", exact: true }),
+  ).toBeVisible();
+  await expect(summary.locator(".asset-hero-change strong")).toHaveText("확정 후 비교");
+  await expect(summary.getByRole("group", { name: "자산 변화 보기" })).toHaveAccessibleDescription(
+    /확정된 비교는 '최근 확정 비교'에서 볼 수 있어요/,
+  );
+  state.mode = "current_missing";
+  state.finance.assets.length = 0;
+  await page.reload();
+  await expect(summary.getByRole("link", { name: "자산 등록", exact: true })).toHaveAttribute(
+    "href",
+    "/assets/new",
+  );
+  await expect(summary.getByRole("link", { name: /기록 시작/ })).toHaveCount(0);
+  // A month that has not started yet.
+  await page.getByLabel("확인할 월").fill("2025-04");
+  await expect(summary.getByRole("link", { name: /기록 시작|기록 이어서|자산 등록/ })).toHaveCount(
+    0,
+  );
+});

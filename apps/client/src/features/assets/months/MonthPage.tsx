@@ -10,6 +10,7 @@ import type { HouseholdMember } from "../../finance/FinanceSupport";
 import { amountBases, assetKinds, categories, shareToPercent } from "../model";
 import { useAssetMonthsApi } from "./api";
 import {
+  CarryPreviousMonth,
   ConfirmMonth,
   CreateMonthDraft,
   ReopenMonth,
@@ -19,7 +20,7 @@ import { MonthError, MonthSummary } from "./MonthFeedback";
 import { snapshotOwner } from "./ScopeChanges";
 import { MonthRowEditor } from "./MonthRowEditor";
 import type { EditingValue } from "./MonthRowEditor";
-import { formatKrw, monthStates, verificationStates } from "./model";
+import { carriedNote, formatKrw, monthStates, untouchedMissing, verificationStates } from "./model";
 import type { MonthRecord, MonthValue } from "./model";
 
 function SnapshotList({
@@ -92,14 +93,7 @@ function SnapshotList({
                 </button>
               </div>
             )}
-            {row.origin === "carried" && (
-              <p className="muted">
-                이전 기록에서 불러온 금액이에요.
-                {row.verification_state === "carried_unconfirmed"
-                  ? " 이번 달 실제 값과 기준일을 확인해 주세요."
-                  : " 직접 확인을 마쳤어요."}
-              </p>
-            )}
+            {carriedNote(row) && <p className="muted">{carriedNote(row)}</p>}
             {row.change_reason && <p>값 변경 사유: {row.change_reason}</p>}
             <details className="record-details">
               <summary>이 기록의 소유·지분·보유기간</summary>
@@ -234,7 +228,7 @@ function MonthHistory({ month, refresh }: { month: string; refresh: string }) {
   );
 }
 
-type Panel = { type: "confirm" | "reopen" | "sync"; initial: MonthRecord };
+type Panel = { type: "confirm" | "reopen" | "sync" | "carry"; initial: MonthRecord };
 function MonthWorkspace({
   month,
   revisionNo,
@@ -390,6 +384,15 @@ function MonthWorkspace({
             </button>
           ) : (
             <>
+              {record.values.some(untouchedMissing) && (
+                <button
+                  type="button"
+                  disabled={locked}
+                  onClick={() => setPanel({ type: "carry", initial: record })}
+                >
+                  전월 확정값 불러오기 검토
+                </button>
+              )}
               <button
                 type="button"
                 disabled={locked}
@@ -427,6 +430,9 @@ function MonthWorkspace({
       )}
       {panel?.type === "reopen" && (
         <ReopenMonth initial={panel.initial} reload={reload} close={() => setPanel(null)} />
+      )}
+      {panel?.type === "carry" && (
+        <CarryPreviousMonth initial={panel.initial} reload={reload} close={() => setPanel(null)} />
       )}
       {panel?.type === "sync" && (
         <SynchronizeMonthScope

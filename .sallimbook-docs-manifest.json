@@ -66,12 +66,12 @@
       "git_sha1": "3b8fc6f363dfeb61ae4efff9a77ca6eb4e35f6ca"
     },
     "docs/api-contract.md": {
-      "sha256": "512722c81ac691427308426cb9d6e1dde1909865cd303d84a8504b692f089695",
-      "git_sha1": "7126c6dc695822f8e8b655d20329ea94f47f07a4"
+      "sha256": "2ae9385ab09f452c9d8496cac3a1e65ce6c99e0a8ab3c9749ac05f3256460a30",
+      "git_sha1": "18e31f0d5cfc2800bba7a7730ca36b489e654cdb"
     },
     "docs/screen-specifications.md": {
-      "sha256": "78ecef2e5ccdd7ac2486229ab5873d23bea8dee74278eab2ed6636a182af5f83",
-      "git_sha1": "8165f8fdbd6ffe1966d265d93273acc0e241446c"
+      "sha256": "5ecd2e3aebabda3e8f6979e3a854e9a9b7e88b6ffc5f7ae68a5d722afd40c583",
+      "git_sha1": "18e89b5fb1833502001ad63fea3b783aa56390cc"
     },
     "docs/security-authentication.md": {
       "sha256": "757b1a2e0596afb6dc5d1d50efac340da0b28bad5e4f605eb102218413c177d5",
@@ -122,8 +122,8 @@
       "git_sha1": "4d927ddc17db103d9192bc15ad739a9078090c7f"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "bd199b1b1726190a3041b884c6ad3eccc4cab4cffa2e93d5047f521a05e69184",
-      "git_sha1": "c79793fff1077cc1323f348975bc4bf533ebee95"
+      "sha256": "29083a7c675a8ff8356ef19cec782be6baae7d599088bff142ae02e2266a4e14",
+      "git_sha1": "907d90222dda46e4676bcd3018b8f7071d7a0ed4"
     },
     "docs/README.md": {
       "sha256": "07e29fb741d3519319ed7450b4855352ca2dc5b3530975adc80a6ec3fcbb7de2",
@@ -234,20 +234,20 @@
       "git_sha1": "4e6c5c7a6e9532e9bfade15d37f4b9013fd3a348"
     },
     "docs/testing/assets-accounts-client.md": {
-      "sha256": "75746b77a581dc417f2fece88db50b4a303630a5bfb47f5bbff95bd44aba6463",
-      "git_sha1": "88a225ab372b6af9991373b5111a018b7b696aca"
+      "sha256": "cf93b3877fc637431f182b3f9cb5cf90582e6456f83d03787c896cfa2389ba34",
+      "git_sha1": "56d3158e21361655c71f6b0b9c7aa46fadaa0438"
     },
     "docs/testing/homecare-server.md": {
       "sha256": "5294bb1903116b5fe8bc5ce3cb02a315736e15a586ff27d63c90c9d7ccefea39",
       "git_sha1": "a8b02f82de5f99d45a3b2e6dc556659e6c54c45d"
     },
     "docs/testing/monthly-assets-client.md": {
-      "sha256": "d1f8af7845fa22f3ecb85d8db595254c7cc6bcaf18864ffb99cf55dbb9e0e916",
-      "git_sha1": "f4ca9f527aef0a213cf38ff21c48098d2c077287"
+      "sha256": "a7789ade8e16d5c23da32b3a508f257913fa476a9438e23ac5c7ca5b28044c83",
+      "git_sha1": "757a7352be57d7d3564476485a08bb816812bc06"
     },
     "docs/testing/assets-comparison-client.md": {
-      "sha256": "226bf23365e5d0760ec2c18726379e63b411875816f9d212ab6dba8c34fba3c7",
-      "git_sha1": "430221764340d608cdd93c0c0c4b88bc69f3a021"
+      "sha256": "3d7ace82877320270057c5a2547a85aa048b04261a1bfdac2b26066410b74da8",
+      "git_sha1": "e599ecb66f3d1611ff6cccca87c03ac134fc7c85"
     },
     "docs/testing/cashflow-client.md": {
       "sha256": "34f7f2ebb21baf50ce4d86a2693950e46eb6443b6bfbff3917ed34171d44db6a",

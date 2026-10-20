@@ -51,11 +51,14 @@ test("existing financial asset linking rejects duplicate linkage and preserves a
   page,
 }) => {
   const state = await mockFinance(page);
+  // The picker hides linked assets, so the duplicate comes from a spouse linking it meanwhile.
+  const linked = state.accounts.splice(0);
   await page.goto("/accounts/new");
   await page.getByLabel("금융기관", { exact: true }).fill("합성 연결 기관");
   await page.getByLabel("계좌 유형", { exact: true }).selectOption("brokerage");
   await page.getByLabel("금융 자산 연결", { exact: true }).selectOption("existing");
   await page.getByLabel("연결할 금융 자산", { exact: true }).selectOption(uid(11));
+  state.accounts.push(...linked);
   await page.getByRole("button", { name: "계좌 등록", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("이미 다른 계좌와 연결된");
   await expect(page.getByLabel("금융기관", { exact: true })).toHaveValue("합성 연결 기관");
@@ -223,10 +226,14 @@ test("new account linking lists active financial assets and preserves inputs on 
   await page.getByLabel("계좌 유형", { exact: true }).selectOption("brokerage");
   await page.getByLabel("금융 자산 연결", { exact: true }).selectOption("existing");
   await expect(page.getByLabel("연결할 금융 자산", { exact: true }).locator("option")).toHaveCount(
-    3,
+    2,
   );
   await expect(page.getByRole("option", { name: "합성 사용 종료 금융 자산" })).toHaveCount(0);
+  // sampleAccount already links uid(11).
+  await expect(page.getByRole("option", { name: "합성 개인 금융 자산" })).toHaveCount(0);
   expect(state.queries.at(-1)?.get("status")).toBe("active");
+  expect(state.accountQueries.at(-1)?.get("status")).toBe("all");
+  expect(state.accountQueries.at(-1)?.get("limit")).toBe("200");
   await page.getByLabel("연결할 금융 자산", { exact: true }).selectOption(uid(72));
   await page.route("**/api/v1/accounts", async (route) => {
     if (route.request().method() === "POST")
@@ -243,4 +250,49 @@ test("new account linking lists active financial assets and preserves inputs on 
   await expect(page.getByLabel("금융기관", { exact: true })).toHaveValue("합성 보존 기관");
   await page.getByRole("button", { name: "금융 자산 다시 불러오기", exact: true }).click();
   await expect(page.getByRole("option", { name: "합성 새 연결 후보" })).toHaveCount(0);
+});
+
+test("account misregistration delete needs confirmation and treats a retried 404 as deleted", async ({
+  page,
+}) => {
+  const state = await mockFinance(page);
+  state.deleteFailureAfter = true;
+  await page.goto(`/accounts/${uid(30)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  const remove = page.getByRole("button", { name: "오등록 계좌 삭제", exact: true });
+  await expect(remove).toBeDisabled();
+  await page
+    .getByLabel("잘못 등록한 계좌이며 연결된 금융 자산과 함께 삭제할 것을 확인했어요.", {
+      exact: true,
+    })
+    .check();
+  await remove.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await remove.click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  await expect(
+    page.getByText("계좌와 연결된 금융 자산이 삭제된 것을 확인했어요.", { exact: true }),
+  ).toBeVisible();
+  expect(state.deletes).toEqual([
+    { path: `/api/v1/accounts/${uid(30)}`, version: '"1"' },
+    { path: `/api/v1/accounts/${uid(30)}`, version: '"1"' },
+  ]);
+  expect(state.accounts).toHaveLength(0);
+  expect(state.assets.some((asset) => asset.id === uid(11))).toBe(false);
+});
+
+test("a referenced account explains why it stays and offers closure instead", async ({ page }) => {
+  const state = await mockFinance(page);
+  state.deleteInUse = true;
+  await page.goto(`/accounts/${uid(30)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("잘못 등록한 계좌이며 연결된 금융 자산과 함께 삭제할 것을 확인했어요.", {
+      exact: true,
+    })
+    .check();
+  await page.getByRole("button", { name: "오등록 계좌 삭제", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("계좌 사용 종료로 과거 기록을 보존해 주세요");
+  await expect(page.getByRole("button", { name: "오등록 계좌 삭제", exact: true })).toBeDisabled();
+  expect(state.accounts).toHaveLength(1);
 });

@@ -88,6 +88,9 @@ p { margin-block: .65rem; }
 .asset-hero-change { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-size: .8125rem; }
 .asset-hero-change > span { color: var(--muted); }
 .asset-hero-change strong { color: var(--accent); font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.money-delta[data-sign="positive"] { color: var(--positive); }
+.money-delta[data-sign="negative"] { color: var(--danger); }
+.money-delta[data-sign="zero"], .money-delta[data-sign="unavailable"] { color: var(--foreground); }
 .asset-mini-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 12px; padding-top: 15px; border-top: 1px solid var(--border); }
 .asset-mini-totals dt { color: var(--muted); font-size: .75rem; }
 .asset-mini-totals dd { margin: 3px 0 0; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -516,6 +519,8 @@ footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
   .home-assets .section-icon { width: 32px; height: 32px; }
   .home-assets .asset-mini-totals { margin-bottom: 6px; }
   .home-assets .snapshot-check { margin-block: 4px; }
+  .home-assets .section-title { margin-bottom: 6px; }
+  .home-assets .section-title .segmented-control button { min-height: 34px; padding: 4px 10px; font-size: .75rem; }
   .home-today .section-title { margin-bottom: 8px; }
   .home-today .care-row-heading h3 { font-size: .8125rem; }
   .home-today .care-item-meta { margin-bottom: 4px; }

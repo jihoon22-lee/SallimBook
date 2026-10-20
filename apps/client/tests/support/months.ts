@@ -183,22 +183,27 @@ export async function mockMonths(page: Page) {
       return route.abort("failed");
     }
     const fingerprint = JSON.stringify([month, body, version]);
-    const idempotent = ["draft", "confirm", "reopen"].includes(operation);
+    const idempotent = ["draft", "confirm", "reopen", "carry-previous"].includes(operation);
     if (idempotent && !key) return fail(route, 400, "INVALID_IDEMPOTENCY_KEY");
     const existing = completed.get(`${operation}:${key}`);
     if (existing)
       return existing.fingerprint === fingerprint
-        ? route.fulfill({ status: operation === "confirm" ? 200 : 201, json: existing.reference })
+        ? route.fulfill({
+            status: ["draft", "reopen"].includes(operation) ? 201 : 200,
+            json: existing.reference,
+          })
         : fail(route, 409, "IDEMPOTENCY_CONFLICT");
     if (operation === "draft") {
       if (state.record) return fail(route, 409, "MONTH_ALREADY_EXISTS");
       const next = structuredClone(initial);
       next.values = next.values.map((row) => {
-        const source = body.copy_previous
-          ? state.previous?.values.find(
-              (item) => item.asset_id === row.asset_id && item.amount_basis === row.amount_basis,
-            )
-          : null;
+        // Like the server, only a confirmed previous month is copied.
+        const source =
+          body.copy_previous && state.previous?.state === "confirmed"
+            ? state.previous.values.find(
+                (item) => item.asset_id === row.asset_id && item.amount_basis === row.amount_basis,
+              )
+            : null;
         return {
           ...row,
           input_amount_krw: source?.input_amount_krw ?? null,
@@ -212,6 +217,10 @@ export async function mockMonths(page: Page) {
             source?.input_amount_krw !== null && source?.input_amount_krw !== undefined
               ? "carried"
               : "manual",
+          origin_revision_id:
+            source?.input_amount_krw !== null && source?.input_amount_krw !== undefined
+              ? state.previous!.revision_id
+              : null,
         };
       });
       next.totals = total(next.values);
@@ -288,6 +297,45 @@ export async function mockMonths(page: Page) {
             version: 1,
           })),
         };
+      } else if (operation === "carry-previous") {
+        if (current.state === "confirmed") return fail(route, 409, "MONTH_CONFIRMED");
+        if (version !== `"${current.version}"`) return fail(route, 409, "VERSION_CONFLICT");
+        const prior = state.previous?.state === "confirmed" ? state.previous : null;
+        if (!prior) return fail(route, 409, "PREVIOUS_MONTH_UNCONFIRMED");
+        let filled = 0;
+        for (const row of current.values) {
+          const source = prior.values.find((item) => item.asset_id === row.asset_id);
+          const untouched =
+            row.verification_state === "missing" &&
+            row.origin === "manual" &&
+            row.origin_revision_id === null &&
+            row.as_of_date === null &&
+            row.change_reason === null;
+          if (
+            !source ||
+            !untouched ||
+            source.amount_basis !== row.amount_basis ||
+            source.input_amount_krw === null
+          )
+            continue;
+          Object.assign(row, {
+            input_amount_krw: source.input_amount_krw,
+            owned_amount_krw: ownedPreview(
+              source.input_amount_krw,
+              row.household_share,
+              row.amount_basis,
+            ),
+            verification_state: "carried_unconfirmed",
+            origin: "carried",
+            origin_revision_id: prior.revision_id,
+            version: row.version + 1,
+          });
+          filled++;
+        }
+        if (filled) {
+          current.version++;
+          current.totals = total(current.values);
+        }
       } else if (operation === "sync-scope") {
         if (current.state === "confirmed") return fail(route, 409, "MONTH_CONFIRMED");
         for (const row of current.values) {
@@ -307,7 +355,11 @@ export async function mockMonths(page: Page) {
             source_asset_version: asset.version,
           });
           if (changed) {
-            if (basisChanged) row.input_amount_krw = null;
+            if (basisChanged) {
+              row.input_amount_krw = null;
+              row.origin = "manual";
+              row.origin_revision_id = null;
+            }
             row.owned_amount_krw =
               row.input_amount_krw === null
                 ? null

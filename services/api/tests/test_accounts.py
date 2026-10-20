@@ -7,7 +7,7 @@ import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from threading import Event
 from uuid import UUID, uuid4
 
@@ -27,8 +27,13 @@ from sallimbook.accounts.crypto import KeyRing, decrypt_number, encrypt_number
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.accounts.router import router
 from sallimbook.accounts.schemas import AccountCreate, AccountNumber, AccountPatch, AccountType
+from sallimbook.assets import month_service
+from sallimbook.assets import service as asset_service
 from sallimbook.assets.models import Asset
+from sallimbook.assets.month_schemas import MonthDraft
 from sallimbook.assets.router import router as asset_router
+from sallimbook.cards import service as card_service
+from sallimbook.cards.schemas import CardCreate
 from sallimbook.config import Settings
 from sallimbook.core.audit import AuditEvent
 from sallimbook.core.authorization import Principal
@@ -158,6 +163,10 @@ def test_account_openapi_declares_versions_and_response_headers():
         "ETag",
         "Location",
     }
+    delete = paths["/api/v1/accounts/{account_id}"]["delete"]
+    assert delete["operationId"] == "deleteAccount"
+    assert next(p for p in delete["parameters"] if p["name"] == "If-Match")["required"] is True
+    assert set(delete["responses"]) >= {"204"}
 
 
 @pytest.mark.parametrize(
@@ -414,6 +423,89 @@ def account_grant(session, actor, target):
 
 @pytest.mark.database
 class TestAccountsDatabase:
+    def test_account_delete_is_atomic_and_refuses_referenced_rows(
+        self, accounts_app, account_actor, db_engine
+    ):
+        stranger = make_actor(db_engine)
+        with TestClient(accounts_app) as client:
+
+            def delete(account, actor=account_actor, version=None):
+                return client.delete(
+                    f"/api/v1/accounts/{account['id']}",
+                    headers={**actor.headers, "If-Match": f'"{version or account["version"]}"'},
+                )
+
+            plain = create_account(client, account_actor)
+            assert delete(plain, stranger).json()["error"]["code"] == "NOT_FOUND"
+            stale = delete(plain, version=plain["version"] + 1)
+            assert stale.json()["error"]["code"] == "VERSION_CONFLICT"
+            assert delete(plain).status_code == 204
+            assert delete(plain).status_code == 404  # a resend deletes nothing else
+            settled = create_account(
+                client, account_actor, asset=asset_payload(name="합성 결제 자산")
+            )
+            recorded = create_account(
+                client, account_actor, asset=asset_payload(name="합성 월 기록 자산")
+            )
+            with Session(db_engine) as session:
+                card_service.create_card(
+                    session,
+                    account_actor.principal,
+                    CardCreate(
+                        owner_member_id=account_actor.member_id,
+                        issuer_name="합성 카드사",
+                        product_name="합성 카드",
+                        card_type="credit",
+                        settlement_account_id=UUID(settled["id"]),
+                    ),
+                )
+            # The account row deletes, but the month value FK blocks the asset row.
+            with Session(db_engine) as session:
+                month_service.create_draft(
+                    session,
+                    account_actor.principal,
+                    "2026-01",
+                    MonthDraft(copy_previous=False),
+                    uuid4().hex,
+                )
+            for account in (settled, recorded):
+                refused = delete(account)
+                assert (refused.status_code, refused.json()["error"]["code"]) == (
+                    409,
+                    "ACCOUNT_IN_USE",
+                )
+                assert (
+                    client.get(
+                        f"/api/v1/accounts/{account['id']}", headers=account_actor.headers
+                    ).status_code
+                    == 200
+                )
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 2
+            assert session.scalar(select(func.count()).select_from(Asset)) == 2
+            deleted = session.scalars(select(AuditEvent).where(AuditEvent.action == "delete")).all()
+            assert sorted((e.entity_type, str(e.entity_id)) for e in deleted) == sorted(
+                [("financial_account", plain["id"]), ("asset", plain["asset_id"])]
+            )
+
+    def test_nested_asset_future_end_creates_neither_account_nor_asset(
+        self, accounts_app, account_actor, db_engine, monkeypatch
+    ):
+        monkeypatch.setattr(
+            asset_service, "utcnow", lambda: datetime(2026, 3, 31, 14, 59, 59, tzinfo=UTC)
+        )
+        with TestClient(accounts_app) as client:
+            response = client.post(
+                "/api/v1/accounts",
+                headers=account_actor.headers,
+                json=account_payload(asset=asset_payload(ended_on="2026-04-01")),
+            )
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "ASSET_END_IN_FUTURE"
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 0
+            assert session.scalar(select(func.count()).select_from(Asset)) == 0
+
     @pytest.mark.parametrize("change", [{"kind": "liability"}, {"category": "real_estate"}])
     def test_linked_asset_keeps_financial_kind(self, accounts_app, account_actor, change):
         with TestClient(accounts_app) as client:

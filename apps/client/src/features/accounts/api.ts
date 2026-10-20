@@ -31,6 +31,14 @@ export function useAccountsApi() {
             }),
           () => nativeFinance.updateAccount(id, body, `"${version}"`),
         ),
+      delete: (id: string, version: number) =>
+        domainApi.write(
+          (client) =>
+            client.DELETE("/api/v1/accounts/{account_id}", {
+              params: { path: { account_id: id }, header: { "If-Match": `"${version}"` } },
+            }),
+          () => nativeFinance.deleteAccount(id, `"${version}"`),
+        ),
     }),
     [domainApi],
   );

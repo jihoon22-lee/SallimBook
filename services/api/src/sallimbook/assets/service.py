@@ -1,6 +1,6 @@
 """Asset metadata operations; all monetary snapshots remain separate sources."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -29,7 +29,9 @@ from sallimbook.cashflow.payment_links import require_closure
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.types import SEOUL
 from sallimbook.identity.auth_models import HouseholdMember
+from sallimbook.identity.service import utcnow
 from sallimbook.insurance.models import InsurancePolicy
 
 
@@ -62,6 +64,16 @@ def _validate_owner(session: Session, principal: Principal, owner_id: UUID | Non
         raise DomainError("OWNER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
 
 
+def _reject_future_end(ended_on: date | None, previous: date | None = None) -> None:
+    # Only a write that sets a new end date is checked, so existing future rows stay editable.
+    if (
+        ended_on is not None
+        and ended_on != previous
+        and ended_on > utcnow().astimezone(SEOUL).date()
+    ):
+        raise DomainError("ASSET_END_IN_FUTURE", "실제로 보유를 종료한 날짜를 입력해 주세요.", 422)
+
+
 def _save(session: Session, asset: Asset) -> AssetResponse:
     session.flush()
     result = asset_response(asset)
@@ -72,6 +84,7 @@ def _save(session: Session, asset: Asset) -> AssetResponse:
 def prepare_asset(session: Session, principal: Principal, payload: AssetCreate) -> Asset:
     """Create within the caller's transaction; account creation can share this commit."""
     lock_asset_scope(session, principal)
+    _reject_future_end(payload.ended_on)
     _validate_owner(session, principal, payload.owner_member_id)
     values = payload.model_dump()
     values["household_share"] = Decimal(payload.household_share)
@@ -174,6 +187,7 @@ def update_asset(
         candidate = AssetCreate.model_validate(merged)
     except ValidationError:
         raise DomainError("INVALID_ASSET", "소유자와 시작·종료일을 확인해 주세요.", 422) from None
+    _reject_future_end(candidate.ended_on, asset.ended_on)
     if (
         candidate.kind != asset.kind
         and session.scalar(

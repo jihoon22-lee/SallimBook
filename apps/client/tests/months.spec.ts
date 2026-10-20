@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import fixtures from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
 import {
+  carriedNote,
+  carryCandidates,
   formatKrw,
   monthEnd,
   ownedPreview,
@@ -8,7 +10,8 @@ import {
   previousMonth,
   valueInput,
 } from "../src/features/assets/months/model";
-import { mockMonths, verifyAll } from "./support/months";
+import type { MonthRecord, MonthValue } from "../src/features/assets/months/model";
+import { mockMonths, total, verifyAll } from "./support/months";
 import { uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
@@ -314,6 +317,22 @@ test("explicit scope synchronization clears amounts when whole and owned bases d
   expect(state.record!.values[0]!.verification_state).toBe("missing");
   expect(state.writes[0]?.operation).toBe("sync-scope");
   expect(state.writes[0]?.body.revision_id).toBe(uid(91));
+  expect(state.record!.values[0]!.origin).toBe("manual");
+  expect(state.record!.values[0]!.origin_revision_id).toBeNull();
+  await expect(page.getByText("직접 확인을 마쳤어요", { exact: false })).toHaveCount(0);
+});
+
+test("carried notes follow the verification state, including legacy cleared carried rows", () => {
+  const row = (
+    verification_state: MonthValue["verification_state"],
+    origin: MonthValue["origin"],
+  ) => ({ verification_state, origin }) as MonthValue;
+  expect(carriedNote(row("missing", "carried"))).toBeNull();
+  expect(carriedNote(row("carried_unconfirmed", "carried"))).toContain(
+    "이번 달 실제 값과 기준일을 확인해 주세요",
+  );
+  expect(carriedNote(row("verified", "carried"))).toContain("직접 확인을 마쳤어요");
+  expect(carriedNote(row("verified", "manual"))).toBeNull();
 });
 
 test("pagination refuses mixed revisions then loads one complete snapshot on explicit retry", async ({
@@ -342,4 +361,153 @@ test("invalid dates and invalid months fail client validation", async ({ page })
     page.getByRole("heading", { name: "월을 확인해 주세요", exact: true }),
   ).toBeVisible();
   expect(state.reads).toHaveLength(0);
+});
+
+test("a future month offers no draft and a server future-month rejection is explained", async ({
+  page,
+}) => {
+  const state = await mockMonths(page);
+  state.record = null;
+  await page.clock.setFixedTime(new Date("2025-01-31T14:59:00Z"));
+  await page.goto("/assets/months/2025-02");
+  await expect(
+    page.getByRole("heading", { name: "아직 시작하지 않은 달이에요", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "월 작성본 만들기", exact: true })).toHaveCount(0);
+  await page.clock.setFixedTime(new Date("2025-01-31T15:00:00Z"));
+  await page.route("**/api/v1/asset-months/2025-02/draft", (route) =>
+    route.fulfill({
+      status: 422,
+      json: { error: { code: "MONTH_IN_FUTURE", message: "synthetic", request_id: uid(99) } },
+    }),
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "월 작성본 만들기", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("아직 시작하지 않은 달은 기록할 수 없어요");
+  expect(state.writes).toHaveLength(0);
+});
+
+test("carry candidates mirror the server rule for untouched missing rows", () => {
+  const untouched = {
+    verification_state: "missing",
+    origin: "manual",
+    origin_revision_id: null,
+    as_of_date: null,
+    change_reason: null,
+    input_amount_krw: null,
+  };
+  const prior = {
+    state: "confirmed",
+    values: [
+      ["a", "whole", "100"],
+      ["b", "whole", "200"],
+      ["c", "whole", "300"],
+      ["d", "whole", "400"],
+      ["e", "owned", null],
+    ].map(([asset_id, amount_basis, input_amount_krw]) => ({
+      asset_id,
+      amount_basis,
+      input_amount_krw,
+    })),
+  } as unknown as MonthRecord;
+  const record = {
+    values: [
+      { ...untouched, asset_id: "a", amount_basis: "whole" },
+      { ...untouched, asset_id: "b", amount_basis: "whole", change_reason: "합성 확인 불가" },
+      { ...untouched, asset_id: "c", amount_basis: "owned" },
+      {
+        ...untouched,
+        asset_id: "d",
+        amount_basis: "whole",
+        verification_state: "verified",
+        input_amount_krw: "450",
+        as_of_date: "2026-02-28",
+      },
+      { ...untouched, asset_id: "e", amount_basis: "owned" },
+      { ...untouched, asset_id: "f", amount_basis: "whole" },
+    ],
+  } as unknown as MonthRecord;
+  expect(
+    carryCandidates(record, prior).map(({ row, source }) => [
+      row.asset_id,
+      source.input_amount_krw,
+    ]),
+  ).toEqual([["a", "100"]]);
+  expect(carryCandidates(record, { ...prior, state: "reopened" })).toEqual([]);
+  expect(carryCandidates(record, null)).toEqual([]);
+});
+
+test("starting a month after an unconfirmed previous month needs an explicit acknowledgment", async ({
+  page,
+}) => {
+  const state = await mockMonths(page);
+  state.record = null;
+  Object.assign(state.previous!, {
+    state: "draft",
+    confirmed_at: null,
+    confirmed_by_member_id: null,
+  });
+  await page.goto("/assets/months/2025-02");
+  await expect(
+    page.getByRole("heading", { name: "전월 기록이 아직 확정되지 않았어요", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "전월 먼저 확정하기", exact: true })).toHaveAttribute(
+    "href",
+    "/assets/months/2025-01",
+  );
+  const create = page.getByRole("button", { name: "월 작성본 만들기", exact: true });
+  await expect(create).toBeDisabled();
+  await page.getByLabel("전월 확정값 없이 시작하는 것을 확인했어요.", { exact: true }).check();
+  await create.click();
+  await expect(
+    page.getByRole("button", { name: "전월 확정값 불러오기 검토", exact: true }),
+  ).toBeVisible();
+  expect(state.writes.map((write) => write.operation)).toEqual(["draft"]);
+  expect(
+    state.record!.values.every((row) => row.input_amount_krw === null && row.origin === "manual"),
+  ).toBe(true);
+});
+
+test("carry-previous fills only untouched missing rows and reuses its key after an ambiguous failure", async ({
+  page,
+}) => {
+  const state = await mockMonths(page);
+  for (const row of state.record!.values)
+    Object.assign(row, {
+      input_amount_krw: null,
+      owned_amount_krw: null,
+      verification_state: "missing",
+      origin: "manual",
+      origin_revision_id: null,
+    });
+  state.record!.values[2]!.change_reason = "합성 확인 불가";
+  state.record!.totals = total(state.record!.values);
+  await page.goto("/assets/months/2025-02");
+  await page.getByRole("button", { name: "전월 확정값 불러오기 검토", exact: true }).click();
+  const panel = page.getByRole("region", { name: "전월 확정값 불러오기", exact: true });
+  await expect(panel.getByRole("listitem")).toHaveText([/^합성 공동 주택: 1,001원/]);
+  state.writeFailure = "after";
+  await panel.getByRole("button", { name: "전월 확정값 불러오기", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("결과를 확인하지 못했어요");
+  await panel.getByRole("button", { name: "전월 확정값 불러오기", exact: true }).click();
+  await expect(
+    page.getByText("이전 기록에서 불러온 금액이에요. 이번 달 실제 값과 기준일을 확인해 주세요.", {
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  const carries = state.writes.filter((write) => write.operation === "carry-previous");
+  expect(carries).toHaveLength(2);
+  expect(carries[0]!.key).toBeTruthy();
+  expect(carries[1]!.key).toBe(carries[0]!.key);
+  expect(carries[0]!.version).toBe('"1"');
+  expect(state.record!.values[0]).toMatchObject({
+    input_amount_krw: "1001",
+    verification_state: "carried_unconfirmed",
+    origin: "carried",
+    origin_revision_id: uid(90),
+  });
+  expect(state.record!.values[2]).toMatchObject({
+    input_amount_krw: null,
+    change_reason: "합성 확인 불가",
+  });
 });

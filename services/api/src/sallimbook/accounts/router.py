@@ -113,6 +113,17 @@ def update_account(
     return result
 
 
+@router.delete("/{account_id}", status_code=204, operation_id="deleteAccount")
+def delete_account(
+    account_id: UUID,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    if_match: Annotated[str, Header(alias="If-Match")],
+) -> Response:
+    service.delete_account(session, principal, account_id, if_match)
+    return Response(status_code=204)
+
+
 @router.post(
     "/{account_id}/reveal", response_model=AccountRevealResponse, operation_id="revealAccountNumber"
 )

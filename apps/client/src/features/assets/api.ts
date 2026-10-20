@@ -42,6 +42,14 @@ export function useAssetsApi() {
             }),
           () => nativeFinance.archiveAsset(id, body, `"${version}"`),
         ),
+      delete: (id: string, version: number) =>
+        domainApi.write(
+          (client) =>
+            client.DELETE("/api/v1/assets/{asset_id}", {
+              params: { path: { asset_id: id }, header: { "If-Match": `"${version}"` } },
+            }),
+          () => nativeFinance.deleteAsset(id, `"${version}"`),
+        ),
     }),
     [domainApi],
   );

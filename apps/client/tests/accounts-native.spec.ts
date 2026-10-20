@@ -15,6 +15,7 @@ async function nativeFinanceMock(
         http: 0,
         accountGets: 0,
         editOnce: true,
+        deleted: false,
       };
       Object.assign(window, {
         __financeNative: state,
@@ -33,10 +34,12 @@ async function nativeFinanceMock(
                 "createAsset",
                 "updateAsset",
                 "archiveAsset",
+                "deleteAsset",
                 "listAccounts",
                 "getAccount",
                 "createAccount",
                 "updateAccount",
+                "deleteAccount",
                 "editAccountNumberUI",
                 "showAccountNumberUI",
                 "showAccountNumberWithPasskeyUI",
@@ -107,7 +110,13 @@ async function nativeFinanceMock(
               });
             }
             if (method === "listAccounts")
-              return metadata({ items: [state.account], next_cursor: null });
+              return metadata({ items: state.deleted ? [] : [state.account], next_cursor: null });
+            if (method === "deleteAsset")
+              return ok({ status: 409, body: { error: { code: "ASSET_IN_USE" } } });
+            if (method === "deleteAccount") {
+              state.deleted = true;
+              return ok({ status: 204, body: null });
+            }
             if (method === "getAccount") {
               state.accountGets++;
               return metadata(state.account);
@@ -261,5 +270,40 @@ test("native account session expiry unmounts protected metadata", async ({ page 
   await page.getByRole("button", { name: "Android에서 전체 계좌번호 보기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toBeVisible();
   await expect(page.getByText("••••ONLY", { exact: true })).toHaveCount(0);
+  await assertBoundary(page);
+});
+
+test("native misregistration deletes send only ids and versions through named commands", async ({
+  page,
+}) => {
+  await nativeFinanceMock(page);
+  await page.goto(`/assets/${uid(11)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("잘못 등록한 자산이며 실제 삭제할 것을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "오등록 자산 삭제", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("연결된 기록이 있어 삭제할 수 없어요");
+  // A full page load restarts the synthetic bridge state, so each page's calls are read in turn.
+  const deletes = async () =>
+    (await state(page)).calls
+      .filter((call) => call.method.startsWith("delete"))
+      .map(({ method, args }) => ({ method, args }));
+  const assetCalls = await deletes();
+  await page.goto(`/accounts/${uid(30)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("잘못 등록한 계좌이며 연결된 금융 자산과 함께 삭제할 것을 확인했어요.", {
+      exact: true,
+    })
+    .check();
+  await page.getByRole("button", { name: "오등록 계좌 삭제", exact: true }).click();
+  await expect(
+    page.getByText("계좌와 연결된 금융 자산이 삭제된 것을 확인했어요.", { exact: true }),
+  ).toBeVisible();
+  expect([...assetCalls, ...(await deletes())]).toEqual([
+    { method: "deleteAsset", args: { assetId: uid(11), ifMatch: '"1"' } },
+    { method: "deleteAccount", args: { accountId: uid(30), ifMatch: '"1"' } },
+  ]);
   await assertBoundary(page);
 });

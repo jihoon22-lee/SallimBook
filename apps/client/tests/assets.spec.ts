@@ -180,3 +180,66 @@ test("asset kind restriction explains existing values without a stale-version re
     page.getByRole("heading", { name: "합성 구분 유지 수정", exact: true }),
   ).toBeVisible();
 });
+
+test("asset and account end dates stop at Seoul today and a stored future end asks for correction", async ({
+  page,
+}) => {
+  const state = await mockFinance(page);
+  await page.clock.setFixedTime(new Date("2026-03-31T14:59:00Z"));
+  state.assets[2]!.ended_on = "2045-01-31";
+  await page.goto(`/assets/${uid(12)}`);
+  await expect(
+    page.getByText("보유 종료일이 서울 기준 오늘보다 늦게 저장돼 있어요", { exact: false }),
+  ).toBeVisible();
+  await page.goto("/assets/new");
+  await expect(page.getByLabel("보유 종료일 (선택)", { exact: true })).toHaveAttribute(
+    "max",
+    "2026-03-31",
+  );
+  await page.goto(`/accounts/${uid(30)}`);
+  await page.getByRole("button", { name: "계좌 사용 종료하기", exact: true }).click();
+  await expect(page.getByLabel("계좌 종료일", { exact: true })).toHaveAttribute(
+    "max",
+    "2026-03-31",
+  );
+  await page.route("**/api/v1/assets/*/archive", (route) =>
+    route.fulfill({
+      status: 422,
+      json: { error: { code: "ASSET_END_IN_FUTURE", message: "synthetic", request_id: uid(99) } },
+    }),
+  );
+  await page.goto(`/assets/${uid(10)}`);
+  await page.getByRole("button", { name: "사용 종료하기", exact: true }).click();
+  await expect(page.getByLabel("종료일", { exact: true })).toHaveAttribute("max", "2026-03-31");
+  await page.getByRole("button", { name: "사용 종료 확인", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "보유 종료일은 서울 기준 오늘보다 늦을 수 없어요",
+  );
+});
+
+test("asset misregistration delete refuses an account-linked asset and removes an unreferenced one", async ({
+  page,
+}) => {
+  const state = await mockFinance(page);
+  await page.goto(`/assets/${uid(11)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await expect(
+    page.getByText("계좌로 등록한 금융 자산은 계좌 상세에서 계좌와 함께 삭제할 수 있어요.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByLabel("잘못 등록한 자산이며 실제 삭제할 것을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "오등록 자산 삭제", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("연결된 기록이 있어 삭제할 수 없어요");
+  await page.goto(`/assets/${uid(10)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("잘못 등록한 자산이며 실제 삭제할 것을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "오등록 자산 삭제", exact: true }).click();
+  await expect(page).toHaveURL(/\/assets$/);
+  await expect(page.getByText("자산이 삭제된 것을 확인했어요.", { exact: true })).toBeVisible();
+  expect(state.assets.map((asset) => asset.id)).toEqual([uid(11), uid(12)]);
+});

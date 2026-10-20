@@ -216,7 +216,7 @@ export function TrendPanel({
                   <th scope="col">월</th>
                   <th scope="col">기록 상태</th>
                   <th scope="col">금액 상태</th>
-                  <th scope="col">확인한 금액</th>
+                  <th scope="col">관찰 금액</th>
                   <th scope="col">기준일</th>
                 </tr>
               </thead>

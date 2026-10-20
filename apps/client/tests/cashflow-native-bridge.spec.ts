@@ -14,6 +14,7 @@ const methods = [
   "synchronizeAssetMonthScope",
   "confirmAssetMonth",
   "reopenAssetMonth",
+  "carryPreviousAssetMonth",
   "listIncome",
   "incomeSummary",
   "incomeDuplicateCandidates",
@@ -127,7 +128,7 @@ async function setup(
   await page.goto("/__cashflow-bridge");
 }
 
-test("46 named metadata commands retain DTO values and mutation keys without web HTTP", async ({
+test("47 named metadata commands retain DTO values and mutation keys without web HTTP", async ({
   page,
 }) => {
   await setup(page);
@@ -197,6 +198,7 @@ test("46 named metadata commands retain DTO values and mutation keys without web
           "reopenAssetMonth",
           { month: "2026-01", input: { revision_id: id, reason: "합성 정정" }, ...mutation },
         ],
+        ["carryPreviousAssetMonth", { month: "2026-01", input: { revision_id: id }, ...mutation }],
         ["listIncome", { query: { month: "2026-01", member_id: id } }],
         ["incomeSummary", { query: { month: "2026-01" } }],
         [
