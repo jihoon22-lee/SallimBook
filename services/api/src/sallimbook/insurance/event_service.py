@@ -14,6 +14,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, krw_string
 from sallimbook.identity.service import utcnow
 from sallimbook.insurance import calculations as calc
@@ -189,11 +190,16 @@ def _current_cash(session, principal, ids):
     return {row.cash_record_id: cash._response(row) for row in rows}
 
 
-def _page(session, query, model, cursor, limit):
-    if cursor is not None:
-        query = query.where(model.id < cursor)
-    rows = list(session.scalars(query.order_by(model.id.desc()).limit(limit + 1)))
-    return rows[:limit], rows[limit - 1].id if len(rows) > limit else None
+def _page(session, principal, query, model, cursor, limit, *, by_cash=True):
+    return keyset_page(
+        session,
+        query,
+        model=model,
+        household_id=principal.household_id,
+        keys=(cash.cash_date(model), model.created_at) if by_cash else (model.created_at,),
+        cursor=cursor,
+        limit=limit,
+    )
 
 
 def _expense_responses(session, principal, rows, *, detail=False):
@@ -334,7 +340,7 @@ def list_expenses(
         query = query.join(CashRecord, CashRecord.id == MedicalExpense.cash_record_id).where(
             CashRecord.state == state
         )
-    rows, next_cursor = _page(session, query, MedicalExpense, cursor, limit)
+    rows, next_cursor = _page(session, principal, query, MedicalExpense, cursor, limit)
     return _finish(
         session,
         ExpenseListResponse(
@@ -480,6 +486,7 @@ def list_refunds(session, principal, expense_id, *, cursor=None, limit=50):
     scoped_entity(session, MedicalExpense, expense_id, principal)
     rows, next_cursor = _page(
         session,
+        principal,
         select(MedicalRefund).where(
             MedicalRefund.household_id == principal.household_id,
             MedicalRefund.expense_id == expense_id,
@@ -711,7 +718,9 @@ def list_claims(
                 )
             )
         )
-    rows, next_cursor = _page(session, query, InsuranceClaim, cursor, limit)
+    rows, next_cursor = _page(
+        session, principal, query, InsuranceClaim, cursor, limit, by_cash=False
+    )
     return _finish(
         session,
         ClaimListResponse(
@@ -995,7 +1004,7 @@ def list_payouts(
         query = query.join(CashRecord, CashRecord.id == InsurancePayout.cash_record_id).where(
             CashRecord.state == state
         )
-    rows, next_cursor = _page(session, query, InsurancePayout, cursor, limit)
+    rows, next_cursor = _page(session, principal, query, InsurancePayout, cursor, limit)
     return _finish(
         session,
         PayoutListResponse(
@@ -1212,6 +1221,7 @@ def list_returns(session, principal, payout_id, *, cursor=None, limit=50):
     scoped_entity(session, InsurancePayout, payout_id, principal)
     rows, next_cursor = _page(
         session,
+        principal,
         select(InsuranceReturn).where(
             InsuranceReturn.household_id == principal.household_id,
             InsuranceReturn.payout_id == payout_id,

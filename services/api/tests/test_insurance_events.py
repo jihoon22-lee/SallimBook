@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from test_accounts import make_actor
 from test_income import CATALOG, close_account, headers, income_payload, make_account
 from test_insurance_core import case_payload, policy_payload
+from test_pagination import api_pages, ids, pairs
 from test_recurring import generate, obligation_for, post_rule, settle
 
 from sallimbook.assets import month_service
@@ -1037,6 +1038,61 @@ class TestInsuranceEventCorrections:
 
 @pytest.mark.database
 class TestInsuranceEventBoundaries:
+    def test_event_lists_follow_cash_dates_then_entry_order_across_pages(self, app, actors):
+        actor = actors[0]
+        days = ["2026-02-02", "2026-02-01", "2026-02-02", "2026-02-03", "2026-02-01"]
+        by_date = (3, 2, 0, 4, 1)
+        with TestClient(app) as client:
+            case, other_case = new_case(client, actor), new_case(client, actor)
+            policy = new_policy(client, actor)
+            node, other_node = new_node(client, actor, case), new_node(client, actor, case)
+            expenses = [new_expense(client, actor, case, node, occurred_on=d)["id"] for d in days]
+            payouts = [
+                new_payout(client, actor, [allocation(case["id"])], occurred_on=d)["id"]
+                for d in days
+            ]
+            claims = [
+                create_metadata(
+                    client, actor, "/claims", {"case_id": case["id"], "policy_id": policy["id"]}
+                )["id"]
+                for _ in days
+            ]
+            source = new_expense(client, actor, case, other_node, "500", occurred_on="2026-01-31")
+            paid = new_payout(
+                client, actor, [allocation(other_case["id"], "500")], occurred_on="2026-01-31"
+            )
+            expense_path = f"/medical-expenses/{source['id']}"
+            payout_path = f"/payouts/{paid['id']}"
+            refunds, returns = [], []
+            for day in days:
+                body = actual("100", occurred_on=day, reason="합성 환불")
+                version = read(client, actor, expense_path)["version"]
+                refunds.append(
+                    money(client, actor, expense_path + "/refunds", body, version=version)
+                )
+                body = actual(
+                    "100",
+                    occurred_on=day,
+                    original_allocation_id=paid["allocations"][0]["id"],
+                    reason="합성 반환",
+                )
+                version = read(client, actor, payout_path)["version"]
+                returns.append(
+                    money(client, actor, payout_path + "/returns", body, version=version)
+                )
+            for path, params, rows in (
+                ("/medical-expenses", {"node_id": node["id"]}, expenses),
+                ("/medical-expenses", {"node_id": node["id"], "state": "active"}, expenses),
+                ("/payouts", {"case_id": case["id"]}, payouts),
+                ("/payouts", {"case_id": case["id"], "state": "active"}, payouts),
+                (expense_path + "/refunds", {}, [row["id"] for row in refunds]),
+                (payout_path + "/returns", {}, [row["id"] for row in returns]),
+            ):
+                pages = api_pages(client, actor, BASE + path, **params)
+                assert ids(pages) == pairs([rows[i] for i in by_date]), (path, params)
+            claimed = api_pages(client, actor, BASE + "/claims", case_id=case["id"])
+            assert ids(claimed) == pairs(claims[::-1])
+
     def test_claim_detail_counts_only_its_own_allocations_and_returns(self, app, actors):
         actor = actors[0]
         with TestClient(app) as client:

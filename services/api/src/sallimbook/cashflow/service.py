@@ -4,8 +4,8 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, aliased
 
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
@@ -807,3 +807,14 @@ def prepare_void_cash_record(
     _no_returns(session, principal, row)
     _void(session, principal, row, reason)
     return row
+
+
+def cash_date(model):
+    """List order key: the actual date of the cash record behind ``model``, else its month."""
+    record = aliased(CashRecord)
+    return (
+        select(func.coalesce(record.occurred_on, record.period_month))
+        .where(record.household_id == model.household_id, record.id == model.cash_record_id)
+        .correlate(model)
+        .scalar_subquery()
+    )
