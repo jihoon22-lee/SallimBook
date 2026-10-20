@@ -32,6 +32,11 @@ _INSPECTION_SLOT = threading.BoundedSemaphore(1)
 _ERRORS = {
     "DOCUMENT_TOO_LARGE": (413, "첨부파일은 20MiB 이하로 선택해 주세요."),
     "DOCUMENT_UNSAFE": (422, "지원하는 안전한 PDF·JPEG·PNG 문서를 선택해 주세요."),
+    "DOCUMENT_IMAGE_UNSUPPORTED": (
+        422,
+        "사진·이미지에 지원하지 않는 부가 정보가 있어요. "
+        "JPEG로 다시 저장하거나 앱에서 다시 선택해 주세요.",
+    ),
     "DOCUMENT_MALWARE": (422, "보안 검사에서 허용하지 않은 파일입니다."),
     "DOCUMENT_CARD_DATA": (422, "카드번호·보안코드 또는 카드 사진은 첨부할 수 없습니다."),
     "DOCUMENT_UNREADABLE": (422, "글자를 명확히 읽을 수 있는 영수증·문서를 선택해 주세요."),

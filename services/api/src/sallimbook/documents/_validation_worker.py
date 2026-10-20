@@ -379,12 +379,15 @@ def _png_structure(data: bytes) -> None:
         length = struct.unpack("!I", data[position : position + 4])[0]
         name = data[position + 4 : position + 8]
         end = position + 12 + length
-        if name not in allowed or end > len(data):
+        if end > len(data):
             raise Rejected
         body = data[position + 8 : end - 4]
         expected = struct.unpack("!I", data[end - 4 : end])[0]
         if zlib.crc32(name + body) & 0xFFFFFFFF != expected:
             raise Rejected
+        # Well-formed but outside this profile (text, animation, editor chunks).
+        if name not in allowed:
+            raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
         if not seen and (name != b"IHDR" or length != 13):
             raise Rejected
         if name != b"IDAT" and name in seen:
@@ -393,15 +396,19 @@ def _png_structure(data: bytes) -> None:
             _size(*struct.unpack("!II", body[:8]))
         seen.append(name)
         if name == b"IEND":
-            if length != 0 or end != len(data) or b"IDAT" not in seen:
+            if length != 0 or b"IDAT" not in seen:
                 raise Rejected
+            if end != len(data):
+                raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
             return
         position = end
     raise Rejected
 
 
 def _jpeg_structure(data: bytes) -> None:
-    if not data.startswith(b"\xff\xd8") or not data.endswith(b"\xff\xd9"):
+    # Broken structure is DOCUMENT_UNSAFE; well-formed segments or trailers outside this
+    # profile (XMP, MPF, comments, camera trailers after EOI) are DOCUMENT_IMAGE_UNSUPPORTED.
+    if not data.startswith(b"\xff\xd8"):
         raise Rejected
     position = 2
     scans = 0
@@ -415,8 +422,10 @@ def _jpeg_structure(data: bytes) -> None:
         marker = data[position]
         position += 1
         if marker == 0xD9:
-            if position != len(data) or scans == 0:
+            if scans == 0:
                 raise Rejected
+            if position != len(data):
+                raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
             return
         if marker in {0x00, 0xD8, 0x01} or 0xD0 <= marker <= 0xD7:
             raise Rejected
@@ -434,11 +443,10 @@ def _jpeg_structure(data: bytes) -> None:
                 0xEE: (b"Adobe",),
             }
             if marker not in prefixes or not payload.startswith(prefixes[marker]):
-                raise Rejected
-        elif (
-            marker == 0xFE
-        ):  # Uninterpreted comments are not part of this readable-document profile.
-            raise Rejected
+                raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
+        elif marker == 0xFE:
+            # Uninterpreted comments are not part of this readable-document profile.
+            raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
         position += length
         if marker == 0xDA:
             scans += 1
@@ -480,6 +488,8 @@ def _image(data: bytes, mime: str):
         expected = "JPEG"
     else:
         raise Rejected
+    # Structure first so camera trailers get the unsupported-image answer, then markers.
+    _polyglot(data, mime)
     with Image.open(io.BytesIO(data), formats=[expected]) as image:
         _size(*image.size)
         if image.format != expected or getattr(image, "n_frames", 1) != 1:
@@ -876,8 +886,6 @@ def _render(data: bytes, page_number: int, pdftoppm: str):
 def inspect_document(data: bytes, mime: str, tesseract: str, pdftoppm: str) -> dict:
     if not data or len(data) > MAX_BYTES:
         raise Rejected
-    if mime != "application/pdf":
-        _polyglot(data, mime)
     if mime == "application/pdf":
         reader = _pdf(data)
         try:

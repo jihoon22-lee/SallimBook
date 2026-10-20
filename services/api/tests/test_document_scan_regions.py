@@ -245,3 +245,81 @@ def test_zip_end_of_directory_hidden_in_excluded_tail_data_is_rejected():
     jpeg = noise_jpeg()
     hidden = jpeg[:-2] + b"\x00" * 32 + eocd[:-2] + struct.pack("<H", 2) + jpeg[-2:]
     assert_rejected(lambda: worker._polyglot(hidden, "image/jpeg"))
+
+
+def segment(marker, payload):
+    return marker + struct.pack("!H", len(payload) + 2) + payload
+
+
+@pytest.mark.parametrize(
+    "segment_bytes",
+    [
+        segment(b"\xff\xe1", b"http://ns.adobe.com/xap/1.0/\0<x:xmpmeta/>"),
+        segment(b"\xff\xe1", b"http://ns.adobe.com/xmp/extension/\0synthetic"),
+        segment(b"\xff\xe2", b"MPF\0MM\0*\0\0\0\x08"),
+        segment(b"\xff\xe5", b"synthetic"),
+        segment(b"\xff\xfe", b"synthetic comment"),
+    ],
+)
+def test_jpeg_segments_outside_profile_are_unsupported_not_unsafe(segment_bytes):
+    data = image_bytes("JPEG")
+    assert_rejected(
+        lambda: worker._jpeg_structure(data[:2] + segment_bytes + data[2:]),
+        "DOCUMENT_IMAGE_UNSUPPORTED",
+    )
+
+
+@pytest.mark.parametrize("kind", ["samsung_seft", "motion_mp4", "gain_map_jpeg"])
+def test_data_after_jpeg_eoi_is_unsupported(kind):
+    trailer = {
+        "samsung_seft": b"SEFH\0\0\0\x01synthetic SEFT",
+        "motion_mp4": b"\0\0\0\x18ftypmp42synthetic",
+        "gain_map_jpeg": image_bytes("JPEG"),
+    }[kind]
+    assert_rejected(
+        lambda: worker._jpeg_structure(image_bytes("JPEG") + trailer),
+        "DOCUMENT_IMAGE_UNSUPPORTED",
+    )
+
+
+def test_malformed_jpeg_stays_unsafe():
+    data = image_bytes("JPEG")
+    for broken in (
+        data[:-2],
+        b"\xff\xd8\xff\xd9",
+        data[:2] + b"\xff\xe1\x00\x01" + data[2:],
+        b"\x00" + data,
+    ):
+        assert_rejected(lambda b=broken: worker._jpeg_structure(b))
+
+
+@pytest.mark.parametrize("name", [b"tEXt", b"iTXt", b"zTXt", b"acTL", b"iDOT", b"zzZZ"])
+def test_png_chunks_outside_profile_are_unsupported(name):
+    data = image_bytes("PNG")
+    assert_rejected(
+        lambda: worker._png_structure(data[:-12] + chunk(name, b"synthetic") + data[-12:]),
+        "DOCUMENT_IMAGE_UNSUPPORTED",
+    )
+
+
+def test_data_after_png_iend_is_unsupported_but_broken_png_stays_unsafe():
+    data = image_bytes("PNG")
+    assert_rejected(
+        lambda: worker._png_structure(data + b"synthetic trailing body"),
+        "DOCUMENT_IMAGE_UNSUPPORTED",
+    )
+    crc = data[:29] + bytes([data[29] ^ 1]) + data[30:]
+    for bad in (crc, data[:-5], data[:8] + chunk(b"IDAT", b"x") + data[8:]):
+        assert_rejected(lambda b=bad: worker._png_structure(b))
+
+
+def test_image_checks_structure_then_markers_then_decode():
+    data = image_bytes("JPEG")
+    assert_rejected(
+        lambda: worker._image(data + b"<?php synthetic", "image/jpeg"),
+        "DOCUMENT_IMAGE_UNSUPPORTED",
+    )
+    exif = data[:2] + segment(b"\xff\xe1", b"Exif\0\0" + b"<?php synthetic") + data[2:]
+    assert_rejected(
+        lambda: worker._image(exif, "image/jpeg")
+    )  # 허용 APP1 안 마커는 DOCUMENT_UNSAFE

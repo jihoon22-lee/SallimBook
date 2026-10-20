@@ -269,6 +269,7 @@ for (const [code, status, message] of [
   ["DOCUMENT_UPLOAD_TIMEOUT", 408, "전송 시간"],
   ["DOCUMENT_CARD_DATA", 422, "카드 사진"],
   ["DOCUMENT_UNREADABLE", 422, "읽기 어려워"],
+  ["DOCUMENT_IMAGE_UNSUPPORTED", 422, "JPEG로 다시 저장"],
   ["DOCUMENT_SCAN_UNAVAILABLE", 503, "안전 검사"],
 ] as const)
   test(`safe ${status} ${code} feedback preserves selected attempt`, async ({ page }) => {

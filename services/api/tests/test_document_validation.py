@@ -323,7 +323,13 @@ def test_worker_result_rejects_extra_fields_wrong_shape_mime_or_count(
 
 @pytest.mark.parametrize(
     "code",
-    ["DOCUMENT_UNSAFE", "DOCUMENT_CARD_DATA", "DOCUMENT_UNREADABLE", "DOCUMENT_OCR_UNAVAILABLE"],
+    [
+        "DOCUMENT_UNSAFE",
+        "DOCUMENT_CARD_DATA",
+        "DOCUMENT_UNREADABLE",
+        "DOCUMENT_OCR_UNAVAILABLE",
+        "DOCUMENT_IMAGE_UNSUPPORTED",
+    ],
 )
 def test_worker_returns_only_fixed_errors(tmp_path, monkeypatch, code):
     fake_worker(monkeypatch, {"error": code})
@@ -334,13 +340,26 @@ def test_worker_returns_only_fixed_errors(tmp_path, monkeypatch, code):
         )
 
 
+def test_unsupported_image_is_422(tmp_path, monkeypatch):
+    fake_worker(monkeypatch, {"error": "DOCUMENT_IMAGE_UNSUPPORTED"})
+    with scanner(tmp_path) as (path, _):
+        assert_domain(
+            "DOCUMENT_IMAGE_UNSUPPORTED",
+            lambda: validation.validate_document(image_bytes(), "image/png", scanner_socket=path),
+            422,
+        )
+
+
 @pytest.mark.parametrize("mime,kind", [("image/png", "PNG"), ("image/jpeg", "JPEG")])
 def test_actual_image_verify_and_load_and_declared_mime_agree(mime, kind):
     with worker._image(image_bytes(kind), mime) as image:
         assert image.size == (400, 200)
     other = "image/jpeg" if mime == "image/png" else "image/png"
     assert_rejected(lambda: worker._image(image_bytes(kind), other))
-    assert_rejected(lambda: worker._image(image_bytes(kind) + b"synthetic trailing body", mime))
+    assert_rejected(
+        lambda: worker._image(image_bytes(kind) + b"synthetic trailing body", mime),
+        "DOCUMENT_IMAGE_UNSUPPORTED",
+    )
     assert_rejected(lambda: worker._image(image_bytes(kind)[:-5], mime))
 
 
@@ -356,7 +375,10 @@ def test_png_crc_animation_unknown_chunks_and_pixel_bombs_fail_before_load():
             + payload
             + struct.pack("!I", zlib.crc32(name + payload))
         )
-        assert_rejected(lambda chunk=chunk: worker._png_structure(data[:-12] + chunk + data[-12:]))
+        assert_rejected(
+            lambda chunk=chunk: worker._png_structure(data[:-12] + chunk + data[-12:]),
+            "DOCUMENT_IMAGE_UNSUPPORTED",
+        )
     for dimensions in ((8193, 1), (4001, 4000), (0, 100)):
         header = struct.pack("!II", *dimensions) + data[24:29]
         huge = data[:16] + header + struct.pack("!I", zlib.crc32(b"IHDR" + header)) + data[33:]
@@ -367,7 +389,9 @@ def test_jpeg_comments_unknown_app_and_append_containers_are_rejected():
     data = image_bytes("JPEG")
     for marker in (b"\xff\xfe", b"\xff\xe5"):
         inserted = data[:2] + marker + b"\x00\x0bsynthetic" + data[2:]
-        assert_rejected(lambda inserted=inserted: worker._jpeg_structure(inserted))
+        assert_rejected(
+            lambda inserted=inserted: worker._jpeg_structure(inserted), "DOCUMENT_IMAGE_UNSUPPORTED"
+        )
     for marker in (b"PK\x03\x04", b"PK\x05\x06", b"\x7fELF", b"MZ\x90\x00", b"%PDF-1.7"):
         assert_rejected(lambda marker=marker: worker._polyglot(data + marker, "image/jpeg"))
 
