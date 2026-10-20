@@ -171,6 +171,14 @@ for path in /downloads /downloads/ /downloads/other.apk /downloads/SallimBook.ap
         "http://127.0.0.1:8080$path" 2>/tmp/headers; then exit 1; fi
     grep -q '404 Not Found' /tmp/headers
 done
+for path in / /assets/index.js /downloads/SallimBook.apk; do
+    wget -S -O /tmp/body --header='Host: synthetic.example.ts.net' \\
+        "http://127.0.0.1:8080$path" 2>/tmp/headers || true
+    for name in Content-Security-Policy Strict-Transport-Security X-Frame-Options \\
+        X-Content-Type-Options Referrer-Policy; do
+        grep -qi "^ *$name: " /tmp/headers
+    done
+done
 """
         command(isolated + [
             "--read-only", "--tmpfs",
@@ -207,6 +215,11 @@ for identity in allowed@synthetic.invalid wrong@synthetic.invalid; do
         http://127.0.0.1:8080/api/probe
     test "$(cat /tmp/body)" = "$identity||"
 done
+wget -S -O /tmp/body --header='Host: synthetic.example.ts.net' \\
+    http://127.0.0.1:8080/api/probe 2>/tmp/headers
+grep -qi '^ *X-Content-Type-Options: nosniff' /tmp/headers
+grep -qi '^ *Strict-Transport-Security: ' /tmp/headers
+if grep -qi -e '^ *Content-Security-Policy: ' -e '^ *X-Frame-Options: ' /tmp/headers; then exit 1; fi
 """
         command(isolated + [
             "--read-only", "--tmpfs",

@@ -83,6 +83,17 @@ test("real HTTPS WebCrypto setup sharing recovery all-card rotation revocation a
   page,
   browser,
 }) => {
+  const violations: string[] = [];
+  await page.exposeFunction("reportCspViolation", (value: string) => {
+    violations.push(value);
+  });
+  await page.addInitScript(() =>
+    document.addEventListener("securitypolicyviolation", (event) => {
+      void (
+        window as unknown as { reportCspViolation: (value: string) => Promise<void> }
+      ).reportCspViolation(`${event.violatedDirective} ${event.blockedURI}`);
+    }),
+  );
   let noStore = true,
     opaqueOnly = true;
   page.on("response", (r) => {
@@ -286,4 +297,5 @@ test("real HTTPS WebCrypto setup sharing recovery all-card rotation revocation a
   } finally {
     await partnerContext.close();
   }
+  expect(violations).toEqual([]);
 });

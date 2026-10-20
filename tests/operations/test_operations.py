@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import re
 import stat
 import subprocess
 import tarfile
@@ -31,6 +32,33 @@ def config():
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_private_caddy_renders_every_security_header_once(self):
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "rendered"
+            deploy.write_config(config(), output)
+            caddyfile = (output / "private.Caddyfile").read_text()
+        names = [name for name, _ in deploy.PRIVATE_WEB_HEADERS]
+        self.assertEqual(
+            names,
+            [
+                "Content-Security-Policy",
+                "Strict-Transport-Security",
+                "X-Frame-Options",
+                "X-Content-Type-Options",
+                "Referrer-Policy",
+            ],
+        )
+        for name, value in deploy.PRIVATE_WEB_HEADERS:
+            line = re.compile(rf'^\s*header (@\w+ )?{name} "{re.escape(value)}"$', re.MULTILINE)
+            self.assertEqual(len(line.findall(caddyfile)), 1, name)
+        csp = dict(deploy.PRIVATE_WEB_HEADERS)["Content-Security-Policy"]
+        self.assertIn("frame-ancestors 'none'", csp)
+        self.assertIn("script-src 'self'", csp)
+        # API responses keep their own content headers; page-only headers skip /api/*.
+        self.assertIn("@page not path /api/*", caddyfile)
+        self.assertIn("header @page Content-Security-Policy", caddyfile)
+
     def test_self_setup_is_an_explicit_manifest_opt_in(self):
         original = config()
         disabled = deploy.render(original)

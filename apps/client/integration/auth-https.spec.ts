@@ -12,7 +12,20 @@ test("real browser login restores HttpOnly Secure Strict cookie and logout revok
   page,
   context,
 }) => {
-  await page.goto("/login");
+  const violations: string[] = [];
+  await page.exposeFunction("reportCspViolation", (value: string) => {
+    violations.push(value);
+  });
+  await page.addInitScript(() =>
+    document.addEventListener("securitypolicyviolation", (event) => {
+      void (
+        window as unknown as { reportCspViolation: (value: string) => Promise<void> }
+      ).reportCspViolation(`${event.violatedDirective} ${event.blockedURI}`);
+    }),
+  );
+  const screen = await page.goto("/login");
+  // The harness serves screens with the production private web headers.
+  expect(screen?.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
   await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login);
   await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
   await page.getByText("기기 이름 변경", { exact: true }).click();
@@ -73,6 +86,7 @@ test("real browser login restores HttpOnly Secure Strict cookie and logout revok
   expect(await page.evaluate(() => localStorage.length === 0 && sessionStorage.length === 0)).toBe(
     true,
   );
+  expect(violations).toEqual([]);
 });
 
 test("real CSRF rejects mutation without token and rotated token only succeeds once", async ({
