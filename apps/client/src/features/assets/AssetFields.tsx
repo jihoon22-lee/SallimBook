@@ -1,4 +1,6 @@
 import { useId } from "react";
+import { Link } from "react-router";
+import { todaySeoul } from "../finance/dates";
 import type { HouseholdMember } from "../finance/FinanceSupport";
 import { amountBases, assetKinds, categories } from "./model";
 import type { AssetDraft } from "./model";
@@ -16,6 +18,22 @@ export const assetFieldLabels: Record<keyof AssetDraft, string> = {
   ended_on: "보유 종료일",
   note: "메모",
 };
+
+export const futureEndMessage =
+  "보유 종료일은 서울 기준 오늘보다 늦을 수 없어요. 실제로 보유를 끝낸 날짜를 입력해 주세요.";
+
+/** A stored end date after today predates the server rule; the row stays editable. */
+export function StoredFutureEnd({ to }: { to: string }) {
+  return (
+    <>
+      <p className="month-warning" role="status">
+        보유 종료일이 서울 기준 오늘보다 늦게 저장돼 있어요. 아직 보유 중이면 종료일을 비우고, 이미
+        끝났다면 실제 종료일로 고쳐 주세요.
+      </p>
+      <Link to={to}>보유 종료일 고치기</Link>
+    </>
+  );
+}
 
 export function AssetFields({
   value,
@@ -226,11 +244,16 @@ export function AssetFields({
                 value={value.ended_on}
                 onChange={(event) => set("ended_on", event.target.value)}
                 min={value.started_on || "0001-01-01"}
-                max="9999-12-31"
+                max={todaySeoul()}
               />
               <p className="muted">
                 종료일을 입력하면 사용 종료 상태가 돼요. 비우면 사용 중으로 관리해요.
               </p>
+              {value.ended_on > todaySeoul() && (
+                <p className="month-warning">
+                  서울 기준 오늘 이후 날짜는 저장할 수 없어요. 실제 종료일로 고치거나 비워 주세요.
+                </p>
+              )}
             </div>
           </div>
           <div className="form-field">

@@ -309,6 +309,7 @@ internal object AuthPolicy {
             "OWNER_UNAVAILABLE" to (422 to "소유자를 확인해 주세요."),
             "ASSET_KIND_IN_USE" to (409 to "월별 금액 기록이 있어 자산·부채 구분을 바꿀 수 없습니다."),
             "ASSET_UNAVAILABLE" to (422 to "사용 중인 금융 자산을 선택해 주세요."),
+            "ASSET_END_IN_FUTURE" to (422 to "실제로 보유를 종료한 날짜를 입력해 주세요."),
             "ASSET_IN_USE" to (409 to "연결된 기록이 있는 자산입니다."),
             "ASSET_ALREADY_LINKED" to (409 to "이미 계좌와 연결된 자산입니다."),
             "FINANCIAL_ASSET_REQUIRED" to (422 to "금융 자산을 선택해 주세요."),

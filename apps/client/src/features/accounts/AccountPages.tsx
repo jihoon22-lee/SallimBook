@@ -19,6 +19,7 @@ import { ClosureReview, useClosureReview } from "../finance/PaymentLinks";
 import { AssetMonthlyData } from "../assets/comparison/AssetMonthlyData";
 import { AssetSummary, ownerLabel } from "../assets/AssetPages";
 import { useAssetsApi } from "../assets/api";
+import { futureEndMessage, StoredFutureEnd } from "../assets/AssetFields";
 import { AccountEditor } from "./AccountEditor";
 import { AccountNumber } from "./AccountNumber";
 import { useAccountsApi } from "./api";
@@ -285,6 +286,10 @@ function AccountDetail({ id }: { id: string }) {
       setFormError("종료일은 보유 시작일과 계좌 개설일 이후의 실제 날짜로 입력해 주세요.");
       return;
     }
+    if (endedOn > todaySeoul()) {
+      setFormError(futureEndMessage);
+      return;
+    }
     setBusy(true);
     setError(null);
     setFormError("");
@@ -354,6 +359,9 @@ function AccountDetail({ id }: { id: string }) {
             <dd>{account.status === "closed" ? "종료" : "사용 중"}</dd>
           </div>
         </dl>
+        {account.closed_on && account.closed_on > todaySeoul() && (
+          <StoredFutureEnd to={`/assets/${account.asset_id}/edit`} />
+        )}
         <div className="form-actions">
           <Link className="button-link" to={`/accounts/${id}/edit`}>
             계좌 정보 수정
@@ -395,7 +403,7 @@ function AccountDetail({ id }: { id: string }) {
                 id="account-closed"
                 type="date"
                 required
-                max="9999-12-31"
+                max={todaySeoul()}
                 min={
                   account.opened_on && account.opened_on > account.asset.started_on
                     ? account.opened_on

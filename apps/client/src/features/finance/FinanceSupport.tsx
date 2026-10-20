@@ -19,6 +19,8 @@ export function FinanceError({ error }: { error: ApiError | null }) {
       "다른 곳에서 정보가 변경됐어요. 작성한 내용은 그대로 두었어요. 서버의 최신 내용을 확인해 주세요.",
     OWNER_UNAVAILABLE: "현재 가계의 구성원을 소유자로 선택해 주세요.",
     INVALID_ASSET: "소유 방식과 소유자, 시작일·종료일을 확인해 주세요.",
+    ASSET_END_IN_FUTURE:
+      "보유 종료일은 서울 기준 오늘보다 늦을 수 없어요. 실제로 보유를 끝낸 날짜를 입력해 주세요.",
     FINANCIAL_ASSET_REQUIRED: "계좌와 연결할 금융 자산을 선택해 주세요.",
     ASSET_ALREADY_LINKED:
       "이미 다른 계좌와 연결된 자산이에요. 기존 계좌를 확인하거나 다른 금융 자산을 선택해 주세요.",

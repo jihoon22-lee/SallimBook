@@ -21,6 +21,7 @@ import type { HouseholdMember } from "../finance/FinanceSupport";
 import { ClosureReview, useAssetClosure } from "../finance/PaymentLinks";
 import { AssetMonthlyData } from "./comparison/AssetMonthlyData";
 import { AssetEditor } from "./AssetEditor";
+import { futureEndMessage, StoredFutureEnd } from "./AssetFields";
 import { useAssetsApi } from "./api";
 import { amountBases, assetKinds, categories, shareToPercent } from "./model";
 import type { Asset, AssetQuery } from "./model";
@@ -394,6 +395,10 @@ function AssetDetail({ id }: { id: string }) {
       setFormError("종료일은 보유 시작일 이후의 실제 날짜로 입력해 주세요.");
       return;
     }
+    if (endedOn > todaySeoul()) {
+      setFormError(futureEndMessage);
+      return;
+    }
     setBusy(true);
     setError(null);
     setFormError("");
@@ -442,6 +447,9 @@ function AssetDetail({ id }: { id: string }) {
         <h2>{asset.name}</h2>
         <AssetSummary asset={asset} members={members.members} />
         <MemberLoadError error={members.error} retry={members.retry} />
+        {asset.ended_on && asset.ended_on > todaySeoul() && (
+          <StoredFutureEnd to={`/assets/${id}/edit`} />
+        )}
         {asset.note && (
           <div className="plain-note">
             <h3>메모</h3>
@@ -484,7 +492,7 @@ function AssetDetail({ id }: { id: string }) {
                 value={endedOn}
                 onChange={(event) => setEndedOn(event.target.value)}
                 min={asset.started_on}
-                max="9999-12-31"
+                max={todaySeoul()}
                 required
                 disabled={busy}
               />

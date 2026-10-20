@@ -202,6 +202,7 @@ const knownCodes = [
   "MEDICAL_NODE_CYCLE",
   "MEDICAL_NODE_IN_USE",
   "INSURANCE_ASSET_REQUIRED",
+  "ASSET_END_IN_FUTURE",
 ] as const;
 
 export type ApiErrorCode = (typeof knownCodes)[number];

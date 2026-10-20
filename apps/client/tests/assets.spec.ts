@@ -180,3 +180,39 @@ test("asset kind restriction explains existing values without a stale-version re
     page.getByRole("heading", { name: "합성 구분 유지 수정", exact: true }),
   ).toBeVisible();
 });
+
+test("asset and account end dates stop at Seoul today and a stored future end asks for correction", async ({
+  page,
+}) => {
+  const state = await mockFinance(page);
+  await page.clock.setFixedTime(new Date("2026-03-31T14:59:00Z"));
+  state.assets[2]!.ended_on = "2045-01-31";
+  await page.goto(`/assets/${uid(12)}`);
+  await expect(
+    page.getByText("보유 종료일이 서울 기준 오늘보다 늦게 저장돼 있어요", { exact: false }),
+  ).toBeVisible();
+  await page.goto("/assets/new");
+  await expect(page.getByLabel("보유 종료일 (선택)", { exact: true })).toHaveAttribute(
+    "max",
+    "2026-03-31",
+  );
+  await page.goto(`/accounts/${uid(30)}`);
+  await page.getByRole("button", { name: "계좌 사용 종료하기", exact: true }).click();
+  await expect(page.getByLabel("계좌 종료일", { exact: true })).toHaveAttribute(
+    "max",
+    "2026-03-31",
+  );
+  await page.route("**/api/v1/assets/*/archive", (route) =>
+    route.fulfill({
+      status: 422,
+      json: { error: { code: "ASSET_END_IN_FUTURE", message: "synthetic", request_id: uid(99) } },
+    }),
+  );
+  await page.goto(`/assets/${uid(10)}`);
+  await page.getByRole("button", { name: "사용 종료하기", exact: true }).click();
+  await expect(page.getByLabel("종료일", { exact: true })).toHaveAttribute("max", "2026-03-31");
+  await page.getByRole("button", { name: "사용 종료 확인", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "보유 종료일은 서울 기준 오늘보다 늦을 수 없어요",
+  );
+});

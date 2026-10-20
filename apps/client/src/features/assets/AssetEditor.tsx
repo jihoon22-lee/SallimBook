@@ -5,7 +5,8 @@ import { ApiError, toApiError } from "../../platform/api";
 import { useMounted } from "../auth/AuthFeedback";
 import { FinanceError, MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport";
 import { ClosureReview, useAssetClosure } from "../finance/PaymentLinks";
-import { AssetFields, assetFieldLabels } from "./AssetFields";
+import { AssetFields, assetFieldLabels, futureEndMessage } from "./AssetFields";
+import { todaySeoul } from "../finance/dates";
 import { useAssetsApi } from "./api";
 import {
   amountBases,
@@ -38,6 +39,15 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (flight.current || conflict || !closure.ready) return;
+    // An unchanged stored future end stays editable; only a newly chosen one is blocked.
+    if (
+      draft.ended_on &&
+      draft.ended_on > todaySeoul() &&
+      draft.ended_on !== (base?.ended_on ?? "")
+    ) {
+      setFormError(futureEndMessage);
+      return;
+    }
     const input = assetInput(draft);
     if (!input) {
       setFormError("필수 항목과 0~100 사이의 가계 지분, 시작일·종료일을 확인해 주세요.");
