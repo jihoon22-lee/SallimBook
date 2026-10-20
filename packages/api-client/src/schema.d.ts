@@ -3790,6 +3790,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Net Burden Krw */
+            net_burden_krw: string;
             /**
              * Patient Member Id
              * Format: uuid

@@ -989,6 +989,39 @@ class TestInsuranceEventCorrections:
 
 @pytest.mark.database
 class TestInsuranceEventBoundaries:
+    def test_case_list_shows_each_case_net_burden_with_constant_queries(
+        self, app, actors, db_engine
+    ):
+        actor = actors[0]
+        with TestClient(app) as client:
+            first, second, empty = (new_case(client, actor) for _ in range(3))
+            new_expense(client, actor, first, new_node(client, actor, first), "1000")
+            new_expense(client, actor, second, new_node(client, actor, second), "500")
+            # One deposit split across two cases counts once in each case.
+            new_payout(
+                client, actor, [allocation(first["id"], "300"), allocation(second["id"], "700")]
+            )
+
+            def listed(limit):
+                queries = []
+
+                def capture(conn, cursor, statement, *args):
+                    if statement.startswith("SELECT"):
+                        queries.append(statement)
+
+                event.listen(db_engine, "before_cursor_execute", capture)
+                try:
+                    items = read(client, actor, f"/cases?limit={limit}")["items"]
+                finally:
+                    event.remove(db_engine, "before_cursor_execute", capture)
+                return {row["id"]: row["net_burden_krw"] for row in items}, len(queries)
+
+            burdens, many = listed(50)
+            assert burdens == {first["id"]: "700", second["id"]: "-200", empty["id"]: "0"}
+            for case in (first, second, empty):
+                assert summary(client, actor, case)["net_burden_krw"] == burdens[case["id"]]
+            assert listed(1)[1] == many
+
     def test_partial_refund_total_cap_exact_limit_and_immutable_replay(
         self, app, actors, db_engine
     ):

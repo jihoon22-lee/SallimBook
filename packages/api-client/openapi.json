@@ -3295,6 +3295,12 @@
             "title": "Id",
             "type": "string"
           },
+          "net_burden_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Net Burden Krw",
+            "type": "string"
+          },
           "patient_member_id": {
             "format": "uuid",
             "title": "Patient Member Id",
@@ -3340,7 +3346,8 @@
           "start_on",
           "end_on",
           "treatment_state",
-          "financial_state"
+          "financial_state",
+          "net_burden_krw"
         ],
         "title": "CaseListItem",
         "type": "object"

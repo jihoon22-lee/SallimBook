@@ -281,3 +281,14 @@ test("tree keeps server sibling order and new nodes default after their siblings
   await page.getByRole("combobox", { name: "상위 진료", exact: true }).selectOption("");
   await expect(page.getByLabel("진료 표시 순서", { exact: true })).toHaveValue("40");
 });
+
+test("case list shows each case's net cash burden including negative values", async ({ page }) => {
+  const state = await mockInsurance(page);
+  state.caseBurdens.set(state.cases[0]!.id, "-50000");
+  await page.goto("/insurance/cases");
+  await expect(
+    page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("link", { name: state.cases[0]!.title, exact: true }) }),
+  ).toContainText("순현금부담 -50,000원");
+});

@@ -16,7 +16,7 @@ from sallimbook.cashflow.recurring_service import _rule_response
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
-from sallimbook.core.types import SEOUL
+from sallimbook.core.types import SEOUL, krw_string
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.insurance.crypto import decrypt_number, encrypt_number
@@ -507,9 +507,25 @@ def list_cases(
         if value is not None:
             query = query.where(getattr(InsuranceCase, field) == value)
     rows, next_cursor = _page_rows(session, query, InsuranceCase, cursor, limit)
+    from sallimbook.insurance import event_service
+
+    burdens = event_service.case_burdens(session, principal, [row.id for row in rows])
     return _finish(
         session,
-        CaseListResponse(items=[_response(r, CaseListItem) for r in rows], next_cursor=next_cursor),
+        CaseListResponse(
+            items=[
+                CaseListItem(
+                    **{
+                        name: getattr(row, name)
+                        for name in CaseListItem.model_fields
+                        if name != "net_burden_krw"
+                    },
+                    net_burden_krw=krw_string(burdens[row.id]),
+                )
+                for row in rows
+            ],
+            next_cursor=next_cursor,
+        ),
     )
 
 

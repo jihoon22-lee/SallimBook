@@ -1279,7 +1279,7 @@ def event_cash_history(session, principal, kind, resource_id, *, cursor=None, li
     )
 
 
-def _medical_sources(session, principal, case_id, *, node_ids=None):
+def _medical_sources(session, principal, case_ids, *, node_ids=None):
     query = (
         select(MedicalExpense, CashRecord)
         .join(
@@ -1289,7 +1289,7 @@ def _medical_sources(session, principal, case_id, *, node_ids=None):
         )
         .where(
             MedicalExpense.household_id == principal.household_id,
-            MedicalExpense.case_id == case_id,
+            MedicalExpense.case_id.in_(case_ids),
             CashRecord.state == "active",
         )
     )
@@ -1297,32 +1297,32 @@ def _medical_sources(session, principal, case_id, *, node_ids=None):
         query = query.where(MedicalExpense.node_id.in_(node_ids))
     rows = session.execute(query).all()
     payments = [
-        calc.MedicalPayment(str(row.id), str(case_id), source.amount_krw) for row, source in rows
+        calc.MedicalPayment(str(row.id), str(row.case_id), source.amount_krw)
+        for row, source in rows
     ]
     ids = [row.id for row, _ in rows]
-    refunds = []
-    if ids:
-        refund_rows = session.execute(
-            select(MedicalRefund, CashRecord)
-            .join(
-                CashRecord,
-                (CashRecord.id == MedicalRefund.cash_record_id)
-                & (CashRecord.household_id == MedicalRefund.household_id),
-            )
-            .where(
-                MedicalRefund.household_id == principal.household_id,
-                MedicalRefund.expense_id.in_(ids),
-                CashRecord.state == "active",
-            )
-        ).all()
-        refunds = [
-            calc.MedicalRefund(str(row.id), str(row.expense_id), source.amount_krw)
-            for row, source in refund_rows
-        ]
+    # Always issued (an empty IN matches nothing) so a list page costs the same queries.
+    refund_rows = session.execute(
+        select(MedicalRefund, CashRecord)
+        .join(
+            CashRecord,
+            (CashRecord.id == MedicalRefund.cash_record_id)
+            & (CashRecord.household_id == MedicalRefund.household_id),
+        )
+        .where(
+            MedicalRefund.household_id == principal.household_id,
+            MedicalRefund.expense_id.in_(ids),
+            CashRecord.state == "active",
+        )
+    ).all()
+    refunds = [
+        calc.MedicalRefund(str(row.id), str(row.expense_id), source.amount_krw)
+        for row, source in refund_rows
+    ]
     return payments, refunds
 
 
-def _payout_sources(session, principal, case_id):
+def _payout_sources(session, principal, case_ids):
     rows = session.execute(
         select(InsurancePayout, CashRecord)
         .join(
@@ -1336,14 +1336,12 @@ def _payout_sources(session, principal, case_id):
             InsurancePayout.id.in_(
                 select(PayoutAllocation.payout_id).where(
                     PayoutAllocation.household_id == principal.household_id,
-                    PayoutAllocation.case_id == case_id,
+                    PayoutAllocation.case_id.in_(case_ids),
                 )
             ),
         )
     ).all()
     ids = [row.id for row, _ in rows]
-    if not ids:
-        return [], []
     allocations = defaultdict(list)
     for allocation in session.scalars(
         select(PayoutAllocation).where(
@@ -1385,21 +1383,42 @@ def _payout_sources(session, principal, case_id):
     return payouts, returns
 
 
-def _balance(payments, payouts, refunds, returns, case_id):
+def _summary(payments, payouts, refunds, returns):
+    """The single place case and claim amounts are computed."""
     try:
-        summary = calc.insurance_summary(payments, payouts, refunds=refunds, returns=returns)
-        return summary.cases.get(str(case_id), calc.CaseBalance(*([0] * 10)))
+        return calc.insurance_summary(payments, payouts, refunds=refunds, returns=returns)
     except ValueError:
         raise DomainError(
             "AMOUNT_OUT_OF_RANGE", "집계 금액과 원본 연결을 확인해 주세요.", 422
         ) from None
 
 
+def _balance(payments, payouts, refunds, returns, case_id):
+    summary = _summary(payments, payouts, refunds, returns)
+    return summary.cases.get(str(case_id), calc.CaseBalance(*([0] * 10)))
+
+
+def case_burdens(session, principal, case_ids):
+    """Net cash burden per case for a list page, with the same queries for any page size."""
+    if not case_ids:
+        return {}
+    cash.lock_cash_household(session, principal)
+    payments, refunds = _medical_sources(session, principal, case_ids)
+    payouts, returns = _payout_sources(session, principal, case_ids)
+    summary = _summary(payments, payouts, refunds, returns)
+    return {
+        case_id: (
+            summary.cases[str(case_id)].net_burden_krw if str(case_id) in summary.cases else 0
+        )
+        for case_id in case_ids
+    }
+
+
 def case_summary(session, principal, case_id):
     cash.lock_cash_household(session, principal)
     scoped_entity(session, InsuranceCase, case_id, principal)
-    payments, refunds = _medical_sources(session, principal, case_id)
-    payouts, returns = _payout_sources(session, principal, case_id)
+    payments, refunds = _medical_sources(session, principal, [case_id])
+    payouts, returns = _payout_sources(session, principal, [case_id])
     balance = _balance(payments, payouts, refunds, returns, case_id)
     allocations = {row.id: row for payout in payouts for row in payout.allocations}
     received, returned = defaultdict(int), defaultdict(int)
@@ -1451,7 +1470,7 @@ def node_summary(session, principal, case_id, node_id):
             continue
         selected.add(identifier)
         pending.extend(children[identifier])
-    payments, refunds = _medical_sources(session, principal, case_id, node_ids=selected)
+    payments, refunds = _medical_sources(session, principal, [case_id], node_ids=selected)
     balance = _balance(payments, [], refunds, [], case_id)
     return _finish(
         session,

@@ -9,7 +9,7 @@ from sallimbook.accounts.schemas import AccountNumber
 from sallimbook.assets.schemas import DateOnly
 from sallimbook.cashflow.recurring_schemas import RuleResponse
 from sallimbook.cashflow.schemas import InputModel, Note, Reason
-from sallimbook.core.types import KrwString
+from sallimbook.core.types import KrwString, SignedKrwString
 
 Title = Annotated[
     str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=120)
@@ -223,6 +223,8 @@ class CaseListItem(EntityResponse):
     end_on: DateOnly | None
     treatment_state: TreatmentState
     financial_state: FinancialState
+    # Same insurance_summary result as the case detail's net_burden_krw.
+    net_burden_krw: SignedKrwString
 
 
 class CaseListResponse(BaseModel):
