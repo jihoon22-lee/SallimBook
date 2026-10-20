@@ -234,7 +234,7 @@ finance Playwright 설정은 전용 18748 포트만 시작해 다른 작업의 1
 사용한다. 네이티브는 고정 GET 경로만 만들며 body·버전·중복 방지 키·임의 헤더를 받지 않는다.
 월·자산·소유자·종류·분류 필터를 검증하고 공동 소유와 개인 소유자 조건의 혼용을 거부한다.
 비교의 이전 월은 확인 월보다 앞서야 하며, 추이는 시작·종료 월을 포함해 최대 120개월이다.
-비교의 페이지는 최대 200행이고 중복·역순 행과 잘못된 cursor를 거부한다.
+비교의 페이지는 최대 200행이고 서버 순서를 그대로 둔다. 중복 행·요청 cursor 재등장·마지막 행과 다른 `next_cursor`를 거부한다.
 
 응답의 월·변경본 참조·필터·자산 ID가 요청과 맞는지 확인하고 기존 월별 DTO 검증을 재사용한다.
 확정/재개방/초안/없는 월, provisional, 미입력 null, 0원, 증감률 계산 불가 사유를 보존한다.
@@ -288,7 +288,7 @@ JVM **146개**(실패·오류·건너뜀 0)가 통과했다. 자산 종류 변�
 `getCardPaymentLinks({resourceId, query})`와 `getAccountPaymentLinks({resourceId, query})`는
 생성된 `PaymentLinksResponse`를 반환한다. 선택 종료일 `as_of_date`, 규칙·미납 회차·카드의 개별
 cursor와 최대 200개 limit만 받는다. 네이티브는 고정 GET 경로를 만들고 대상 종류·ID·버전,
-계좌의 연결 자산 ID, 선택 날짜, 64자리 소문자 hex digest와 세 페이지의 필드·순서·cursor를 검증한다.
+계좌의 연결 자산 ID, 선택 날짜, 64자리 소문자 hex digest와 세 페이지의 필드·cursor를 검증한다. 각 페이지는 서버 순서를 그대로 두고 중복 행·요청 cursor 재등장·마지막 행과 다른 `next_cursor`를 거부한다.
 계좌에 연결된 카드가 다른 페이지에 있어도 해당 카드의 납부 규칙은 누락시키지 않는다.
 
 조회 범위는 `registered_recurring_only`, 전체 계좌 출금 합계 제공 여부는 false로 제한한다.
@@ -328,7 +328,7 @@ TS 입력·응답은 공식 생성 DTO를 참조하고 기존 자원 수정·삭
 사건의 치료 상태와 정산 상태는 독립이고, 치료 종료일과 시작일 관계를 검증한다.
 사건 목록에는 진단 메모·코드를 허용하지 않으며 상세와 typed 변경 이력에서만 길이를 제한해 전달한다.
 진료 노드는 종류·부모·정렬 순서·실제 날짜와 요청 사건 ID를 검증한다. 전체 트리의 순환·가계 권한과
-최종 계산은 서버가 판단한다. 일반 목록의 ID/이력 version은 내림차순·중복 없음·cursor/limit을 검증한다.
+최종 계산은 서버가 판단한다. 일반 목록은 서버 순서를 그대로 두고 ID 중복·요청 cursor 재등장·마지막 행과 다른 `next_cursor`·limit을 거부한다. 이력 version은 내림차순을 검증한다.
 진료 노드는 서버의 부모 우선·형제 정렬 순서를 보존하고 UUID cursor를 위치로 취급하며,
 ID 중복·마지막 행 cursor·limit·사건 ID를 검증한다.
 네이티브는 진료 노드에 금액을 추가하거나 보험료를 자산 스냅샷에 자동 합산하지 않는다.
@@ -437,7 +437,7 @@ float·bool·숫자 문자열을 수량으로 변환하지 않는다. 금액은 
 재전송 응답의 version을 현재 재고로 해석하거나 If-Match에 맞춰 올리지 않으며, 후속 변경 전
 현재 소모품과 연결을 다시 조회한다. 취소는 새 원장 ID를 반환하며 원본을 삭제하지 않는다.
 
-응답은 부모 ID·조회 필터·내림차순 cursor/limit·가계 일관성을 검사한다. 보증 상태는 미입력과
+응답은 부모 ID·조회 필터·cursor/limit·가계 일관성을 검사한다. 목록은 서버 순서를 그대로 두고 중복 행·요청 cursor 재등장·마지막 행과 다른 `next_cursor`를 거부한다. 보증 상태는 미입력과
 만료일 포함 유효 상태를 구분한다. 다음 확인일의 unknown/override/replacement와 교체 필요 null,
 구매 필요 및 재고 임계 상태를 보존하며 날짜/수량의 내부 일관성을 대조한다. `getHomecareStatus`는
 서버 `as_of`를 사용하고 자산 month나 임의 기준일 쿼리를 받지 않는다.
@@ -475,7 +475,7 @@ git diff --check
 R-13/R-15/R-20의 9개 서버 API 중 `nativeFinance`의 JSON 메타데이터 명령은
 `listDocuments`, `getDocument`, `deleteDocument`, `createDocumentLink`, `listDocumentLinks`,
 `endDocumentLink` 6개다. 입력·조회·응답은 생성 API 타입을 참조하고 Kotlin에서 경로·필드·
-버전·멱등키·typed target·문서 상태·부모 ID·페이지를 검증한다. 연결 생성의 If-Match는 문서,
+버전·멱등키·typed target·문서 상태·부모 ID·페이지를 검증한다. 목록은 서버 순서를 그대로 두고 중복 행·요청 cursor 재등장·마지막 행과 다른 `next_cursor`를 거부한다. 연결 생성의 If-Match는 문서,
 연결 해제의 If-Match는 연결 자체의 버전이다. 변경 응답은 원래 요청 당시의 불변 참조다.
 
 `uploadDocument({target})`와 `downloadDocument({documentId})`는 각각

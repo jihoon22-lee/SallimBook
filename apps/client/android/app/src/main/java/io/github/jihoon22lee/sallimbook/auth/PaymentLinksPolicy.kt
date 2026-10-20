@@ -125,7 +125,7 @@ internal object PaymentLinksPolicy {
         val count = number(row["total_count"], 0)
         if (items.size > limit || items.size > count) invalid()
         val ids = items.map { item(it)["id"] as String }
-        if (ids != ids.sortedDescending() || ids.distinct().size != ids.size || cursor != null && ids.any { it >= cursor as String }) invalid()
+        if (ids.distinct().size != ids.size || cursor != null && cursor in ids) invalid()
         row["next_cursor"]?.let {
             FinancePolicy.id(it)
             if (ids.isEmpty() || it != ids.last()) invalid()

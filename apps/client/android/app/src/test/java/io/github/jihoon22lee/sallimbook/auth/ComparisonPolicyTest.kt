@@ -168,4 +168,10 @@ class ComparisonPolicyTest {
         assertEquals("INVALID_TREND_RANGE", (safe["error"] as Map<*, *>)["code"])
         assertFalse(safe.toString().contains("synthetic"))
     }
+    @Test fun itemsKeepServerOrderButRejectDuplicatesAndRepeatedCursor() {
+        val second = item() + mapOf("asset_id" to other, "before" to value("2025-12") + mapOf("asset_id" to other), "after" to value("2026-01") + mapOf("asset_id" to other))
+        val row = comparison() + mapOf("item_count" to 2, "items" to listOf(second, item()))
+        assertEquals(row, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(), 200, row))
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(query = mapOf("to" to "2026-01", "cursor" to other)), 200, row) }
+    }
 }

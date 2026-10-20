@@ -623,8 +623,8 @@ internal object InsuranceEventPolicy {
                     var previous = (q["cursor"] as? Number)?.toLong() ?: Long.MAX_VALUE
                     for (item in items) { val version = (item["version"] as Number).toLong(); if (version >= previous) invalid(); previous = version }
                 } else {
-                    var previous = q["cursor"] as? String
-                    for (item in items) { val id = item["id"] as String; if (previous != null && id >= previous!!) invalid(); previous = id }
+                    // Server order is kept; the requested cursor row may not appear again.
+                    q["cursor"]?.let { if (keys.any { k -> k.toString() == it.toString() }) invalid() }
                 }
                 if (row["next_cursor"] != null && (keys.isEmpty() || row["next_cursor"].toString() != keys.last().toString())) invalid()
                 if (items.mapNotNull { it["household_id"] }.toSet().size > 1) invalid()

@@ -170,7 +170,7 @@ class InsuranceEventPolicyTest {
         bad(AuthCode.ACCESS_DENIED) { response(op, emptyMap(), page(expense())) }
         bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("case_id" to child)), page(item)) }
         bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("state" to "void")), page(item)) }
-        bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("cursor" to child)), page(item)) }
+        bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("cursor" to id)), page(item)) }
         bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("limit" to 1)), page(item, item + mapOf("id" to other))) }
     }
     @Test fun summariesKeepNegativeBurdenAndRejectArbitraryNodeInsuranceAttribution() {
@@ -212,5 +212,9 @@ class InsuranceEventPolicyTest {
             assertEquals("INTERNAL_ERROR", (AuthPolicy.safeError(500, unsafe, id)!!["error"] as Map<*, *>)["code"])
         }
     }
-
+    @Test fun listsKeepServerOrderButRejectRepeatedCursor() {
+        val op = FinanceOperation.LIST_MEDICAL_EXPENSES; val item = expense() - "lines"
+        response(op, mapOf("query" to mapOf("cursor" to child)), page(item))
+        bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("cursor" to id)), page(item)) }
+    }
 }

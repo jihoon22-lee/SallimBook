@@ -125,7 +125,10 @@ class PaymentLinksPolicyTest {
         }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op(false), request(), 200, response() + mapOf("rules" to page(listOf(rule() + mapOf("card_id" to assetId))))) }
     }
-    @Test fun eachPageHasIndependentCursorTotalAndBoundedDescendingRows() {
+    @Test fun eachPageHasIndependentCursorTotalAndBoundedRowsInServerOrder() {
+        val later = "00000000-0000-4000-8000-000000000006"
+        val ascending = response(true) + mapOf("rules" to page(listOf(rule(true), rule(true) + mapOf("id" to later))))
+        assertEquals(ascending, FinancePolicy.response(op(true), request(true), 200, ascending))
         val row = response(true) + mapOf("rules" to page(listOf(rule(true))) + mapOf("total_count" to 10, "next_cursor" to ruleId))
         assertEquals(row, FinancePolicy.response(op(true), request(true, mapOf("as_of_date" to day, "limit" to 1)), 200, row))
         for (change in listOf(mapOf("rules" to page(List(201) { rule(true) })), mapOf("rules" to page(listOf(rule(true))) + mapOf("total_count" to 0)),

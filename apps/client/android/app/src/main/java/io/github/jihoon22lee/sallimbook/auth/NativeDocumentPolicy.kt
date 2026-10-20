@@ -209,18 +209,20 @@ internal object NativeDocumentPolicy {
             val items = page["items"] as? List<*> ?: invalid()
             val query = uri.rawQuery?.split('&')?.associate { it.substringBefore('=') to it.substringAfter('=') } ?: emptyMap()
             if (items.size > (query["limit"]?.toInt() ?: 50)) invalid()
-            var previous = query["cursor"]
+            // Server order is kept; rows and the requested cursor may not repeat.
+            val seen = mutableSetOf<String>().apply { query["cursor"]?.lowercase()?.let(::add) }
+            var last: String? = null
             val households = mutableSetOf<Any?>()
             for (item in items) {
                 val row = if (operation == FinanceOperation.LIST_DOCUMENT_LINKS) linked(item) else document(item)
                 val current = (row["id"] as String).lowercase()
-                if (previous != null && current >= previous) invalid()
-                previous = current; households.add(row["household_id"])
+                if (!seen.add(current)) invalid()
+                last = current; households.add(row["household_id"])
                 if (operation == FinanceOperation.LIST_DOCUMENT_LINKS && row["document_id"] != parts[4] ||
                     operation == FinanceOperation.LIST_DOCUMENTS && row["state"] == "deleted") invalid()
             }
             if (households.size > 1) invalid()
-            page["next_cursor"]?.let { id(it); if (items.isEmpty() || (it as String).lowercase() != previous) invalid() }
+            page["next_cursor"]?.let { id(it); if (items.isEmpty() || (it as String).lowercase() != last) invalid() }
             return page
         } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
     }
