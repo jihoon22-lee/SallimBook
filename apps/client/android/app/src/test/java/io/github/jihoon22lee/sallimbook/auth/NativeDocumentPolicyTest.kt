@@ -110,6 +110,21 @@ class NativeDocumentPolicyTest {
         bad(AuthCode.ACCESS_DENIED) { NativeDocumentPolicy.info(document + mapOf("state" to "pending", "stored_at" to null), id) }
         assertFalse(info.toString().contains("합성"))
     }
+    @Test fun tooComplexCodeKeepsStatusAndNamesThePageLimit() {
+        val raw = mapOf("error" to mapOf("code" to "DOCUMENT_TOO_COMPLEX", "message" to "SYNTHETIC PRIVATE"))
+        assertEquals("DOCUMENT_TOO_COMPLEX", (AuthPolicy.safeError(422, raw, id)!!["error"] as Map<*, *>)["code"])
+        assertTrue(NativeDocumentPolicy.errorMessage("DOCUMENT_TOO_COMPLEX").contains("${NativeDocumentPolicy.MAX_PDF_PAGES}쪽"))
+        assertEquals("REQUEST_FAILED", (AuthPolicy.safeError(503, raw, id)!!["error"] as Map<*, *>)["code"])
+    }
+    @Test fun unsupportedImageCodeKeepsStatusAndLocalMessage() {
+        val raw = mapOf("error" to mapOf("code" to "DOCUMENT_IMAGE_UNSUPPORTED", "message" to "SYNTHETIC PRIVATE"))
+        val safe = AuthPolicy.safeError(422, raw, id)!!
+        assertEquals("DOCUMENT_IMAGE_UNSUPPORTED", (safe["error"] as Map<*, *>)["code"])
+        assertEquals(NativeDocumentPolicy.errorMessages.getValue("DOCUMENT_IMAGE_UNSUPPORTED").second,
+            NativeDocumentPolicy.errorMessage("DOCUMENT_IMAGE_UNSUPPORTED"))
+        assertFalse(safe.toString().contains("SYNTHETIC PRIVATE"))
+        assertEquals("REQUEST_FAILED", (AuthPolicy.safeError(503, raw, id)!!["error"] as Map<*, *>)["code"])
+    }
     @Test fun documentErrorsKeepOnlyKnownStatusMatchedCodesAndLocalMessages() {
         for ((code, detail) in NativeDocumentPolicy.errorMessages) {
             val raw = mapOf("error" to mapOf("code" to code, "message" to "SYNTHETIC PRIVATE", "uri" to "content://synthetic/private"))

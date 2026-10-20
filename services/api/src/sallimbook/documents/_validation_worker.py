@@ -18,22 +18,35 @@ import signal
 import struct
 import subprocess
 import sys
+import threading
 import time
 import unicodedata
 import warnings
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_PIXELS = 16_000_000
 MAX_DIMENSION = 8192
-MAX_PAGES = 20
+# Measured 2026-10-20 with parallel OCR: s = 9.04 s/page, floor((90 - 10) / (1.5 × 9.04)) = 5.
+# Clients pin the same value.
+MAX_PAGES = 5
+# The API waits WORKER_SECONDS = DEADLINE_SECONDS + 10 for the whole worker.
+DEADLINE_SECONDS = 80
 MAX_OBJECTS = 10_000
 MAX_DEPTH = 64
 MAX_NODES = 100_000
 MAX_STREAM = 8 * 1024 * 1024
 MAX_DECOMPRESSED = 64 * 1024 * 1024
 MAX_OCR_OUTPUT = 2 * 1024 * 1024
+# Per render/OCR tool call; every call is further bounded by the worker deadline.
+TOOL_SECONDS = 10
+# Unbroken 13+ digit OCR words below this confidence are not card candidates (user decision
+# 2026-10-20: sideways-text blobs score 4–22, upright card numbers 95+).
+OCR_BLOB_CONFIDENCE = 30
+# Orientations OCRed at once (user decision 2026-10-20: same coverage, about half the time).
+OCR_PARALLEL = 2
 PROCESS_ENV = {
     "PATH": "/usr/bin:/bin",
     "LANG": "C.UTF-8",
@@ -46,6 +59,10 @@ PROCESS_ENV = {
 class ProcessFailure(Exception):
     def __init__(self):
         super().__init__("DOCUMENT_PROCESS_FAILED")
+
+
+class ProcessTimeout(ProcessFailure):
+    """The process outlived its time budget; other process failures stay ProcessFailure."""
 
 
 class Rejected(Exception):
@@ -90,7 +107,7 @@ def bounded_process(
             while poll.get_map():
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise ProcessFailure
+                    raise ProcessTimeout
                 for key, event in poll.select(min(remaining, 0.25)):
                     if event & selectors.EVENT_WRITE:
                         try:
@@ -112,6 +129,8 @@ def bounded_process(
             if process.wait(timeout=max(0.001, deadline - time.monotonic())) != 0:
                 raise ProcessFailure
             return bytes(output)
+    except ProcessTimeout, subprocess.TimeoutExpired:
+        raise ProcessTimeout from None
     except OSError, ValueError, subprocess.SubprocessError, ProcessFailure:
         raise ProcessFailure from None
     finally:
@@ -141,10 +160,52 @@ def _limits() -> None:
 
 
 def _size(width: int, height: int) -> None:
-    if not 1 <= width <= MAX_DIMENSION or not 1 <= height <= MAX_DIMENSION:
+    if width < 1 or height < 1:
         raise Rejected
-    if width * height > MAX_PIXELS:
-        raise Rejected
+    # Legitimate but beyond the inspection budget: a retry cannot help, so say so.
+    if width > MAX_DIMENSION or height > MAX_DIMENSION or width * height > MAX_PIXELS:
+        raise Rejected("DOCUMENT_TOO_COMPLEX")
+
+
+def _remaining(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise Rejected("DOCUMENT_TOO_COMPLEX")
+    return remaining
+
+
+# Digit groups joined by one space or a dash (optionally spaced); dots, commas, colons and
+# tildes end a run, so dates such as 2026.02.22 2026.03.01 never form one candidate.
+_PAN_SEPARATOR = r"(?: ?[-–—] ?| )"
+_PAN_RUN = re.compile(r"(?<!\d)\d+(?:" + _PAN_SEPARATOR + r"\d+)*")
+_PAN_LAYOUTS = frozenset(
+    {(length,) for length in range(13, 20)}
+    | {(4, 4, 4, 4)}
+    | {(4, 4, 4, 4, tail) for tail in (1, 2, 3)}
+    | {(4, 6, 5), (4, 6, 4)}
+)
+_PAN_WINDOWS = (1, 3, 4, 5)
+
+
+def _pan_candidates(text: str):
+    """Card-like digit strings (13–19 digits) from NFKC text, in linear time."""
+    for run in _PAN_RUN.finditer(text):
+        groups = re.findall(r"\d+", run[0])
+        lengths = [len(group) for group in groups]
+        for start in range(len(groups)):
+            for width in _PAN_WINDOWS:
+                window = tuple(lengths[start : start + width])
+                if len(window) == width and window in _PAN_LAYOUTS:
+                    yield "".join(groups[start : start + width])
+        # A maximal stretch of single digits (spaced-out OCR) is one candidate as a whole.
+        opened = None
+        for index, length in enumerate([*lengths, 0]):
+            if length == 1:
+                opened = index if opened is None else opened
+                continue
+            if opened is not None and 13 <= index - opened <= 19:
+                yield "".join(groups[opened:index])
+            opened = None
 
 
 def _card_text(value: str) -> None:
@@ -164,9 +225,9 @@ def _card_text(value: str) -> None:
         normalized,
     ):
         raise Rejected("DOCUMENT_CARD_DATA")
-    for match in re.finditer(r"(?<!\d)(?:\d[\s\-–—.]*){12,18}\d(?!\d)", normalized):
-        digits = [int(char) for char in match[0] if char.isdecimal()]
-        if not 13 <= len(digits) <= 19 or len(set(digits)) == 1:
+    for candidate in _pan_candidates(normalized):
+        digits = [int(char) for char in candidate]
+        if len(set(digits)) == 1:
             continue
         total = 0
         for index, digit in enumerate(reversed(digits)):
@@ -176,31 +237,178 @@ def _card_text(value: str) -> None:
             raise Rejected("DOCUMENT_CARD_DATA")
 
 
-def _polyglot(data: bytes, mime: str) -> None:
+# Each scanned range widens by the longest marker minus one so a marker that continues into
+# attacker-chosen bytes next to an excluded range (e.g. a PNG CRC) is still found.
+_MARKER_OVERLAP = 13
+# ZIP/JAR readers search the last 64 KiB plus the 22-byte record for the end of the central
+# directory, so that tail is always scanned for it, excluded ranges or not.
+_ZIP_TAIL = 65_557
+
+
+def _merge(ranges: list[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(ranges):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return tuple(merged)
+
+
+def _jpeg_ranges(data: bytes) -> tuple[tuple[int, int], ...] | None:
+    """Everything except entropy-coded scan data; None when the layout cannot be followed."""
+    if not data.startswith(b"\xff\xd8"):
+        return None
+    ranges: list[tuple[int, int]] = []
+    opened = 0
+    position = 2
+    while position < len(data):
+        if data[position] != 0xFF:
+            return None
+        while position < len(data) and data[position] == 0xFF:
+            position += 1
+        if position >= len(data):
+            return None
+        marker = data[position]
+        position += 1
+        if marker == 0xD9:
+            ranges.append((opened, len(data)))
+            return _merge(ranges)
+        if marker in {0x00, 0x01} or 0xD0 <= marker <= 0xD8 or position + 2 > len(data):
+            return None
+        length = struct.unpack("!H", data[position : position + 2])[0]
+        if length < 2 or position + length > len(data):
+            return None
+        position += length
+        if marker == 0xDA:
+            ranges.append((opened, position))
+            while True:
+                if position + 1 >= len(data):
+                    return None
+                if data[position] != 0xFF:
+                    position += 1
+                    continue
+                following = data[position + 1]
+                if following == 0x00 or 0xD0 <= following <= 0xD7:
+                    position += 2
+                elif following == 0xFF:
+                    position += 1
+                else:
+                    opened = position
+                    break
+    return None
+
+
+def _png_ranges(data: bytes) -> tuple[tuple[int, int], ...] | None:
+    """Everything except IDAT payloads; None when the chunk layout cannot be followed."""
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    ranges: list[tuple[int, int]] = []
+    opened = 0
+    position = 8
+    while position < len(data):
+        if position + 12 > len(data):
+            return None
+        length = struct.unpack("!I", data[position : position + 4])[0]
+        name = data[position + 4 : position + 8]
+        end = position + 12 + length
+        if end > len(data):
+            return None
+        if name == b"IDAT":
+            ranges.append((opened, position + 8))
+            opened = end - 4
+        position = end
+        if name == b"IEND":
+            ranges.append((opened, len(data)))
+            return _merge(ranges)
+    return None
+
+
+_STREAM_KEYWORD = re.compile(rb"stream *(?:\r\n|\r|\n)")
+_MAX_STREAM_CANDIDATES = 64
+
+
+def _pdf_ranges(data: bytes, reader) -> tuple[tuple[int, int], ...] | None:
+    """Everything except raw stream data located after a parsed object's `stream` keyword."""
+    from pypdf.generic import IndirectObject, StreamObject
+
+    located = sorted(
+        (offset, generation, object_id)
+        for generation, rows in reader.xref.items()
+        for object_id, offset in rows.items()
+        if object_id != 0 and generation != 65535 and object_id not in reader.xref_objStm
+    )
+    excluded: list[tuple[int, int]] = []
+    # Search windows end at the next object's offset, so total work stays linear in file size.
+    for index, (offset, generation, object_id) in enumerate(located):
+        window_end = located[index + 1][0] if index + 1 < len(located) else len(data)
+        value = IndirectObject(object_id, generation, reader).get_object()
+        if not isinstance(value, StreamObject) or not value._data:
+            continue
+        raw = value._data
+        for candidates, match in enumerate(_STREAM_KEYWORD.finditer(data, offset, window_end), 1):
+            if candidates > _MAX_STREAM_CANDIDATES:
+                return None
+            if match.end() + len(raw) <= window_end and data.startswith(raw, match.end()):
+                excluded.append((match.end(), match.end() + len(raw)))
+                break
+        else:
+            return None
+    ranges: list[tuple[int, int]] = []
+    opened = 0
+    for start, end in sorted(excluded):
+        if start < opened:
+            return None
+        ranges.append((opened, start))
+        opened = end
+    ranges.append((opened, len(data)))
+    return _merge([(start, end) for start, end in ranges if start < end] or [(0, 0)])
+
+
+def _scannable_ranges(data: bytes, mime: str, reader=None) -> tuple[tuple[int, int], ...]:
+    """Sorted half-open ranges that the marker scan covers; the whole file if unparseable."""
+    ranges = None
+    if mime == "image/jpeg":
+        ranges = _jpeg_ranges(data)
+    elif mime == "image/png":
+        ranges = _png_ranges(data)
+    elif mime == "application/pdf" and reader is not None:
+        ranges = _pdf_ranges(data, reader)
+    return ranges if ranges is not None else ((0, len(data)),)
+
+
+def _polyglot(data: bytes, mime: str, ranges: tuple[tuple[int, int], ...] | None = None) -> None:
     # Reject append/prepend containers and executable signatures. Structural parsing
     # below additionally requires exact format termination and known container chunks.
-    if any(marker in data for marker in (b"PK\x03\x04", b"PK\x05\x06", b"\x7fELF", b"MZ\x90\x00")):
+    # Compressed image/stream data is excluded: random bytes there are not interpretable.
+    if b"PK\x05\x06" in data[-_ZIP_TAIL:]:
         raise Rejected
-    if mime != "application/pdf" and b"%PDF-" in data:
-        raise Rejected
-    # HTML/PHP interpreters can ignore an image/PDF prefix. Raw executable markup
-    # is excluded even when stored in otherwise legal container metadata.
-    lower = data.lower()
-    if any(
-        marker in lower
-        for marker in (
-            b"<?php",
-            b"<?=",
-            b"<script",
-            b"<!doctype html",
-            b"<html",
-            b"<svg",
-            b"<iframe",
-            b"<object",
-            b"javascript:",
-        )
-    ):
-        raise Rejected
+    for start, end in _scannable_ranges(data, mime) if ranges is None else ranges:
+        part = data[max(0, start - _MARKER_OVERLAP) : min(len(data), end + _MARKER_OVERLAP)]
+        if any(
+            marker in part for marker in (b"PK\x03\x04", b"PK\x05\x06", b"\x7fELF", b"MZ\x90\x00")
+        ):
+            raise Rejected
+        if mime != "application/pdf" and b"%PDF-" in part:
+            raise Rejected
+        # HTML/PHP interpreters can ignore an image/PDF prefix. Raw executable markup
+        # is excluded even when stored in otherwise legal container metadata.
+        lower = part.lower()
+        if any(
+            marker in lower
+            for marker in (
+                b"<?php",
+                b"<?=",
+                b"<script",
+                b"<!doctype html",
+                b"<html",
+                b"<svg",
+                b"<iframe",
+                b"<object",
+                b"javascript:",
+            )
+        ):
+            raise Rejected
 
 
 def _png_structure(data: bytes) -> None:
@@ -230,12 +438,15 @@ def _png_structure(data: bytes) -> None:
         length = struct.unpack("!I", data[position : position + 4])[0]
         name = data[position + 4 : position + 8]
         end = position + 12 + length
-        if name not in allowed or end > len(data):
+        if end > len(data):
             raise Rejected
         body = data[position + 8 : end - 4]
         expected = struct.unpack("!I", data[end - 4 : end])[0]
         if zlib.crc32(name + body) & 0xFFFFFFFF != expected:
             raise Rejected
+        # Well-formed but outside this profile (text, animation, editor chunks).
+        if name not in allowed:
+            raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
         if not seen and (name != b"IHDR" or length != 13):
             raise Rejected
         if name != b"IDAT" and name in seen:
@@ -244,15 +455,24 @@ def _png_structure(data: bytes) -> None:
             _size(*struct.unpack("!II", body[:8]))
         seen.append(name)
         if name == b"IEND":
-            if length != 0 or end != len(data) or b"IDAT" not in seen:
+            if length != 0 or b"IDAT" not in seen:
                 raise Rejected
+            if end != len(data):
+                raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
             return
         position = end
     raise Rejected
 
 
+_JPEG_SOF = frozenset(
+    {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+)
+
+
 def _jpeg_structure(data: bytes) -> None:
-    if not data.startswith(b"\xff\xd8") or not data.endswith(b"\xff\xd9"):
+    # Broken structure is DOCUMENT_UNSAFE; well-formed segments or trailers outside this
+    # profile (XMP, MPF, comments, camera trailers after EOI) are DOCUMENT_IMAGE_UNSUPPORTED.
+    if not data.startswith(b"\xff\xd8"):
         raise Rejected
     position = 2
     scans = 0
@@ -266,8 +486,10 @@ def _jpeg_structure(data: bytes) -> None:
         marker = data[position]
         position += 1
         if marker == 0xD9:
-            if position != len(data) or scans == 0:
+            if scans == 0:
                 raise Rejected
+            if position != len(data):
+                raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
             return
         if marker in {0x00, 0xD8, 0x01} or 0xD0 <= marker <= 0xD7:
             raise Rejected
@@ -277,6 +499,12 @@ def _jpeg_structure(data: bytes) -> None:
         if length < 2 or position + length > len(data):
             raise Rejected
         payload = data[position + 2 : position + length]
+        if marker in _JPEG_SOF:
+            if len(payload) < 5:
+                raise Rejected
+            # SOFn payload: precision, height, width.
+            height, width = struct.unpack("!HH", payload[1:5])
+            _size(width, height)
         if 0xE0 <= marker <= 0xEF:
             prefixes = {
                 0xE0: (b"JFIF\0", b"JFXX\0"),
@@ -285,11 +513,10 @@ def _jpeg_structure(data: bytes) -> None:
                 0xEE: (b"Adobe",),
             }
             if marker not in prefixes or not payload.startswith(prefixes[marker]):
-                raise Rejected
-        elif (
-            marker == 0xFE
-        ):  # Uninterpreted comments are not part of this readable-document profile.
-            raise Rejected
+                raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
+        elif marker == 0xFE:
+            # Uninterpreted comments are not part of this readable-document profile.
+            raise Rejected("DOCUMENT_IMAGE_UNSUPPORTED")
         position += length
         if marker == 0xDA:
             scans += 1
@@ -331,6 +558,8 @@ def _image(data: bytes, mime: str):
         expected = "JPEG"
     else:
         raise Rejected
+    # Structure first so camera trailers get the unsupported-image answer, then markers.
+    _polyglot(data, mime)
     with Image.open(io.BytesIO(data), formats=[expected]) as image:
         _size(*image.size)
         if image.format != expected or getattr(image, "n_frames", 1) != 1:
@@ -401,7 +630,11 @@ def _ocr_words(output: bytes) -> bool:
                 score = float(row["conf"])
                 if not math.isfinite(score) or not -1 <= score <= 100:
                     raise ValueError
-                words.append(word)
+                # Sideways text reads as long low-confidence digit blobs that pass Luhn by
+                # chance; such a blob ends the digit run instead of becoming a candidate.
+                # Grouped numbers (4-4-4-4) still count at any confidence.
+                blob = re.search(r"\d{13,}", unicodedata.normalize("NFKC", word))
+                words.append("|" if blob and score < OCR_BLOB_CONFIDENCE else word)
                 if any(char.isalnum() for char in word):
                     confidence.append(score)
         _card_text(" ".join(words))
@@ -414,39 +647,49 @@ def _ocr_words(output: bytes) -> bool:
         raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
 
 
-def _ocr(image, tesseract: str) -> None:
-    readable = False
+def _ocr_command(tesseract: str) -> list[str]:
+    return [tesseract, "stdin", "stdout", "-l", "eng+kor", "--psm", "11", "--dpi", "200", "tsv"]
+
+
+def _ocr(image, tesseract: str, deadline: float) -> None:
     # Check every right-angle orientation, including low-confidence recognized words.
     # OCR still cannot prove absence of all visual card data; unreadable input is refused.
-    for angle in (0, 90, 180, 270):
-        rotated = image if angle == 0 else image.rotate(angle, expand=True)
-        try:
-            buffer = io.BytesIO()
-            rotated.save(buffer, format="PPM")
+    _remaining(deadline)
+    encode = threading.Lock()
+
+    def recognize(angle: int) -> bytes:
+        # One rotation is serialized at a time so at most OCR_PARALLEL PPM copies are alive.
+        with encode:
+            rotated = image if angle == 0 else image.rotate(angle, expand=True)
             try:
-                output = bounded_process(
-                    [
-                        tesseract,
-                        "stdin",
-                        "stdout",
-                        "-l",
-                        "eng+kor",
-                        "--psm",
-                        "11",
-                        "--dpi",
-                        "200",
-                        "tsv",
-                    ],
-                    buffer.getvalue(),
-                    timeout=10,
-                    output_limit=MAX_OCR_OUTPUT,
-                )
-            except ProcessFailure:
-                raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
-            readable = _ocr_words(output) or readable
-        finally:
-            if rotated is not image:
-                rotated.close()
+                buffer = io.BytesIO()
+                rotated.save(buffer, format="PPM")
+                data = buffer.getvalue()
+                buffer.close()
+            finally:
+                if rotated is not image:
+                    rotated.close()
+        try:
+            return bounded_process(
+                _ocr_command(tesseract),
+                data,
+                timeout=min(TOOL_SECONDS, _remaining(deadline)),
+                output_limit=MAX_OCR_OUTPUT,
+            )
+        except ProcessTimeout:
+            raise Rejected("DOCUMENT_TOO_COMPLEX") from None
+        except ProcessFailure:
+            raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
+
+    pool = ThreadPoolExecutor(max_workers=OCR_PARALLEL)
+    try:
+        futures = [pool.submit(recognize, angle) for angle in (0, 90, 180, 270)]
+        outputs = [future.result() for future in futures]
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+    readable = False
+    for output in outputs:
+        readable = _ocr_words(output) or readable
     if not readable:
         raise Rejected("DOCUMENT_UNREADABLE")
 
@@ -549,7 +792,16 @@ def _pdf(data: bytes):
             form_fields_maximum_depth=MAX_DEPTH,
             xform_maximum_invocations_per_extraction=1000,
         ):
-            return _read_pdf(data)
+            reader = _read_pdf(data)
+            try:
+                # Stream locations are known only after the strict parse.
+                _polyglot(
+                    data, "application/pdf", _scannable_ranges(data, "application/pdf", reader)
+                )
+            except BaseException:
+                reader.close()
+                raise
+            return reader
     except PyPdfError, ValueError, TypeError, OSError, RecursionError:
         raise Rejected from None
 
@@ -672,8 +924,10 @@ def _read_pdf(data: bytes):
     for generation, object_id in references:
         visit(IndirectObject(object_id, generation, reader), inventory=True)
     pages = reader.pages
-    if not 1 <= len(pages) <= MAX_PAGES:
+    if not pages:
         raise Rejected
+    if len(pages) > MAX_PAGES:
+        raise Rejected("DOCUMENT_TOO_COMPLEX")
     for page in pages:
         # Float is used only for page geometry, never for financial data.
         width, height = float(page.mediabox.width), float(page.mediabox.height)
@@ -689,24 +943,30 @@ def _read_pdf(data: bytes):
     return reader
 
 
-def _render(data: bytes, page_number: int, pdftoppm: str):
+def _render_command(pdftoppm: str, page_number: int) -> list[str]:
+    return [
+        pdftoppm,
+        "-f",
+        str(page_number),
+        "-l",
+        str(page_number),
+        "-r",
+        "200",
+        "-singlefile",
+        "-",
+    ]
+
+
+def _render(data: bytes, page_number: int, pdftoppm: str, deadline: float):
     try:
         output = bounded_process(
-            [
-                pdftoppm,
-                "-f",
-                str(page_number),
-                "-l",
-                str(page_number),
-                "-r",
-                "200",
-                "-singlefile",
-                "-",
-            ],
+            _render_command(pdftoppm, page_number),
             data,
-            timeout=10,
+            timeout=min(TOOL_SECONDS, _remaining(deadline)),
             output_limit=MAX_PIXELS * 3 + 1024,
         )
+    except ProcessTimeout:
+        raise Rejected("DOCUMENT_TOO_COMPLEX") from None
     except ProcessFailure:
         raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
     Image = _pillow()
@@ -718,35 +978,38 @@ def _render(data: bytes, page_number: int, pdftoppm: str):
         return image.convert("RGB")
 
 
-def inspect_document(data: bytes, mime: str, tesseract: str, pdftoppm: str) -> dict:
+def inspect_document(
+    data: bytes, mime: str, tesseract: str, pdftoppm: str, *, deadline: float
+) -> dict:
     if not data or len(data) > MAX_BYTES:
         raise Rejected
-    _polyglot(data, mime)
     if mime == "application/pdf":
         reader = _pdf(data)
         try:
             _ocr_setup(tesseract, pdftoppm, True)
             page_count = len(reader.pages)
             for page_number in range(1, page_count + 1):
-                with _render(data, page_number, pdftoppm) as image:
-                    _ocr(image, tesseract)
+                _remaining(deadline)
+                with _render(data, page_number, pdftoppm, deadline) as image:
+                    _ocr(image, tesseract, deadline)
         finally:
             reader.close()
     else:
         with _image(data, mime) as image:
             _ocr_setup(tesseract, pdftoppm, False)
-            _ocr(image, tesseract)
+            _ocr(image, tesseract, deadline)
         page_count = 1
     return {"content_type": mime, "page_count": page_count}
 
 
 def main() -> None:
+    deadline = time.monotonic() + DEADLINE_SECONDS
     try:
         _limits()
         if len(sys.argv) != 4 or sys.argv[1] not in {"application/pdf", "image/png", "image/jpeg"}:
             raise Rejected
         data = sys.stdin.buffer.read(MAX_BYTES + 1)
-        result = inspect_document(data, sys.argv[1], sys.argv[2], sys.argv[3])
+        result = inspect_document(data, sys.argv[1], sys.argv[2], sys.argv[3], deadline=deadline)
     except Rejected as failure:
         result = {"error": failure.code}
     except BaseException:

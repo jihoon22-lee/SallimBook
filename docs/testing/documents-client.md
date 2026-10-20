@@ -11,7 +11,8 @@
   문서 삭제는 사유와 모든 연결 대상에 대한 확인을 받아 수행한다.
 - 웹 업로드는 실제 File 크기 1바이트~20MiB, 이름 255문자, 경로/제어/방향 제어 문자,
   MIME과 PDF/JPEG/PNG 확장자 일치를 확인한다. 카드 정보 없는 문서라는 확인 후 메모리에서
-  SHA-256을 계산하고 metadata POST에 보낸다. 같은 원본 bytes를 raw PUT으로 전송한다.
+  SHA-256을 계산하고 metadata POST에 보낸다. 같은 bytes를 raw PUT으로 전송한다. JPEG는 해시 전에
+  정규화한 사본을 사용한다(아래 JPEG 정규화 절).
   일반 React state에는 파일 bytes를 보관하지 않는다. input/ref는 화면 종료·pagehide·세션 해제 시
   비우고 보유 ArrayBuffer를 지운다. 브라우저/런타임 내부 사본까지 완전 삭제했다고 주장하지 않는다.
 - metadata 응답 유실은 같은 생성 키로 재시도한다. 업로드 응답 유실은 현재 metadata를 조회해
@@ -139,3 +140,49 @@ git diff --check
 문서/manifest 검사와 `git diff --check`도 통과했다. 시험 종료 후 전용 Vite 18756을 해제했다.
 이 보완에서는 전체 앱 982개, 실제 HTTPS/API/DB, Android 실기기 검증을 다시 실행하지 않았다.
 위 모의 화면 검증을 서버 권한이나 네이티브 저장·암호화의 검증으로 간주하지 않는다.
+
+
+## JPEG 정규화와 검사 한도 안내 — 2026-10-20
+
+휴대폰 카메라 JPEG의 EXIF 방향·위치 정보·제조사 꼬리 데이터 때문에 서버가 정상 사진을
+거절하던 문제(H2)를 클라이언트에서 줄인다. 서버는 받은 bytes를 바꾸지 않는다.
+
+- 웹은 크기 확인 뒤 `createImageBitmap(imageOrientation: "from-image")`로 방향을 적용하고
+  CPU canvas에서 긴 변 3,072px 이하, 품질 0.9 JPEG로 다시 인코딩한다. 같은 파일은 같은 bytes가
+  되므로 pending 재개의 이름·형식·크기·SHA-256 대조가 유지된다. 변환 결과가 20MiB를 넘으면
+  업로드하지 않고 사진 크기를 줄이라고 안내한다. 브라우저가 디코딩/인코딩하지 못하면 선택한 bytes를
+  그대로 올리고 서버 검사가 판단한다. 이 경우 EXIF가 남을 수 있으며 가계 보관함에 암호화해 보관한다.
+- Android는 네이티브 보호 화면에서 `ImageDecoder`(software allocator, target size)로 방향을 적용하고
+  같은 긴 변·품질 90으로 다시 압축한다. 변환 bytes는 JS bridge로 전달하지 않으며 실패하면 선택한
+  bytes를 올린다. 웹과 Android의 긴 변·품질 값은 JVM 시험이 `normalize.ts`와 대조한다.
+- 업로드 안내에 PDF 최대 5쪽과 JPEG 사본 업로드를 표시한다.
+- 새 422 코드의 안내 문구는 웹 `DocumentSupport`와 `NativeDocumentPolicy.errorMessages`에 있다.
+  - `DOCUMENT_IMAGE_UNSUPPORTED`: 지원하지 않는 부가 정보(편집 정보·동영상 등)가 있으니
+    JPEG로 다시 저장하거나 다시 캡처해 첨부하라는 안내
+  - `DOCUMENT_TOO_COMPLEX`: 쪽수나 해상도가 커서 검사 시간 안에 확인하지 못했으니
+    PDF를 5쪽 이하로 나누거나 해상도를 낮추라는 안내
+  - 구버전 APK는 두 코드를 일반 실패 문구로 표시한다. 서버와 APK를 같은 배포에서 갱신한다.
+
+```bash
+pnpm --filter @sallimbook/client exec playwright test --config playwright.documents.config.ts tests/documents-normalize.spec.ts tests/documents-ui.spec.ts tests/documents-model.spec.ts --workers=1
+cd apps/client/android && ./gradlew --no-daemon testDebugUnitTest --tests 'io.github.jihoon22lee.sallimbook.auth.NativeDocumentImageTest' --tests 'io.github.jihoon22lee.sallimbook.auth.NativeDocumentPolicyTest'
+```
+
+웹 정규화 시험은 합성 canvas JPEG에 EXIF 방향·XMP·MPF·카메라 꼬리 데이터를 붙여 업로드 bytes에
+허용 segment만 남고 꼬리가 없음을, 방향 6의 회전과 긴 변 제한, pending 재개의 동일 해시,
+디코딩 불가 파일의 원본 업로드를 확인한다. Android의 방향·메타데이터 제거·결정성은
+`NativeDocumentImageDeviceTest` 계측 시험에 있으며 로컬 기기가 없어 아직 실행하지 않았다
+(push 후 클라우드 Android instrumentation job에서 실행).
+
+### 실기기 확인(Galaxy 카메라 사진)
+
+합성 내용만 적은 종이를 기본 카메라로 찍어 합성 기록에 첨부한다. 사진·스크린샷은 저장소·Issue·PR에
+올리지 않고 단계별 성공/오류 코드만 적는다. 모션 포토·Ultra HDR이 정규화 실패로 거절되면 통과로 적지 않는다.
+
+| 항목 | Android 앱 | PC 웹(같은 원본 파일) |
+|---|---|---|
+| 기본 설정 세로 사진: 첨부, 방향, 다운로드 긴 변 3,072px 이하 | 미실행 | 미실행 |
+| 모션 포토 켬 | 미실행 | 미실행 |
+| 가로로 돌려 찍은 사진 | 미실행 | 미실행 |
+| Ultra HDR 켬(지원 기기) | 미실행 | 미실행 |
+| 스캔 앱 5쪽 PDF 첨부 / 6쪽 PDF `DOCUMENT_TOO_COMPLEX` 안내 | 미실행 | 미실행 |

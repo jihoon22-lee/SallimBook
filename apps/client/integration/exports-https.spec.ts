@@ -204,6 +204,8 @@ test("real authenticated ZIP preserves selected originals and excludes secret fi
           "DOCUMENT_SCANNER_UNAVAILABLE",
           "DOCUMENT_UPLOAD_TIMEOUT",
           "DOCUMENT_UNSAFE",
+          "DOCUMENT_IMAGE_UNSUPPORTED",
+          "DOCUMENT_TOO_COMPLEX",
           "DOCUMENT_MALWARE",
           "DOCUMENT_CARD_DATA",
           "DOCUMENT_UNREADABLE",

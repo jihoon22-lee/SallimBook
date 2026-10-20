@@ -360,7 +360,9 @@ PC 웹에서는 별도 vault adapter가 암호문을 복호화하며 일반 Quer
 
 ## 6. 첨부
 
-SB-023은 PDF/JPEG/PNG 원본을 파일당 **20MiB(20,971,520바이트)**까지 지원한다.
+SB-023은 PDF/JPEG/PNG 파일을 파일당 **20MiB(20,971,520바이트)**까지 지원하며 PDF는 최대 **5쪽**이다.
+JPEG는 웹·Android 클라이언트가 EXIF 방향을 적용하고 긴 변을 3,072px 이하로 줄이며 위치 등 사진 정보와
+꼬리 데이터를 뺀 사본을 만들어 그 bytes로 해시·업로드한다. 서버는 받은 bytes를 바꾸지 않고 그대로 검사·보관한다.
 `POST /documents`에 파일명·MIME·실제 크기·SHA-256·typed target·`contains_no_card_data: true`를
 제출하면 pending 문서와 최초 연결을 같은 트랜잭션으로 만든다. 생성은 Idempotency-Key를 요구하고
 201 Location 및 불변 `{id, version}` 참조를 반환한다. 파일명은 경로·제어문자·방향 제어문자를
@@ -370,13 +372,14 @@ SB-023은 PDF/JPEG/PNG 원본을 파일당 **20MiB(20,971,520바이트)**까지 
 받는다. 크기·해시·실제 형식·악성 내용·카드 정보 검사를 모두 통과한 원본만 암호화해 ready로 전환한다.
 본문을 읽기 전부터 프로세스당 업로드 한 개로 제한하며 초과는 503 `DOCUMENT_UPLOAD_BUSY`다.
 HTTP 취소 후에도 시작한 worker가 끝날 때까지 처리 슬롯을 유지한다. 본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
-503이다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
+503이다. 422에는 지원하지 않는 사진 정보·꼬리 데이터의 `DOCUMENT_IMAGE_UNSUPPORTED`와 쪽수·픽셀·검사 시간
+초과의 `DOCUMENT_TOO_COMPLEX`가 포함된다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
 검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
 
 | 동작 | 경로·버전 기준 |
 |---|---|
 | 목록/상세 | GET /documents, GET /documents/{id}; 목록은 target_kind와 target_id를 함께 지정 가능 |
-| 원본 다운로드 | GET /documents/{id}/download; 현재 가계 권한과 ready 상태 확인 후 인증 응답으로 전달 |
+| 업로드한 파일 다운로드 | GET /documents/{id}/download; 현재 가계 권한과 ready 상태 확인 후 인증 응답으로 전달 |
 | 문서 삭제 | POST /documents/{id}/delete; 사유·문서 If-Match·멱등키, 연결도 함께 종료 |
 | 연결 추가 | POST /document-links; document_id/target·문서 If-Match·멱등키 |
 | 연결 이력 | GET /documents/{id}/links; 활성·종료 이력을 모두 반환 |

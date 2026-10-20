@@ -127,3 +127,62 @@ worker 본문은 위 DB 실행 후 변경하지 않았다. 실제 network-none·
 진입이 clone 페이지를 초기화하는 문제를 명시적 close로 고쳤고, 정상 페이지 1개를 별도 검사한다.
 최종 검사 이미지 ID는 `sha256:1bcd3e967ad706a3df96cc8ab4ae333e6a8eae6f9621650ad114fa0ee8ed4ed3`이다.
 전용 임시 컨테이너는 종료·제거했고 검토용 이미지는 보존했다. 이는 운영 배포 완료 기록과 구분한다.
+
+## 문서 검사 정확도(H2·M16·L12) — 2026-10-20
+
+검토에서 정상 사진·PDF가 거절되거나 검사 시간을 넘기는 문제 세 가지를 확인했다.
+H2는 압축된 사진·PDF 데이터 안의 우연한 바이트가 위험 표식으로 판정된 문제,
+M16은 쪽수·해상도 제한 없이 OCR이 worker 시간을 넘기던 문제, L12는 날짜 두 개나
+옆으로 누운 글자의 OCR 숫자가 카드번호 후보로 판정된 문제다.
+
+### 위험 표식 검사 구간
+
+- JPEG는 엔트로피 부호화 데이터, PNG는 IDAT, PDF는 strict parser가 길이를 확인한 스트림
+  데이터만 표식 검사에서 뺀다. 헤더·segment·chunk·사전·꼬리 등 나머지는 모두 검사한다.
+- 제외 구간의 경계는 표식 길이만큼 겹쳐 검사하며 파일 끝 ZIP 중앙 디렉터리 표식은 항상 검사한다.
+- 구조를 해석할 수 없으면 제외 없이 파일 전체를 검사한다. 허용 profile 밖의 JPEG segment·PNG chunk·
+  EOI/IEND 뒤 데이터는 `DOCUMENT_IMAGE_UNSUPPORTED`, 깨진 구조는 기존 `DOCUMENT_UNSAFE`다.
+- 다운로드의 nosniff·CSP sandbox·attachment 경계와 ClamAV·카드 정보 검사는 그대로 유지한다.
+
+### 처리 한도
+
+격리된 도구 container(network none, CPU 2개, 메모리 4GiB)에서 실제 worker로 측정했다.
+4방향 OCR을 한 번에 두 방향씩 병렬 실행하도록 바꾼 뒤의 값이다(사용자 결정, 2026-10-20).
+
+| 합성 입력 | 결과 | 시간 |
+|---|---|---|
+| 글자 PDF A4 1/2/4/8쪽 | 허용 | 8.7/18.6/37.6/72.0초 |
+| 이미지 PDF A4 1/4쪽 | 허용 | 7.4/33.3초 |
+| JPEG 3072×2304/4000×3000/4608×3456 | 허용 | 8.1/10.7/11.8초, 최대 메모리 441/615/762MiB |
+
+쪽당 비용 s = 9.04초(글자 PDF 기울기)에서 `floor((90 − 10) / (1.5 × 9.04)) = 5`이므로
+`MAX_PAGES = 5`, `DEADLINE_SECONDS = 80`, API의 `WORKER_SECONDS = 90`, 도구 호출당 10초다.
+6쪽 이상 PDF, 1,600만 화소 또는 한 변 8,192px 초과, 검사 시간 초과는 422 `DOCUMENT_TOO_COMPLEX`로 답한다.
+병렬 OCR 전 측정(s = 15.52초)으로는 3쪽이 한계였다. 운영 CPU가 더 느리면 5쪽 PDF가
+같은 오류로 거절될 수 있으며 이 경우 worker 비정상 종료가 아니라 안내 가능한 오류다.
+
+### 카드번호 후보
+
+카드번호 후보는 실제 카드 번호 묶음(공백 없는 13~19자리, 4-4-4-4와 끝 1~3자리, 4-6-5, 4-6-4,
+한 자리씩 띄운 숫자 연속; 공백·하이픈·전각 숫자 포함)만 Luhn 검사한다. 날짜 쌍·계좌번호처럼 다른 묶음의 숫자는 후보가 아니다. OCR에서 공백 없이
+13자리 이상 이어진 한 단어는 신뢰도 30 이상일 때만 후보로 본다(사용자 결정, 2026-10-20).
+옆으로 누운 글자의 숫자 덩어리는 신뢰도 4~22였고 바로 선 실제 번호는 95 이상이었다.
+묶음 숫자·PDF 글자 layer·EXIF·카드 라벨 검사는 바꾸지 않았다.
+
+### 실제 도구 검사
+
+```bash
+uv run --project services/api --frozen python scripts/test_document_tools.py
+uv run --project services/api --frozen python scripts/test_document_tools.py --measure
+```
+
+기존 단계에 아래 8개를 더해 모두 통과했다. `pdf_max_pages`(5쪽 이미지 PDF)는
+`max_pages_seconds` 4.102초로 `WORKER_SECONDS` 90초 안에서 끝났다.
+
+- 허용: `jpeg_marker_in_scan`, `jpeg_reencoded_phone`, `png_dates_korean`, `pdf_max_pages`
+- 거절: `jpeg_phone_original`(`DOCUMENT_IMAGE_UNSUPPORTED`), `jpeg_comment_marker`,
+  `jpeg_trailer_zip`, `pdf_too_many_pages`(`DOCUMENT_TOO_COMPLEX`)
+
+`--measure`는 합성 입력별 결과 코드·시간·메모리 숫자만 출력한다. 검사 container는
+`sallimbook-document-test-*` 이름만 만들고 끝나면 제거한다. 실제 HTTPS `test_web_auth.py --documents`와
+`--exports`도 통과했다. 실제 Galaxy 카메라 사진 확인은 [첨부 UI 검증](documents-client.md)에 기록한다.

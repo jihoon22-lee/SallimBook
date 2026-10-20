@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError } from "../../platform/api";
 import type { DocumentsApi } from "./api";
-import { checksum, etag, expired, fileProblem, sameContent, stateLabel } from "./model";
+import { MAX_BYTES, checksum, etag, expired, fileProblem, sameContent, stateLabel } from "./model";
 import type { CreateDocument, Document, Target } from "./model";
 import { CommandFeedback, useDocumentCommand } from "./DocumentSupport";
+import { MAX_LONG_EDGE, normalizeJpeg } from "./normalize";
 type Attempt = {
   bytes: ArrayBuffer;
   input: CreateDocument;
@@ -63,11 +64,25 @@ export function WebUpload({
           setProblem(validation);
           return;
         }
-        const bytes = await selected.arrayBuffer();
+        let bytes = await selected.arrayBuffer();
         try {
           if (signal.aborted || !command.mounted.current) throw new DOMException("", "AbortError");
           if (bytes.byteLength !== selected.size)
             throw new ApiError(422, "DOCUMENT_CONTENT_MISMATCH");
+          // Camera JPEGs carry orientation, location and vendor trailers; upload a clean copy.
+          if (selected.type === "image/jpeg") {
+            const normalized = await normalizeJpeg(bytes, signal);
+            if (normalized) {
+              new Uint8Array(bytes).fill(0);
+              bytes = normalized;
+            }
+            if (!command.mounted.current) throw new DOMException("", "AbortError");
+            if (bytes.byteLength > MAX_BYTES) {
+              new Uint8Array(bytes).fill(0);
+              setProblem("변환한 사진이 20MiB를 넘어요. 사진 크기를 줄여 다시 선택해 주세요.");
+              return;
+            }
+          }
           const hash = await checksum(bytes);
           if (signal.aborted || !command.mounted.current) throw new DOMException("", "AbortError");
           const metadata: CreateDocument = {
@@ -182,6 +197,12 @@ export function WebUpload({
             카드 사진·전체 카드번호·CVC 등 카드 비밀정보가 없는 문서임을 확인했어요
           </label>
         </fieldset>
+        {file.current?.type === "image/jpeg" && (
+          <p>
+            JPEG 사진은 방향을 맞추고 긴 변을 {MAX_LONG_EDGE}px 이하로 줄이며 위치 등 사진 정보를 뺀
+            사본으로 올려요. 기기의 원래 사진은 바뀌지 않아요.
+          </p>
+        )}
         {problem && <p role="alert">{problem}</p>}
         <CommandFeedback command={command} />
         {command.error?.status === 409 && (

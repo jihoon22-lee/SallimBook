@@ -12,6 +12,8 @@ internal class NativeDocumentInfo(val id: String, val name: String, val mime: St
 
 /** Six public metadata commands; create and binary content are native file-screen operations only. */
 internal object NativeDocumentPolicy {
+    /** Must equal the server worker's MAX_PAGES (pinned by a server unit test). */
+    const val MAX_PDF_PAGES = 5
     val errorMessages = mapOf(
         "DOCUMENT_STORAGE_QUOTA_EXCEEDED" to (413 to "첨부파일 보관 용량을 초과했어요. 기존 문서를 확인해 주세요."),
         "DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE" to (503 to "첨부파일 저장 공간을 사용할 수 없어요. 잠시 후 목록을 확인해 주세요."),
@@ -30,6 +32,8 @@ internal object NativeDocumentPolicy {
         "DOCUMENT_TOO_LARGE" to (413 to "첨부파일은 20MiB 이하로 선택해 주세요."),
         "DOCUMENT_UPLOAD_TIMEOUT" to (408 to "파일 전송 시간이 초과됐습니다. 목록을 확인해 주세요."),
         "DOCUMENT_UNSAFE" to (422 to "지원하는 안전한 PDF·JPEG·PNG 문서를 선택해 주세요."),
+        "DOCUMENT_TOO_COMPLEX" to (422 to "쪽수나 해상도가 커서 검사 시간 안에 확인하지 못했어요. PDF는 ${MAX_PDF_PAGES}쪽 이하로 나눠 첨부해 주세요."),
+        "DOCUMENT_IMAGE_UNSUPPORTED" to (422 to "사진에 지원하지 않는 부가 정보가 있어요. 앱에서 다시 선택하거나 JPEG로 다시 저장해 첨부해 주세요."),
         "DOCUMENT_MALWARE" to (422 to "보안 검사에서 허용하지 않은 파일입니다."),
         "DOCUMENT_CARD_DATA" to (422 to "카드번호·보안코드 또는 카드 사진은 첨부할 수 없습니다."),
         "DOCUMENT_UNREADABLE" to (422 to "글자를 명확히 읽을 수 있는 영수증·문서를 선택해 주세요."),

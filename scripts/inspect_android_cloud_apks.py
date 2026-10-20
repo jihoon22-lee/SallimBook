@@ -24,6 +24,7 @@ FORBIDDEN = (
     b"SecureBridgeWebViewTest",
     b"NativeVaultCvcAcceptanceTest",
     b"NativeRoutePolicyTest",
+    b"NativeDocumentImageDeviceTest",
 )
 
 

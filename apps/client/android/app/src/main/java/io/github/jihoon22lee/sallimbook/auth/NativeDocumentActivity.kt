@@ -127,7 +127,7 @@ class NativeDocumentActivity : AppCompatActivity() {
             setTextIsSelectable(false); isLongClickable = false; setPadding(0, 12.dp(), 0, 12.dp()); column.addView(this)
         }
         label(if (mode == UPLOAD) "SallimBook · 문서 첨부" else "SallimBook · 문서 사본 저장").textSize = 24f
-        label(if (mode == UPLOAD) "PDF·JPEG·PNG 한 개를 첨부할 수 있어요. 최대 20MiB이며 카드 사진·전체 카드번호·보안코드가 포함된 파일은 첨부할 수 없어요."
+        label(if (mode == UPLOAD) "PDF·JPEG·PNG 한 개를 첨부할 수 있어요. 최대 20MiB, PDF는 최대 ${NativeDocumentPolicy.MAX_PDF_PAGES}쪽이며 카드 사진·전체 카드번호·보안코드가 포함된 파일은 첨부할 수 없어요. JPEG 사진은 방향을 맞추고 긴 변을 ${NativeDocumentImage.MAX_LONG_EDGE}px 이하로 줄이며 위치 등 사진 정보를 뺀 사본으로 올려요."
             else "선택한 저장 위치에 문서 사본을 만들어요. 이 사본은 앱 밖에 남으며 서버에서 문서를 삭제해도 함께 지워지지 않아요. 중단되면 빈 파일이나 일부 내용이 남을 수 있어요.")
         label("파일 선택 중 1분이 지나거나 화면을 잠그면 작업을 취소해요. 처리 중 이 화면을 벗어나도 취소합니다.")
         status = label(if (mode == UPLOAD) "첨부할 파일을 선택해 주세요." else "현재 문서를 확인하고 있어요.")
@@ -266,6 +266,13 @@ class NativeDocumentActivity : AppCompatActivity() {
                     finally { request.releaseCancellation(owner) }
                 }
                 request.check()
+                if (selection.mime == "image/jpeg") {
+                    main.post { status.text = "사진 방향을 맞추고 크기를 줄여 첨부하고 있어요. 보안 검사까지 기다려 주세요." }
+                    NativeDocumentImage.normalizeJpeg(content!!) { request.check() }?.let { normalized ->
+                        content?.close()
+                        content = normalized
+                    }
+                }
                 val owned = content!!
                 auth.uploadDocument(selection.name, selection.mime, mapOf("kind" to targetKind, "id" to targetId), true, owned, request) { outcome ->
                     main.post { complete(outcome, "uploaded") }

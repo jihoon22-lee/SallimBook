@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { bytes, digest, documentRow, documentLink, mockDocuments } from "./support/documents";
 import { uid } from "./support/finance";
+import { MAX_PDF_PAGES } from "../src/features/documents/model";
 const appliance = `/appliances/${uid(100)}`;
 const panel = (page: Page, label = "가전") =>
   page.getByRole("region", { name: `${label} 첨부 문서`, exact: true });
@@ -262,6 +263,11 @@ test("explicit original save verifies bytes and revokes opaque URL without stora
   expect(storage.caches).toEqual([]);
   await expect(detail.locator("iframe,object,embed,img")).toHaveCount(0);
 });
+test("panel states the PDF page limit before upload", async ({ page }) => {
+  await mockDocuments(page);
+  await open(page);
+  await expect(panel(page)).toContainText(`PDF는 최대 ${MAX_PDF_PAGES}쪽`);
+});
 for (const [code, status, message] of [
   ["DOCUMENT_STORAGE_QUOTA_EXCEEDED", 413, "보관 한도"],
   ["DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE", 503, "보관할 공간"],
@@ -269,6 +275,8 @@ for (const [code, status, message] of [
   ["DOCUMENT_UPLOAD_TIMEOUT", 408, "전송 시간"],
   ["DOCUMENT_CARD_DATA", 422, "카드 사진"],
   ["DOCUMENT_UNREADABLE", 422, "읽기 어려워"],
+  ["DOCUMENT_IMAGE_UNSUPPORTED", 422, "JPEG로 다시 저장"],
+  ["DOCUMENT_TOO_COMPLEX", 422, "검사 시간 안에"],
   ["DOCUMENT_SCAN_UNAVAILABLE", 503, "안전 검사"],
 ] as const)
   test(`safe ${status} ${code} feedback preserves selected attempt`, async ({ page }) => {

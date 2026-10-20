@@ -386,3 +386,10 @@ SKIP은 강력한 생체 인증 등록이 필요한 기존 Keystore 시나리오
 같은 9bbb67e의 서명 0.1.5/code6 APK와 source-bound API/웹 이미지를 준비했고 SDK 검사 및
 실제 DB 역할 사전 검사, 격리 API/웹 런타임 시험을 통과했다. 실제 운영 전환은
 [SB-040](https://github.com/jihoon22-lee/SallimBook/issues/49)의 배포 기록으로 별도 확인한다.
+
+## 문서 사진 정규화 계측 추가 — 2026-10-20
+
+WP03에서 `NativeDocumentImageDeviceTest` 3개(방향 적용, 메타데이터·trailer 제거, 같은 입력의 같은 출력)를
+기존 계측 묶음에 더했다. 기존 보안+경로 15개와 합쳐 정확히 **18개**를 요구하고, 가입 1개와 원래의
+생체인증 조건부 skip 하나만 허용하는 규칙은 그대로다. 정상 release 격리 검사의 금지 표식에도 이 클래스명을 더했다.
+
