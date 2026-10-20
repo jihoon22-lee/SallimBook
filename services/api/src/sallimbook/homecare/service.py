@@ -704,6 +704,33 @@ def create_stock_movement(session, principal, consumable_id, payload, if_match, 
     )
 
 
+def _clear_override(session, principal, link):
+    cleared = link.next_check_override
+    if cleared is None:
+        return None, None
+    before = _touch(link, principal)
+    link.next_check_override = None
+    session.flush()
+    _audit(
+        session, principal, link, "appliance_consumable", "update", {"next_check_override"}, before
+    )
+    return cleared, link.version
+
+
+def _restore_override(session, principal, link_id, replacement):
+    if replacement.cleared_link_version is None:
+        return
+    link = scoped_entity(session, ApplianceConsumable, link_id, principal, for_update=True)
+    if link.version != replacement.cleared_link_version:
+        return
+    before = _touch(link, principal)
+    link.next_check_override = replacement.cleared_next_check_override
+    session.flush()
+    _audit(
+        session, principal, link, "appliance_consumable", "update", {"next_check_override"}, before
+    )
+
+
 def create_replacement(session, principal, link_id, payload, if_match, key):
     def execute():
         link = scoped_entity(session, ApplianceConsumable, link_id, principal)
@@ -731,6 +758,12 @@ def create_replacement(session, principal, link_id, payload, if_match, key):
             occurred_on=payload.replaced_on,
             note=payload.note,
         )
+        # Clear before the insert: the database checks the recorded version against the link.
+        cleared_on, cleared_version = (
+            _clear_override(session, principal, link)
+            if payload.clear_next_check_override
+            else (None, None)
+        )
         replacement = ConsumableReplacement(
             household_id=principal.household_id,
             created_by_member_id=principal.member_id,
@@ -740,22 +773,11 @@ def create_replacement(session, principal, link_id, payload, if_match, key):
             replaced_on=payload.replaced_on,
             quantity=payload.quantity,
             note=payload.note,
+            cleared_next_check_override=cleared_on,
+            cleared_link_version=cleared_version,
         )
         session.add(replacement)
         session.flush()
-        if payload.clear_next_check_override and link.next_check_override is not None:
-            before = _touch(link, principal)
-            link.next_check_override = None
-            session.flush()
-            _audit(
-                session,
-                principal,
-                link,
-                "appliance_consumable",
-                "update",
-                {"next_check_override"},
-                before,
-            )
         _audit(
             session,
             principal,
@@ -852,9 +874,11 @@ def cancel_replacement(session, principal, link_id, replacement_id, payload, if_
             raise DomainError("NOT_FOUND", "요청한 교체 기록을 찾을 수 없습니다.", 404)
         require_version(stock, if_match)
         original = scoped_entity(session, StockMovement, replacement.stock_movement_id, principal)
-        # Do not restore a saved old date or override: reads select the newest surviving
-        # replacement, and an explicit configuration change remains the current choice.
-        return _reverse(session, principal, stock, original, payload)
+        result = _reverse(session, principal, stock, original, payload)
+        # Restore only the override this replacement cleared, and only while the link is still
+        # at the version that clear produced; any later link edit stays the current choice.
+        _restore_override(session, principal, link.id, replacement)
+        return result
 
     def scope():
         scoped_entity(session, ApplianceConsumable, link_id, principal)

@@ -2,10 +2,14 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
+from pathlib import Path
 from threading import Barrier
 from uuid import UUID
 
 import pytest
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -429,7 +433,9 @@ def test_same_day_replacements_have_stable_id_tie_and_cancel_does_not_lose_other
         assert link_at(client, actor, link["id"])["last_replaced_on"] == TODAY
 
 
-def test_override_keep_or_explicit_clear_is_not_rolled_back_by_cancellation(homecare_app, actors):
+def test_cancelling_the_clearing_replacement_restores_override_until_link_is_edited(
+    homecare_app, actors
+):
     actor = actors[0]
     with TestClient(homecare_app) as client:
         stock = post_consumable(client, actor)
@@ -440,12 +446,7 @@ def test_override_keep_or_explicit_clear_is_not_rolled_back_by_cancellation(home
         kept = replace(
             client, actor, link, replaced_on="2026-09-01", clear_next_check_override=False
         )
-        after_keep = link_at(client, actor, link["id"])
-        assert (
-            after_keep["next_check_on"] == "2025-01-01"
-            and after_keep["next_check_source"] == "override"
-        )
-        assert after_keep["version"] == 1
+        assert link_at(client, actor, link["id"])["version"] == 1
         cleared = replace(
             client, actor, link, replaced_on="2026-10-01", clear_next_check_override=True
         )
@@ -453,21 +454,120 @@ def test_override_keep_or_explicit_clear_is_not_rolled_back_by_cancellation(home
         assert after_clear["next_check_override"] is None and after_clear["version"] == 2
         assert after_clear["next_check_on"] == "2026-11-01"
         cancel_replacement(client, actor, link, cleared)
-        current = link_at(client, actor, link["id"])
-        assert current["next_check_override"] is None and current["version"] == 2
-        assert current["last_replacement_id"] == kept["replacement_id"]
+        restored = link_at(client, actor, link["id"])
+        assert restored["next_check_override"] == "2025-01-01" and restored["version"] == 3
         assert (
-            current["next_check_on"] == "2026-10-01"
-            and current["next_check_source"] == "replacement"
+            restored["next_check_source"] == "override"
+            and restored["next_check_on"] == "2025-01-01"
         )
+        assert restored["last_replacement_id"] == kept["replacement_id"]
         changed = client.patch(
             f"/api/v1/appliance-consumables/{link['id']}",
-            headers=headers(actor, version=2),
+            headers=headers(actor, version=3),
             json={"next_check_override": "2027-01-01"},
         )
         assert changed.status_code == 200
         cancel_replacement(client, actor, link, kept)
-        assert link_at(client, actor, link["id"])["next_check_on"] == "2027-01-01"
+        final = link_at(client, actor, link["id"])
+        assert final["next_check_on"] == "2027-01-01" and final["version"] == 4
+
+
+def cleared_override(client, actor):
+    stock = post_consumable(client, actor)
+    link = post_link(
+        client, actor, post_appliance(client, actor), stock, next_check_override="2025-01-01"
+    )
+    receipt(client, actor, stock)
+    cleared = replace(client, actor, link, replaced_on="2026-10-01", clear_next_check_override=True)
+    assert link_at(client, actor, link["id"])["version"] == 2
+    return stock, link, cleared
+
+
+def test_cancel_keeps_current_link_when_it_was_edited_after_the_clear(homecare_app, actors):
+    actor = actors[0]
+    with TestClient(homecare_app) as client:
+        _, link, cleared = cleared_override(client, actor)
+        edited = client.patch(
+            f"/api/v1/appliance-consumables/{link['id']}",
+            headers=headers(actor, version=2),
+            json={"note": "합성 메모"},
+        )
+        assert edited.status_code == 200 and edited.json()["version"] == 3
+        cancel_replacement(client, actor, link, cleared)
+        current = link_at(client, actor, link["id"])
+        assert current["next_check_override"] is None and current["version"] == 3
+        assert current["next_check_source"] == "unknown" and current["next_check_on"] is None
+
+
+def test_restore_bumps_link_version_and_replay_does_not_restore_twice(
+    homecare_app, actors, db_engine
+):
+    from sallimbook.core.audit import AuditEvent
+
+    actor = actors[0]
+    with TestClient(homecare_app) as client:
+        stock, link, cleared = cleared_override(client, actor)
+        path = (
+            f"/api/v1/appliance-consumables/{link['id']}"
+            f"/replacements/{cleared['replacement_id']}/cancel"
+        )
+        h = headers(
+            actor, "synthetic-restore-cancel", stock_at(client, actor, stock["id"])["version"]
+        )
+        body = {"occurred_on": TODAY, "reason": "합성 교체 취소"}
+        first = client.post(path, headers=h, json=body)
+        assert first.status_code == 200, first.text
+        assert client.post(path, headers=h, json=body).json() == first.json()
+        assert link_at(client, actor, link["id"])["version"] == 3
+        stale = client.patch(
+            f"/api/v1/appliance-consumables/{link['id']}",
+            headers=headers(actor, version=2),
+            json={"note": "합성 메모"},
+        )
+        assert stale.status_code == 409 and stale.json()["error"]["code"] == "VERSION_CONFLICT"
+    with Session(db_engine) as session:
+        events = session.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.entity_type == "appliance_consumable",
+                AuditEvent.entity_id == UUID(link["id"]),
+                AuditEvent.action == "update",
+            )
+            .order_by(AuditEvent.after_version)
+        ).all()
+        assert [event.after_version for event in events] == [2, 3]
+        assert all(
+            event.safe_diff == {"changed_fields": ["next_check_override"]} for event in events
+        )
+
+
+def test_replacement_cleared_before_0016_cancels_without_restoring_override(
+    homecare_app, actors, db_engine
+):
+    actor = actors[0]
+    with TestClient(homecare_app) as client:
+        stock, link, cleared = cleared_override(client, actor)
+    # Re-run 0016 so the row carries the NULL pair that rows written before it have.
+    with db_engine.connect() as connection:
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.attributes["connection"] = connection
+        target = (
+            ScriptDirectory.from_config(config)
+            .get_revision("0016_replacement_override")
+            .down_revision
+        )
+        command.downgrade(config, target)
+        connection.commit()
+        command.upgrade(config, "head")
+        connection.commit()
+    with TestClient(homecare_app) as client:
+        cancel_replacement(client, actor, link, cleared)
+        current = link_at(client, actor, link["id"])
+        assert current["next_check_override"] is None and current["version"] == 2
+        assert stock_at(client, actor, stock["id"])["stock_quantity"] == 3
+    with Session(db_engine) as session:
+        row = session.get(ConsumableReplacement, UUID(cleared["replacement_id"]))
+        assert row.cleared_next_check_override is None and row.cleared_link_version is None
 
 
 def test_cancel_receipt_needs_available_quantity_and_reversal_is_full_once(
