@@ -12,7 +12,7 @@
 
 | 작업 | 기본 예약, Asia/Seoul | 성공 조건 | 제한 시간 |
 | --- | --- | --- | --- |
-| `startup` | 사용자 manager의 `default.target` | 실제 배포 preflight, 전용 Compose 시작, 6개 서비스 및 스캐너 확인 | 10분 |
+| `startup` | 사용자 manager의 `default.target` | 실제 배포 preflight, 전용 Compose 시작, 7개 서비스(문서 검사기 포함) 및 스캐너 확인 | 10분 |
 | `backup` | 매일 03:15 | 일관된 암호화 백업, 실제 archive SHA-256, 별도 운영 장부 기록 | 45분(백업 worker 30분 + 준비·ack·실패 정리 여유 15분) |
 | `health` | 매시간 15분 | 서비스 상태, 실제 스캐너 응답/신선도, 백업 존재·26시간 이내, 운영 장부/백업/build/daemon 이미지 저장소 여유 1GiB 이상 | 5분 |
 | `restore-check` | 매월 1일 04:30 | 격리 DB의 스키마·테이블 수·첨부 해시·필드 암호문 인증 | 2시간 |
@@ -170,8 +170,9 @@ python -m ops.automation run /PRIVATE/automation.json --sha256 CONFIG_SHA256 --t
 `docker build --iidfile` 결과는 저장소 digest가 아닌 로컬 image ID이므로 전체 `sha256:` ID를 직접 고정한다. 저장소 이름과 합성하지 않는다. candidate worker는 이미지 안에 포함된 `ops.deploy.validate`로 새 manifest를 검증하여, 이후 그 이미지의 `ops.backup`이 같은 manifest를 처리할 수 있는지도 승격 전에 확인한다. 전체 로컬 ID를 지원하지 않는 과거 앱 소스는 여기서 거절되며, 해당 지원을 포함한 앱을 먼저 배포해야 한다. 운영 helper가 과거 이미지의 백업 구현이나 정책을 몰래 교체하지 않는다. [Docker build의 iidfile 정의](https://docs.docker.com/reference/cli/docker/buildx/build/#iidfile)를 따른다.
 
 새 manifest에서는 API 이미지 참조만 바꾼다. 웹·APK·앱 소스·서명·origin은 그대로 유지하며 APK를 복사한
-새 배포 디렉터리도 preflight한다. 이후 전용 scanner/API만 갱신하고 실제 health/신선도를 확인한 다음
-state/active-deployment.json을 atomic rename+fsync한다. 실패하면 이전 scanner/API로 복귀한다. pointer
+새 배포 디렉터리도 preflight한다. 이후 전용 scanner·inspector·API만 이 순서로 갱신하고(inspector는 API와 같은
+이미지를 쓴다) 실제 health/신선도를 확인한 다음 state/active-deployment.json을 atomic rename+fsync한다.
+실패하면 이전 scanner·inspector·API로 복귀한다. 중단된 승격의 복구도 같은 세 서비스를 다시 올린다. pointer
 rename은 끝났지만 fsync 결과가 불확실하면 새 서비스를 임의로 되돌리지 않고 `PROMOTION_COMMIT_UNCERTAIN`
 및 복구 필요 기록을 남긴다.
 

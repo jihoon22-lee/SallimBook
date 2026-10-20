@@ -74,8 +74,8 @@
       "git_sha1": "7e37f8aa182bda561934c3fea4ab726d89656646"
     },
     "docs/security-authentication.md": {
-      "sha256": "aff5d41d53436cc2e9ce4f4cc4170dcab6e42b0fdf8ccb25d4d2d0b790ec2e10",
-      "git_sha1": "6cf851970637d21557cb555a52f8f89fddfb089e"
+      "sha256": "a7f46b740db741dfacf36bfd51c13b3923a773da62b4d1c5d07a276401f9e256",
+      "git_sha1": "0c1afb42e9a73117083800311ce92a9041a250c0"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -254,12 +254,12 @@
       "git_sha1": "88ba3f44aff1db413a9e193672ac52db6646ebb1"
     },
     "docs/testing/documents-server.md": {
-      "sha256": "9f815c65d6e434136366013ae081c3cfe99c83bd581d5502219cce04d3bd87e1",
-      "git_sha1": "056fb9a9cc1110f6f0e7929a80d0f319c914e3fe"
+      "sha256": "5618e694e90fce26bf875f52287a2f55f2fab3a054fae637dfb53ec79e1e5196",
+      "git_sha1": "364d823995f8637064e51afd75ccef6b54073770"
     },
     "infra/documents/README.md": {
-      "sha256": "ee1b7ea9d0c5c239737cefb6868111c9f152900de16cfa4d7eebc27c92e96ceb",
-      "git_sha1": "112a8f48c2ebc6761e02ce4642f6df465bb3ebb1"
+      "sha256": "489e8b1864f12fd1ec588a738ebc088309f82a0c4cb3c8919e50751343c8f519",
+      "git_sha1": "799a3f4c103a23aa3536db4d3515c09b9c2fe995"
     },
     "scripts/cleanup_documents.py": {
       "sha256": "514c471e081b56d2dc7fcdbc5f00d4b352a729b2c7b1f1997594606218eb527f",
@@ -374,8 +374,8 @@
       "git_sha1": "10b7d5a3395629224b144f837cfb318b43f0b388"
     },
     "docs/testing/operations-automation.md": {
-      "sha256": "6c4a8e6fb6c9d8d269e5a4ef55d50975222a8fdccc05d8d2d8cd5a08e966395b",
-      "git_sha1": "f298843ae8cb09e51ee8cf6bdcb49459fdeddf09"
+      "sha256": "aaee40ba4b481c433305ca69b8c1895140722b205d7535761023444884ef9a36",
+      "git_sha1": "b3b88066b133567dd6c347e801ac98d1a76931d6"
     },
     "docs/testing/design-refresh.md": {
       "sha256": "a5128aaaa9f0a4c50f42932b431576abad96711042d15ef0807d45d7e0aa0433",
