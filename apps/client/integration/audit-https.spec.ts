@@ -125,13 +125,18 @@ test("real audit UI paginates metadata filters current household and rejects exp
     ])
       await expect(page.getByText(value, { exact: true })).toHaveCount(0);
     const metadata = await read<S["AuditListResponse"]>(page, "/api/v1/audit-events?limit=200");
-    const logins = metadata.items.filter((row) => row.entity_type === "registered_device");
-    const seeded = metadata.items.filter((row) => row.entity_type !== "registered_device");
+    // Security events (sign-ins, the setup invitation) sit beside the seeded appliance rows.
+    const seeded = metadata.items.filter((row) => row.entity_type === "appliance");
+    const security = metadata.items.filter((row) => row.entity_type !== "appliance");
     expect(shown).toBe(metadata.items.length);
     expect(seeded).toHaveLength(52);
-    expect(logins.length).toBeGreaterThan(0);
+    expect(security.some((row) => row.entity_type === "registered_device")).toBe(true);
     expect(
-      logins.every((row) => row.action === "login" && row.actor_member_id === member.member_id),
+      security.every(
+        (row) =>
+          ["registered_device", "invitation", "passkey"].includes(row.entity_type) &&
+          row.actor_member_id === member.member_id,
+      ),
     ).toBe(true);
     expect(
       seeded.every(
