@@ -32,6 +32,10 @@ class MonthReopen(AssetInput):
     reason: Reason
 
 
+class MonthCarryPrevious(AssetInput):
+    revision_id: UUID
+
+
 class MonthConfirm(AssetInput):
     revision_id: UUID
     acknowledge_non_month_end_dates: bool = False

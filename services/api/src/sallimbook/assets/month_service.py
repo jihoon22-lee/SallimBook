@@ -12,6 +12,7 @@ from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
 from sallimbook.assets.month_models import AssetMonthRecord, AssetMonthRevision, AssetMonthValue
 from sallimbook.assets.month_schemas import (
+    MonthCarryPrevious,
     MonthConfirm,
     MonthDraft,
     MonthHistoryItem,
@@ -611,6 +612,94 @@ def confirm_month(
         session,
         principal,
         "asset_month.confirm",
+        key,
+        {"month": month, "if_match": if_match, **payload.model_dump(mode="json")},
+        execute,
+    )
+    result = _reference(session, principal, month, saved)
+    session.commit()
+    return result
+
+
+def _untouched_missing(value: AssetMonthValue) -> bool:
+    # A row cleared without a reason looks the same; the screen lists rows before applying.
+    return (
+        value.verification_state == "missing"
+        and value.origin == "manual"
+        and value.origin_revision_id is None
+        and value.as_of_date is None
+        and value.change_reason is None
+    )
+
+
+def carry_previous(
+    session: Session,
+    principal: Principal,
+    month: str,
+    payload: MonthCarryPrevious,
+    if_match: str | None,
+    key: str | None,
+) -> MonthReference:
+    """Fill untouched missing rows from the previous month's latest confirmation."""
+    lock_asset_scope(session, principal)
+
+    def execute():
+        record = _record(session, principal, month, lock=True)
+        revision = _revision(session, record, lock=True)
+        _require_revision(revision, payload.revision_id)
+        require_version(revision, if_match)
+        if revision.state == "confirmed":
+            raise DomainError(
+                "MONTH_CONFIRMED", "확정한 월은 정정 사유를 남기고 다시 열어 주세요.", 409
+            )
+        prior = _latest_previous_confirmation(session, principal, month)
+        if prior is None:
+            raise DomainError(
+                "PREVIOUS_MONTH_UNCONFIRMED",
+                "전월 확정 기록이 없습니다. 전월을 먼저 확정해 주세요.",
+                409,
+            )
+        prior_rows = {row.asset_id: row for row in _values(session, prior)}
+        before = revision.version
+        filled = 0
+        for value in _values(session, revision):
+            previous = prior_rows.get(value.asset_id)
+            if (
+                previous is None
+                or not _untouched_missing(value)
+                or previous.amount_basis != value.amount_basis
+                or previous.input_amount_krw is None
+            ):
+                continue
+            value.input_amount_krw = previous.input_amount_krw
+            value.owned_amount_krw = owned_valuation(
+                previous.input_amount_krw,
+                household_share=value.household_share,
+                basis=value.amount_basis,
+            )
+            value.verification_state = "carried_unconfirmed"
+            value.origin, value.origin_revision_id = "carried", prior.id
+            filled += 1
+        if filled:
+            revision.updated_at = utcnow()
+            session.flush()
+            _totals(_values(session, revision))
+            record_event(
+                session,
+                principal,
+                entity_type="asset_month",
+                entity_id=revision.id,
+                action="update",
+                before_version=before,
+                after_version=revision.version,
+                changed_fields=("values", "origin", "origin_revision_id"),
+            )
+        return IdempotentResult(revision.id, "asset_month_revision", revision.version, 200)
+
+    saved = run_idempotent(
+        session,
+        principal,
+        "asset_month.carry_previous",
         key,
         {"month": month, "if_match": if_match, **payload.model_dump(mode="json")},
         execute,

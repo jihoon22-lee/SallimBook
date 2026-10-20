@@ -204,6 +204,7 @@ const knownCodes = [
   "INSURANCE_ASSET_REQUIRED",
   "ASSET_END_IN_FUTURE",
   "MONTH_IN_FUTURE",
+  "PREVIOUS_MONTH_UNCONFIRMED",
 ] as const;
 
 export type ApiErrorCode = (typeof knownCodes)[number];

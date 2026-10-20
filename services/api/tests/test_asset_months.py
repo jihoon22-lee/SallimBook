@@ -42,6 +42,7 @@ def test_month_openapi_describes_required_mutation_headers():
         "/{month}/sync-scope": {"If-Match"},
         "/{month}/confirm": {"If-Match", "Idempotency-Key"},
         "/{month}/reopen": {"If-Match", "Idempotency-Key"},
+        "/{month}/carry-previous": {"If-Match", "Idempotency-Key"},
     }
     for suffix, names in expected.items():
         operation = paths["/api/v1/asset-months" + suffix][
@@ -205,6 +206,133 @@ def confirm(client, actor, month, *, key=None, **acknowledgments):
 
 @pytest.mark.database
 class TestAssetMonthsDatabase:
+    def test_carry_previous_fills_only_untouched_missing_rows_once(
+        self, months_app, account_actor, db_engine
+    ):
+        with TestClient(months_app) as client:
+            kept = add_asset(client, account_actor, name="합성 직접 입력")
+            filled = add_asset(client, account_actor, name="합성 미입력")
+            cleared = add_asset(client, account_actor, name="합성 직접 비움")
+            switched = add_asset(
+                client,
+                account_actor,
+                name="합성 기준 변경",
+                amount_basis="whole",
+                household_share="0.5",
+            )
+            draft(client, account_actor, "2026-01")
+            for asset, amount in [
+                (kept, "100"),
+                (filled, "200"),
+                (cleared, "300"),
+                (switched, "400"),
+            ]:
+                observe(client, account_actor, "2026-01", asset["id"], amount, "2026-01-31")
+            # M5: a February draft made before January was confirmed is all missing.
+            draft(client, account_actor, "2026-02")
+            assert confirm(client, account_actor, "2026-01").status_code == 200
+            january = read_month(client, account_actor, "2026-01")["revision_id"]
+            observe(client, account_actor, "2026-02", kept["id"], "150", "2026-02-28")
+            observe(
+                client,
+                account_actor,
+                "2026-02",
+                cleared["id"],
+                None,
+                None,
+                change_reason="합성 확인 불가",
+            )
+            assert (
+                client.patch(
+                    f"/api/v1/assets/{switched['id']}",
+                    json={"amount_basis": "owned"},
+                    headers={**account_actor.headers, "If-Match": f'"{switched["version"]}"'},
+                ).status_code
+                == 200
+            )
+            stale = read_month(client, account_actor, "2026-02")
+            assert (
+                client.post(
+                    "/api/v1/asset-months/2026-02/sync-scope",
+                    json={"revision_id": stale["revision_id"]},
+                    headers={**account_actor.headers, "If-Match": f'"{stale["version"]}"'},
+                ).status_code
+                == 200
+            )
+            current = read_month(client, account_actor, "2026-02", limit=200)
+            key = uuid4().hex
+
+            def carry(idempotency_key):
+                return client.post(
+                    "/api/v1/asset-months/2026-02/carry-previous",
+                    json={"revision_id": current["revision_id"]},
+                    headers={
+                        **account_actor.headers,
+                        "If-Match": f'"{current["version"]}"',
+                        "Idempotency-Key": idempotency_key,
+                    },
+                )
+
+            first = carry(key)
+            assert first.status_code == 200
+            assert carry(key).json() == first.json()
+            assert carry(uuid4().hex).json()["error"]["code"] == "VERSION_CONFLICT"
+            rows = {
+                r["asset_id"]: r
+                for r in read_month(client, account_actor, "2026-02", limit=200)["values"]
+            }
+            row = rows[filled["id"]]
+            assert (
+                row["input_amount_krw"],
+                row["verification_state"],
+                row["origin"],
+                row["origin_revision_id"],
+                row["as_of_date"],
+            ) == ("200", "carried_unconfirmed", "carried", january, None)
+            assert (
+                rows[kept["id"]]["input_amount_krw"],
+                rows[kept["id"]]["verification_state"],
+            ) == ("150", "verified")
+            assert rows[cleared["id"]]["input_amount_krw"] is None
+            assert rows[switched["id"]]["input_amount_krw"] is None
+        with Session(db_engine) as session:
+            diffs = [
+                e.safe_diff
+                for e in session.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_id == UUID(current["revision_id"]),
+                        AuditEvent.action == "update",
+                    )
+                )
+            ]
+            assert diffs.count({"changed_fields": ["origin", "origin_revision_id", "values"]}) == 1
+
+    def test_carry_previous_requires_a_confirmed_previous_month_and_an_open_revision(
+        self, months_app, account_actor, db_engine
+    ):
+        stranger = make_actor(db_engine)
+        with TestClient(months_app) as client:
+            asset = add_asset(client, account_actor)
+            draft(client, account_actor, "2026-01")
+
+            def carry(actor):
+                current = read_month(client, account_actor, "2026-01")
+                return client.post(
+                    "/api/v1/asset-months/2026-01/carry-previous",
+                    json={"revision_id": current["revision_id"]},
+                    headers={
+                        **actor.headers,
+                        "If-Match": f'"{current["version"]}"',
+                        "Idempotency-Key": uuid4().hex,
+                    },
+                )
+
+            assert carry(account_actor).json()["error"]["code"] == "PREVIOUS_MONTH_UNCONFIRMED"
+            assert carry(stranger).json()["error"]["code"] == "MONTH_NOT_FOUND"
+            observe(client, account_actor, "2026-01", asset["id"], "100", "2026-01-31")
+            assert confirm(client, account_actor, "2026-01").status_code == 200
+            assert carry(account_actor).json()["error"]["code"] == "MONTH_CONFIRMED"
+
     def test_future_month_draft_is_rejected_until_the_seoul_month_starts(
         self, months_app, account_actor, monkeypatch
     ):
