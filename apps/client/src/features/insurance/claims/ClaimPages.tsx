@@ -20,7 +20,7 @@ import type { Schema } from "../model";
 import { useInsuranceEventsApi } from "../events/api";
 import { CaseSelect, PolicySelect } from "../events/EventSupport";
 import { PayoutList } from "../events/EventPages";
-import { claimStates } from "../events/model";
+import { claimStates, needsCompare } from "../events/model";
 type Draft = {
   caseId: string;
   policyId: string;
@@ -174,7 +174,7 @@ export function ClaimEditor({
     setDraft((old) => ({ ...old, [field]: value }));
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!input || !valid || command.error?.status === 409) return;
+    if (!input || !valid || needsCompare(command.error)) return;
     const result = await command.run(
       () =>
         base && changes
@@ -375,7 +375,7 @@ export function ClaimEditor({
         <div className="form-actions save-actions">
           <button
             type="submit"
-            disabled={!valid || command.busy || command.uncertain || command.error?.status === 409}
+            disabled={!valid || command.busy || command.uncertain || needsCompare(command.error)}
           >
             {base ? "청구 정정 저장" : "청구 기록 저장"}
           </button>

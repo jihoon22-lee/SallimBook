@@ -583,6 +583,38 @@ class TestInsuranceEventFixtures:
 
 @pytest.mark.database
 class TestInsuranceEventCorrections:
+    def test_claims_can_be_listed_by_cited_expense(self, app, actors):
+        actor, _, foreign = actors
+        with TestClient(app) as client:
+            case, policy = new_case(client, actor), new_policy(client, actor)
+            node = new_node(client, actor, case)
+            cited, other = (
+                new_expense(client, actor, case, node),
+                new_expense(client, actor, case, node),
+            )
+            claim = create_metadata(
+                client,
+                actor,
+                "/claims",
+                {"case_id": case["id"], "policy_id": policy["id"], "expense_ids": [cited["id"]]},
+            )
+            create_metadata(
+                client, actor, "/claims", {"case_id": case["id"], "policy_id": policy["id"]}
+            )
+            found = read(client, actor, f"/claims?case_id={case['id']}&expense_id={cited['id']}")
+            assert [row["id"] for row in found["items"]] == [claim["id"]]
+            assert read(client, actor, f"/claims?expense_id={other['id']}")["items"] == []
+            hidden_case = new_case(client, foreign)
+            hidden = new_expense(
+                client, foreign, hidden_case, new_node(client, foreign, hidden_case)
+            )
+            assert (
+                client.get(
+                    f"{BASE}/claims?expense_id={hidden['id']}", headers=actor.headers
+                ).status_code
+                == 404
+            )
+
     @pytest.mark.parametrize("source", ["refund", "return"])
     def test_reversal_correction_keeps_its_original_reason(self, app, actors, source):
         actor = actors[0]

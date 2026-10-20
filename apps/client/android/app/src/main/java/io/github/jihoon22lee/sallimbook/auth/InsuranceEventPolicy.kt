@@ -59,7 +59,7 @@ internal object InsuranceEventPolicy {
     private val routes = mapOf(
         FinanceOperation.MEDICAL_NODE_SUMMARY to Route("GET", "/api/v1/insurance/cases/{caseId}/nodes/{nodeId}/summary", "", "NodeSummaryResponse", mapOf(), false, false, 200),
         FinanceOperation.INSURANCE_CASE_SUMMARY to Route("GET", "/api/v1/insurance/cases/{caseId}/summary", "", "CaseSummaryResponse", mapOf(), false, false, 200),
-        FinanceOperation.LIST_INSURANCE_CLAIMS to Route("GET", "/api/v1/insurance/claims", "", "ClaimListResponse", mapOf("case_id" to nullable(id), "policy_id" to nullable(id), "claim_state" to nullable({ v -> validate("ClaimState", v); Unit }), "cursor" to nullable(id), "limit" to integer(1L, 200L)), false, false, 200),
+        FinanceOperation.LIST_INSURANCE_CLAIMS to Route("GET", "/api/v1/insurance/claims", "", "ClaimListResponse", mapOf("case_id" to nullable(id), "policy_id" to nullable(id), "claim_state" to nullable({ v -> validate("ClaimState", v); Unit }), "expense_id" to nullable(id), "cursor" to nullable(id), "limit" to integer(1L, 200L)), false, false, 200),
         FinanceOperation.CREATE_INSURANCE_CLAIM to Route("POST", "/api/v1/insurance/claims", "ClaimCreate", "ClaimResponse", mapOf(), false, false, 201),
         FinanceOperation.GET_INSURANCE_CLAIM to Route("GET", "/api/v1/insurance/claims/{claimId}", "", "ClaimResponse", mapOf(), false, false, 200),
         FinanceOperation.UPDATE_INSURANCE_CLAIM to Route("PATCH", "/api/v1/insurance/claims/{claimId}", "ClaimPatch", "ClaimResponse", mapOf(), true, false, 200),

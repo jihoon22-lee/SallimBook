@@ -13,7 +13,7 @@ import { AllocationSummary, PayoutEditor } from "./PayoutEditor";
 import { ExpenseEditor } from "./ExpenseEditor";
 import { ReturnEditor } from "./ReturnEditor";
 import { EventCashHistory, getters, VoidEvent } from "./EventCommands";
-import { eventNames, eventPaths } from "./model";
+import { claimStates, eventNames, eventPaths } from "./model";
 import type { EventKind, EventRow } from "./model";
 import { useInsuranceEventsApi } from "./api";
 export function ExpenseList({ caseId, nodeId }: { caseId: string; nodeId?: string }) {
@@ -247,6 +247,44 @@ function RefundCorrection({
     </>
   );
 }
+function ClaimsCitingExpense({ expense }: { expense: Schema["ExpenseResponse"] }) {
+  const api = useInsuranceEventsApi();
+  const claims = useResource(
+    useCallback(
+      () =>
+        api.listInsuranceClaims({
+          query: { case_id: expense.case_id, expense_id: expense.id, limit: 50 },
+        }),
+      [api, expense.case_id, expense.id],
+    ),
+  );
+  return (
+    <section className="card" aria-label="이 비용을 인용한 청구">
+      <h2>이 비용을 인용한 청구</h2>
+      <InsuranceError error={claims.error} />
+      {claims.error && (
+        <button type="button" onClick={() => void claims.reload()}>
+          인용한 청구 다시 확인
+        </button>
+      )}
+      {claims.data &&
+        (claims.data.items.length ? (
+          <ul>
+            {claims.data.items.map((claim) => (
+              <li key={claim.id}>
+                <Link to={`/insurance/claims/${claim.id}`}>
+                  {claim.claim_reference || "접수번호 미입력 청구"} ·{" "}
+                  {claimStates[claim.claim_state]}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>이 비용을 근거로 인용한 청구가 없어요.</p>
+        ))}
+    </section>
+  );
+}
 function EventDetail({ kind, id, edit }: { kind: EventKind; id: string; edit: boolean }) {
   const api = useInsuranceEventsApi();
   const resource = useResource(
@@ -273,7 +311,10 @@ function EventDetail({ kind, id, edit }: { kind: EventKind; id: string; edit: bo
         !resource.error &&
         (edit ? (
           kind === "expense" && "lines" in row ? (
-            <ExpenseEditor initial={row} />
+            <>
+              <ExpenseEditor initial={row} />
+              <ClaimsCitingExpense expense={row} />
+            </>
           ) : kind === "payout" && "allocations" in row ? (
             <PayoutEditor initial={row} />
           ) : (kind === "refund" || kind === "return") && "reason" in row ? (
@@ -321,6 +362,7 @@ function EventDetail({ kind, id, edit }: { kind: EventKind; id: string; edit: bo
                 )}
               </div>
             </section>
+            {kind === "expense" && "lines" in row && <ClaimsCitingExpense expense={row} />}
             {voiding && (
               <VoidEvent
                 key={`void:${row.version}`}

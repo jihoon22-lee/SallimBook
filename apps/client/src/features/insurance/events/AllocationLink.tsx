@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { needsCompare } from "./model";
 import type { FormEvent } from "react";
 import { toApiError } from "../../../platform/api";
 import { useIdempotencyKey, useMonthCommand } from "../../assets/months/useMonthCommand";
@@ -79,7 +80,7 @@ export function AllocationLink({
     !!reason.trim() && Object.keys(changes).length > 0 && (!draft.claimId || !!draft.policyId);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!ready || command.error?.status === 409) return;
+    if (!ready || needsCompare(command.error)) return;
     const result = await command.run((signal) =>
       api.linkPayoutAllocation(
         { allocationId: base.id, input, ifMatch: `"${base.version}"`, idempotencyKey: key },
@@ -121,7 +122,7 @@ export function AllocationLink({
           </label>
         </div>
         <InsuranceError error={command.error} />
-        {command.error?.status === 409 && (
+        {needsCompare(command.error) && (
           <button type="button" onClick={() => void compare()}>
             현재 배분 연결 비교
           </button>
@@ -145,7 +146,7 @@ export function AllocationLink({
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || command.error?.status === 409}
+          disabled={!ready || needsCompare(command.error)}
           label="같은 입금의 청구 연결 저장"
         />
         <button type="button" onClick={cancel} disabled={command.busy}>

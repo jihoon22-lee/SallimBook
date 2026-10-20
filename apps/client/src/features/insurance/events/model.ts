@@ -1,3 +1,4 @@
+import type { ApiError } from "../../../platform/api";
 import type { Schema } from "../model";
 import { optional } from "../model";
 import { parseKrw } from "../../assets/months/model";
@@ -70,3 +71,15 @@ export const eventNames = {
   payout: "보험금 수령",
   return: "보험금 반환",
 };
+/**
+ * Only a stale version or an already-void original warrants comparing with the current
+ * record. Rule conflicts (expense in a claim, refunds or returns present, amounts over the
+ * original) explain themselves; the failed request kept no idempotency reservation, so the
+ * same save can be retried after fixing the cause.
+ */
+export function needsCompare(error: ApiError | null): boolean {
+  return (
+    error?.status === 409 &&
+    (error.code === "VERSION_CONFLICT" || error.code === "EVENT_ALREADY_VOID")
+  );
+}

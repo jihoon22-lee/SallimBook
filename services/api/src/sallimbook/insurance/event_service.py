@@ -679,7 +679,15 @@ def get_claim(session, principal, claim_id):
 
 
 def list_claims(
-    session, principal, *, case_id=None, policy_id=None, claim_state=None, cursor=None, limit=50
+    session,
+    principal,
+    *,
+    case_id=None,
+    policy_id=None,
+    claim_state=None,
+    expense_id=None,
+    cursor=None,
+    limit=50,
 ):
     cash.lock_cash_household(session, principal)
     query = select(InsuranceClaim).where(InsuranceClaim.household_id == principal.household_id)
@@ -692,6 +700,17 @@ def list_claims(
             query = query.where(getattr(InsuranceClaim, field) == value)
     if claim_state is not None:
         query = query.where(InsuranceClaim.claim_state == claim_state)
+    if expense_id is not None:
+        # Claims currently citing this expense as evidence.
+        scoped_entity(session, MedicalExpense, expense_id, principal)
+        query = query.where(
+            InsuranceClaim.id.in_(
+                select(ClaimExpense.claim_id).where(
+                    ClaimExpense.household_id == principal.household_id,
+                    ClaimExpense.expense_id == expense_id,
+                )
+            )
+        )
     rows, next_cursor = _page(session, query, InsuranceClaim, cursor, limit)
     return _finish(
         session,

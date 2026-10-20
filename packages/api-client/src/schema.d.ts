@@ -20802,6 +20802,7 @@ export interface operations {
                 case_id?: string | null;
                 policy_id?: string | null;
                 claim_state?: components["schemas"]["ClaimState"] | null;
+                expense_id?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };

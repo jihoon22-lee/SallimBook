@@ -367,6 +367,7 @@ def list_claims(
     case_id: UUID | None = None,
     policy_id: UUID | None = None,
     claim_state: ClaimState | None = None,
+    expense_id: UUID | None = None,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
@@ -376,6 +377,7 @@ def list_claims(
         case_id=case_id,
         policy_id=policy_id,
         claim_state=claim_state,
+        expense_id=expense_id,
         cursor=cursor,
         limit=limit,
     )

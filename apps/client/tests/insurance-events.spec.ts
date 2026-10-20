@@ -460,3 +460,30 @@ test("case summary leads with the five specified totals in calculation order", a
   await expect(summary.locator("dl.metric-strip .metric-primary dt")).toHaveText("순현금부담");
   await expect(summary.getByText("의료 지불금", { exact: true })).toHaveCount(1);
 });
+
+test("an expense shows the claims citing it and a rule conflict does not offer a version compare", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.claims.push(claimRow(1200, [uid(1001)])); // The mock refuses voiding a cited expense with MEDICAL_EXPENSE_IN_CLAIM, like the server.
+  await page.goto(`/insurance/expenses/${uid(1001)}`);
+  const citing = page.getByRole("region", { name: "이 비용을 인용한 청구", exact: true });
+  await expect(citing.getByRole("link")).toHaveCount(1);
+  await expect(citing.getByRole("link").first()).toHaveAttribute(
+    "href",
+    `/insurance/claims/${uid(1200)}`,
+  );
+  await page.getByRole("button", { name: "의료비 무효 검토", exact: true }).click();
+  await page.getByLabel("금전 기록 무효 사유", { exact: true }).fill("합성 오등록");
+  await page
+    .getByLabel("실제 환불·반환이 아닌 오등록 무효임을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "사유와 함께 금전 기록 무효 처리", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("청구에 연결된 의료비예요.");
+  await expect(
+    page.getByRole("button", { name: "무효 처리 전 원본 다시 비교", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "사유와 함께 금전 기록 무효 처리", exact: true }),
+  ).toBeEnabled();
+});

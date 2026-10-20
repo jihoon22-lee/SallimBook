@@ -187,6 +187,10 @@ class InsuranceEventPolicyTest {
         assertFalse(FinancePolicy.metadataHttpAllowed("GET", "$path/$id/history?cursor=01", null, null))
         assertFalse(FinancePolicy.metadataHttpAllowed("POST", path, expenseInput, null, "bad key"))
     }
+    @Test fun claimListAcceptsExpenseFilter() {
+        request(FinanceOperation.LIST_INSURANCE_CLAIMS, mapOf("query" to mapOf("expense_id" to id)))
+        bad { request(FinanceOperation.LIST_INSURANCE_CLAIMS, mapOf("query" to mapOf("expense_id" to "not-a-uuid"))) }
+    }
     @Test fun claimMoneyMustBeExactDifference() {
         response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim())
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim() + mapOf("net_received_krw" to "551")) }
