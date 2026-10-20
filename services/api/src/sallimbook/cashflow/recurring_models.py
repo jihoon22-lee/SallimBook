@@ -92,11 +92,14 @@ class RecurringRuleVersion(ScheduleFields, Base):
         UniqueConstraint(
             "household_id", "rule_id", "id", name="uq_rule_versions_household_rule_id"
         ),
-        UniqueConstraint(
+        # Revoked versions (never started) release their start date and period.
+        Index(
+            "uq_rule_versions_household_rule_start",
             "household_id",
             "rule_id",
             "effective_from",
-            name="uq_rule_versions_household_rule_start",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
         ),
         household_fk("recurring_rule_versions", "rule_id", "recurring_rules"),
         *schedule_constraints("recurring_rule_versions"),
@@ -111,6 +114,7 @@ class RecurringRuleVersion(ScheduleFields, Base):
             (text("daterange(effective_from, effective_until, '[)')"), "&&"),
             name="ex_recurring_rule_versions_period",
             using="gist",
+            where=text("revoked_at IS NULL"),
             ops={"household_id": "public.gist_uuid_ops", "rule_id": "public.gist_uuid_ops"},
         ),
     )
@@ -124,6 +128,7 @@ class RecurringRuleVersion(ScheduleFields, Base):
     frequency: Mapped[str] = mapped_column(String(8))
     interval_count: Mapped[int]
     reason: Mapped[str | None] = mapped_column(String(500))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ObligationFields(ScheduleFields):
@@ -167,6 +172,11 @@ class ScheduledObligation(ObligationFields, EntityMixin, Base):
             name="uq_obligations_household_rule_occurrence",
         ),
         *obligation_constraints("scheduled_obligations"),
+        # Revisions keep the flag as it was; only the current row must match its exception.
+        CheckConstraint(
+            "manual_override = (skipped OR manually_completed OR scheduled_date <> nominal_date)",
+            name="manual_override_derived",
+        ),
         Index("ix_obligations_household_scheduled", "household_id", "scheduled_date", "id"),
     )
 

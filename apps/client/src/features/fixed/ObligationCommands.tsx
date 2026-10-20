@@ -308,6 +308,7 @@ export function SettlementForm({
                 setMethod(next);
                 setMethodId(id);
               }}
+              on={date}
             />
             <div className="form-field">
               <label>
@@ -456,6 +457,35 @@ export function VoidSettlement({
           label="사유와 함께 납부 무효 처리"
         />
       </form>
+    </section>
+  );
+}
+export function AdditionalPaymentCheck({
+  row,
+  onConfirm,
+}: {
+  row: Obligation;
+  onConfirm: () => void;
+}) {
+  const [checked, setChecked] = useState(false);
+  return (
+    <section className="review-panel" aria-label="추가 납부 확인">
+      <h3>이미 납부를 마친 회차예요</h3>
+      <p>
+        실제 납부 {formatKrw(row.actual_amount_krw)}이 기록되어 있어요. 같은 납부를 다시 기록하면
+        실제 납부액이 두 번 합산돼요. 아래 실제 납부 내역을 먼저 확인해 주세요.
+      </p>
+      <label className="checkbox-field">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => setChecked(event.target.checked)}
+        />
+        납부 내역을 확인했고, 이 회차에 추가로 낸 금액이 있어요.
+      </label>
+      <button type="button" disabled={!checked} onClick={onConfirm}>
+        추가 납부 입력 계속
+      </button>
     </section>
   );
 }

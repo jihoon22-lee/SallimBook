@@ -1,6 +1,6 @@
 """Manual income and shared cash facts, serialized without changing any snapshot."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -186,6 +186,11 @@ def _validate_actual_date(payload: CashInput) -> None:
         )
 
 
+def _link_date(payload: CashInput) -> date:
+    """The day a payment method must still be usable: the actual date or a month's first day."""
+    return payload.occurred_on or month_start(payload.period_month)
+
+
 def _validate_links(
     session: Session,
     principal: Principal,
@@ -194,6 +199,9 @@ def _validate_links(
     previous: CashRecord | None = None,
 ) -> None:
     _validate_actual_date(payload)
+    # A closed account or card still takes records dated through its end, and a correction
+    # keeps the link of the fact it replaces.
+    on = _link_date(payload)
     # Match existing asset/account writers: Asset -> Account -> Member. IDs cannot be retargeted.
     if payload.account_id is not None:
         account = scoped_entity(session, FinancialAccount, payload.account_id, principal)
@@ -201,7 +209,11 @@ def _validate_links(
         account = scoped_entity(
             session, FinancialAccount, payload.account_id, principal, for_update=True
         )
-        if (previous is None or previous.account_id != account.id) and asset.ended_on is not None:
+        if (
+            (previous is None or previous.account_id != account.id)
+            and asset.ended_on is not None
+            and asset.ended_on < on
+        ):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 입금 계좌를 선택해 주세요.", 422)
     if payload.member_id is not None:
         member = scoped_entity(
@@ -211,7 +223,11 @@ def _validate_links(
             raise DomainError("MEMBER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
     if payload.card_id is not None:
         card = scoped_entity(session, Card, payload.card_id, principal, for_update=True)
-        if (previous is None or previous.card_id != card.id) and card.ended_on is not None:
+        if (
+            (previous is None or previous.card_id != card.id)
+            and card.ended_on is not None
+            and card.ended_on < on
+        ):
             raise DomainError("CARD_UNAVAILABLE", "사용 중인 결제 카드를 선택해 주세요.", 422)
 
 
@@ -245,8 +261,11 @@ def prepare_cash_record(
     reverses_id: UUID | None = None,
     reason: str | None = None,
     conversion_id: UUID | None = None,
+    previous: CashRecord | None = None,
 ) -> CashRecord:
     """Flush-only cash fact + typed version + metadata audit, with household validation.
+
+    previous is the voided fact this record corrects; its own links stay usable.
 
     No generic HTTP endpoint exposes non-income kinds. Subtype callers must create exactly
     one subtype referencing this ID (unique household-scoped FK) in this same transaction,
@@ -269,7 +288,7 @@ def prepare_cash_record(
         returned = sum(int(row.amount_krw) for row in _active_returns(session, principal, original))
         if returned + int(payload.amount_krw) > int(original.amount_krw):
             raise DomainError("RETURN_EXCEEDS_ORIGINAL", "반환 합계가 원본 금액을 초과합니다.", 409)
-    _validate_links(session, principal, payload)
+    _validate_links(session, principal, payload, previous=previous)
     values = payload.model_dump(include=set(CashInput.model_fields))
     values["amount_krw"] = decimal_krw(payload.amount_krw)
     values["period_month"] = month_start(payload.period_month)

@@ -6,6 +6,7 @@ import { useMonth, isValidMonth } from "../../shared/MonthContext";
 import { useIdempotencyKey, useMonthCommand } from "../assets/months/useMonthCommand";
 import { formatKrw } from "../assets/months/model";
 import { allPages } from "../finance/queries";
+import { useAccountChoices } from "../finance/AccountChoices";
 import {
   AuthenticatedFinance,
   CashflowError,
@@ -14,7 +15,13 @@ import {
 } from "../finance/FinancialFeedback";
 import { isUuid, useHouseholdMembers, MemberLoadError, dateLabel } from "../finance/FinanceSupport";
 import { useIncomeApi } from "./api";
-import { conversionTotal, incomeDraft, incomeInput, manualKinds } from "./model";
+import {
+  conversionTotal,
+  incomeDraft,
+  incomeInput,
+  manualKinds,
+  sharedSourceValues,
+} from "./model";
 import type { Income, IncomeConversion, IncomeDraft } from "./model";
 import { IncomeFields } from "./IncomeFields";
 function ConversionWorkspace() {
@@ -30,6 +37,12 @@ function ConversionWorkspace() {
   const [replacements, setReplacements] = useState<IncomeDraft[]>([]);
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
+  const accounts = useAccountChoices();
+  const shared = sources ? sharedSourceValues(sources) : null;
+  const accountName = (id: string | null) =>
+    id
+      ? (accounts.data?.find((row) => row.id === id)?.asset.name ?? "연결 계좌 다시 확인 필요")
+      : "계좌 연결 안 함";
   const [loading, setLoading] = useState(false);
   const sourceReady =
     !!sources?.length &&
@@ -80,6 +93,7 @@ function ConversionWorkspace() {
       );
       if (!command.mounted.current) return;
       setSources(rows);
+      const common = sharedSourceValues(rows);
       if (!keep)
         setReplacements(
           rows.length
@@ -90,6 +104,8 @@ function ConversionWorkspace() {
                   kind,
                   precision: rows[0]!.date_precision === "month" ? "day" : "month",
                   amount: conversionTotal(rows),
+                  account: common.account,
+                  note: common.note,
                 },
               ]
             : [],
@@ -186,12 +202,20 @@ function ConversionWorkspace() {
             {sources.map((row) => (
               <li key={row.id}>
                 {formatKrw(row.amount_krw)} ·{" "}
-                {row.date_precision === "month" ? "월합계" : dateLabel(row.occurred_on)} · 버전{" "}
-                {row.version}
+                {row.date_precision === "month" ? "월합계" : dateLabel(row.occurred_on)} ·{" "}
+                {accountName(row.account_id)}
+                {row.note ? ` · 메모 ${row.note}` : ""} · 버전 {row.version}
               </li>
             ))}
           </ul>
           <p>원본 합계: {formatKrw(sourceTotal)}</p>
+          {shared && shared.mixed.length > 0 && (
+            <p className="muted">
+              원본마다{" "}
+              {shared.mixed.map((name) => (name === "account" ? "계좌" : "메모")).join("·")}가 달라
+              대체 기록에 넣지 않았어요. 원본 목록을 보고 직접 입력해 주세요.
+            </p>
+          )}
           {!sourceReady && (
             <p role="alert">
               활성 반환이 있거나 날짜 정밀도가 섞였거나 원본이 없으면 전환할 수 없어요. 한 번에
@@ -236,7 +260,14 @@ function ConversionWorkspace() {
               onClick={() => {
                 setReplacements((rows) => [
                   ...rows,
-                  { ...incomeDraft(period), member, kind, precision: destination },
+                  // The shared note stays on the first replacement only.
+                  {
+                    ...incomeDraft(period),
+                    member,
+                    kind,
+                    precision: destination,
+                    account: shared?.account ?? "",
+                  },
                 ]);
                 setAck(false);
               }}

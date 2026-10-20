@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
-from test_income import CATALOG, headers, income_payload, make_account
+from test_income import CATALOG, close_account, headers, income_payload, make_account
 from test_insurance_core import case_payload, policy_payload
 from test_recurring import generate, obligation_for, post_rule, settle
 
@@ -567,6 +567,62 @@ class TestInsuranceEventFixtures:
 
 @pytest.mark.database
 class TestInsuranceEventCorrections:
+    @pytest.mark.parametrize("source", ["expense", "refund", "payout", "return"])
+    def test_correction_keeps_a_link_that_closed_after_the_original(
+        self, app, actors, db_engine, source
+    ):
+        actor = actors[0]
+        account = make_account(db_engine, actor)
+        linked = {"account_id": str(account.id), "occurred_on": "2026-01-20"}
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            node = new_node(client, actor, case)
+            if source == "expense":
+                collection = "/medical-expenses"
+                body = expense_payload(case["id"], node["id"]) | actual(**linked)
+                first = money(client, actor, collection, body)
+            elif source == "refund":
+                parent = new_expense(client, actor, case, node, occurred_on="2026-01-10")
+                collection = "/medical-refunds"
+                body = actual("30", reason="합성 환불", **linked)
+                first = money(
+                    client, actor, f"/medical-expenses/{parent['id']}/refunds", body, version=1
+                )
+            elif source == "payout":
+                collection = "/payouts"
+                body = actual(allocations=[allocation(case["id"])], **linked)
+                first = money(client, actor, collection, body)
+            else:
+                parent = new_payout(
+                    client, actor, [allocation(case["id"])], occurred_on="2026-01-10"
+                )
+                collection = "/returns"
+                body = actual(
+                    "30",
+                    original_allocation_id=parent["allocations"][0]["id"],
+                    reason="합성 반환",
+                    **linked,
+                )
+                first = money(client, actor, f"/payouts/{parent['id']}/returns", body, version=1)
+            close_account(db_engine, actor, account, "2026-01-25")
+            fixed = body | {"occurred_on": "2026-01-31", "reason": "합성 날짜 정정"}
+            replacement = money(
+                client, actor, f"{collection}/{first['id']}/correct", fixed, version=1
+            )
+            corrected = read(client, actor, f"{collection}/{replacement['id']}")
+            assert corrected["cash"]["account_id"] == str(account.id)
+            assert corrected["cash"]["occurred_on"] == "2026-01-31"
+            if source == "expense":
+                # A new fact on the closed account still has to be dated on or before its end.
+                late = client.post(
+                    BASE + collection,
+                    headers=headers(actor),
+                    json=body | {"occurred_on": "2026-01-26"},
+                )
+                assert late.status_code == 422
+                assert late.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+                money(client, actor, collection, body | {"occurred_on": "2026-01-25"})
+
     def test_claim_evidence_must_be_explicitly_unlinked_before_expense_void(
         self, app, actors, db_engine
     ):

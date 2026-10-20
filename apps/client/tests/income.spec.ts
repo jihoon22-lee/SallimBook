@@ -1,7 +1,8 @@
 import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { mockCashflow, incomeRow } from "./support/cashflow";
-import { uid } from "./support/finance";
+import { closedAccount, uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
@@ -220,4 +221,110 @@ test("history pagination keeps every version of the same record", async ({ page 
   await page.getByRole("button", { name: "수입 이력 더 보기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "버전 1 · 등록", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "버전 3 · 정정", exact: true })).toBeVisible();
+});
+
+test("an income can use an account through the day it closed", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.finance.accounts.push(closedAccount(33, "2025-02-15"));
+  await page.goto("/income/new");
+  const closed = page.getByRole("option", {
+    name: /^합성 종료 계좌 자산 · .* · 2025\.02\.15 사용 종료$/,
+  });
+  await page.getByRole("combobox", { name: "수입 구성원", exact: true }).selectOption(uid(2));
+  await page.getByRole("combobox", { name: "날짜 정밀도", exact: true }).selectOption("day");
+  await page.getByLabel("실제 입금일", { exact: true }).fill("2025-02-16");
+  await expect(closed).toHaveCount(0);
+  await page.getByLabel("실제 입금일", { exact: true }).fill("2025-02-15");
+  await expect(closed).toHaveJSProperty("disabled", false);
+  await page.getByRole("combobox", { name: "날짜 정밀도", exact: true }).selectOption("month");
+  await expect(closed).toHaveJSProperty("disabled", false);
+  await page.getByLabel("수입 금액 (원)", { exact: true }).fill("1000");
+  await page.getByRole("combobox", { name: "입금계좌", exact: true }).selectOption(uid(33));
+  await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(state.writes[0]!.body).toMatchObject({
+    date_precision: "month",
+    period_month: "2025-02",
+    account_id: uid(33),
+  });
+});
+
+async function correctToDay(page: Page) {
+  await page.goto(`/income/${uid(40)}/edit`);
+  await page.getByRole("combobox", { name: "날짜 정밀도", exact: true }).selectOption("day");
+  await page.getByLabel("실제 입금일", { exact: true }).fill("2025-02-10");
+  await page.getByLabel("정정 사유", { exact: true }).fill("합성 입금일 확인");
+  await page.getByRole("button", { name: "수입 정정 저장", exact: true }).click();
+}
+test("an income correction never lists the record itself as a duplicate", async ({ page }) => {
+  const state = await mockCashflow(page);
+  await correctToDay(page);
+  await expect(page.getByRole("heading", { name: "수입 상세", exact: true })).toBeVisible();
+  expect(state.writes).toHaveLength(1);
+  expect(state.writes[0]!.body).toMatchObject({
+    date_precision: "day",
+    occurred_on: "2025-02-10",
+    reason: "합성 입금일 확인",
+  });
+  expect(state.writes[0]!.body.duplicate_acknowledged).not.toBe(true);
+});
+test("another month total still needs duplicate review during a correction", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.incomes.push(incomeRow(44, { amount_krw: "100000" }));
+  await correctToDay(page);
+  const review = page.getByRole("region", { name: "수입 중복 검토", exact: true });
+  await expect(review.getByRole("link")).toHaveCount(1);
+  await expect(review.getByRole("link", { name: "100,000원 · 월합계", exact: true })).toBeVisible();
+  await expect(
+    page.getByText("아래 기존 기록을 확인하고 중복 여부를 선택해 주세요.", { exact: true }),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(0);
+});
+
+async function loadConversion(page: Page) {
+  await page.goto("/income/convert");
+  await page.getByRole("combobox", { name: "전환 구성원", exact: true }).selectOption(uid(2));
+  await page.getByRole("button", { name: "원본 수입 전체 확인", exact: true }).click();
+  return page.getByRole("region", { name: "대체 수입 1", exact: true });
+}
+test("precision conversion keeps the shared account and note of its sources", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.incomes[0]!.note = "합성 급여 메모";
+  const first = await loadConversion(page);
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "3,000,000원 · 월합계" }),
+  ).toContainText("합성 개인 금융 자산 · 메모 합성 급여 메모");
+  await expect(first.getByRole("combobox", { name: "입금계좌", exact: true })).toHaveValue(uid(30));
+  // A filled textarea inside its label adds its value to the accessible name.
+  await expect(first.getByLabel("수입 메모")).toHaveValue("합성 급여 메모");
+  await first.getByLabel("실제 입금일", { exact: true }).fill("2025-02-10");
+  await page.getByLabel("전환 사유", { exact: true }).fill("합성 입금일 확인");
+  await page.getByLabel("원본 전체와 같은 합계의 대체 기록을 확인했어요.", { exact: true }).check();
+  await page.getByRole("button", { name: "합계를 유지하고 전환", exact: true }).click();
+  await expect(page).toHaveURL(/\/income$/);
+  expect(state.writes[0]!.body.replacements).toEqual([
+    expect.objectContaining({
+      amount_krw: "3000000",
+      occurred_on: "2025-02-10",
+      account_id: uid(30),
+      note: "합성 급여 메모",
+    }),
+  ]);
+});
+test("precision conversion leaves differing source accounts for the user to choose", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  state.incomes.push(incomeRow(45, { amount_krw: "500000", account_id: null }));
+  const first = await loadConversion(page);
+  await expect(first.getByRole("combobox", { name: "입금계좌", exact: true })).toHaveValue("");
+  await expect(
+    page.getByText(
+      "원본마다 계좌가 달라 대체 기록에 넣지 않았어요. 원본 목록을 보고 직접 입력해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: "500,000원 · 월합계" })).toContainText(
+    "계좌 연결 안 함",
+  );
 });

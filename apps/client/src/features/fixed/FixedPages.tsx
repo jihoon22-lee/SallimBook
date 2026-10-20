@@ -17,14 +17,23 @@ import {
 import { dateLabel, isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 import { allPages, usePagedList, useResource } from "../finance/queries";
 import { useFixedApi } from "./api";
-import { displayedTerms, economicTypes, generationValid, obligationStates } from "./model";
+import {
+  displayedTerms,
+  economicTypes,
+  generationValid,
+  historyLabel,
+  obligationStates,
+  settlementEntry,
+  withdrawalPlan,
+} from "./model";
 import type { Obligation, Rule, Settlement } from "./model";
-import { RuleEditor } from "./RuleEditor";
+import { RuleCommandError, RuleEditor, WithdrawalNotice } from "./RuleEditor";
 import { RuleSummary } from "./RuleSummary";
 import { ObligationCalendar } from "./ObligationCalendar";
 import {
   actionAllowed,
   actionLabels,
+  AdditionalPaymentCheck,
   ObligationActionForm,
   SettlementForm,
   VoidSettlement,
@@ -347,7 +356,7 @@ function FixedList() {
                       {row.manual_override ? " · 수동 예외" : ""}
                     </p>
                   </div>
-                  {row.schedule_state === "active" && !row.skipped && !row.manually_completed && (
+                  {settlementEntry(row) === "settle" && (
                     <Link
                       className="button-link secondary-button"
                       to={`/fixed-payments/${row.id}?task=settle`}
@@ -444,14 +453,12 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
   const [latest, setLatest] = useState<Rule | null>(null);
   const [ack, setAck] = useState(false);
   const key = useIdempotencyKey(JSON.stringify([row.id, row.version, date, reason.trim()]));
-  const lastFrom = [...row.versions]
-    .sort((a, b) => a.effective_from.localeCompare(b.effective_from))
-    .at(-1)!.effective_from;
+  const plan = withdrawalPlan(row, date);
   const valid =
     (!row.ended_on || (row.ended_on > todaySeoul() && date < row.ended_on)) &&
     isDateOnly(date) &&
     date >= todaySeoul() &&
-    date > lastFrom &&
+    date > plan.floor &&
     !!reason.trim() &&
     ack;
   async function submit(event: FormEvent) {
@@ -474,8 +481,8 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
     <section className="card">
       <h2>납부 규칙 종료</h2>
       <p>
-        마지막 적용일 {dateLabel(lastFrom)}보다 뒤의 종료 적용일을 선택해요. 과거 납부와 수동 예외는
-        남겨요.
+        현재 적용 중인 시작일 {dateLabel(plan.floor)}보다 뒤의 종료 적용일을 선택해요. 과거 납부와
+        수동 예외는 남겨요.
         {row.ended_on
           ? ` 현재 종료 적용일 ${dateLabel(row.ended_on)}보다 앞당기는 것만 가능해요.`
           : ""}
@@ -518,7 +525,8 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
             종료 적용일 이후의 미래 미납 회차가 바뀌는 것을 확인했어요.
           </label>
         </fieldset>
-        <CashflowError error={command.error} />
+        <WithdrawalNotice withdrawn={plan.withdrawn} />
+        <RuleCommandError error={command.error} />
         {command.error?.status === 409 && (
           <button type="button" onClick={() => void compare()}>
             종료 전 현재 규칙 비교
@@ -643,18 +651,6 @@ function ObligationHistory({ id }: { id: string }) {
     useCallback((cursor?: number) => api.history(id, cursor), [api, id]),
     historyKey,
   );
-  const names: Record<string, string> = {
-    create: "회차 생성",
-    generate: "회차 생성",
-    reschedule: "예정일 변경",
-    skip: "건너뛰기",
-    unskip: "건너뛰기 복원",
-    complete: "수동 완료",
-    reopen: "수동 완료 재개",
-    settle: "실제 납부",
-    void_settlement: "납부 무효",
-    supersede: "규칙 변경으로 대체",
-  };
   return (
     <section className="card">
       <h2>회차 변경 이력</h2>
@@ -664,7 +660,7 @@ function ObligationHistory({ id }: { id: string }) {
         {history.items.map((row) => (
           <li key={historyKey(row)}>
             <h3>
-              버전 {row.version} · {names[row.action] ?? "회차 상태 변경"}
+              버전 {row.version} · {historyLabel(row)}
             </h3>
             <p>
               예정일 {dateLabel(row.scheduled_date)} · 예정액{" "}
@@ -765,7 +761,10 @@ function ObligationDetail({ id }: { id: string }) {
   const [voiding, setVoiding] = useState<Settlement | null>(null);
   const [notice, setNotice] = useState("");
   const row = resource.data;
-  const canSettle = row?.schedule_state === "active" && !row.skipped && !row.manually_completed;
+  const entry = row ? settlementEntry(row) : null;
+  const canSettle = entry !== null;
+  // A paid occurrence shows the double-count check before the payment form.
+  const [extraConfirmed, setExtraConfirmed] = useState(false);
   const currentAction = action === "settle" && !canSettle ? "" : action;
   function close(restoreFocus = true) {
     const target = actionTrigger.current;
@@ -775,6 +774,7 @@ function ObligationDetail({ id }: { id: string }) {
       });
     setAction("");
     setVoiding(null);
+    setExtraConfirmed(false);
     if (params.has("task")) {
       const next = new URLSearchParams(params);
       next.delete("task");
@@ -819,10 +819,10 @@ function ObligationDetail({ id }: { id: string }) {
               {formatKrw(row.actual_amount_krw)}
             </p>
             <div className="primary-action-row">
-              {canSettle && (
+              {entry && (
                 <button
                   ref={actionTrigger}
-                  className="primary-button"
+                  className={entry === "settle" ? "primary-button" : "secondary-button"}
                   disabled={Boolean(currentAction || voiding)}
                   onClick={(event) => {
                     actionTrigger.current = event.currentTarget;
@@ -831,7 +831,7 @@ function ObligationDetail({ id }: { id: string }) {
                     setNotice("");
                   }}
                 >
-                  실제 납부 기록
+                  {entry === "settle" ? "실제 납부 기록" : "추가 납부 기록"}
                 </button>
               )}
               <Link to={`/fixed-payments/rules/${row.rule_id}`}>납부 규칙과 적용기간</Link>
@@ -867,7 +867,11 @@ function ObligationDetail({ id }: { id: string }) {
               label={currentAction === "settle" ? "실제 납부 입력" : "납부 회차 변경 입력"}
             >
               {currentAction === "settle" ? (
-                <SettlementForm initial={row} onSaved={saved} onBusyChange={setCommandBusy} />
+                entry === "additional" && !extraConfirmed ? (
+                  <AdditionalPaymentCheck row={row} onConfirm={() => setExtraConfirmed(true)} />
+                ) : (
+                  <SettlementForm initial={row} onSaved={saved} onBusyChange={setCommandBusy} />
+                )
               ) : (
                 <ObligationActionForm
                   initial={row}

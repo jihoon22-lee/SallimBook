@@ -315,3 +315,11 @@ BEFORE guard는 가계 잠금과 수명주기/동결을 검사하고 deferred tr
 복구 wrapping, 1~2명 활성 구성원의 wrapping, 카드 last4 및 회전 원본 전체를 대조한다.
 불완전한 준비를 current로 바꾸는 SQL이나 공유 수락 없이 구성원을 활성화하는 SQL도 실패한다.
 카드의 일반 alias 편집은 가능하지만 비밀이 있는 카드의 last4는 비밀 저장과 원자적으로만 바뀐다.
+
+`0015_rule_revocation`은 `recurring_rule_versions.revoked_at`(timestamptz, NULL 허용)을 추가한다.
+기간 배제 제약과 규칙·시작일 고유 제약은 철회하지 않은 행에만 적용하므로 철회한 예정 버전의 시작일과
+기간을 대체 버전이 다시 쓸 수 있다. 불변 트리거는 `revoked_at`만 바꾸고 더 이른 활성 버전이 있는
+경우의 철회만 허용하며, 철회한 행은 다시 바꿀 수 없다. "시작 전" 판정은 서비스의 서울 오늘 기준이다.
+`scheduled_obligations.manual_override`는 `skipped OR manually_completed OR scheduled_date <> nominal_date`와
+같도록 정규화하고 CHECK로 고정한다. 이력 행은 당시 값을 보존한다. 철회 행이 있으면 downgrade는
+55000으로 실패하며 조용히 데이터를 지우지 않는다.

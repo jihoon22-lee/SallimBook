@@ -85,7 +85,11 @@ def _audit(session, principal, row, entity, action, fields, before=None, after=N
     )
 
 
-def _validate_method(session, principal, account_id, card_id, loan_asset_id=None):
+def _validate_method(session, principal, account_id, card_id, loan_asset_id=None, *, on=None):
+    # Plans (on=None) need a method still in use; an actual payment only needs it on that day.
+    def closed(ended_on):
+        return ended_on is not None and (on is None or ended_on < on)
+
     account = None
     asset_ids = set()
     if account_id is not None:
@@ -103,13 +107,13 @@ def _validate_method(session, principal, account_id, card_id, loan_asset_id=None
             raise DomainError("LOAN_UNAVAILABLE", "사용 중인 부채를 선택해 주세요.", 422)
     if account is not None:
         scoped_entity(session, FinancialAccount, account_id, principal, for_update=True)
-        if assets[account.asset_id].ended_on is not None:
+        if closed(assets[account.asset_id].ended_on):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 납부 계좌를 선택해 주세요.", 422)
     if card_id is not None:
         from sallimbook.cards.models import Card
 
         card = scoped_entity(session, Card, card_id, principal, for_update=True)
-        if card.ended_on is not None:
+        if closed(card.ended_on):
             raise DomainError("CARD_UNAVAILABLE", "사용 중인 납부 카드를 선택해 주세요.", 422)
 
 
@@ -128,6 +132,7 @@ def _versions(session, principal, rule_id):
             .where(
                 RecurringRuleVersion.household_id == principal.household_id,
                 RecurringRuleVersion.rule_id == rule_id,
+                RecurringRuleVersion.revoked_at.is_(None),
             )
             .order_by(RecurringRuleVersion.effective_from)
         )
@@ -137,6 +142,8 @@ def _versions(session, principal, rule_id):
 def _rule_response(session, principal, row, *, versions=None):
     if versions is None:
         versions = _versions(session, principal, row.id)
+    # Callers with their own queries (list_rules, insurance premiums) pass revoked rows too.
+    versions = [version for version in versions if version.revoked_at is None]
     return RuleResponse(
         id=row.id,
         household_id=row.household_id,
@@ -241,6 +248,51 @@ def _change_window(session, principal, rule, start):
             cursor = window_end + timedelta(days=1)
 
 
+def _split_at(versions, cutoff):
+    """The version running into cutoff and the not-yet-started versions from cutoff on."""
+    anchor = None
+    for version in versions:
+        if version.effective_from < cutoff:
+            anchor = version
+    pending = [version for version in versions if version.effective_from >= cutoff]
+    if anchor is None or any(version.effective_from <= today() for version in pending):
+        raise DomainError(
+            "RULE_PERIOD_OVERLAP",
+            "현재 적용 중인 규칙의 시작일 뒤이면서 기존 종료일 전인 날짜를 선택해 주세요.",
+            409,
+        )
+    return anchor, pending
+
+
+def _revoke(session, principal, versions):
+    """Withdraw not-yet-started versions whose occurrences are still untouched."""
+    if not versions:
+        return
+    ids = [version.id for version in versions]
+    rows = list(
+        session.scalars(
+            select(ScheduledObligation)
+            .where(
+                ScheduledObligation.household_id == principal.household_id,
+                ScheduledObligation.rule_version_id.in_(ids),
+            )
+            .order_by(ScheduledObligation.id)
+            .with_for_update()
+        )
+    )
+    settlements = _active_settlements_by_obligation(session, principal, [row.id for row in rows])
+    if any(settlements[row.id] or _has_exception(row) for row in rows):
+        raise DomainError(
+            "OBLIGATION_HAS_PAYMENT",
+            "시작 전 변경에 납부·수동 변경한 회차가 있어 철회할 수 없습니다.",
+            409,
+        )
+    revoked_at = datetime.now(UTC)
+    for version in versions:
+        version.revoked_at = revoked_at
+    session.flush()  # Free the start date and period before a replacement version is added.
+
+
 def change_rule(session, principal, rule_id, payload, if_match, key):
     cash.lock_cash_household(session, principal)
 
@@ -248,10 +300,7 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
         row = scoped_entity(session, RecurringRule, rule_id, principal, for_update=True)
         require_version(row, if_match)
         versions = _versions(session, principal, row.id)
-        last = versions[-1]
-        if payload.effective_from <= last.effective_from or (
-            row.ended_on is not None and payload.effective_from >= row.ended_on
-        ):
+        if row.ended_on is not None and payload.effective_from >= row.ended_on:
             raise DomainError(
                 "RULE_PERIOD_OVERLAP",
                 "마지막 규칙 이후이면서 기존 종료일 전인 적용일을 선택해 주세요.",
@@ -259,10 +308,15 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
             )
         if payload.effective_from < today():
             raise DomainError("PAST_RULE_CHANGE", "지난 규칙은 변경할 수 없습니다.", 409)
+        # A change dated at or before a not-yet-started version replaces it.
+        anchor, pending = _split_at(versions, payload.effective_from)
         _validate_method(
             session, principal, payload.account_id, payload.card_id, payload.loan_asset_id
         )
-        last.effective_until = payload.effective_from
+        _revoke(session, principal, pending)
+        # The trigger only lets a period end move earlier, so equal values are not reassigned.
+        if anchor.effective_until != payload.effective_from:
+            anchor.effective_until = payload.effective_from
         session.flush()  # Close the old range before the exclusion constraint sees its successor.
         session.add(
             RecurringRuleVersion(
@@ -277,9 +331,8 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
         before = row.version
         row.version += 1
         row.updated_at = datetime.now(UTC)
-        _audit(
-            session, principal, row, "recurring_rule", "update", payload.model_fields_set, before
-        )
+        changed = set(payload.model_fields_set) | ({"revoked_at"} if pending else set())
+        _audit(session, principal, row, "recurring_rule", "update", changed, before)
         session.flush()
         _change_window(session, principal, row, payload.effective_from)
         return IdempotentResult(row.id, "recurring_rule", row.version, 200)
@@ -303,12 +356,10 @@ def end_rule(session, principal, rule_id, payload, if_match, key):
     def execute():
         row = scoped_entity(session, RecurringRule, rule_id, principal, for_update=True)
         require_version(row, if_match)
-        last = _versions(session, principal, row.id)[-1]
+        versions = _versions(session, principal, row.id)
         # A future cutoff can only move earlier. Together with today's lower bound,
         # this cannot reopen an elapsed rule or rewrite an earlier version's period.
-        if payload.effective_on <= last.effective_from or (
-            row.ended_on is not None and payload.effective_on >= row.ended_on
-        ):
+        if row.ended_on is not None and payload.effective_on >= row.ended_on:
             raise DomainError(
                 "RULE_PERIOD_OVERLAP",
                 "마지막 적용일 이후이며 기존 종료일보다 이른 날짜를 선택해 주세요.",
@@ -316,13 +367,18 @@ def end_rule(session, principal, rule_id, payload, if_match, key):
             )
         if payload.effective_on < today():
             raise DomainError("PAST_RULE_CHANGE", "지난 규칙은 변경할 수 없습니다.", 409)
-        last.effective_until = payload.effective_on
+        # Ending before a not-yet-started version withdraws it.
+        anchor, pending = _split_at(versions, payload.effective_on)
+        _revoke(session, principal, pending)
+        if anchor.effective_until != payload.effective_on:
+            anchor.effective_until = payload.effective_on
         row.ended_on = payload.effective_on
         row.end_reason = payload.reason
         before = row.version
         row.version += 1
         row.updated_at = datetime.now(UTC)
-        _audit(session, principal, row, "recurring_rule", "archive", ("ended_on",), before)
+        fields = ("ended_on", "revoked_at") if pending else ("ended_on",)
+        _audit(session, principal, row, "recurring_rule", "archive", fields, before)
         session.flush()
         _change_window(session, principal, row, payload.effective_on)
         return IdempotentResult(row.id, "recurring_rule", row.version, 200)
@@ -407,7 +463,13 @@ def _remember(session, principal, row, action, *, reason=None, before=None):
     session.flush()
 
 
+def _has_exception(row: ScheduledObligation) -> bool:
+    """The occurrence differs from what its rule would generate; keep it on regeneration."""
+    return row.skipped or row.manually_completed or row.scheduled_date != row.nominal_date
+
+
 def _touch(session, principal, row, action, reason=None):
+    row.manual_override = _has_exception(row)
     before = row.version
     row.version += 1
     row.updated_at = datetime.now(UTC)
@@ -709,7 +771,6 @@ def obligation_action(session, principal, obligation_id, payload, if_match, key,
             row.manually_completed = False
         else:
             raise ValueError("Unknown obligation action")
-        row.manual_override = True
         _touch(session, principal, row, action, payload.reason)
         return IdempotentResult(row.id, "obligation", row.version, 200)
 
@@ -794,7 +855,9 @@ def settle(session, principal, obligation_id, payload, if_match, key):
             raise DomainError(
                 "INVALID_PAYMENT_SPLIT", "원금·이자 합계와 실제 납부액을 확인해 주세요.", 422
             ) from None
-        _validate_method(session, principal, payload.account_id, payload.card_id)
+        _validate_method(
+            session, principal, payload.account_id, payload.card_id, on=payload.occurred_on
+        )
         cash_values = dict(
             amount_krw=payload.amount_krw,
             occurred_on=payload.occurred_on,

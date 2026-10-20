@@ -1,10 +1,28 @@
 import type { components } from "@sallimbook/api-client";
+import type { ApiErrorCode } from "../../platform/api";
 import { isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 import { parseKrw } from "../assets/months/model";
 export type Rule = components["schemas"]["RuleResponse"];
 export type RuleTerms = components["schemas"]["RuleVersionResponse"];
 export type Obligation = components["schemas"]["ObligationResponse"];
 export type Settlement = components["schemas"]["SettlementResponse"];
+export type ObligationHistoryItem = components["schemas"]["ObligationHistoryItem"];
+const historyLabels: Record<ObligationHistoryItem["action"], string> = {
+  create: "회차 생성",
+  regenerate: "규칙 변경 반영",
+  reschedule: "예정일 변경",
+  skip: "건너뛰기",
+  unskip: "건너뛰기 복원",
+  complete: "수동 완료",
+  reopen: "수동 완료 재개",
+  settle: "실제 납부",
+  void_settlement: "납부 무효",
+};
+export function historyLabel(row: ObligationHistoryItem): string {
+  if (row.action === "regenerate" && row.schedule_state === "superseded") return "규칙 종료로 대체";
+  // An older cached response may still carry an action this build does not know.
+  return historyLabels[row.action] ?? "회차 상태 변경";
+}
 export const economicTypes = {
   expense: "소비성 비용",
   loan: "대출 원리금",
@@ -48,6 +66,41 @@ export function displayedTerms(rule: Rule, date = todaySeoul()): RuleTerms {
     sorted.filter((row) => row.effective_from > date)[0] ??
     sorted.at(-1)!
   );
+}
+/**
+ * Same split as the server's _split_at: a cutoff must follow the version already running
+ * today (or the first version), and not-yet-started versions from the cutoff on are revoked.
+ */
+export function withdrawalPlan(
+  rule: Rule,
+  date: string,
+  today = todaySeoul(),
+): { floor: string; withdrawn: RuleTerms[] } {
+  const sorted = [...rule.versions].sort((a, b) =>
+    a.effective_from.localeCompare(b.effective_from),
+  );
+  const floor = (sorted.filter((row) => row.effective_from <= today).at(-1) ?? sorted[0]!)
+    .effective_from;
+  const withdrawn = isDateOnly(date)
+    ? sorted.filter(
+        (row) =>
+          row.effective_from > floor && row.effective_from > today && row.effective_from >= date,
+      )
+    : [];
+  return { floor, withdrawn };
+}
+// The shared CashflowError wording is about occurrences and the last start date; rule
+// changes and ends need the revocation meaning instead.
+export const ruleCommandMessages: Partial<Record<ApiErrorCode, string>> = {
+  OBLIGATION_HAS_PAYMENT:
+    "철회할 예정 변경에 실제 납부나 수동 변경한 회차가 있어요. 그 회차를 먼저 정리하거나 예정 변경 이후 날짜를 선택해 주세요.",
+  RULE_PERIOD_OVERLAP:
+    "현재 적용 중인 시작일 뒤이면서 종료 적용일 전인 날짜를 선택해 주세요. 종료일을 연장하거나 지난 규칙을 덮어쓰지 않아요.",
+};
+/** How the detail page offers a payment: normally, only after a check when already paid, or not at all. */
+export function settlementEntry(row: Obligation): "settle" | "additional" | null {
+  if (row.schedule_state !== "active" || row.skipped || row.manually_completed) return null;
+  return row.status === "paid" ? "additional" : "settle";
 }
 export function ruleDraft(row?: RuleTerms): RuleDraft {
   return row

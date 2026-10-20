@@ -379,3 +379,24 @@ export async function mockFinance(page: Page) {
   });
   return state;
 }
+
+export function closedAccount(
+  id: number,
+  endedOn: string,
+): components["schemas"]["AccountResponse"] {
+  const asset = {
+    ...structuredClone(sampleAccount.asset),
+    id: uid(id + 100),
+    name: "합성 종료 계좌 자산",
+    status: "archived" as const,
+    ended_on: endedOn,
+  };
+  return {
+    ...structuredClone(sampleAccount),
+    id: uid(id),
+    asset_id: asset.id,
+    asset,
+    closed_on: endedOn,
+    status: "closed",
+  };
+}

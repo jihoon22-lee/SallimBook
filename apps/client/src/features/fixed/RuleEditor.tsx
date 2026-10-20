@@ -3,16 +3,44 @@ import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
 import { useNavigate } from "react-router";
 import { toApiError } from "../../platform/api";
+import type { ApiError } from "../../platform/api";
 import { useMonthCommand, useIdempotencyKey } from "../assets/months/useMonthCommand";
 import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { dateLabel, todaySeoul } from "../finance/dates";
 import { useFixedApi } from "./api";
-import { economicTypes, frequencies, preserveRuleChanges, ruleDraft, ruleInput } from "./model";
+import {
+  economicTypes,
+  frequencies,
+  preserveRuleChanges,
+  ruleCommandMessages,
+  ruleDraft,
+  ruleInput,
+  withdrawalPlan,
+} from "./model";
 import type { Rule, RuleDraft } from "./model";
 import { LiabilitySelect, PaymentMethod } from "./PaymentMethod";
 import { RuleSummary } from "./RuleSummary";
 const lastTerms = (row: Rule) =>
   [...row.versions].sort((a, b) => a.effective_from.localeCompare(b.effective_from)).at(-1)!;
+export function RuleCommandError({ error }: { error: ApiError | null }) {
+  const message = error && ruleCommandMessages[error.code];
+  if (message)
+    return (
+      <div className="auth-message" role="alert">
+        <p>{message}</p>
+      </div>
+    );
+  return <CashflowError error={error} />;
+}
+export function WithdrawalNotice({ withdrawn }: { withdrawn: { effective_from: string }[] }) {
+  if (!withdrawn.length) return null;
+  return (
+    <p>
+      {withdrawn.map((row) => dateLabel(row.effective_from)).join(", ")} 적용 예정 변경은 함께
+      철회돼요.
+    </p>
+  );
+}
 export function RuleEditor({ initial }: { initial?: Rule }) {
   const api = useFixedApi();
   const navigate = useNavigate();
@@ -33,13 +61,14 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         reason: reason.trim(),
       }))(input)
     : null;
+  const plan = base ? withdrawalPlan(base, draft.from) : null;
   const valid =
     !!input &&
     (!base ||
       (!!reason.trim() &&
         reason.length <= 500 &&
         draft.from >= todaySeoul() &&
-        draft.from > lastTerms(base).effective_from &&
+        draft.from > plan!.floor &&
         (!base.ended_on || draft.from < base.ended_on) &&
         reviewAck));
   const payload = base ? changed : input;
@@ -221,13 +250,17 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
                   onChange={(event) => change("from", event.target.value)}
                 />
               </label>
-              {base && (
-                <p className="muted">
-                  현재 마지막 적용일 {dateLabel(lastTerms(base).effective_from)}보다 뒤여야 해요.
-                  {base.ended_on
-                    ? ` 종료 적용일 ${dateLabel(base.ended_on)}은 유지되며 그 전의 적용일만 사용할 수 있어요.`
-                    : ""}
-                </p>
+              {base && plan && (
+                <>
+                  <p className="muted">
+                    현재 적용 중인 시작일 {dateLabel(plan.floor)}보다 뒤여야 해요. 시작 전 예정
+                    변경과 같거나 앞선 날짜를 고르면 그 예정 변경은 철회돼요.
+                    {base.ended_on
+                      ? ` 종료 적용일 ${dateLabel(base.ended_on)}은 유지되며 그 전의 적용일만 사용할 수 있어요.`
+                      : ""}
+                  </p>
+                  <WithdrawalNotice withdrawn={plan.withdrawn} />
+                </>
               )}
             </div>
             {!base && (
@@ -326,7 +359,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
           )}
         </fieldset>
         {validation && <p role="alert">{validation}</p>}
-        <CashflowError error={command.error} />
+        <RuleCommandError error={command.error} />
         {conflict && (
           <section className="review-panel">
             <h3>현재 규칙과 변경 비교</h3>

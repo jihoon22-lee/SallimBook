@@ -1,6 +1,6 @@
 import { MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport";
 import { todaySeoul } from "../finance/dates";
-import { AccountSelect } from "../finance/AccountChoices";
+import { AccountSelect, linkDate } from "../finance/AccountChoices";
 import type { IncomeDraft } from "./model";
 import { manualKinds } from "./model";
 export function IncomeFields({
@@ -114,6 +114,7 @@ export function IncomeFields({
           value={draft.account}
           onChange={(value) => change("account", value)}
           disabled={disabled}
+          on={linkDate(draft.precision, draft.date, draft.month)}
         />
         <div className="form-field">
           <label>

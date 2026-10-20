@@ -206,6 +206,7 @@ export async function mockCashflow(page: Page) {
     obligationHistory: new Map<string, S["ObligationHistoryItem"][]>(),
     failure: "" as "" | "before" | "after",
     conflict: false,
+    withdrawalBlocked: false,
     staleReceipt: false,
     pageSize: 50,
     nextId: 300,
@@ -247,7 +248,7 @@ export async function mockCashflow(page: Page) {
   state.incomes.forEach(rememberIncome);
   const rememberObligation = (
     row: S["ObligationResponse"],
-    action: string,
+    action: S["ObligationHistoryItem"]["action"],
     reason: string | null = null,
   ) => {
     const list = state.obligationHistory.get(row.id) ?? [];
@@ -775,24 +776,28 @@ export async function mockCashflow(page: Page) {
         row.versions.at(-1)!.note = "배우자 합성 규칙 메모";
       }
       if (version !== `"${row.version}"`) return error("VERSION_CONFLICT");
+      // Mirrors the server's _split_at/_revoke: a cutoff at or before a not-yet-started
+      // version withdraws it.
+      const cutoff: string = action === "end" ? body.effective_on : body.effective_from;
+      const mockToday = "2025-02-20";
+      if (row.ended_on && cutoff >= row.ended_on) return error("RULE_PERIOD_OVERLAP");
+      const earlier = row.versions.filter((v) => v.effective_from < cutoff);
+      const pending = row.versions.filter((v) => v.effective_from >= cutoff);
+      if (!earlier.length || pending.some((v) => v.effective_from <= mockToday))
+        return error("RULE_PERIOD_OVERLAP");
+      if (pending.length && state.withdrawalBlocked) return error("OBLIGATION_HAS_PAYMENT");
+      row.versions = earlier;
+      row.versions.at(-1)!.effective_until = cutoff;
       if (action === "end") {
-        row.ended_on = body.effective_on;
+        row.ended_on = cutoff;
         row.end_reason = body.reason;
-        row.versions.at(-1)!.effective_until = body.effective_on;
-      } else {
-        if (
-          body.effective_from <= row.versions.at(-1)!.effective_from ||
-          (row.ended_on && body.effective_from >= row.ended_on)
-        )
-          return error("RULE_PERIOD_OVERLAP");
-        row.versions.at(-1)!.effective_until = body.effective_from;
+      } else
         row.versions.push({
           ...(body as S["RuleChange"]),
           id: uid(state.nextId++),
           created_at: timestamp,
           effective_until: row.ended_on,
         });
-      }
       row.version++;
       return finish(response({ id: row.id, version: row.version }));
     }
@@ -857,10 +862,15 @@ export async function mockCashflow(page: Page) {
       if (action === "unskip") row.skipped = false;
       if (action === "complete") row.manually_completed = true;
       if (action === "reopen") row.manually_completed = false;
-      row.manual_override = true;
+      row.manual_override =
+        row.skipped || row.manually_completed || row.scheduled_date !== row.nominal_date;
       row.version++;
       refreshObligation(row);
-      rememberObligation(row, action ?? "reschedule", body.reason);
+      rememberObligation(
+        row,
+        (action as S["ObligationHistoryItem"]["action"] | undefined) ?? "reschedule",
+        body.reason,
+      );
       return finish(response({ id: row.id, version: row.version }));
     }
     if (domain === "settlements") {
@@ -872,6 +882,8 @@ export async function mockCashflow(page: Page) {
       payment.cash.reason = body.reason;
       const row = state.obligations.find((r) => r.id === payment.obligation_id)!;
       row.manually_completed = false;
+      row.manual_override =
+        row.skipped || row.manually_completed || row.scheduled_date !== row.nominal_date;
       row.version++;
       refreshObligation(row);
       rememberObligation(row, "void_settlement", body.reason);

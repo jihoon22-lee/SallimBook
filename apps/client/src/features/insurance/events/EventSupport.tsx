@@ -56,12 +56,14 @@ export function ActualFields({
             label={`${title} 계좌`}
             value={draft.methodId}
             onChange={(id) => onChange({ ...draft, method: id ? "account" : "none", methodId: id })}
+            on={draft.date}
           />
         ) : (
           <PaymentMethod
             method={draft.method}
             id={draft.methodId}
             onChange={(method, methodId) => onChange({ ...draft, method, methodId })}
+            on={draft.date}
           />
         )}
         <div className="form-field">
