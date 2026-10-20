@@ -13,6 +13,7 @@ import {
   ancestors,
   changedFields,
   descendants,
+  nextSiblingOrder,
   nodeKinds,
   optional,
   preserveDraft,
@@ -35,14 +36,14 @@ type Draft = {
   order: string;
   note: string;
 };
-const draftOf = (row?: MedicalNode, parent = ""): Draft => ({
+const draftOf = (row?: MedicalNode, parent = "", nodes: MedicalNode[] = []): Draft => ({
   parent: row?.parent_id ?? parent,
   kind: row?.kind ?? "outpatient",
   label: row?.label ?? "",
   provider: row?.provider_name ?? "",
   start: row?.start_on ?? "",
   end: row?.end_on ?? "",
-  order: String(row?.sort_order ?? 0),
+  order: String(row ? (row.sort_order ?? 0) : nextSiblingOrder(nodes, parent)),
   note: row?.note ?? "",
 });
 export function medicalInput(d: Draft): Schema["MedicalNodeInput"] | null {
@@ -124,7 +125,7 @@ function NodeEditor({
   const api = useInsuranceApi();
   const command = useMetadataCommand();
   const [base, setBase] = useState(initial);
-  const [draft, setDraft] = useState(() => draftOf(initial, parent));
+  const [draft, setDraft] = useState(() => draftOf(initial, parent, nodes));
   const [latest, setLatest] = useState<MedicalNode | null>(null);
   const forbidden = base ? descendants(nodes, base.id) : new Set<string>();
   const input = medicalInput(draft);
@@ -132,7 +133,13 @@ function NodeEditor({
   const valid =
     !!input && !forbidden.has(draft.parent) && (!changes || Object.keys(changes).length > 0);
   const change = <K extends keyof Draft>(key: K, value: Draft[K]) =>
-    setDraft((old) => ({ ...old, [key]: value }));
+    setDraft((old) => {
+      const next = { ...old, [key]: value };
+      // A new node follows its new parent's default unless the order was edited by hand.
+      if (!base && key === "parent" && old.order === String(nextSiblingOrder(nodes, old.parent)))
+        next.order = String(nextSiblingOrder(nodes, next.parent));
+      return next;
+    });
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!input || !valid || command.error?.status === 409) return;
@@ -311,9 +318,8 @@ function TreeBranch({
   nodes: MedicalNode[];
   depth?: number;
 }) {
-  const children = nodes
-    .filter((node) => node.parent_id === row.id)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id.localeCompare(b.id));
+  // The server already orders siblings (sort order, start date, creation time).
+  const children = nodes.filter((node) => node.parent_id === row.id);
   const [expanded, setExpanded] = useState(depth < 2);
   return (
     <li>
@@ -358,9 +364,7 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
   const [ack, setAck] = useState(false);
   const nodes = list.data ?? [];
   const selected = nodes.find((n) => n.id === selectedId);
-  const roots = nodes
-    .filter((n) => (selected ? n.parent_id === selected.id : !n.parent_id))
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id.localeCompare(b.id));
+  const roots = nodes.filter((n) => (selected ? n.parent_id === selected.id : !n.parent_id));
   async function remove() {
     if (!selected || !ack) return;
     const result = await command.run(async () => {
