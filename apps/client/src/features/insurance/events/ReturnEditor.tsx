@@ -13,6 +13,8 @@ import { ActualFields, CashSummary } from "./EventSupport";
 import { actualDraft, actualInput, eventNames, eventPaths, needsCompare } from "./model";
 import { useInsuranceEventsApi } from "./api";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { krwFieldError } from "../../../shared/krw";
 type Parent = Schema["ExpenseResponse"] | Schema["PayoutResponse"];
 type ReturnRow = Schema["RefundResponse"] | Schema["ReturnResponse"];
 export function ReturnEditor({
@@ -37,6 +39,8 @@ export function ReturnEditor({
   );
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<{ parent: Parent; base?: ReturnRow } | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const returns = useResource(
     useCallback(
       async (): Promise<ReturnRow[]> =>
@@ -90,9 +94,19 @@ export function ReturnEditor({
       reason.trim(),
     ]),
   );
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!actual || !ready || needsCompare(command.error)) return;
+    if (needsCompare(command.error)) return;
+    if (!actual || !ready) {
+      setMessage(
+        kind === "refund"
+          ? "의료비 환불 금액·날짜·사유를 확인해 주세요. 금액은 남은 환불 가능액 이하여야 해요."
+          : "반환할 원래 배분과 보험금 반환 금액·날짜·사유를 확인해 주세요. 금액은 남은 반환 가능액 이하여야 해요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) => {
       const common = {
         resourceId: base?.id ?? parent.id,
@@ -147,7 +161,13 @@ export function ReturnEditor({
           : "보험사에 실제 돌려준 금액을 원래 입금의 사건별 배분에 연결해요."}
       </p>
       <CashSummary cash={parent.cash} />
-      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setDirty(true);
+          setMessage("");
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         {kind === "return" && (
           <div className="form-field">
             <label>
@@ -184,6 +204,11 @@ export function ReturnEditor({
           onChange={setDraft}
           disabled={command.busy}
           accountOnly={kind === "return"}
+          amountError={
+            attempt.attempted
+              ? krwFieldError(draft.amount, { required: true, positive: true })
+              : null
+          }
         />
         {base && (
           <p className="muted">
@@ -242,6 +267,7 @@ export function ReturnEditor({
             </button>
           </section>
         )}
+        <FormError message={message} />
         <SaveControls
           backTo={
             base
@@ -250,7 +276,13 @@ export function ReturnEditor({
           }
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || needsCompare(command.error)}
+          disabled={
+            needsCompare(command.error) ||
+            returns.loading ||
+            !!returns.error ||
+            parent.cash.state !== "active" ||
+            (!!base && base.cash.state !== "active")
+          }
           label={`${eventNames[kind]}${base ? " 정정" : ""} 저장`}
         />
       </form>

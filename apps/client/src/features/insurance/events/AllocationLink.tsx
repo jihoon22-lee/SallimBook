@@ -11,6 +11,7 @@ import type { Schema } from "../model";
 import { InsuranceError, recordedLabel } from "../InsuranceSupport";
 import { AllocationFields, AllocationSummary, allocationDraft } from "./PayoutEditor";
 import { useInsuranceEventsApi } from "./api";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 const keyOf = (row: { id: string; version: number }) => `${row.id}:${row.version}`;
 export function AllocationHistory({ id }: { id: string }) {
   const members = useHouseholdMembers();
@@ -70,6 +71,8 @@ export function AllocationLink({
   const [draft, setDraft] = useState(() => allocationDraft(initial));
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Schema["AllocationResponse"] | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const changes = changedFields(
     { policy_id: base.policy_id ?? null, claim_id: base.claim_id ?? null },
     { policy_id: optional(draft.policyId), claim_id: optional(draft.claimId) },
@@ -78,9 +81,17 @@ export function AllocationLink({
   const key = useIdempotencyKey(JSON.stringify([base.id, base.version, input]));
   const ready =
     !!reason.trim() && Object.keys(changes).length > 0 && (!draft.claimId || !!draft.policyId);
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!ready || needsCompare(command.error)) return;
+    if (needsCompare(command.error)) return;
+    if (!ready) {
+      setMessage(
+        "바꿀 계약·청구 연결과 정정 사유를 확인해 주세요. 청구를 고르면 계약도 골라야 해요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       api.linkPayoutAllocation(
         { allocationId: base.id, input, ifMatch: `"${base.version}"`, idempotencyKey: key },
@@ -101,7 +112,7 @@ export function AllocationLink({
     <section className="review-panel">
       <h3>같은 입금의 청구 연결 정정</h3>
       <p>사건·금액·급부유형은 유지하며 계약·청구 연결만 바꿔요. 새 보험금 입금을 만들지 않아요.</p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
         <AllocationFields
           value={draft}
           onChange={setDraft}
@@ -121,6 +132,7 @@ export function AllocationLink({
             />
           </label>
         </div>
+        <FormError message={message} />
         <InsuranceError error={command.error} />
         {needsCompare(command.error) && (
           <button type="button" onClick={() => void compare()}>
@@ -146,7 +158,7 @@ export function AllocationLink({
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || needsCompare(command.error)}
+          disabled={needsCompare(command.error)}
           label="같은 입금의 청구 연결 저장"
         />
         <button type="button" onClick={cancel} disabled={command.busy}>

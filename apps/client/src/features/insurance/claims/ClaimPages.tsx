@@ -22,6 +22,9 @@ import { CaseSelect, PolicySelect } from "../events/EventSupport";
 import { PayoutList } from "../events/EventPages";
 import { claimStates, needsCompare } from "../events/model";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
+import { AmountField } from "../../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { krwFieldError } from "../../../shared/krw";
 type Draft = {
   caseId: string;
   policyId: string;
@@ -147,6 +150,8 @@ export function ClaimEditor({
   const [draft, setDraft] = useState(() => draftOf(initial, caseId, policyId));
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Schema["ClaimResponse"] | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const expenses = useResource(
     useCallback(
       () =>
@@ -175,9 +180,19 @@ export function ClaimEditor({
     (!base || (!!reason.trim() && !!Object.keys(changes ?? {}).length));
   const change = <K extends keyof Draft>(field: K, value: Draft[K]) =>
     setDraft((old) => ({ ...old, [field]: value }));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!input || !valid || needsCompare(command.error)) return;
+    if (needsCompare(command.error)) return;
+    if (!input || !valid) {
+      setMessage(
+        base
+          ? "바꾼 청구 내용과 정정 사유를 확인해 주세요."
+          : "청구 보험계약·근거 비용·접수일·금액을 확인해 주세요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run(
       () =>
         base && changes
@@ -214,7 +229,13 @@ export function ClaimEditor({
   return (
     <section className="card">
       <h2>{base ? "청구 상태·근거 정정" : "청구 기록"}</h2>
-      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setDirty(true);
+          setMessage("");
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy}>
           <legend>청구와 근거</legend>
           {base ? (
@@ -273,26 +294,26 @@ export function ClaimEditor({
                 />
               </label>
             </div>
-            <div className="form-field">
-              <label>
-                직접 입력한 청구액 (원)
-                <input
-                  inputMode="numeric"
-                  value={draft.requested}
-                  onChange={(e) => change("requested", e.target.value)}
-                />
-              </label>
-            </div>
-            <div className="form-field">
-              <label>
-                심사 결정액 (원)
-                <input
-                  inputMode="numeric"
-                  value={draft.decided}
-                  onChange={(e) => change("decided", e.target.value)}
-                />
-              </label>
-            </div>
+            <AmountField
+              label="직접 입력한 청구액 (원)"
+              value={draft.requested}
+              error={
+                attempt.attempted
+                  ? krwFieldError(draft.requested, { required: false, positive: false })
+                  : null
+              }
+              onChange={(value) => change("requested", value)}
+            />
+            <AmountField
+              label="심사 결정액 (원)"
+              value={draft.decided}
+              error={
+                attempt.attempted
+                  ? krwFieldError(draft.decided, { required: false, positive: false })
+                  : null
+              }
+              onChange={(value) => change("decided", value)}
+            />
             <div className="form-field">
               <label>
                 청구·심사 메모
@@ -368,6 +389,7 @@ export function ClaimEditor({
             </div>
           )}
         </fieldset>
+        <FormError message={message} />
         <MetadataFeedback command={command} listPath={`/insurance/cases/${draft.caseId}`} />
         <ConflictReview
           error={command.error}
@@ -381,7 +403,13 @@ export function ClaimEditor({
         <div className="form-actions save-actions">
           <button
             type="submit"
-            disabled={!valid || command.busy || command.uncertain || needsCompare(command.error)}
+            disabled={
+              expenses.loading ||
+              !!expenses.error ||
+              command.busy ||
+              command.uncertain ||
+              needsCompare(command.error)
+            }
           >
             {base ? "청구 정정 저장" : "청구 기록 저장"}
           </button>

@@ -16,6 +16,9 @@ import { actualDraft, actualInput, exactSum, needsCompare } from "./model";
 import type { ActualDraft } from "./model";
 import { useInsuranceEventsApi } from "./api";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
+import { AmountField } from "../../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { krwFieldError } from "../../../shared/krw";
 type Line = { label: string; amount: string; type: string };
 type Draft = {
   actual: ActualDraft;
@@ -98,6 +101,8 @@ export function ExpenseEditor({
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
   const [latest, setLatest] = useState<Schema["ExpenseResponse"] | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const nodes = useResource(
     useCallback(
       () =>
@@ -117,13 +122,31 @@ export function ExpenseEditor({
     !nodes.loading &&
     !nodes.error &&
     (!base || (base.cash.state === "active" && !!reason.trim() && ack));
+  const linesMismatch =
+    draft.lines.length > 0 &&
+    exactSum(draft.lines.map((l) => l.amount)) !== parseKrw(draft.actual.amount);
   const change = <K extends keyof Draft>(field: K, value: Draft[K]) => {
     setDraft((d) => ({ ...d, [field]: value }));
     setAck(false);
+    setMessage("");
   };
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!input || !ready || needsCompare(command.error)) return;
+    if (needsCompare(command.error)) return;
+    if (!input || !ready) {
+      // The on-screen line-total notice is the explanation when only the totals disagree.
+      const correctionOnly = !!base && !!input && !!selected && selected.kind !== "prescription";
+      setMessage(
+        linesMismatch
+          ? ""
+          : correctionOnly
+            ? "의료비 정정 사유와 확인란을 확인해 주세요."
+            : "비용 사건·귀속 진료·지불 금액·실제 날짜를 확인해 주세요. 무금액 처방에는 비용을 연결할 수 없어요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       base
         ? api.correctMedicalExpense(
@@ -199,6 +222,11 @@ export function ExpenseEditor({
           draft={draft.actual}
           onChange={(d) => change("actual", d)}
           disabled={command.busy}
+          amountError={
+            attempt.attempted
+              ? krwFieldError(draft.actual.amount, { required: true, positive: true })
+              : null
+          }
         />
         <details
           className="optional-fields"
@@ -236,26 +264,28 @@ export function ExpenseEditor({
               </label>
             </div>
             <div className="form-grid">
-              <div className="form-field">
-                <label>
-                  병원 총진료비 참고 (원)
-                  <input
-                    inputMode="numeric"
-                    value={draft.gross}
-                    onChange={(e) => change("gross", e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="form-field">
-                <label>
-                  공단 부담액 참고 (원)
-                  <input
-                    inputMode="numeric"
-                    value={draft.publicCoverage}
-                    onChange={(e) => change("publicCoverage", e.target.value)}
-                  />
-                </label>
-              </div>
+              <AmountField
+                label="병원 총진료비 참고 (원)"
+                required={false}
+                value={draft.gross}
+                error={
+                  attempt.attempted
+                    ? krwFieldError(draft.gross, { required: false, positive: false })
+                    : null
+                }
+                onChange={(value) => change("gross", value)}
+              />
+              <AmountField
+                label="공단 부담액 참고 (원)"
+                required={false}
+                value={draft.publicCoverage}
+                error={
+                  attempt.attempted
+                    ? krwFieldError(draft.publicCoverage, { required: false, positive: false })
+                    : null
+                }
+                onChange={(value) => change("publicCoverage", value)}
+              />
             </div>
             <p>
               총진료비와 공단 부담액은 설명용이에요. 실제로 본인이 지불한 금액과 구분해 기록해요.
@@ -288,24 +318,22 @@ export function ExpenseEditor({
                     />
                   </label>
                 </div>
-                <div className="form-field">
-                  <label>
-                    명세 금액 (원)
-                    <input
-                      required
-                      inputMode="numeric"
-                      value={line.amount}
-                      onChange={(e) =>
-                        change(
-                          "lines",
-                          draft.lines.map((l, i) =>
-                            i === index ? { ...l, amount: e.target.value } : l,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                </div>
+                <AmountField
+                  label="명세 금액 (원)"
+                  required
+                  value={line.amount}
+                  error={
+                    attempt.attempted
+                      ? krwFieldError(line.amount, { required: true, positive: false })
+                      : null
+                  }
+                  onChange={(value) =>
+                    change(
+                      "lines",
+                      draft.lines.map((l, i) => (i === index ? { ...l, amount: value } : l)),
+                    )
+                  }
+                />
                 <div className="form-field">
                   <label>
                     명세 분류
@@ -355,7 +383,9 @@ export function ExpenseEditor({
           )}
           {draft.lines.length > 0 &&
             exactSum(draft.lines.map((l) => l.amount)) !== parseKrw(draft.actual.amount) && (
-              <p role="alert">명세 합계와 실제 지불금이 같아야 해요.</p>
+              <p role="alert" tabIndex={-1} data-form-error>
+                명세 합계와 실제 지불금이 같아야 해요.
+              </p>
             )}
           {base && (
             <>
@@ -408,6 +438,7 @@ export function ExpenseEditor({
             </button>
           </section>
         )}
+        <FormError message={message} />
         <SaveControls
           backTo={
             base
@@ -418,7 +449,12 @@ export function ExpenseEditor({
           }
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || needsCompare(command.error)}
+          disabled={
+            needsCompare(command.error) ||
+            nodes.loading ||
+            !!nodes.error ||
+            (!!base && base.cash.state !== "active")
+          }
           label={base ? "의료비 정정 저장" : "실제 의료비 저장"}
         />
       </form>

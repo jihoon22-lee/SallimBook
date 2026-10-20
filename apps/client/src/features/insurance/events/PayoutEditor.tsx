@@ -15,6 +15,9 @@ import { actualDraft, actualInput, claimStates, exactSum, needsCompare } from ".
 import type { ActualDraft } from "./model";
 import { useInsuranceEventsApi } from "./api";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
+import { AmountField } from "../../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { krwFieldError } from "../../../shared/krw";
 export type AllocationDraft = {
   caseId: string;
   policyId: string;
@@ -35,12 +38,14 @@ export function AllocationFields({
   fixedCase = false,
   showMoney = true,
   disabled = false,
+  amountError = null,
 }: {
   value: AllocationDraft;
   onChange: (next: AllocationDraft) => void;
   fixedCase?: boolean;
   showMoney?: boolean;
   disabled?: boolean;
+  amountError?: string | null;
 }) {
   const api = useInsuranceEventsApi();
   const claims = useResource(
@@ -128,17 +133,13 @@ export function AllocationFields({
               </select>
             </label>
           </div>
-          <div className="form-field">
-            <label>
-              사건 배분금액 (원)
-              <input
-                required
-                inputMode="numeric"
-                value={value.amount}
-                onChange={(e) => onChange({ ...value, amount: e.target.value })}
-              />
-            </label>
-          </div>
+          <AmountField
+            label="사건 배분금액 (원)"
+            required
+            value={value.amount}
+            error={amountError}
+            onChange={(amount) => onChange({ ...value, amount })}
+          />
         </>
       )}
     </fieldset>
@@ -230,6 +231,8 @@ export function PayoutEditor({
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
   const [latest, setLatest] = useState<Schema["PayoutResponse"] | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const input = payoutInput(draft);
   const sum = exactSum(draft.allocations.map((a) => a.amount));
   const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, input, reason.trim()]));
@@ -237,10 +240,25 @@ export function PayoutEditor({
   const change = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setAck(false);
+    setMessage("");
   };
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!input || !ready || needsCompare(command.error)) return;
+    if (needsCompare(command.error)) return;
+    if (!input || !ready) {
+      // The on-screen allocation-total notice explains a sum mismatch by itself.
+      const mismatch = sum !== parseKrw(draft.actual.amount);
+      setMessage(
+        mismatch
+          ? ""
+          : base
+            ? "보험금 수령 금액·날짜·계좌, 사건별 배분, 확인란을 확인해 주세요. 정정 사유도 입력해 주세요."
+            : "보험금 수령 금액·날짜·계좌, 사건별 배분, 확인란을 확인해 주세요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       base
         ? api.correctInsurancePayout(
@@ -283,6 +301,11 @@ export function PayoutEditor({
           onChange={(value) => change("actual", value)}
           disabled={command.busy}
           accountOnly
+          amountError={
+            attempt.attempted
+              ? krwFieldError(draft.actual.amount, { required: true, positive: true })
+              : null
+          }
         />
         <fieldset disabled={command.busy}>
           <legend>입금 출처와 배분</legend>
@@ -301,6 +324,11 @@ export function PayoutEditor({
               <h3>배분 {index + 1}</h3>
               <AllocationFields
                 value={a}
+                amountError={
+                  attempt.attempted
+                    ? krwFieldError(a.amount, { required: true, positive: true })
+                    : null
+                }
                 onChange={(next) =>
                   change(
                     "allocations",
@@ -334,7 +362,9 @@ export function PayoutEditor({
             실제 입금 {formatKrw(parseKrw(draft.actual.amount))} · 배분 합계 {formatKrw(sum)}
           </p>
           {sum !== parseKrw(draft.actual.amount) && (
-            <p role="alert">배분 합계가 실제 입금액과 같아야 해요.</p>
+            <p role="alert" tabIndex={-1} data-form-error>
+              배분 합계가 실제 입금액과 같아야 해요.
+            </p>
           )}
           {base && (
             <div className="form-field">
@@ -395,6 +425,7 @@ export function PayoutEditor({
             </button>
           </section>
         )}
+        <FormError message={message} />
         <SaveControls
           backTo={
             base
@@ -405,7 +436,7 @@ export function PayoutEditor({
           }
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || needsCompare(command.error)}
+          disabled={needsCompare(command.error) || (!!base && base.cash.state !== "active")}
           label={base ? "보험금 수령 정정 저장" : "실제 보험금 수령 저장"}
         />
       </form>

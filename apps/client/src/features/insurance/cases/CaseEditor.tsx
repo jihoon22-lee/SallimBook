@@ -22,6 +22,7 @@ import {
   useMetadataCommand,
 } from "../InsuranceSupport";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 export type CaseDraft = {
   title: string;
   patient: string;
@@ -124,6 +125,8 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
   const [draft, setDraft] = useState(() => caseDraft(initial));
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<InsuranceCase | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const input = caseInput(draft);
   const changes = input && base ? changedFields(caseInput(caseDraft(base))!, input) : null;
   const change = <K extends keyof CaseDraft>(key: K, value: CaseDraft[K]) =>
@@ -132,14 +135,19 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
       [key]: value,
       ...(key === "treatment" && value === "ongoing" ? { end: "" } : {}),
     }));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (
-      !input ||
-      (base && (!reason.trim() || !Object.keys(changes ?? {}).length)) ||
-      command.error?.status === 409
-    )
+    if (command.error?.status === 409) return;
+    if (!input || (base && (!reason.trim() || !Object.keys(changes ?? {}).length))) {
+      setMessage(
+        base
+          ? "바꾼 사건 내용과 변경 사유를 확인해 주세요."
+          : "사건 이름·대상 구성원·시작일·치료 상태와 종료일을 확인해 주세요.",
+      );
+      attempt.reject(form);
       return;
+    }
     const result = await command.run(
       () =>
         base && changes
@@ -175,7 +183,13 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
         여러 보험계약의 청구와 지급을 한 사건에 연결할 수 있어요. 치료 종료와 정산 종료는 각각
         기록해요.
       </p>
-      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setDirty(true);
+          setMessage("");
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy}>
           <legend>사건 내용</legend>
           <div className="form-grid">
@@ -288,6 +302,7 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
             )}
           </div>
         </fieldset>
+        <FormError message={message} />
         <MetadataFeedback command={command} listPath="/insurance/cases" />
         <ConflictReview
           error={command.error}
@@ -301,13 +316,7 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
         <div className="form-actions save-actions">
           <button
             type="submit"
-            disabled={
-              !input ||
-              (!!base && (!reason.trim() || !Object.keys(changes ?? {}).length)) ||
-              command.busy ||
-              command.uncertain ||
-              command.error?.status === 409
-            }
+            disabled={command.busy || command.uncertain || command.error?.status === 409}
           >
             {base ? "사건 변경 저장" : "보험 사건 등록"}
           </button>

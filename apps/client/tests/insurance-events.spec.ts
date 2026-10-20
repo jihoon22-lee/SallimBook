@@ -94,7 +94,10 @@ test("receipt details must exactly decompose actual payment and never add gross 
     await line.getByLabel("명세 이름", { exact: true }).fill(`합성 설명 ${index + 1}`);
     await line.getByLabel("명세 금액 (원)", { exact: true }).fill(amount);
   }
-  await expect(page.getByRole("button", { name: "실제 의료비 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+  await expect(
+    page.getByText("명세 합계와 실제 지불금이 같아야 해요.", { exact: true }),
+  ).toBeFocused();
   expect(state.writes).toHaveLength(0);
   await page
     .getByRole("region", { name: "영수증 명세 2", exact: true })
@@ -114,7 +117,10 @@ test("prescription is not selectable as an expense source", async ({ page }) => 
   await expect(nodes.locator(`option[value="${uid(92)}"]`)).toHaveJSProperty("disabled", true);
   await page.goto(`/insurance/expenses/new?case=${uid(90)}&node=${uid(92)}`);
   await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill("30000");
-  await expect(page.getByRole("button", { name: "실제 의료비 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "비용 사건·귀속 진료·지불 금액·실제 날짜를 확인해 주세요. 무금액 처방에는 비용을 연결할 수 없어요.",
+  );
   expect(state.writes).toHaveLength(0);
 });
 for (const failure of ["before", "after"] as const)
@@ -201,7 +207,11 @@ test("refund correction and void preserve reversal history and enforce original 
   await page.goto(`/insurance/expenses/${uid(1000)}/refunds/new`);
   await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("30001");
   await page.getByLabel("의료비 환불 사유", { exact: true }).fill("합성 환불");
-  await expect(page.getByRole("button", { name: "의료비 환불 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "의료비 환불 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "의료비 환불 금액·날짜·사유를 확인해 주세요. 금액은 남은 환불 가능액 이하여야 해요.",
+  );
+  expect(state.writes).toHaveLength(0);
   await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("10000");
   await page.getByRole("button", { name: "의료비 환불 저장", exact: true }).click();
   await page.getByRole("link", { name: "의료비 환불 원본 정정", exact: true }).click();
@@ -232,9 +242,10 @@ test("T-18 one 500000 receipt requires T-19 equal multi-case allocation before s
   await page
     .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
     .check();
+  await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }),
-  ).toBeDisabled();
+    page.getByText("배분 합계가 실제 입금액과 같아야 해요.", { exact: true }),
+  ).toBeFocused();
   expect(state.writes).toHaveLength(0);
   await second.getByLabel("사건 배분금액 (원)", { exact: true }).fill("200000");
   await expect(
@@ -327,7 +338,10 @@ test("insurance return cap follows the selected allocation and correction preser
     .selectOption(uid(2100));
   await page.getByLabel("보험금 반환 금액 (원)", { exact: true }).fill("300001");
   await page.getByLabel("보험금 반환 사유", { exact: true }).fill("합성 반환 확인");
-  await expect(page.getByRole("button", { name: "보험금 반환 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "보험금 반환 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "반환할 원래 배분과 보험금 반환 금액·날짜·사유를 확인해 주세요. 금액은 남은 반환 가능액 이하여야 해요.",
+  );
   await page.getByLabel("보험금 반환 금액 (원)", { exact: true }).fill("50000");
   await page.getByRole("button", { name: "보험금 반환 저장", exact: true }).click();
   await page.getByRole("link", { name: "보험금 반환 원본 정정", exact: true }).click();
@@ -486,4 +500,14 @@ test("an expense shows the claims citing it and a rule conflict does not offer a
   await expect(
     page.getByRole("button", { name: "사유와 함께 금전 기록 무효 처리", exact: true }),
   ).toBeEnabled();
+});
+
+test("medical expense accepts grouped amounts and sends digits only", async ({ page }) => {
+  const state = await mockInsuranceEvents(page);
+  state.expenses = [];
+  await newExpense(page, "30,000");
+  await expect(page.getByText("30,000원", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "의료비 상세", exact: true })).toBeVisible();
+  expect(state.expenses[0]!.cash.amount_krw).toBe("30000");
 });
