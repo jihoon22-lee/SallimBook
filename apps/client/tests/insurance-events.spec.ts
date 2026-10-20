@@ -445,3 +445,18 @@ test("claim detail shows only this claim's received, returned and net amounts", 
     }),
   ).toBeVisible();
 });
+
+test("case summary leads with the five specified totals in calculation order", async ({ page }) => {
+  await mockInsuranceEvents(page);
+  await page.goto(`/insurance/cases/${uid(90)}`);
+  const summary = page.getByRole("region", { name: "사건 실제 비용과 순부담", exact: true });
+  await expect(summary.locator("dl.metric-strip dt")).toHaveText([
+    "의료 지불금",
+    "환불",
+    "순의료비",
+    "순보험금",
+    "순현금부담",
+  ]);
+  await expect(summary.locator("dl.metric-strip .metric-primary dt")).toHaveText("순현금부담");
+  await expect(summary.getByText("의료 지불금", { exact: true })).toHaveCount(1);
+});

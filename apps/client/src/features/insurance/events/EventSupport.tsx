@@ -237,10 +237,15 @@ export function CaseMoneySummary({ caseId }: { caseId: string }) {
       )}
       {row && !result.error && !result.loading && (
         <>
+          {/* Screen spec order: paid − refunded = net medical; net medical − net benefit = burden. */}
           <dl className="metric-strip">
-            <div className="metric-primary">
-              <dt>순현금부담</dt>
-              <dd>{formatKrw(row.net_burden_krw)}</dd>
+            <div>
+              <dt>의료 지불금</dt>
+              <dd>{formatKrw(row.medical_paid_krw)}</dd>
+            </div>
+            <div>
+              <dt>환불</dt>
+              <dd>{formatKrw(row.medical_refunded_krw)}</dd>
             </div>
             <div>
               <dt>순의료비</dt>
@@ -250,18 +255,14 @@ export function CaseMoneySummary({ caseId }: { caseId: string }) {
               <dt>순보험금</dt>
               <dd>{formatKrw(row.net_received_krw)}</dd>
             </div>
+            <div className="metric-primary">
+              <dt>순현금부담</dt>
+              <dd>{formatKrw(row.net_burden_krw)}</dd>
+            </div>
           </dl>
           <details className="summary-details">
-            <summary>지불·환불·급부유형별 계산 내역</summary>
+            <summary>보험금 수령·반환과 급부유형별 계산 내역</summary>
             <dl className="metadata-grid">
-              <div>
-                <dt>의료 지불금</dt>
-                <dd>{formatKrw(row.medical_paid_krw)}</dd>
-              </div>
-              <div>
-                <dt>병원·약국 환불</dt>
-                <dd>{formatKrw(row.medical_refunded_krw)}</dd>
-              </div>
               <div>
                 <dt>실제 보험금 수령</dt>
                 <dd>{formatKrw(row.insurance_received_krw)}</dd>
