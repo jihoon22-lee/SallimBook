@@ -214,3 +214,14 @@ test("selected month follows the Seoul month at midnight unless another month wa
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(picker).toHaveValue("2027-03");
 });
+
+test("data router keeps the in-app history index used by back", async ({ page }) => {
+  await page.goto("/");
+  expect(await page.evaluate(() => (history.state as { idx?: number } | null)?.idx)).toBe(0);
+  await page.getByRole("banner").getByRole("link", { name: "설정", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  expect(await page.evaluate(() => (history.state as { idx?: number } | null)?.idx)).toBe(1);
+  await page.getByRole("button", { name: "뒤로", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("오늘의 살림");
+});
