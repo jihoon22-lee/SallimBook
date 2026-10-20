@@ -120,6 +120,8 @@ function CardList() {
         }),
       [api, owner, type, account, status],
     ),
+    undefined,
+    "cards",
   );
   return (
     <>
@@ -290,7 +292,7 @@ function CardDetail({ id, edit }: { id: string; edit: boolean }) {
     try {
       if (action === "delete") {
         await api.delete(id, card.version);
-        if (mounted.current) navigate("/cards");
+        if (mounted.current) navigate("/cards", { replace: true });
       } else {
         await api.archive(id, { ended_on: ended, ...closure.proof }, card.version);
         if (mounted.current) {

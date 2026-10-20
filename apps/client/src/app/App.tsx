@@ -1,6 +1,15 @@
 import { useEffect, useRef } from "react";
 import { isNativeAuth, nativeAuth } from "../platform/nativeAuth";
-import { Link, matchRoutes, NavLink, Route, Routes, useLocation, useNavigate } from "react-router";
+import {
+  Link,
+  matchRoutes,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from "react-router";
 import {
   AccountListPage,
   AccountNewPage,
@@ -69,6 +78,8 @@ import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navi
 import { MonthProvider } from "../shared/MonthContext";
 import { RelatedLinks } from "../shared/PlannedPage";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
+import { useHistoryScroll } from "../shared/historyRestore";
+import { UnsavedChangesProvider, useLeavePrompt } from "../shared/UnsavedChanges";
 
 const screens = [
   {
@@ -77,12 +88,7 @@ const screens = [
     group: "home" as NavigationGroup,
     parent: { to: "/", label: "홈" },
     live: true,
-    element: (
-      <>
-        <SignedOutWelcome />
-        <Dashboard />
-      </>
-    ),
+    element: <Dashboard welcome={<SignedOutWelcome />} />,
   },
   {
     path: "/more",
@@ -719,6 +725,14 @@ const navigation: {
 ];
 
 function Navigation({ active, desktop = false }: { active?: NavigationGroup; desktop?: boolean }) {
+  const { pathname } = useLocation();
+  // The section link is "the page" only on its own path; on a sub-page it marks the section.
+  const current = (item: (typeof navigation)[number]) =>
+    pathname === item.to
+      ? ("page" as const)
+      : active === item.group
+        ? ("true" as const)
+        : undefined;
   return (
     <nav
       className={desktop ? "sidebar-nav" : "mobile-tabs"}
@@ -727,11 +741,7 @@ function Navigation({ active, desktop = false }: { active?: NavigationGroup; des
       <ul>
         {navigation.map((item) => (
           <li key={item.group}>
-            <Link
-              to={item.to}
-              className="nav-item"
-              aria-current={active === item.group ? "page" : undefined}
-            >
+            <Link to={item.to} className="nav-item" aria-current={current(item)}>
               <span className="nav-icon">
                 <Icon name={item.icon} />
               </span>
@@ -769,8 +779,18 @@ function NotFound() {
 }
 
 function AppShell() {
+  return (
+    <UnsavedChangesProvider>
+      <ShellFrame />
+    </UnsavedChangesProvider>
+  );
+}
+
+function ShellFrame() {
+  const leave = useLeavePrompt();
   const { state } = useAuth();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(location.pathname);
@@ -791,16 +811,25 @@ function AppShell() {
 
   useEffect(() => {
     document.title = location.pathname === "/" ? "SallimBook · 살림북" : `${title} · SallimBook`;
-    if (previousPath.current !== location.pathname) {
-      mainRef.current?.focus();
-      window.scrollTo(0, 0);
-    }
+    const active = document.activeElement;
+    // A POP keeps its restored scroll and only recovers focus the old screen took with it.
+    if (
+      previousPath.current !== location.pathname &&
+      (navigationType !== "POP" || !active || active === document.body)
+    )
+      mainRef.current?.focus({ preventScroll: true });
     previousPath.current = location.pathname;
-  }, [location.pathname, title]);
+  }, [location.pathname, navigationType, title]);
+  useHistoryScroll(location, navigationType);
 
   useEffect(
     () =>
       registerAndroidBackHandler(() => {
+        // A second back press while the leave prompt is open keeps the person editing.
+        if (leave.open) {
+          leave.stay();
+          return true;
+        }
         if (canGoBackWithinApp(window.history.state)) {
           navigate(-1);
           return true;
@@ -811,7 +840,7 @@ function AppShell() {
         }
         return false;
       }),
-    [navigate, location.pathname, parent],
+    [navigate, location.pathname, parent, leave],
   );
 
   return (

@@ -26,6 +26,7 @@ import { MisregistrationDelete } from "./MisregistrationDelete";
 import { useAssetsApi } from "./api";
 import { amountBases, assetKinds, categories, shareToPercent } from "./model";
 import type { Asset, AssetQuery } from "./model";
+import { usePagedList } from "../finance/queries";
 
 export function ownerLabel(asset: Asset, members: HouseholdMember[]): string {
   return asset.ownership_kind === "joint"
@@ -78,17 +79,11 @@ export function AssetSummary({ asset, members }: { asset: Asset; members: Househ
 function AssetList() {
   const api = useAssetsApi();
   const members = useHouseholdMembers();
-  const mounted = useMounted();
   const [params, setParams] = useSearchParams();
   const pendingParams = useRef(params);
   useEffect(() => {
     pendingParams.current = params;
   }, [params]);
-  const [items, setItems] = useState<Asset[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
-  const generation = useRef(0);
   const kind = ["asset", "liability"].includes(params.get("kind") ?? "") ? params.get("kind")! : "";
   const category = Object.hasOwn(categories, params.get("category") ?? "")
     ? params.get("category")!
@@ -115,44 +110,14 @@ function AssetList() {
     }),
     [kind, category, owner, inclusion, status],
   );
-  const load = useCallback(
-    async (after?: string) => {
-      const requestGeneration = ++generation.current;
-      setLoading(true);
-      setError(null);
-      if (!after) {
-        setItems([]);
-        setCursor(null);
-      }
-      try {
-        const response = await api.list({ ...query, ...(after ? { cursor: after } : {}) });
-        if (!mounted.current || generation.current !== requestGeneration) return;
-        setItems((old) =>
-          after
-            ? [
-                ...old,
-                ...response.items.filter(
-                  (item) => !old.some((existing) => existing.id === item.id),
-                ),
-              ]
-            : response.items,
-        );
-        setCursor(response.next_cursor);
-      } catch (failure) {
-        if (mounted.current && generation.current === requestGeneration)
-          setError(toApiError(failure));
-      } finally {
-        if (mounted.current && generation.current === requestGeneration) setLoading(false);
-      }
-    },
-    [api, query, mounted],
+  const { items, cursor, loading, error, reload, more } = usePagedList(
+    useCallback(
+      (after?: string) => api.list({ ...query, ...(after ? { cursor: after } : {}) }),
+      [api, query],
+    ),
+    undefined,
+    "assets",
   );
-  useEffect(() => {
-    void load();
-    return () => {
-      generation.current++;
-    };
-  }, [load]);
   function filter(name: string, value: string) {
     const next = new URLSearchParams(pendingParams.current);
     if (value) next.set(name, value);
@@ -263,7 +228,7 @@ function AssetList() {
           </div>
         </div>
         <div className="form-actions">
-          <button type="button" disabled={loading} onClick={() => void load()}>
+          <button type="button" disabled={loading} onClick={() => void reload()}>
             자산 목록 다시 불러오기
           </button>
           <button
@@ -281,7 +246,7 @@ function AssetList() {
       <MemberLoadError error={members.error} retry={members.retry} />
       <FinanceError error={error} />
       {error && (
-        <button type="button" onClick={() => void load()}>
+        <button type="button" onClick={() => void reload()}>
           자산 목록 다시 불러오기
         </button>
       )}
@@ -335,7 +300,7 @@ function AssetList() {
         ))}
       </ul>
       {cursor && (
-        <button type="button" disabled={loading} onClick={() => void load(cursor)}>
+        <button type="button" disabled={loading} onClick={() => void more()}>
           자산 더 보기
         </button>
       )}

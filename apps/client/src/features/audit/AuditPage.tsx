@@ -39,6 +39,8 @@ function AuditResults({ query, members }: { query: AuditQuery; members: Househol
       (cursor?: string) => api.list({ ...query, ...(cursor ? { cursor } : {}) }),
       [api, query],
     ),
+    undefined,
+    "audit",
   );
   return (
     <section className="card audit-results" aria-label="감사 기록 목록">

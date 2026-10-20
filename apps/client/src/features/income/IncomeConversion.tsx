@@ -24,7 +24,12 @@ import {
 } from "./model";
 import type { Income, IncomeConversion, IncomeDraft } from "./model";
 import { IncomeFields } from "./IncomeFields";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { krwFieldError } from "../../shared/krw";
 function ConversionWorkspace() {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useIncomeApi();
   const command = useMonthCommand();
   const navigate = useNavigate();
@@ -37,6 +42,8 @@ function ConversionWorkspace() {
   const [replacements, setReplacements] = useState<IncomeDraft[]>([]);
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const accounts = useAccountChoices();
   const shared = sources ? sharedSourceValues(sources) : null;
   const accountName = (id: string | null) =>
@@ -116,12 +123,21 @@ function ConversionWorkspace() {
       if (command.mounted.current) setLoading(false);
     }
   }
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!payload || !sourceReady || !ack || !reason.trim() || sourceTotal !== replacementTotal)
+    if (!payload || !sourceReady || !ack || !reason.trim() || sourceTotal !== replacementTotal) {
+      // A total mismatch already has its own notice on screen; focus that instead.
+      const mismatch = replacementTotal !== null && replacementTotal !== sourceTotal;
+      setMessage(mismatch ? "" : "대체 수입의 금액·날짜와 전환 사유, 확인란을 확인해 주세요.");
+      attempt.reject(form);
       return;
+    }
     const result = await command.run((signal) => api.convert(payload, key, signal));
-    if (result.ok && command.mounted.current) navigate("/income");
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate("/income", { replace: true });
+    }
   }
   return (
     <>
@@ -227,7 +243,13 @@ function ConversionWorkspace() {
       {sourceReady && (
         <section className="card">
           <h2>{destination === "day" ? "실제 입금일별 기록으로 전환" : "월합계 기록으로 전환"}</h2>
-          <form onSubmit={(event) => void submit(event)}>
+          <form
+            onInput={() => {
+              setDirty(true);
+              setMessage("");
+            }}
+            onSubmit={(event) => void submit(event)}
+          >
             {replacements.map((draft, index) => (
               <section className="conversion-row" key={index} aria-label={`대체 수입 ${index + 1}`}>
                 <h3>대체 수입 {index + 1}</h3>
@@ -235,6 +257,11 @@ function ConversionWorkspace() {
                   draft={draft}
                   fixedScope
                   disabled={command.busy || loading}
+                  amountError={
+                    attempt.attempted
+                      ? krwFieldError(draft.amount, { required: true, positive: true })
+                      : null
+                  }
                   onChange={(next) => {
                     setReplacements((rows) => rows.map((row, i) => (i === index ? next : row)));
                     setAck(false);
@@ -292,7 +319,9 @@ function ConversionWorkspace() {
               {replacementTotal === null ? "금액 확인 필요" : formatKrw(replacementTotal)}
             </p>
             {replacementTotal !== null && replacementTotal !== sourceTotal && (
-              <p role="alert">전환 전후 합계가 같아야 해요.</p>
+              <p role="alert" tabIndex={-1} data-form-error>
+                전환 전후 합계가 같아야 해요.
+              </p>
             )}
             <div className="form-field">
               <label>
@@ -324,13 +353,12 @@ function ConversionWorkspace() {
                 현재 원본 다시 비교
               </button>
             )}
+            <FormError message={message} />
             <SaveControls
               backTo={"/income"}
               busy={command.busy}
               cancel={command.cancel}
-              disabled={
-                loading || !ack || !reason.trim() || !payload || sourceTotal !== replacementTotal
-              }
+              disabled={loading}
               label="합계를 유지하고 전환"
             />
           </form>

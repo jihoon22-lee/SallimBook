@@ -13,6 +13,9 @@ import {
   MetadataFeedback,
   useMetadataCommand,
 } from "../InsuranceSupport";
+import { AmountField } from "../../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { krwFieldError } from "../../../shared/krw";
 type Draft = {
   name: string;
   benefit: Coverage["benefit_type"];
@@ -70,6 +73,8 @@ function CoverageEditor({
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() => draftOf(initial));
   const [latest, setLatest] = useState<Coverage | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const input = inputOf(draft);
   const changes = base ? changedFields(inputOf(draftOf(base)), input) : null;
   const valid =
@@ -81,9 +86,19 @@ function CoverageEditor({
     (!changes || Object.keys(changes).length > 0);
   const change = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((old) => ({ ...old, [key]: value }));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!valid || command.error?.status === 409) return;
+    if (command.error?.status === 409) return;
+    if (!valid) {
+      setMessage(
+        changes && Object.keys(changes).length === 0
+          ? "바꾼 보장 내용이 없어요."
+          : "보장 이름·기간·금액을 확인해 주세요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run(
       () =>
         base && changes
@@ -115,7 +130,7 @@ function CoverageEditor({
   return (
     <section className="review-panel">
       <h3>{initial ? "보장 항목 수정" : "보장 항목 등록"}</h3>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>보장 내용</legend>
           <div className="form-grid">
@@ -145,19 +160,17 @@ function CoverageEditor({
                 </select>
               </label>
             </div>
-            <div className="form-field">
-              <label>
-                기록한 보장금액 (원)
-                <input
-                  inputMode="numeric"
-                  value={draft.amount}
-                  onChange={(e) => change("amount", e.target.value)}
-                />
-              </label>
-              <p className="muted">
-                미입력과 0원은 달라요. 실제 보험금이나 자동 예상 지급액이 아니에요.
-              </p>
-            </div>
+            <AmountField
+              label="기록한 보장금액 (원)"
+              value={draft.amount}
+              hint="미입력과 0원은 달라요. 실제 보험금이나 자동 예상 지급액이 아니에요."
+              error={
+                attempt.attempted
+                  ? krwFieldError(draft.amount, { required: false, positive: false })
+                  : null
+              }
+              onChange={(value) => change("amount", value)}
+            />
             <div className="form-field">
               <label>
                 항목 보장 시작일
@@ -198,6 +211,7 @@ function CoverageEditor({
             보장 항목 사용 중
           </label>
         </fieldset>
+        <FormError message={message} />
         <MetadataFeedback command={command} listPath={`/insurance/policies/${policyId}`} />
         <ConflictReview
           error={command.error}
@@ -211,12 +225,12 @@ function CoverageEditor({
         <div className="form-actions">
           <button
             type="submit"
-            disabled={!valid || command.busy || command.uncertain || command.error?.status === 409}
+            disabled={command.busy || command.uncertain || command.error?.status === 409}
           >
             보장 항목 저장
           </button>
           <button type="button" onClick={cancel} disabled={command.busy}>
-            보장 편집 취소
+            입력 취소
           </button>
         </div>
       </form>

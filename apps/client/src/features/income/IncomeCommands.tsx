@@ -10,6 +10,10 @@ import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { isDateOnly, todaySeoul } from "../finance/dates";
 import type { Income, IncomeReturn } from "./model";
 import { useIncomeApi } from "./api";
+import { useTaskPanelRelease } from "../../shared/TaskLayout";
+import { AmountField } from "../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { krwFieldError } from "../../shared/krw";
 export function IncomeCommand({
   initial,
   action,
@@ -23,6 +27,7 @@ export function IncomeCommand({
 }) {
   const api = useIncomeApi();
   const navigate = useNavigate();
+  const release = useTaskPanelRelease();
   const { month } = useMonth();
   const command = useMonthCommand();
   const [source, setSource] = useState(initial);
@@ -34,6 +39,8 @@ export function IncomeCommand({
   const [date, setDate] = useState("");
   const [account, setAccount] = useState("");
   const [note, setNote] = useState("");
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   useEffect(() => {
     onBusyChange?.(command.busy);
   }, [command.busy, onBusyChange]);
@@ -58,15 +65,25 @@ export function IncomeCommand({
   };
   const payload = action === "void" ? { reason: reason.trim() } : body;
   const key = useIdempotencyKey(JSON.stringify([source.id, source.version, action, payload]));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!valid) return;
+    if (!valid) {
+      setMessage(
+        action === "void"
+          ? "무효 사유를 입력해 주세요."
+          : "반환 금액·귀속월·실제 반환일·반환 사유를 확인해 주세요. 반환 금액은 원본 수입 금액 이하여야 해요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       action === "void"
         ? api.void(source.id, { reason: reason.trim() }, source.version, key, signal)
         : api.return(source.id, body, source.version, key, signal),
     );
     if (result.ok && command.mounted.current) {
+      release();
       if (action === "return") navigate(`/income/${result.value.id}`);
       else onSaved();
     }
@@ -85,7 +102,7 @@ export function IncomeCommand({
       <p>
         원본 {formatKrw(source.amount_krw)} · 버전 {source.version}. 원본과 이력을 보존해요.
       </p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setMessage("")} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={command.busy}>
           <legend>{action === "void" ? "무효 사유 확인" : "실제로 반환한 내용"}</legend>
           {action === "return" && (
@@ -94,20 +111,17 @@ export function IncomeCommand({
                 구성원은 원본에서 이어받아요. 기존 반환을 포함한 합계는 원본 금액을 넘을 수 없어요.
               </p>
               <div className="form-grid">
-                <div className="form-field">
-                  <label>
-                    반환 금액 (원)
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]+"
-                      maxLength={20}
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
+                <AmountField
+                  label="반환 금액 (원)"
+                  required
+                  value={amount}
+                  onChange={setAmount}
+                  error={
+                    attempt.attempted
+                      ? krwFieldError(amount, { required: true, positive: true })
+                      : null
+                  }
+                />
                 <div className="form-field">
                   <label>
                     반환 귀속월
@@ -176,6 +190,7 @@ export function IncomeCommand({
             </label>
           </div>
         </fieldset>
+        <FormError message={message} />
         <CashflowError error={command.error} />
         {command.error?.status === 409 && (
           <button type="button" disabled={command.busy} onClick={() => void compare()}>
@@ -205,7 +220,7 @@ export function IncomeCommand({
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!valid || source.state !== "active" || (action === "void" && !source.voidable)}
+          disabled={source.state !== "active" || (action === "void" && !source.voidable)}
           label={action === "void" ? "사유와 함께 무효 처리" : "반환 기록 저장"}
         />
       </form>

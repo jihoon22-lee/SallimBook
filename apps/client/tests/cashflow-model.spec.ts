@@ -22,8 +22,9 @@ test("cash form normalization preserves exact money, month precision and changed
     occurred_on: null,
     date_precision: "month",
   });
-  for (const amount of ["", "0", "-1", "1.2", "1e3", "1,000"])
+  for (const amount of ["", "0", "-1", "1.2", "1e3", "1,00"])
     expect(incomeInput({ ...draft, amount })).toBeNull();
+  expect(incomeInput({ ...draft, amount: "1,000" })?.amount_krw).toBe("1000");
   expect(incomePatch(draft, { ...draft, amount: "9007199254740994" }, "합성 정정", false)).toEqual({
     amount_krw: "9007199254740994",
     reason: "합성 정정",

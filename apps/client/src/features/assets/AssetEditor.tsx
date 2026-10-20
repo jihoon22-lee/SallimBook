@@ -19,8 +19,11 @@ import {
   newAssetDraft,
 } from "./model";
 import type { Asset, AssetDraft, AssetPatch } from "./model";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 
 export function AssetEditor({ initial }: { initial?: Asset }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useAssetsApi();
   const navigate = useNavigate();
   const mounted = useMounted();
@@ -75,8 +78,10 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
     try {
       const saved =
         base && patch ? await api.update(base.id, patch, base.version) : await api.create(input);
-      if (mounted.current)
+      if (mounted.current) {
+        guard.release();
         navigate(`/assets/${saved.id}`, { replace: true, state: { saved: true } });
+      }
     } catch (failure) {
       if (mounted.current) {
         const value = toApiError(failure);
@@ -137,7 +142,11 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
     <section className="card">
       <MemberLoadError error={members.error} retry={members.retry} />
       {members.loading && <p role="status">가계 구성원을 확인하고 있어요.</p>}
-      <form className="finance-form" onSubmit={(event) => void submit(event)}>
+      <form
+        onInput={() => setDirty(true)}
+        className="finance-form"
+        onSubmit={(event) => void submit(event)}
+      >
         <AssetFields
           value={draft}
           onChange={setDraft}
@@ -212,6 +221,7 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
             {busy ? "저장 중…" : base ? "자산 수정 저장" : "자산 등록"}
           </button>
           <Link
+            replace
             className="button-link secondary-button"
             aria-disabled={busy}
             onClick={(event) => {

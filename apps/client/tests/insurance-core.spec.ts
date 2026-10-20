@@ -287,7 +287,7 @@ test("tree keeps server sibling order and new nodes default after their siblings
   ).toHaveText(["합성 첫 외래", "합성 처방", "합성 약국", "합성 나중 등록 외래", "합성 셋째 외래"]);
   await page.getByRole("button", { name: "사건 아래 진료 추가", exact: true }).click();
   await expect(page.getByLabel("진료 표시 순서", { exact: true })).toHaveValue("40");
-  await page.getByRole("button", { name: "진료 편집 취소", exact: true }).click();
+  await page.getByRole("button", { name: "입력 취소", exact: true }).click();
   await page.goto(`/insurance/cases/${uid(90)}/nodes/${uid(91)}`);
   await page.getByRole("button", { name: "이 진료 아래 추가", exact: true }).click();
   await expect(page.getByLabel("진료 표시 순서", { exact: true })).toHaveValue("10");

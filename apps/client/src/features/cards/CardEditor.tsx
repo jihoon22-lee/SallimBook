@@ -15,7 +15,10 @@ import { ClosureReview, useClosureReview } from "../finance/PaymentLinks";
 import { useCardsApi } from "./api";
 import { cardDraft, cardInput, cardEndDateError, cardTypes, preserveCardChanges } from "./model";
 import type { Card, CardDraft, CardPatch } from "./model";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 export function CardEditor({ initial }: { initial?: Card }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useCardsApi();
   const navigate = useNavigate();
   const members = useHouseholdMembers();
@@ -72,7 +75,10 @@ export function CardEditor({ initial }: { initial?: Card }) {
               base.version,
             )
           : await api.create(input);
-      if (mounted.current) navigate(`/cards/${row.id}`);
+      if (mounted.current) {
+        guard.release();
+        navigate(`/cards/${row.id}`, { replace: true });
+      }
     } catch (failure) {
       if (mounted.current) {
         const value = toApiError(failure);
@@ -107,7 +113,7 @@ export function CardEditor({ initial }: { initial?: Card }) {
     <section className="card">
       <h2>{base ? "카드 일반정보 수정" : "카드 일반정보 등록"}</h2>
       <p>카드 식별에는 별칭과 마지막 네 자리만 사용해요. 보호된 정보는 별도 보관함에서 다뤄요.</p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setDirty(true)} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={busy || members.loading}>
           <legend>카드 기본정보</legend>
           <div className="form-grid">

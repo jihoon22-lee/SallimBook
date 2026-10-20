@@ -11,8 +11,11 @@ import type { Asset } from "../assets/model";
 import { useAccountsApi } from "./api";
 import { accountDraft, accountInput, accountLabels, accountTypes } from "./model";
 import type { Account, AccountDraft, AccountPatch } from "./model";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 
 export function AccountEditor({ initial }: { initial?: Account }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useAccountsApi();
   const assetsApi = useAssetsApi();
   const navigate = useNavigate();
@@ -131,8 +134,10 @@ export function AccountEditor({ initial }: { initial?: Account }) {
               ...input,
               ...(mode === "new" ? { asset: assetInput(asset)! } : { asset_id: assetId }),
             });
-      if (mounted.current)
+      if (mounted.current) {
+        guard.release();
         navigate(`/accounts/${saved.id}`, { replace: true, state: { saved: true } });
+      }
     } catch (failure) {
       if (mounted.current) {
         const value = toApiError(failure);
@@ -175,7 +180,11 @@ export function AccountEditor({ initial }: { initial?: Account }) {
         계좌는 금융 자산 하나와 연결해요. 계좌 잔액과 자산 평가액을 두 번 합산하지 않아요.
         계좌번호는 저장 후 별도로 관리할 수 있어요.
       </p>
-      <form className="finance-form" onSubmit={(event) => void submit(event)}>
+      <form
+        onInput={() => setDirty(true)}
+        className="finance-form"
+        onSubmit={(event) => void submit(event)}
+      >
         <fieldset className="finance-fields" disabled={busy}>
           <legend>계좌 기본정보</legend>
           <div className="form-field">
@@ -375,6 +384,7 @@ export function AccountEditor({ initial }: { initial?: Account }) {
             {busy ? "저장 중…" : base ? "계좌 수정 저장" : "계좌 등록"}
           </button>
           <Link
+            replace
             to={base ? `/accounts/${base.id}` : "/accounts"}
             aria-disabled={busy}
             onClick={(event) => {

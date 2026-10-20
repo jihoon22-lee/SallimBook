@@ -11,34 +11,33 @@ import { AccountSelect } from "../../finance/AccountChoices";
 import { PaymentMethod } from "../../fixed/PaymentMethod";
 import { allPages, useResource } from "../../finance/queries";
 import type { ActualDraft } from "./model";
+import { AmountField } from "../../../shared/AmountField";
 export function ActualFields({
   draft,
   onChange,
   title,
   accountOnly = false,
   disabled = false,
+  amountError = null,
 }: {
   draft: ActualDraft;
   onChange: (next: ActualDraft) => void;
   title: string;
   accountOnly?: boolean;
   disabled?: boolean;
+  amountError?: string | null;
 }) {
   return (
     <fieldset disabled={disabled}>
       <legend>{title} 실제 금전 기록</legend>
       <div className="form-grid">
-        <div className="form-field">
-          <label>
-            {title} 금액 (원)
-            <input
-              required
-              inputMode="numeric"
-              value={draft.amount}
-              onChange={(e) => onChange({ ...draft, amount: e.target.value })}
-            />
-          </label>
-        </div>
+        <AmountField
+          label={`${title} 금액 (원)`}
+          required
+          value={draft.amount}
+          error={amountError}
+          onChange={(amount) => onChange({ ...draft, amount })}
+        />
         <div className="form-field">
           <label>
             {title} 실제 날짜

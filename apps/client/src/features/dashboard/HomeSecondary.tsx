@@ -146,7 +146,7 @@ function InsuranceSummary() {
 export function HomeSecondary() {
   const { state } = useAuth();
   return (
-    <div className="secondary-summary" aria-label="다른 기록 살펴보기">
+    <section className="secondary-summary" aria-label="다른 기록 살펴보기">
       {state.status === "authenticated" ? (
         <div className="home-secondary-grid">
           <IncomeSummary />
@@ -166,6 +166,6 @@ export function HomeSecondary() {
           ]}
         />
       )}
-    </div>
+    </section>
   );
 }

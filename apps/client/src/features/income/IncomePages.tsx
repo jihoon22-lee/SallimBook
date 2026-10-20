@@ -20,18 +20,35 @@ import { incomeActions, incomeKinds, manualIncome } from "./model";
 import type { Income, IncomeQuery } from "./model";
 import { IncomeEditor } from "./IncomeEditor";
 import { IncomeCommand } from "./IncomeCommands";
-export function IncomeSummaryPanel() {
+import { RetryFailed, retriesCombined } from "../../shared/RetryFailed";
+function useIncomeSummary() {
   const api = useIncomeApi();
   const { month } = useMonth();
-  const summary = useResource(useCallback(() => api.summary(month), [api, month]));
+  return useResource(useCallback(() => api.summary(month), [api, month]));
+}
+export function IncomeSummaryPanel() {
+  const summary = useIncomeSummary();
   const members = useHouseholdMembers();
+  return <IncomeSummaryView summary={summary} members={members.members} />;
+}
+/** With `combined`, a failure is reported by the screen's single retry instead. */
+function IncomeSummaryView({
+  summary,
+  members,
+  combined = false,
+}: {
+  summary: ReturnType<typeof useIncomeSummary>;
+  members: HouseholdMember[];
+  combined?: boolean;
+}) {
+  const { month } = useMonth();
   const data = summary.data;
   return (
     <section className="card task-summary" aria-label="등록 수입 요약">
       <h2>{formatMonth(month)} 등록 수입</h2>
-      <CashflowError error={summary.error} />
+      {!combined && <CashflowError error={summary.error} />}
       {summary.loading && <p role="status">수입 요약을 확인하고 있어요.</p>}
-      {summary.error && (
+      {summary.error && !combined && (
         <button type="button" onClick={() => void summary.reload()}>
           수입 요약 다시 확인
         </button>
@@ -80,7 +97,12 @@ export function IncomeSummaryPanel() {
               </div>
             </dl>
             {data.members.length > 0 && (
-              <div className="table-scroll">
+              <div
+                className="table-scroll"
+                tabIndex={0}
+                role="region"
+                aria-label="구성원별 등록 수입 표"
+              >
                 <table>
                   <caption>구성원별 등록 수입</caption>
                   <thead>
@@ -95,8 +117,8 @@ export function IncomeSummaryPanel() {
                       <tr key={row.member_id ?? "unassigned"}>
                         <th>
                           {row.member_id
-                            ? (members.members.find((m) => m.member_id === row.member_id)
-                                ?.display_name ?? "구성원 확인 필요")
+                            ? (members.find((m) => m.member_id === row.member_id)?.display_name ??
+                              "구성원 확인 필요")
                             : "구성원 미지정"}
                         </th>
                         <td>{formatKrw(row.totals.earned_net_krw)}</td>
@@ -179,6 +201,7 @@ function IncomeList() {
   const api = useIncomeApi();
   const { month } = useMonth();
   const members = useHouseholdMembers();
+  const summary = useIncomeSummary();
   const accounts = useAccountChoices();
   const { params, filter, reset } = useUrlFilters();
   const member = isUuid(params.get("member") ?? "") ? params.get("member")! : "";
@@ -201,7 +224,15 @@ function IncomeList() {
         }),
       [api, month, member, kind, state],
     ),
+    undefined,
+    "income",
   );
+  const failures = [
+    { error: summary.error, retry: () => void summary.reload() },
+    { error: list.error, retry: () => void list.reload() },
+    { error: members.error, retry: members.retry },
+  ];
+  const combined = retriesCombined(failures);
   return (
     <>
       <MonthPicker />
@@ -213,7 +244,8 @@ function IncomeList() {
           월합계·일별 전환
         </Link>
       </div>
-      <IncomeSummaryPanel />
+      <RetryFailed items={failures} label="수입 화면 다시 불러오기" />
+      <IncomeSummaryView summary={summary} members={members.members} combined={combined} />
       <RecordedMoneyNotice />
       <FilterPanel
         title="수입 기록 찾기"
@@ -267,9 +299,9 @@ function IncomeList() {
           </button>
         </div>
       </FilterPanel>
-      <MemberLoadError error={members.error} retry={members.retry} />
-      <CashflowError error={list.error} />
-      {list.error && (
+      {!combined && <MemberLoadError error={members.error} retry={members.retry} />}
+      {!combined && <CashflowError error={list.error} />}
+      {list.error && !combined && (
         <button type="button" onClick={() => void list.reload()}>
           수입 다시 확인
         </button>

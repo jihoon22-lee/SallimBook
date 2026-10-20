@@ -103,9 +103,10 @@ test("navigation exposes five mobile tabs or the expanded desktop sidebar", asyn
   await nav.getByRole("link", { name: "생활비", exact: true }).click();
   await page.getByRole("main").getByRole("link", { name: "카드 관리", exact: false }).click();
   await expect(page).toHaveURL(/\/cards$/);
+  // /cards is a sub-page of 생활비: the section is marked, but it is not the current page.
   await expect(nav.getByRole("link", { name: "생활비", exact: true })).toHaveAttribute(
     "aria-current",
-    "page",
+    "true",
   );
   await expect(page.getByRole("main")).toBeFocused();
   await page.getByRole("button", { name: "뒤로", exact: true }).click();
@@ -213,4 +214,26 @@ test("selected month follows the Seoul month at midnight unless another month wa
   await page.clock.setSystemTime(new Date("2027-02-28T15:00:30Z"));
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(picker).toHaveValue("2027-03");
+});
+
+test("data router keeps the in-app history index used by back", async ({ page }) => {
+  await page.goto("/");
+  expect(await page.evaluate(() => (history.state as { idx?: number } | null)?.idx)).toBe(0);
+  await page.getByRole("banner").getByRole("link", { name: "설정", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  expect(await page.evaluate(() => (history.state as { idx?: number } | null)?.idx)).toBe(1);
+  await page.getByRole("button", { name: "뒤로", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("오늘의 살림");
+});
+
+test("only the visited sub-page is the current page in desktop navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/settings/audit");
+  const nav = page.getByRole("navigation", { name: "전체 메뉴" });
+  await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+  const section = nav.locator(".nav-item[aria-current]");
+  await expect(section).toHaveAttribute("aria-current", "true");
+  const background = await section.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(background).not.toBe("rgba(0, 0, 0, 0)");
 });

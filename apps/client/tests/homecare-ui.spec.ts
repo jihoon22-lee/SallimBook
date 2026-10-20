@@ -46,7 +46,10 @@ test("appliance conflict retains edited location and current note then ending pr
   expect(state.writes.at(-1)!.body).toEqual({ location: "합성 서재" });
   await page.goto(`${appliance}/edit`);
   await page.getByLabel("가전 사용 종료일").fill("2025-03-01");
-  await expect(page.getByRole("button", { name: "가전 수정 저장" })).toBeDisabled();
+  const writesBeforeEnd = state.writes.length;
+  await page.getByRole("button", { name: "가전 수정 저장" }).click();
+  await expect(page.getByRole("alert")).toHaveText("사용 종료 확인란을 선택해 주세요.");
+  expect(state.writes).toHaveLength(writesBeforeEnd);
   await page
     .getByLabel("종료 후 새 교체 기록이 제한되고 오늘 관리 목록에서 제외됨을 확인했어요")
     .check();
@@ -89,6 +92,7 @@ test("metadata uncertain create requires checking list before another attempt", 
   await expect(page.getByRole("button", { name: "가전 등록", exact: true })).toBeDisabled();
   expect(state.appliances.filter((a) => a.name === "합성 응답 유실 제품")).toHaveLength(1);
   await page.getByRole("link", { name: "현재 목록", exact: true }).click();
+  await page.getByRole("button", { name: "입력 버리고 나가기", exact: true }).click();
   await expect(page.getByRole("link", { name: "합성 응답 유실 제품", exact: true })).toBeVisible();
 });
 test("consumable conflict merges threshold only while unit with existing stock history is rejected", async ({
@@ -170,7 +174,12 @@ test("clearing a device override is explicit and conflict retains only edited in
   await page.getByRole("button", { name: "현재 가전·소모품 내용 비교" }).click();
   await page.getByRole("button", { name: "비교한 수정 유지" }).click();
   await page.getByLabel("다음 확인일 직접 지정").fill("");
-  await expect(page.getByRole("button", { name: "기기별 소모품 설정 저장" })).toBeDisabled();
+  const writesBeforeClear = state.writes.length;
+  await page.getByRole("button", { name: "기기별 소모품 설정 저장" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "직접 지정한 다음 확인일 해제 확인란을 선택해 주세요.",
+  );
+  expect(state.writes).toHaveLength(writesBeforeClear);
   await page.getByLabel("직접 지정한 다음 확인일을 해제하고 교체 기록 기준을 적용해요").check();
   await page.getByRole("button", { name: "기기별 소모품 설정 저장" }).click();
   await expect(page.getByText("2025.03.31 · 교체 기록 기준")).toBeVisible();
@@ -211,7 +220,9 @@ test("stock adjustment requires signed delta and reason while receipt unit price
   await page.goto(`${stock}/stock/new`);
   await page.getByLabel("재고 기록 종류").selectOption("adjustment");
   await page.getByLabel("재고 조정 수량 (증가 양수·감소 음수)").fill("-2");
-  await expect(page.getByRole("button", { name: "재고 변화 저장" })).toBeDisabled();
+  await page.getByRole("button", { name: "재고 변화 저장" }).click();
+  await expect(page.getByLabel("재고 기록 사유 (필수)")).toBeFocused();
+  expect(state.writes).toHaveLength(0);
   await page.getByLabel("재고 기록 사유 (필수)").fill("합성 실물 재고 확인");
   await page.getByLabel("단위당 참고 가격 (원)").fill("0");
   await page.getByRole("button", { name: "재고 변화 저장" }).click();
@@ -251,7 +262,9 @@ test("replacement requires explicit override choice and missed cycles never mult
   await page.goto(`${device}/replace`);
   await page.getByLabel("실제 교체일", { exact: true }).fill("2025-03-02");
   await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
-  await expect(page.getByRole("button", { name: "실제 교체·재고 사용 저장" })).toBeDisabled();
+  await page.getByRole("button", { name: "실제 교체·재고 사용 저장" }).click();
+  await expect(page.getByLabel("직접 지정한 다음 확인일 처리")).toBeFocused();
+  expect(state.writes).toHaveLength(0);
   await page.getByLabel("직접 지정한 다음 확인일 처리").selectOption("keep");
   await saveReplacement(page);
   await expect(page.getByText("2025.02.01 · 직접 지정")).toBeVisible();

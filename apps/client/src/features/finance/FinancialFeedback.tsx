@@ -94,6 +94,7 @@ export function SaveControls({
   busy: boolean;
   cancel: () => void;
   label: string;
+  /** busy·uncertain·409·선택 목록 로딩·기록 상태 전용. 입력 검증에 쓰지 않는다. */
   disabled?: boolean;
   backTo?: string;
   onDismiss?: () => void;
@@ -112,7 +113,7 @@ export function SaveControls({
           입력 취소
         </button>
       ) : backTo ? (
-        <Link className="button-link secondary-button" to={backTo}>
+        <Link className="button-link secondary-button" to={backTo} replace>
           입력 취소
         </Link>
       ) : null}

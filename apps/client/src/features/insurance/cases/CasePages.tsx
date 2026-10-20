@@ -86,6 +86,8 @@ function CaseList() {
         }),
       [api, patient, treatment, financial],
     ),
+    undefined,
+    "insurance-cases",
   );
   return (
     <>

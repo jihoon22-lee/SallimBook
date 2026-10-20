@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
+import { useUnsavedChangesGuard } from "./UnsavedChanges";
+
+const TaskPanelRelease = createContext<() => void>(() => {});
 
 /** Keep optional search controls out of the path to the records themselves. */
 export function FilterPanel({
@@ -39,15 +42,30 @@ export function FilterPanel({
 /** A newly opened inline task must be discoverable without searching below the fold. */
 export function TaskPanel({ label, children }: { label: string; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   useEffect(() => {
     ref.current?.focus({ preventScroll: true });
     ref.current?.scrollIntoView({ block: "start" });
   }, []);
   return (
-    <section ref={ref} className="task-panel" aria-label={label} tabIndex={-1}>
-      {children}
-    </section>
+    <TaskPanelRelease.Provider value={guard.release}>
+      <section
+        ref={ref}
+        className="task-panel"
+        aria-label={label}
+        tabIndex={-1}
+        onInput={() => setDirty(true)}
+      >
+        {children}
+      </section>
+    </TaskPanelRelease.Provider>
   );
+}
+
+/** Clear the enclosing task panel's unsaved state before a save navigates away. */
+export function useTaskPanelRelease(): () => void {
+  return useContext(TaskPanelRelease);
 }
 
 export function TaskNotice({ message }: { message: string }) {

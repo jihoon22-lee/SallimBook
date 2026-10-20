@@ -15,6 +15,11 @@ test("income summary separates earned and insurance inflow and filters only the 
   state.pageSize = 1;
   await page.goto("/income");
   const summary = page.getByRole("region", { name: "등록 수입 요약" });
+  await openDisclosure(page, "수입 종류·구성원별 상세");
+  await expect(page.getByRole("region", { name: "구성원별 등록 수입 표" })).toHaveAttribute(
+    "tabindex",
+    "0",
+  );
   await expect(summary).toContainText("3,200,000원");
   await expect(summary).toContainText("800,000원");
   await expect(summary).toContainText("4,000,000원");
@@ -188,9 +193,8 @@ test("precision conversion requires equal totals and records all source versions
   await second.getByLabel("실제 입금일", { exact: true }).fill("2025-02-10");
   await page.getByLabel("전환 사유", { exact: true }).fill("합성 입금일별 내역 확인");
   await page.getByLabel("원본 전체와 같은 합계의 대체 기록을 확인했어요.", { exact: true }).check();
-  await expect(
-    page.getByRole("button", { name: "합계를 유지하고 전환", exact: true }),
-  ).toBeDisabled();
+  await page.getByRole("button", { name: "합계를 유지하고 전환", exact: true }).click();
+  await expect(page.getByText("전환 전후 합계가 같아야 해요.", { exact: true })).toBeFocused();
   expect(state.writes).toHaveLength(0);
   await second.getByLabel("수입 금액 (원)", { exact: true }).fill("2000000");
   await page.getByLabel("원본 전체와 같은 합계의 대체 기록을 확인했어요.", { exact: true }).check();
@@ -327,4 +331,66 @@ test("precision conversion leaves differing source accounts for the user to choo
   await expect(page.getByRole("listitem").filter({ hasText: "500,000원 · 월합계" })).toContainText(
     "계좌 연결 안 함",
   );
+});
+
+test("income amount accepts thousands separators, echoes the value and sends digits only", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  await page.goto("/income/new");
+  await page.getByRole("combobox", { name: "수입 구성원", exact: true }).selectOption(uid(2));
+  await page.getByLabel("수입 금액 (원)", { exact: true }).fill("3,500,000");
+  await expect(page.getByText("3,500,000원", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "수입 상세", exact: true })).toBeVisible();
+  expect(state.writes[0]!.body).toMatchObject({ amount_krw: "3500000" });
+});
+
+test("invalid income amount keeps save enabled and explains the field on submit", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  await page.goto("/income/new");
+  await page.getByRole("combobox", { name: "수입 구성원", exact: true }).selectOption(uid(2));
+  const amount = page.getByLabel("수입 금액 (원)", { exact: true });
+  await amount.fill("1.5");
+  const save = page.getByRole("button", { name: "수입 기록 저장", exact: true });
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(amount).toHaveAttribute("aria-invalid", "true");
+  await expect(amount).toBeFocused();
+  await expect(amount).toHaveAccessibleDescription(
+    "원 단위 숫자로 입력해 주세요. 세 자리마다 쉼표를 쓸 수 있지만 소수점·부호는 쓸 수 없어요.",
+  );
+  await expect(page.getByRole("alert")).toContainText("구성원·월·금액·실제 날짜를 확인해 주세요.");
+  await amount.fill("1,500");
+  await expect(amount).not.toHaveAttribute("aria-invalid", "true");
+  expect(state.writes).toHaveLength(0);
+});
+test("a lost connection on the income screen offers one retry that reloads every failed part", async ({
+  page,
+}) => {
+  await mockCashflow(page);
+  let failing = true;
+  const reloaded = new Set<string>();
+  await page.route(/\/api\/v1\/(income(\/summary)?|household\/members)(\?|$)/, async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (failing) return route.abort();
+    reloaded.add(path);
+    return route.fallback();
+  });
+  await page.goto("/income");
+  const retries = page.getByRole("button", { name: /다시 (확인|불러오기)$/ });
+  // Wait for every part to fail; while one is still loading, its own retry is the only one.
+  await expect(retries).toHaveText(["수입 화면 다시 불러오기"]);
+  failing = false;
+  await retries.click();
+  await expect(page.getByRole("link", { name: "급여 · 3,000,000원", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "등록 수입 요약" })).toContainText("4,000,000원");
+  expect([...reloaded].sort()).toEqual([
+    "/api/v1/household/members",
+    "/api/v1/income",
+    "/api/v1/income/summary",
+  ]);
+  await expect(page.getByRole("button", { name: "수입 화면 다시 불러오기" })).toHaveCount(0);
 });

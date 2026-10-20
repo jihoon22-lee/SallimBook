@@ -1,6 +1,7 @@
 import type { components } from "@sallimbook/api-client";
 import { isValidMonth } from "../../../shared/MonthContext";
 import { isDateOnly, todaySeoul } from "../../finance/dates";
+import { parseKrwInput } from "../../../shared/krw";
 export type MonthRecord = components["schemas"]["MonthResponse"];
 export type MonthValue = components["schemas"]["MonthValueResponse"];
 export type MonthTotals = components["schemas"]["MonthTotals"];
@@ -13,9 +14,8 @@ export const verificationStates = {
   verified: "확인 완료",
 } as const;
 export function parseKrw(value: string): string | null {
-  const trimmed = value.trim();
-  if (!/^[0-9]{1,20}$/.test(trimmed)) return null;
-  return BigInt(trimmed).toString();
+  const result = parseKrwInput(value);
+  return result.ok ? result.krw : null;
 }
 export function formatKrw(value: string | null): string {
   if (value === null) return "미입력";

@@ -3,6 +3,7 @@ import { mockComparison } from "./support/comparison";
 import { mockHomecare } from "./support/homecare";
 import { mockOnboarding } from "./support/onboarding";
 import { mockFinance, uid } from "./support/finance";
+import { mockCashflow } from "./support/cashflow";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
 async function homeData(page: import("@playwright/test").Page) {
@@ -225,4 +226,115 @@ test("asset error offers a visible retry while filters remain collapsed", async 
   await retry.click();
   await expect(page.getByRole("link", { name: "합성 공동 주택", exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+const luminance = (rgb: string) => {
+  const [r, g, b] = rgb
+    .match(/\d+/g)!
+    .slice(0, 3)
+    .map((v) => {
+      const c = Number(v) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+};
+const contrast = (a: string, b: string) => {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x! + 0.05) / (y! + 0.05);
+};
+for (const scheme of ["light", "dark"] as const)
+  test(`form controls and selected surfaces meet contrast minimums (${scheme})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await mockOnboarding(page);
+    await page.goto("/login");
+    const input = page.getByLabel("로그인 이름", { exact: true });
+    const [border, surface, background] = await input.evaluate((el) => {
+      const s = getComputedStyle(el);
+      const body = getComputedStyle(document.body);
+      return [s.borderTopColor, s.backgroundColor, body.backgroundColor];
+    });
+    expect(contrast(border!, surface!)).toBeGreaterThanOrEqual(3);
+    expect(contrast(border!, background!)).toBeGreaterThanOrEqual(3);
+    const [muted, selected] = await page.evaluate(() => {
+      const probe = document.createElement("p");
+      probe.className = "muted";
+      probe.style.background = "var(--selected)";
+      document.body.append(probe);
+      const s = getComputedStyle(probe);
+      const result = [s.color, s.backgroundColor];
+      probe.remove();
+      return result;
+    });
+    expect(contrast(muted!, selected!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+test("narrow home keeps the month label, 12px status text and 48px segmented buttons", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await homeData(page);
+  await page.goto("/");
+  const label = page.locator(".dashboard-heading .month-control label");
+  expect((await label.boundingBox())!.width).toBeGreaterThan(20);
+  for (const selector of [".snapshot-check", ".dashboard-heading .month-picker > .muted"]) {
+    const sizes = await page
+      .locator(selector)
+      .evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
+    for (const size of sizes) expect(size).toBeGreaterThanOrEqual(12);
+  }
+  await mockCashflow(page);
+  await page.goto("/fixed-payments");
+  for (const button of await page.locator(".segmented-control button").all())
+    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+});
+
+const styleOf = (page: import("@playwright/test").Page, selector: string, props: string[]) =>
+  page.evaluate(
+    ([sel, names]) =>
+      [...document.querySelectorAll(sel as string)].map((el) => {
+        const s = getComputedStyle(el);
+        return Object.fromEntries((names as string[]).map((n) => [n, s.getPropertyValue(n)]));
+      }),
+    [selector, props] as const,
+  );
+for (const [width, actions] of [
+  [390, { "margin-top": "6px", "padding-top": "6px", "row-gap": "5px", "column-gap": "12px" }],
+  [1280, { "margin-top": "12px", "padding-top": "12px", "row-gap": "8px", "column-gap": "8px" }],
+] as const)
+  test(`cleanup keeps computed sizes of formerly important rules at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockOnboarding(page);
+    await page.goto("/");
+    await page.locator(".home-card-actions").first().waitFor();
+    for (const style of await styleOf(page, ".home-card-actions", Object.keys(actions)))
+      expect(style).toEqual(actions);
+    if (width === 1280) {
+      await page.goto("/login");
+      await page.locator(".auth-story-foot").waitFor();
+      expect(await styleOf(page, ".auth-story-foot", ["font-size", "padding-top"])).toEqual([
+        { "font-size": "12px", "padding-top": "30px" },
+      ]);
+    }
+  });
+test("cleanup keeps computed sizes of formerly important homecare rules", async ({ page }) => {
+  await homeData(page);
+  await page.goto("/");
+  await page.locator(".care-item-actions a").first().waitFor();
+  for (const style of await styleOf(page, ".care-intro", ["font-size", "margin-bottom"]))
+    expect(style).toEqual({ "font-size": "12px", "margin-bottom": "10px" });
+  for (const style of await styleOf(page, ".care-item-actions a", ["font-size"]))
+    expect(style).toEqual({ "font-size": "12px" });
+  await page.goto("/consumables");
+  await page.locator(".stock-card").first().waitFor();
+  for (const style of await styleOf(page, ".care-intro", ["font-size", "margin-bottom"]))
+    expect(style).toEqual({ "font-size": "12px", "margin-bottom": "14px" });
+  const margins = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
+  for (const style of await styleOf(page, ".stock-card", margins))
+    expect(Object.values(style)).toEqual(["0px", "0px", "0px", "0px"]);
+  for (const style of await styleOf(page, ".stock-count", ["font-size", "padding-top"]))
+    expect(style).toEqual({ "font-size": "12px", "padding-top": "16px" });
 });

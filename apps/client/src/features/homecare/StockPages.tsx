@@ -18,6 +18,10 @@ import {
   recordedLabel,
   ResourceFeedback,
 } from "./HomecareSupport";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { AmountField } from "../../shared/AmountField";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { krwFieldError } from "../../shared/krw";
 export function StockSummary({ row }: { row: Consumable }) {
   return (
     <p>
@@ -139,6 +143,8 @@ export function StockMovements({ consumable }: { consumable: Consumable }) {
   );
 }
 function StockEditor({ initial }: { initial: Consumable }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
   const navigate = useNavigate();
   const command = useMonthCommand();
@@ -153,21 +159,31 @@ function StockEditor({ initial }: { initial: Consumable }) {
     reason: "",
     note: "",
   });
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const input = movementInput(draft);
   const key = useIdempotencyKey(JSON.stringify({ stock: stock.id, version: stock.version, input }));
   const change = <K extends keyof MovementDraft>(field: K, value: MovementDraft[K]) =>
     setDraft((old) => ({ ...old, [field]: value }));
-  async function submit(e: FormEvent) {
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
     e.preventDefault();
-    if (!input || stock.status !== "active" || command.error?.status === 409) return;
+    if (stock.status !== "active" || command.error?.status === 409) return;
+    if (!input) {
+      setMessage("수량·날짜·가격·구매 링크를 확인해 주세요. 재고 조정에는 사유가 필요해요.");
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run((signal) =>
       api.createStockMovement(
         { consumableId: stock.id, input, ifMatch: etag(stock.version), idempotencyKey: key },
         signal,
       ),
     );
-    if (result.ok && command.mounted.current)
-      navigate(`/consumables/${stock.id}/stock/${result.value.id}`);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/consumables/${stock.id}/stock/${result.value.id}`, { replace: true });
+    }
   }
   async function compare() {
     try {
@@ -182,7 +198,13 @@ function StockEditor({ initial }: { initial: Consumable }) {
       <h2>입고·반품·재고 조정</h2>
       <StockSummary row={stock} />
       <p>구매한 날짜와 수량을 기록해요. 교체·재고 사용은 기기별 교체 화면에서 기록해 주세요.</p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setDirty(true);
+          setMessage("");
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy || stock.status !== "active"}>
           <legend>실제 재고 변화</legend>
           <div className="form-grid">
@@ -233,17 +255,17 @@ function StockEditor({ initial }: { initial: Consumable }) {
                 />
               </label>
             </div>
-            <div className="form-field">
-              <label>
-                단위당 참고 가격 (원)
-                <input
-                  inputMode="numeric"
-                  value={draft.price}
-                  onChange={(e) => change("price", e.target.value)}
-                />
-              </label>
-              <p className="muted">미입력과 0원은 달라요. 실제 지출 원장을 만들지 않아요.</p>
-            </div>
+            <AmountField
+              label="단위당 참고 가격 (원)"
+              value={draft.price}
+              hint="미입력과 0원은 달라요. 실제 지출 원장을 만들지 않아요."
+              error={
+                attempt.attempted
+                  ? krwFieldError(draft.price, { required: false, positive: false })
+                  : null
+              }
+              onChange={(value) => change("price", value)}
+            />
             <div className="form-field">
               <label>
                 구매 링크 (HTTPS)
@@ -278,6 +300,7 @@ function StockEditor({ initial }: { initial: Consumable }) {
             </div>
           </div>
         </fieldset>
+        <FormError message={message} />
         <HomecareError error={command.error} />
         {command.error?.status === 409 && (
           <section className="review-panel">
@@ -307,7 +330,7 @@ function StockEditor({ initial }: { initial: Consumable }) {
           busy={command.busy}
           cancel={command.cancel}
           label="재고 변화 저장"
-          disabled={!input || stock.status !== "active" || command.error?.status === 409}
+          disabled={stock.status !== "active" || command.error?.status === 409}
         />
       </form>
     </section>
@@ -337,6 +360,8 @@ export function CancelStock({
   const [date, setDate] = useState(todaySeoul());
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const originalDate = "replaced_on" in target ? target.replaced_on : target.occurred_on;
   const reversed =
     "replaced_on" in target
@@ -354,9 +379,15 @@ export function CancelStock({
   const key = useIdempotencyKey(
     JSON.stringify({ id: target.id, stock: stock.id, version: stock.version, input }),
   );
-  async function submit(e: FormEvent) {
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
     e.preventDefault();
-    if (!valid || command.error?.status === 409) return;
+    if (reversed || command.error?.status === 409) return;
+    if (!valid) {
+      setMessage("취소 날짜·사유·확인란을 확인해 주세요. 날짜는 원래 기록일과 오늘 사이여야 해요.");
+      attempt.reject(form);
+      return;
+    }
     const options = { input, ifMatch: etag(stock.version), idempotencyKey: key };
     const result = await command.run((signal) =>
       "replaced_on" in target
@@ -399,7 +430,7 @@ export function CancelStock({
       {reversed && (
         <p role="status">현재 원본은 이 화면에서 취소할 수 없어요. 연결 이력을 확인해 주세요.</p>
       )}
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy || reversed}>
           <legend>취소 내용</legend>
           <div className="form-field">
@@ -431,6 +462,7 @@ export function CancelStock({
             원본 전체 수량을 취소하고 보정 이력을 남겨요
           </label>
         </fieldset>
+        <FormError message={message} />
         <HomecareError error={command.error} />
         {command.error?.status === 409 && (
           <section className="review-panel">
@@ -470,7 +502,7 @@ export function CancelStock({
           busy={command.busy}
           cancel={command.cancel}
           label="원본 취소·재고 보정"
-          disabled={!valid || command.error?.status === 409}
+          disabled={reversed || command.error?.status === 409}
         />
         <button type="button" disabled={command.busy} onClick={cancel}>
           취소 검토 닫기

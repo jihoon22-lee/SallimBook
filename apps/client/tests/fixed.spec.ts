@@ -22,9 +22,10 @@ test("fixed summary separates known plans, unknown amounts and actuals without a
   expect(state.writes).toHaveLength(0);
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   await page.getByLabel("회차 생성 종료일", { exact: true }).fill("2026-02-02");
-  await expect(
-    page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }),
-  ).toBeDisabled();
+  await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "회차 생성 기간은 시작일부터 1년 이내로 정해 주세요.",
+  );
   expect(state.writes).toHaveLength(0);
 });
 test("explicit generation retries the same key after a committed response is lost", async ({
@@ -102,7 +103,11 @@ test("future scheduled end permits new terms before the cutoff without rewriting
       { exact: true },
     )
     .check();
-  await expect(page.getByRole("button", { name: "새 적용기간 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "필수 정보·날짜·금액과 적용 범위를 확인해 주세요.",
+  );
+  expect(state.writes).toHaveLength(0);
   await page.getByLabel("적용 시작일", { exact: true }).fill("2025-03-01");
   await page
     .getByLabel(
@@ -134,9 +139,11 @@ test("a future rule cutoff can be shortened but not extended from the end form",
   await page
     .getByLabel("종료 적용일 이후의 미래 미납 회차가 바뀌는 것을 확인했어요.", { exact: true })
     .check();
-  await expect(
-    page.getByRole("button", { name: "납부 규칙 종료 저장", exact: true }),
-  ).toBeDisabled();
+  await page.getByRole("button", { name: "납부 규칙 종료 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "종료 적용일·종료 사유·확인란을 확인해 주세요. 종료 적용일은 오늘 이후, 마지막 적용 시작일 뒤, 기존 종료일 전이어야 해요.",
+  );
+  expect(state.writes).toHaveLength(0);
   await page.getByLabel("규칙 종료 적용일", { exact: true }).fill("2025-08-01");
   await page
     .getByLabel("종료 적용일 이후의 미래 미납 회차가 바뀌는 것을 확인했어요.", { exact: true })
@@ -184,7 +191,10 @@ test("T-09 loan payment validates exact principal plus interest and reports cons
   await page.getByLabel("실제 납부일", { exact: true }).fill("2025-02-20");
   await page.getByLabel("실제 원금 상환액 (원)", { exact: true }).fill(input.principal_krw);
   await page.getByLabel("실제 이자 (원)", { exact: true }).fill("299999");
-  await expect(page.getByRole("button", { name: "실제 납부 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "실제 납부금액·납부일·납부 수단을 확인해 주세요. 대출 상환은 원금과 이자의 합이 납부금액과 같아야 해요.",
+  );
   expect(state.writes).toHaveLength(0);
   await page.getByLabel("실제 이자 (원)", { exact: true }).fill(input.interest_krw);
   await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
@@ -504,4 +514,24 @@ test("occurrence history names rule-driven regeneration", async ({ page }) => {
     page.getByRole("heading", { name: "버전 3 · 규칙 종료로 대체", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: /회차 상태 변경$/ })).toHaveCount(0);
+});
+
+test("actual payment accepts grouped amounts and sends digits only", async ({ page }) => {
+  const state = await mockCashflow(page);
+  await page.goto(`/fixed-payments/${uid(70)}`);
+  await page.getByRole("button", { name: "실제 납부 기록", exact: true }).click();
+  await page.getByLabel("실제 납부금액 (원)", { exact: true }).fill("17,000");
+  await expect(page.getByText("17,000원", { exact: true })).toBeVisible();
+  await page.getByLabel("실제 납부일", { exact: true }).fill("2025-02-20");
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(state.writes[0]!.body).toMatchObject({ amount_krw: "17000" });
+});
+test("the occurrence list title names the selected month", async ({ page }) => {
+  await mockCashflow(page);
+  await page.goto("/fixed-payments");
+  await page.getByLabel("확인할 월").fill("2025-01");
+  await expect(
+    page.getByRole("heading", { name: "2025년 1월 납부 목록", exact: true }),
+  ).toBeVisible();
 });

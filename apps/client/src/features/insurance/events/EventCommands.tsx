@@ -10,6 +10,7 @@ import { CashSummary } from "./EventSupport";
 import { useInsuranceEventsApi } from "./api";
 import { eventNames, needsCompare } from "./model";
 import type { EventKind, EventRow } from "./model";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 export const getters = {
   expense: "getMedicalExpense",
   refund: "getMedicalRefund",
@@ -92,11 +93,18 @@ export function VoidEvent({
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
   const [latest, setLatest] = useState<EventRow | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const key = useIdempotencyKey(JSON.stringify([kind, base.id, base.version, reason.trim()]));
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!reason.trim() || !ack || base.cash.state !== "active" || needsCompare(command.error))
+    if (base.cash.state !== "active" || needsCompare(command.error)) return;
+    if (!reason.trim() || !ack) {
+      setMessage("무효 사유와 확인란을 확인해 주세요.");
+      attempt.reject(form);
       return;
+    }
     const result = await command.run((signal) =>
       api[voiders[kind]](
         {
@@ -123,7 +131,7 @@ export function VoidEvent({
       <h2>{eventNames[kind]} 무효 처리</h2>
       <p>오등록을 무효 이력으로 남겨요. 실제 환불·반환은 별도 금전 기록으로 입력해 주세요.</p>
       <CashSummary cash={base.cash} />
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>무효 사유와 확인</legend>
           <div className="form-field">
@@ -145,6 +153,7 @@ export function VoidEvent({
             실제 환불·반환이 아닌 오등록 무효임을 확인했어요.
           </label>
         </fieldset>
+        <FormError message={message} />
         <InsuranceError error={command.error} />
         {needsCompare(command.error) && (
           <button type="button" onClick={() => void compare()}>
@@ -172,13 +181,11 @@ export function VoidEvent({
         <SaveControls
           busy={command.busy}
           cancel={command.cancel}
-          disabled={
-            !reason.trim() || !ack || base.cash.state !== "active" || needsCompare(command.error)
-          }
+          disabled={base.cash.state !== "active" || needsCompare(command.error)}
           label="사유와 함께 금전 기록 무효 처리"
         />
         <button type="button" onClick={cancel} disabled={command.busy}>
-          무효 검토 취소
+          무효 검토 닫기
         </button>
       </form>
     </section>

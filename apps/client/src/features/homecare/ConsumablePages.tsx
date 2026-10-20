@@ -28,6 +28,8 @@ import { DeleteHomecare } from "./DeleteHomecare";
 import { DeviceLinks } from "./DeviceLinks";
 import { StockMovements } from "./StockPages";
 import { TodayConsumables } from "./TodayConsumables";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 export function ConsumableSummary({ row }: { row: Consumable }) {
   return (
     <>
@@ -71,6 +73,8 @@ export function ConsumableSummary({ row }: { row: Consumable }) {
   );
 }
 function ConsumableEditor({ initial }: { initial?: Consumable }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
   const navigate = useNavigate();
   const command = useMetadataCommand();
@@ -78,6 +82,8 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
   const [draft, setDraft] = useState(() => consumableDraft(initial));
   const [latest, setLatest] = useState<Consumable | null>(null);
   const [ack, setAck] = useState(false);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const input = consumableInput(draft);
   const changed =
     base && input ? changedFields(consumableInput(consumableDraft(base))!, input) : null;
@@ -87,15 +93,22 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
     if (key === "ended") setAck(false);
     if (!base && !command.uncertain) command.setError(null);
   };
-  async function submit(e: FormEvent) {
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
     e.preventDefault();
-    if (
-      !input ||
-      (ending && !ack) ||
-      (base && !Object.keys(changed ?? {}).length) ||
-      command.error?.status === 409
-    )
+    if (command.error?.status === 409) return;
+    const problem = !input
+      ? "소모품 이름·단위·재고 부족 임계 수량·종료일을 확인해 주세요."
+      : ending && !ack
+        ? "사용 종료 확인란을 선택해 주세요."
+        : base && !Object.keys(changed ?? {}).length
+          ? "바꾼 소모품 정보가 없어요."
+          : "";
+    if (problem || !input) {
+      setMessage(problem);
+      attempt.reject(form);
       return;
+    }
     const row = await command.run(
       () =>
         base
@@ -107,7 +120,10 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
           : api.createConsumable({ input }),
       !base,
     );
-    if (row && command.mounted.current) navigate(`/consumables/${row.id}`);
+    if (row && command.mounted.current) {
+      guard.release();
+      navigate(`/consumables/${row.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -137,7 +153,13 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
         처음에는 재고 0으로 등록돼요. 구매·기초 수량은 날짜와 함께 입고 또는 사유 있는 조정으로
         기록해 주세요.
       </p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setDirty(true);
+          setMessage("");
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy}>
           <legend>소모품 정보</legend>
           <div className="form-grid">
@@ -201,6 +223,7 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
             </label>
           )}
         </fieldset>
+        <FormError message={message} />
         <MetadataFeedback command={command} listPath="/consumables?status=all" />
         <ConflictReview
           error={base ? command.error : null}
@@ -213,14 +236,7 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
         </ConflictReview>
         <button
           type="submit"
-          disabled={
-            !input ||
-            (ending && !ack) ||
-            (!!base && !Object.keys(changed ?? {}).length) ||
-            command.busy ||
-            command.uncertain ||
-            command.error?.status === 409
-          }
+          disabled={command.busy || command.uncertain || command.error?.status === 409}
         >
           {base ? "소모품 수정 저장" : "소모품 등록"}
         </button>
@@ -238,6 +254,8 @@ function ConsumableList() {
       (cursor?: string) => api.listConsumables({ query: { status, cursor, limit: 50 } }),
       [api, status],
     ),
+    undefined,
+    "consumables",
   );
   return (
     <>
@@ -383,7 +401,7 @@ function ConsumableDetail({ id, edit }: { id: string; edit: boolean }) {
                   api.deleteConsumable({ consumableId: id, ifMatch: etag(current.version) }, signal)
                 }
                 render={(current) => <ConsumableSummary row={current} />}
-                deleted={() => navigate("/consumables")}
+                deleted={() => navigate("/consumables", { replace: true })}
                 listPath="/consumables?status=all"
               />
             </section>

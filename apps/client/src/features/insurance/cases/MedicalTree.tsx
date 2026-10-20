@@ -1,4 +1,4 @@
-import { TaskPanel } from "../../../shared/TaskLayout";
+import { TaskPanel, useTaskPanelRelease } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -26,6 +26,7 @@ import {
   MetadataFeedback,
   useMetadataCommand,
 } from "../InsuranceSupport";
+import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 type Draft = {
   parent: string;
   kind: MedicalNode["kind"];
@@ -124,9 +125,12 @@ function NodeEditor({
 }) {
   const api = useInsuranceApi();
   const command = useMetadataCommand();
+  const release = useTaskPanelRelease();
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() => draftOf(initial, parent, nodes));
   const [latest, setLatest] = useState<MedicalNode | null>(null);
+  const [message, setMessage] = useState("");
+  const attempt = useSubmitAttempt();
   const forbidden = base ? descendants(nodes, base.id) : new Set<string>();
   const input = medicalInput(draft);
   const changes = input && base ? changedFields(medicalInput(draftOf(base))!, input) : null;
@@ -140,9 +144,19 @@ function NodeEditor({
         next.order = String(nextSiblingOrder(nodes, next.parent));
       return next;
     });
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
     event.preventDefault();
-    if (!input || !valid || command.error?.status === 409) return;
+    if (command.error?.status === 409) return;
+    if (!input || !valid) {
+      setMessage(
+        changes && Object.keys(changes).length === 0
+          ? "바꾼 진료 내용이 없어요."
+          : "진료 이름·기간·표시 순서를 확인해 주세요. 하위 진료 아래로는 옮길 수 없어요.",
+      );
+      attempt.reject(form);
+      return;
+    }
     const result = await command.run(
       () =>
         base && changes
@@ -150,7 +164,10 @@ function NodeEditor({
           : api.createNode(caseId, input),
       !base,
     );
-    if (result && command.mounted.current) saved(result.id);
+    if (result && command.mounted.current) {
+      release();
+      saved(result.id);
+    }
   }
   async function compare() {
     if (!base) return;
@@ -171,7 +188,7 @@ function NodeEditor({
   return (
     <section className="card">
       <h3>{base ? "진료 내용·위치 수정" : "진료·약국 추가"}</h3>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>진료 내용</legend>
           <div className="form-grid">
@@ -276,6 +293,7 @@ function NodeEditor({
             </div>
           </div>
         </fieldset>
+        <FormError message={message} />
         <MetadataFeedback command={command} listPath={`/insurance/cases/${caseId}`} />
         <ConflictReview
           error={command.error}
@@ -297,12 +315,12 @@ function NodeEditor({
         <div className="form-actions">
           <button
             type="submit"
-            disabled={!valid || command.busy || command.uncertain || command.error?.status === 409}
+            disabled={command.busy || command.uncertain || command.error?.status === 409}
           >
             진료 기록 저장
           </button>
           <button type="button" onClick={cancel} disabled={command.busy}>
-            진료 편집 취소
+            입력 취소
           </button>
         </div>
       </form>
@@ -375,7 +393,7 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
       setDeleting(false);
       setAck(false);
       void list.reload();
-      navigate(`/insurance/cases/${caseId}`);
+      navigate(`/insurance/cases/${caseId}`, { replace: true });
     }
   }
   return (

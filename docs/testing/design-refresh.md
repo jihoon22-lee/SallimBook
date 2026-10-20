@@ -75,3 +75,36 @@ pnpm --filter @sallimbook/client exec playwright test --config playwright.docume
 ```sh
 pnpm exec tsc --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --jsx react-jsx --lib ES2022,DOM,DOM.Iterable tests/design-refresh.spec.ts tests/assets.spec.ts tests/auth.spec.ts tests/auth-native.spec.ts tests/comparison.spec.ts tests/home.spec.ts tests/routing.spec.ts tests/passkeys.spec.ts tests/onboarding.spec.ts tests/onboarding-native.spec.ts integration/*.spec.ts
 ```
+
+## 웹 사용성 보완 (2026-10-20)
+
+변경: React Router data router 전환(경로·제목 불변), 뒤로가기의 스크롤·불러온 페이지 복원, 미저장 입력 확인창과 저장·취소·삭제 뒤 기록 교체,
+쉼표 금액 입력 공통 파서와 저장 시 필드 오류 안내, 입력 테두리·보조 글자 대비 상향, 좁은 화면 월 라벨·12px 최소 글자·48px 구간 버튼,
+월 행 편집 뒤 초점 복귀와 동작 줄이기, 홈 제목 순서·메뉴 `aria-current`·표 스크롤 영역 이름, 취소·재시도 문구 통일, 사용하지 않는 CSS·중복 선택자·`!important` 정리.
+DB 마이그레이션, API 계약·생성 client, 서버, Android 네이티브 코드 변경은 없다.
+
+추가·변경한 시험:
+
+| spec | 확인 내용 |
+| --- | --- |
+| `history-restore.spec.ts` | 뒤로가기에서 목록 스크롤과 불러온 페이지 수 복원, 새 화면 진입 시 맨 위 |
+| `unsaved-changes.spec.ts` | 탭·취소·브라우저 뒤로가기·Android 뒤로가기에서 확인창, 저장 뒤 목록 착지, 창 닫기 확인 |
+| `krw-input.spec.ts` | 숫자·쉼표·공백·전각 숫자·끝의 `원` 허용, 잘못 묶은 자릿수·소수·음수·20자리 초과 거부 |
+| `design-refresh.spec.ts` | 두 테마의 입력 테두리 3:1·보조 글자 4.5:1, 좁은 홈의 월 라벨·12px 글자·48px 구간 버튼, `!important` 정리 전후 계산 값 고정 |
+| `months.spec.ts` | 행 편집 저장·취소 뒤 행 버튼으로 초점 복귀, 동작 줄이기에서 즉시 스크롤 |
+| `home.spec.ts`, `routing.spec.ts` | 로그아웃 홈의 첫 제목이 화면 h1, 메뉴의 `page`·`true` 구분 |
+| `income.spec.ts`, `fixed.spec.ts` | 수입 화면 동시 실패 시 재시도 버튼 하나, 고정 납부 목록 제목의 선택 월 |
+| 각 도메인 spec | 금액 오류를 저장 시 필드 아래에 알리고 저장 버튼을 미리 막지 않음 |
+
+CSS 정리는 임시 계산 스타일 비교로도 확인했다. 밝은·다크 테마 × 390·1280px × 16개 경로의 모든 요소·모든 계산 속성을 정리 전후로 비교해 차이 0건이었다.
+이 비교 스크립트는 저장소에 남기지 않았다.
+
+| 범위 | 결과 |
+| --- | --- |
+| `pnpm typecheck` | 통과 |
+| `pnpm --filter @sallimbook/client build` | 통과, 182 modules. CSS 44.36 kB(gzip 9.44 kB), JS 1,030.99 kB(gzip 270.91 kB). 기존 500 kB 경고 유지 |
+| 전체 브라우저 시험 `pnpm --filter @sallimbook/client exec playwright test` | 1,370건 통과, 8.3분 |
+| 이 변경 범위의 API·서버·플러그인·Android 차이 | 없음 |
+| 실제 HTTPS 시나리오(인증·`--finance`·`--months`·`--cashflow`·`--insurance`·`--homecare`, 하나씩 실행) | 6개 모두 통과, 실제 API/PostgreSQL. 첫 `--insurance` 실행은 배분 합계 불일치 때 저장 버튼 비활성을 기대하던 기존 시험 1곳 때문에 실패했다. 저장을 누르면 이유에 초점이 가는 새 동작으로 시험을 바꾼 뒤 통과했다 |
+
+Android 실기기 확인(하드웨어 뒤로가기 확인창, 저장 뒤 뒤로가기 착지, 쉼표 금액 저장)은 사용자 확인 전까지 미실행이다.

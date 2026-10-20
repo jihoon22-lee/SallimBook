@@ -22,8 +22,9 @@ test("shared fixture money, HALF_UP and calendar examples remain exact", () => {
     );
   expect(parseKrw("9007199254740993")).toBe("9007199254740993");
   expect(parseKrw("99999999999999999999")).toBe("99999999999999999999");
-  for (const amount of ["", "-1", "1.1", "1e3", "1,000", "100000000000000000000"])
+  for (const amount of ["", "-1", "1.1", "1e3", "1,00", "100000000000000000000"])
     expect(parseKrw(amount)).toBeNull();
+  expect(parseKrw("1,000")).toBe("1000");
   expect(ownedPreview("99999999999999999999", "1", "whole")).toBe("99999999999999999999");
   expect(ownedPreview("1", "0.499999999999999999", "whole")).toBe("0");
   expect(formatKrw(null)).toBe("미입력");
@@ -510,4 +511,50 @@ test("carry-previous fills only untouched missing rows and reuses its key after 
     input_amount_krw: null,
     change_reason: "합성 확인 불가",
   });
+});
+
+test("month value accepts a grouped amount and saves digits", async ({ page }) => {
+  const state = await mockMonths(page);
+  await page.goto("/assets/months/2025-02");
+  await page.getByRole("button", { name: "합성 종료 대출 금액 확인", exact: true }).click();
+  await page.getByLabel("확인 금액 (원)", { exact: true }).fill("1,234,567");
+  await expect(page.getByText("1,234,567원", { exact: true })).toBeVisible();
+  await page.getByLabel("실제 확인 기준일", { exact: true }).fill("2025-02-28");
+  await page.getByRole("button", { name: "금액 확인 저장", exact: true }).click();
+  await expect(page.getByText("확인한 금액과 기준일을 저장했어요.", { exact: true })).toBeVisible();
+  expect(state.writes.at(-1)?.body.input_amount_krw).toBe("1234567");
+  await expect(
+    page.getByRole("button", { name: "합성 종료 대출 금액 확인", exact: true }),
+  ).toBeFocused();
+});
+
+test("closing the month editor returns focus to the row and reduced motion scrolls instantly", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const calls: unknown[] = [];
+    Object.assign(window, { scrollCalls: calls });
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (arg?: boolean | ScrollIntoViewOptions) {
+      calls.push(arg);
+      return original.call(this, arg);
+    };
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mockMonths(page);
+  await page.goto("/assets/months/2025-02");
+  const opener = page.getByRole("button", { name: "합성 종료 대출 금액 확인", exact: true });
+  await opener.click();
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          (
+            window as unknown as { scrollCalls: (ScrollIntoViewOptions | undefined)[] }
+          ).scrollCalls.at(-1) as ScrollIntoViewOptions | undefined
+        )?.behavior,
+    ),
+  ).toBe("auto");
+  await page.getByRole("button", { name: /^입력 (닫기|취소)$/ }).click();
+  await expect(opener).toBeFocused();
 });
