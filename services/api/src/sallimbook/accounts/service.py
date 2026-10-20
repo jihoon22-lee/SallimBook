@@ -28,6 +28,7 @@ from sallimbook.core.authorization import (
     scoped_entity,
 )
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import keyset_page
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.passkeys.models import StepUpPurpose
@@ -214,12 +215,20 @@ def list_accounts(
         query = query.where(Asset.ended_on.is_(None))
     elif status == "closed":
         query = query.where(Asset.ended_on.is_not(None))
-    if cursor is not None:
-        query = query.where(FinancialAccount.id < cursor)
-    rows = list(session.execute(query.order_by(FinancialAccount.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=FinancialAccount,
+        household_id=principal.household_id,
+        keys=(FinancialAccount.created_at,),
+        cursor=cursor,
+        limit=limit,
+        scalars=False,
+        cursor_of=lambda row: row[0].id,
+    )
     result = AccountListResponse(
-        items=[account_response(account, asset) for account, asset in rows[:limit]],
-        next_cursor=rows[limit - 1][0].id if len(rows) > limit else None,
+        items=[account_response(account, asset) for account, asset in rows],
+        next_cursor=next_cursor,
     )
     session.commit()
     return result

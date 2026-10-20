@@ -24,6 +24,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 from test_accounts import asset_payload, make_actor, write_keyring
 from test_income import headers
+from test_pagination import api_pages, ids, pairs
 
 from sallimbook.assets.router import router as asset_router
 from sallimbook.config import Settings
@@ -993,3 +994,30 @@ def test_reservation_identity_and_live_charge_cannot_be_changed_directly(documen
         with Session(document_app.state.engine) as session, pytest.raises(DBAPIError):
             session.execute(text(statement))
             session.commit()
+
+
+def test_document_and_link_lists_are_newest_first_across_pages(document_app, actors):
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        target = {"kind": "asset", "id": asset(client, actor)["id"]}
+        rows = [pending(client, actor, target=target)["id"] for _ in range(5)]
+        listed = api_pages(
+            client, actor, "/api/v1/documents", target_kind="asset", target_id=target["id"]
+        )
+        assert ids(listed) == pairs(rows[::-1])
+        document = pending(client, actor)
+        assert upload(client, actor, document).status_code == 200
+        path = f"/api/v1/documents/{document['id']}/links"
+        links = [client.get(path, headers=actor.headers).json()["items"][0]["id"]]
+        for _ in range(4):
+            linked = client.post(
+                "/api/v1/document-links",
+                headers=headers(actor, version=detail(client, actor, document)["version"]),
+                json={
+                    "document_id": document["id"],
+                    "target": {"kind": "asset", "id": asset(client, actor)["id"]},
+                },
+            )
+            assert linked.status_code == 201, linked.text
+            links.append(linked.json()["id"])
+        assert ids(api_pages(client, actor, path)) == pairs(links[::-1])

@@ -19,6 +19,7 @@ from sallimbook.cashflow.payment_links import require_closure
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.service import utcnow
@@ -242,10 +243,16 @@ def list_cards(
         query = query.where(
             Card.ended_on.is_(None) if status == "active" else Card.ended_on.is_not(None)
         )
-    if cursor is not None:
-        query = query.where(Card.id < cursor)
-    rows = list(session.scalars(query.order_by(Card.id.desc()).limit(limit + 1)))
-    page_ids = {row.id for row in rows[:limit]}
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=Card,
+        household_id=principal.household_id,
+        keys=(Card.created_at,),
+        cursor=cursor,
+        limit=limit,
+    )
+    page_ids = {row.id for row in rows}
     secret_card_ids = (
         set(
             session.scalars(
@@ -267,7 +274,7 @@ def list_cards(
         else set()
     )
     account_ids = {
-        row.settlement_account_id for row in rows[:limit] if row.settlement_account_id is not None
+        row.settlement_account_id for row in rows if row.settlement_account_id is not None
     }
     account_statuses = {}
     if account_ids:
@@ -291,9 +298,9 @@ def list_cards(
             card_response(
                 session, row, account_statuses=account_statuses, secret_card_ids=secret_card_ids
             )
-            for row in rows[:limit]
+            for row in rows
         ],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        next_cursor=next_cursor,
     )
     session.commit()
     return result

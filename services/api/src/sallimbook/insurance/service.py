@@ -16,6 +16,7 @@ from sallimbook.cashflow.recurring_service import _rule_response
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, krw_string
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
@@ -173,11 +174,17 @@ def _write_number(row, number, key_file):
     row.last_four = raw.replace(" ", "").replace("-", "")[-4:]
 
 
-def _page_rows(session, query, model, cursor, limit):
-    if cursor is not None:
-        query = query.where(model.id < cursor)
-    rows = list(session.scalars(query.order_by(model.id.desc()).limit(limit + 1)))
-    return rows[:limit], rows[limit - 1].id if len(rows) > limit else None
+def _page_rows(session, principal, query, model, cursor, limit, *, keys=None, descending=True):
+    return keyset_page(
+        session,
+        query,
+        model=model,
+        household_id=principal.household_id,
+        keys=keys or (model.created_at,),
+        cursor=cursor,
+        limit=limit,
+        descending=descending,
+    )
 
 
 def create_policy(session, principal, payload, key_file, *, request_id=None):
@@ -227,7 +234,7 @@ def list_policies(
             query = query.where(getattr(InsurancePolicy, field) == value)
     if status is not None:
         query = query.where(InsurancePolicy.status == status)
-    rows, next_cursor = _page_rows(session, query, InsurancePolicy, cursor, limit)
+    rows, next_cursor = _page_rows(session, principal, query, InsurancePolicy, cursor, limit)
     return _finish(
         session,
         PolicyListResponse(items=[policy_response(r) for r in rows], next_cursor=next_cursor),
@@ -321,7 +328,9 @@ def list_coverages(session, principal, policy_id, *, active=None, cursor=None, l
     )
     if active is not None:
         query = query.where(InsuranceCoverage.active == active)
-    rows, next_cursor = _page_rows(session, query, InsuranceCoverage, cursor, limit)
+    rows, next_cursor = _page_rows(
+        session, principal, query, InsuranceCoverage, cursor, limit, descending=False
+    )
     return _finish(
         session,
         CoverageListResponse(
@@ -424,7 +433,7 @@ def list_premium_links(session, principal, policy_id, *, active=None, cursor=Non
     )
     if active is not None:
         query = query.where(PolicyPremiumLink.active == active)
-    rows, next_cursor = _page_rows(session, query, PolicyPremiumLink, cursor, limit)
+    rows, next_cursor = _page_rows(session, principal, query, PolicyPremiumLink, cursor, limit)
     return _finish(
         session,
         PremiumLinkListResponse(
@@ -506,7 +515,15 @@ def list_cases(
     ):
         if value is not None:
             query = query.where(getattr(InsuranceCase, field) == value)
-    rows, next_cursor = _page_rows(session, query, InsuranceCase, cursor, limit)
+    rows, next_cursor = _page_rows(
+        session,
+        principal,
+        query,
+        InsuranceCase,
+        cursor,
+        limit,
+        keys=(InsuranceCase.start_on, InsuranceCase.created_at),
+    )
     from sallimbook.insurance import event_service
 
     burdens = event_service.case_burdens(session, principal, [row.id for row in rows])

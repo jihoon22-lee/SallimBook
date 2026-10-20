@@ -1,11 +1,12 @@
 """Manual income and shared cash facts, serialized without changing any snapshot."""
 
 from datetime import UTC, date, datetime
+from operator import attrgetter
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, aliased
 
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
@@ -41,6 +42,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, decimal_krw, krw_string, month_start
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.models import Household
@@ -683,12 +685,19 @@ def list_income(
         query = query.where(CashRecord.kind == kind)
     if state != "all":
         query = query.where(CashRecord.state == state)
-    if cursor is not None:
-        query = query.where(CashRecord.id < cursor)
-    rows = list(session.scalars(query.order_by(CashRecord.id.desc()).limit(limit + 1)))
+    # One month per list: dated rows first, then month totals (no date) by entry.
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=CashRecord,
+        household_id=principal.household_id,
+        keys=(func.coalesce(CashRecord.occurred_on, date(1, 1, 1)), CashRecord.created_at),
+        cursor=cursor,
+        limit=limit,
+        cursor_of=attrgetter("cash_record_id"),
+    )
     response = IncomeListResponse(
-        items=_current_responses(session, principal, rows[:limit]),
-        next_cursor=rows[limit - 1].cash_record_id if len(rows) > limit else None,
+        items=_current_responses(session, principal, rows), next_cursor=next_cursor
     )
     session.commit()
     return response
@@ -807,3 +816,14 @@ def prepare_void_cash_record(
     _no_returns(session, principal, row)
     _void(session, principal, row, reason)
     return row
+
+
+def cash_date(model):
+    """List order key: the actual date of the cash record behind ``model``, else its month."""
+    record = aliased(CashRecord)
+    return (
+        select(func.coalesce(record.occurred_on, record.period_month))
+        .where(record.household_id == model.household_id, record.id == model.cash_record_id)
+        .correlate(model)
+        .scalar_subquery()
+    )

@@ -12,6 +12,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.pagination import keyset_page
 from sallimbook.documents.models import Document, DocumentLink
 from sallimbook.documents.quota import STORAGE_BARRIER, reserve
 from sallimbook.documents.schemas import (
@@ -229,12 +230,17 @@ def list_documents(session, principal, *, target_kind=None, target_id=None, curs
                 )
             )
         )
-    if cursor is not None:
-        query = query.where(Document.id < cursor)
-    rows = list(session.scalars(query.order_by(Document.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=Document,
+        household_id=principal.household_id,
+        keys=(Document.created_at,),
+        cursor=cursor,
+        limit=limit,
+    )
     result = DocumentListResponse(
-        items=[_response(session, principal, row) for row in rows[:limit]],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        items=[_response(session, principal, row) for row in rows], next_cursor=next_cursor
     )
     recheck()
     session.commit()
@@ -372,12 +378,17 @@ def list_links(session, principal, document_id, *, cursor=None, limit=50):
     query = select(DocumentLink).where(
         DocumentLink.household_id == principal.household_id, DocumentLink.document_id == document_id
     )
-    if cursor is not None:
-        query = query.where(DocumentLink.id < cursor)
-    rows = list(session.scalars(query.order_by(DocumentLink.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=DocumentLink,
+        household_id=principal.household_id,
+        keys=(DocumentLink.created_at,),
+        cursor=cursor,
+        limit=limit,
+    )
     result = DocumentLinkListResponse(
-        items=[_link_response(row) for row in rows[:limit]],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        items=[_link_response(row) for row in rows], next_cursor=next_cursor
     )
     recheck()
     session.commit()

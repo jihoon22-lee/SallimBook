@@ -40,6 +40,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, decimal_krw, krw_string, month_start
 from sallimbook.identity.service import utcnow
 
@@ -408,10 +409,16 @@ def get_rule(session, principal, rule_id):
 def list_rules(session, principal, *, cursor=None, limit=50):
     cash.lock_cash_household(session, principal)
     query = select(RecurringRule).where(RecurringRule.household_id == principal.household_id)
-    if cursor:
-        query = query.where(RecurringRule.id < cursor)
-    rows = list(session.scalars(query.order_by(RecurringRule.id.desc()).limit(limit + 1)))
-    versions = {row.id: [] for row in rows[:limit]}
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=RecurringRule,
+        household_id=principal.household_id,
+        keys=(RecurringRule.created_at,),
+        cursor=cursor,
+        limit=limit,
+    )
+    versions = {row.id: [] for row in rows}
     if versions:
         for version in session.scalars(
             select(RecurringRuleVersion)
@@ -423,11 +430,8 @@ def list_rules(session, principal, *, cursor=None, limit=50):
         ):
             versions[version.rule_id].append(version)
     response = RuleListResponse(
-        items=[
-            _rule_response(session, principal, row, versions=versions[row.id])
-            for row in rows[:limit]
-        ],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        items=[_rule_response(session, principal, row, versions=versions[row.id]) for row in rows],
+        next_cursor=next_cursor,
     )
     session.commit()
     return response
@@ -711,18 +715,22 @@ def list_obligations(session, principal, month, *, cursor=None, limit=50):
         ScheduledObligation.household_id == principal.household_id,
         ScheduledObligation.scheduled_date.between(start, end),
     )
-    if cursor:
-        query = query.where(ScheduledObligation.id < cursor)
-    rows = list(session.scalars(query.order_by(ScheduledObligation.id.desc()).limit(limit + 1)))
-    actuals = _active_settlements_by_obligation(
-        session, principal, [row.id for row in rows[:limit]]
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=ScheduledObligation,
+        household_id=principal.household_id,
+        keys=(ScheduledObligation.scheduled_date, ScheduledObligation.created_at),
+        cursor=cursor,
+        limit=limit,
+        descending=False,
     )
+    actuals = _active_settlements_by_obligation(session, principal, [row.id for row in rows])
     response = ObligationListResponse(
         items=[
-            _obligation_response(session, principal, row, actuals=actuals[row.id])
-            for row in rows[:limit]
+            _obligation_response(session, principal, row, actuals=actuals[row.id]) for row in rows
         ],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        next_cursor=next_cursor,
     )
     session.commit()
     return response
@@ -975,15 +983,23 @@ def list_settlements(session, principal, obligation_id, *, cursor=None, limit=50
             FixedSettlement.obligation_id == obligation_id,
         )
     )
-    if cursor:
-        query = query.where(FixedSettlement.id < cursor)
-    rows = list(session.execute(query.order_by(FixedSettlement.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=FixedSettlement,
+        household_id=principal.household_id,
+        keys=(cash.cash_date(FixedSettlement), FixedSettlement.created_at),
+        cursor=cursor,
+        limit=limit,
+        scalars=False,
+        cursor_of=lambda row: row[0].id,
+    )
     response = SettlementListResponse(
         items=[
             _settlement_response(session, principal, payment, revision=revision)
-            for payment, revision in rows[:limit]
+            for payment, revision in rows
         ],
-        next_cursor=rows[limit - 1][0].id if len(rows) > limit else None,
+        next_cursor=next_cursor,
     )
     session.commit()
     return response

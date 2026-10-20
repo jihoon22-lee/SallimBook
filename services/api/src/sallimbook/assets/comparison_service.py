@@ -27,8 +27,10 @@ from sallimbook.assets.month_schemas import (
     MonthTotals,
     MonthValueResponse,
 )
+from sallimbook.assets.month_service import value_order
 from sallimbook.core.authorization import Principal, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import page_after
 from sallimbook.core.types import krw_string, month_end, month_start
 from sallimbook.identity.auth_models import HouseholdMember
 
@@ -244,10 +246,12 @@ def compare_snapshots(
     # An explicit asset detail also projects excluded observations as reference values.
     if filters.asset_id is not None:
         keys |= {key for key, row in [*before.items(), *after.items()] if _matches(row, filters)}
-    all_keys = sorted(keys)
-    selected = [key for key in all_keys if cursor is None or key > cursor]
+    # The current month's value names and classifies an item; otherwise the compared month's.
+    shown = {key: after[key] if key in after else before[key] for key in keys}
+    ordered = sorted(keys, key=lambda key: value_order(shown[key]))
+    selected, next_cursor = page_after(ordered, cursor=cursor, limit=limit, key=lambda key: key)
     items = []
-    for key in selected[:limit]:
+    for key in selected:
         old, new = before.get(key), after.get(key)
         old_in, new_in = key in old_scope, key in new_scope
         membership = (
@@ -308,9 +312,9 @@ def compare_snapshots(
         added_asset_ids=sorted(added),
         removed_asset_ids=sorted(removed),
         changed_share_asset_ids=sorted(changed_share),
-        item_count=len(all_keys),
+        item_count=len(ordered),
         items=items,
-        next_cursor=selected[limit - 1] if len(selected) > limit else None,
+        next_cursor=next_cursor,
     )
 
 

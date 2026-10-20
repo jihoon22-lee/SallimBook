@@ -3,6 +3,7 @@
 import hashlib
 import json
 from datetime import date
+from operator import attrgetter
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -30,17 +31,14 @@ from sallimbook.cashflow.recurring_models import (
 )
 from sallimbook.core.authorization import Principal, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import page_after
 from sallimbook.core.types import SEOUL
 from sallimbook.identity.service import utcnow
 
 
 def _page(rows, cursor, limit, model):
-    visible = [row for row in rows if cursor is None or row.id < cursor]
-    return model(
-        items=visible[:limit],
-        total_count=len(rows),
-        next_cursor=visible[limit - 1].id if len(visible) > limit else None,
-    )
+    items, next_cursor = page_after(rows, cursor=cursor, limit=limit, key=attrgetter("id"))
+    return model(items=items, total_count=len(rows), next_cursor=next_cursor)
 
 
 def usage(
@@ -73,7 +71,7 @@ def usage(
                     Card.household_id == household_id,
                     Card.settlement_account_id == source.id,
                 )
-                .order_by(Card.id.desc())
+                .order_by(Card.created_at.desc(), Card.id.desc())
             )
         )
         card_ids = [card.id for card in related_cards]
@@ -99,7 +97,11 @@ def usage(
                 RecurringRuleVersion.effective_until > as_of_date,
             ),
         )
-        .order_by(RecurringRuleVersion.id.desc())
+        .order_by(
+            RecurringRuleVersion.effective_from,
+            RecurringRuleVersion.created_at,
+            RecurringRuleVersion.id,
+        )
     ).all()
     rules = [
         LinkedRule(
@@ -146,7 +148,11 @@ def usage(
             ScheduledObligation.skipped.is_(False),
             ScheduledObligation.manually_completed.is_(False),
         )
-        .order_by(ScheduledObligation.id.desc())
+        .order_by(
+            ScheduledObligation.scheduled_date,
+            ScheduledObligation.created_at,
+            ScheduledObligation.id,
+        )
     ).all()
     obligations = []
     for row, paid in rows:

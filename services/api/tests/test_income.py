@@ -16,6 +16,7 @@ from sqlalchemy import delete, event, func, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
+from test_pagination import api_pages, ids, pairs
 
 from sallimbook.accounts import service as accounts
 from sallimbook.accounts.schemas import AccountCreate
@@ -248,6 +249,25 @@ def post_income(client, actor, *, key=None, **overrides):
 
 @pytest.mark.database
 class TestIncomeDatabase:
+    def test_income_list_orders_dated_rows_before_month_totals_across_pages(
+        self, income_app, income_actors
+    ):
+        actor = income_actors[0]
+        dates = ["2026-01-10", None, "2026-01-20", "2026-01-10", None]
+        with TestClient(income_app) as client:
+            rows = [
+                post_income(
+                    client,
+                    actor,
+                    amount_krw=str(1000 + n),
+                    duplicate_acknowledged=True,  # dated and month-total rows share the month
+                    **({"date_precision": "day", "occurred_on": day} if day else {}),
+                ).json()["id"]
+                for n, day in enumerate(dates)
+            ]
+            pages = api_pages(client, actor, "/api/v1/income", month="2026-01")
+            assert ids(pages) == pairs([rows[i] for i in (2, 3, 0, 4, 1)])
+
     def test_closed_account_accepts_records_dated_through_its_end(
         self, income_app, income_actors, db_engine
     ):

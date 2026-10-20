@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from sallimbook.core.authorization import require_recent_login, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import keyset_page
 from sallimbook.identity import service as identity
 from sallimbook.identity.dependencies import (
     SESSION_COOKIE,
@@ -203,12 +204,18 @@ def list_passkeys(
         AuthCredential.user_id == principal.user_id,
         AuthCredential.revoked_at.is_(None),
     )
-    if cursor is not None:
-        query = query.where(AuthCredential.id < cursor)
-    rows = list(session.scalars(query.order_by(AuthCredential.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=AuthCredential,
+        household_id=principal.household_id,
+        keys=(AuthCredential.created_at,),
+        cursor=cursor,
+        limit=limit,
+        cursor_where=(AuthCredential.user_id == principal.user_id,),
+    )
     result = CredentialListResponse(
-        items=[service.credential_response(row) for row in rows[:limit]],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        items=[service.credential_response(row) for row in rows], next_cursor=next_cursor
     )
     session.commit()
     return result

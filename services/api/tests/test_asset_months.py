@@ -15,6 +15,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import asset_payload, create_account, make_actor
 from test_asset_calculations import vector
+from test_pagination import api_pages, ids, pairs
 
 from sallimbook.accounts.router import router as account_router
 from sallimbook.assets import month_service
@@ -206,6 +207,31 @@ def confirm(client, actor, month, *, key=None, **acknowledgments):
 
 @pytest.mark.database
 class TestAssetMonthsDatabase:
+    def test_month_values_list_assets_before_liabilities_by_name_across_pages(
+        self, months_app, account_actor
+    ):
+        names = [
+            ("나 예금", {}),
+            ("가 대출", {"kind": "liability", "category": "loan"}),
+            ("가 예금", {}),
+            ("나 예금", {}),
+            ("다 대출", {"kind": "liability", "category": "loan"}),
+        ]
+        with TestClient(months_app) as client:
+            assets = [
+                add_asset(client, account_actor, name=name, **extra)["id"] for name, extra in names
+            ]
+            draft(client, account_actor, "2026-01")
+            pages = api_pages(
+                client,
+                account_actor,
+                "/api/v1/asset-months/2026-01",
+                items="values",
+                cursor_key="asset_id",
+            )
+            expected = [assets[2], *sorted([assets[0], assets[3]]), assets[1], assets[4]]
+            assert ids(pages, "asset_id") == pairs(expected)
+
     def test_carry_previous_fills_only_untouched_missing_rows_once(
         self, months_app, account_actor, db_engine
     ):

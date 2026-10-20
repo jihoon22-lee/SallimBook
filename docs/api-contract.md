@@ -142,7 +142,7 @@ OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다
 | 메서드·경로 | 동작 |
 |---|---|
 | POST /asset-months/{month}/draft | `copy_previous`; 멱등키 필수, 새 작성본의 불변 참조 반환 |
-| GET /asset-months/{month} | 현재 revision·전체 합계·확인 건수·범위 변경 상태와 최대 200행 cursor 조회 |
+| GET /asset-months/{month} | 현재 revision·전체 합계·확인 건수·범위 변경 상태와 최대 200행 cursor 조회. 값은 자산 → 부채, 이름, 자산 ID 순 |
 | PATCH /asset-months/{month}/values/{asset_id} | `revision_id`, `value_id`, 입력 금액 또는 `unchanged`, 기준일·사유; 값 행 If-Match 필수 |
 | POST /asset-months/{month}/sync-scope | `revision_id`, revision If-Match; 현재 자산 범위를 명시 반영하고 변경된 행을 미확인으로 돌림 |
 | POST /asset-months/{month}/confirm | `revision_id`, revision If-Match·멱등키; 미확인 거부, 날짜/비교 범위 변화 확인 필요 |
@@ -175,6 +175,7 @@ draft·confirm·reopen·carry-previous 응답은 `month`, `revision_id`, `revisi
 `owner_member_id` 필터를 지원한다. 필터는 각 월 당시 값에 적용한다. 다른 가계의 자산/소유자 ID는 404다.
 공동 소유와 개인 owner ID를 함께 지정하면 422다. 비교는 UUID cursor, limit 1~200을 지원하며
 페이지마다 전체 필터 합계와 양쪽 revision 참조를 반환한다. 조회 도중 revision이 바뀐 페이지를 UI에서 섞지 않는다.
+항목은 자산 → 부채, 이름, 자산 ID 순이며 이번 달 값이 있으면 그 값, 없으면 비교 달 값의 분류·이름을 쓴다.
 
 비교 `state`는 available/no_previous_month/current_missing/unconfirmed다. 한쪽 기록이 없거나
 미확정이면 증감은 null이며, 미입력을 0원으로 바꾸지 않는다. 순자산 합계에는 included 항목만 넣는다.
@@ -256,6 +257,21 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 같은 key+payload는 같은 결과를 반환하고 다른 payload는 409.
 민감 API는 `Cache-Control: no-store`, 오류 응답에 입력 원문·SQL·토큰을 넣지 않는다.
 목록은 cursor pagination, 기본 50개/최대 200개. 날짜/금액/문자열 필터를 명시적으로 whitelist한다.
+
+목록 순서는 업무 기준이며 id 순서가 아니다. `cursor`는 직전 페이지 마지막 항목의 UUID다. 서버는 그 행의 정렬 값을 다시 읽어 다음 페이지를 잇고, 같은 값은 같은 방향의 id로 나눈다. cursor 행이 없거나 다른 가계의 것이면 404 `NOT_FOUND`다. 기기·패스키는 본인 행만 cursor가 된다. 페이지 사이에 정렬 값이 바뀐 행(사건 시작일, 회차 예정일)은 중복되거나 빠질 수 있으므로 클라이언트는 id로 중복을 거른다.
+
+| 목록 | 순서 |
+|---|---|
+| 가전·소모품·기기 연결·오늘 소모품, 문서·문서 연결, 보험 계약·납부 연결, 청구, 자산·계좌·카드, 기기·패스키, 고정 납부 규칙 | 등록 최신순 |
+| 보장 | 등록 순서(계약서 순서대로 입력) |
+| 사건 | 시작일 최신순 → 등록 최신순 |
+| 재고 기록 / 교체 이력 | 발생일 / 교체일 최신순 → 등록 최신순 |
+| 의료비·환불·보험금 수령·반환, 고정 납부 실제 납부 | 실제 날짜 최신순 → 등록 최신순 |
+| 수입(한 달) | 실제 날짜 최신순, 날짜 없는 월합계는 마지막 → 등록 최신순 |
+| 예정 회차 | 예정일 → 등록 순 |
+| 결제 연결: 규칙 / 회차 / 카드 | 적용 시작일 → 등록 순 / 예정일 → 등록 순 / 등록 최신순 |
+| 월 기록 값, 비교 항목 | 자산 → 부채, 이름, 자산 ID |
+| 이력·감사·진료 노드·보관함 공유 | 기존 순서 유지 |
 
 ### 오류 예시
 
@@ -412,7 +428,7 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 
 ### SB-018 결제수단 연결 조회와 종료 확인
 
-`GET /api/v1/cards/{resource_id}/payment-links`와 `GET /api/v1/accounts/{resource_id}/payment-links`는 현재·미래 규칙 버전, 미납/부분 납부 회차와 연결 카드를 각각 count/cursor 페이지로 반환한다. `as_of_date`는 기본 서울 오늘이며 종료 화면에서는 선택한 종료일을 전달한다. 카드 승인 계획과 계좌 직접 납부 계획을 구분하고, 응답은 `registered_recurring_only` 및 `account_withdrawal_total_available=false`로 전체 카드대금 출금액을 알 수 없음을 명시한다.
+`GET /api/v1/cards/{resource_id}/payment-links`와 `GET /api/v1/accounts/{resource_id}/payment-links`는 현재·미래 규칙 버전, 미납/부분 납부 회차와 연결 카드를 각각 count/cursor 페이지로 반환한다. `as_of_date`는 기본 서울 오늘이며 종료 화면에서는 선택한 종료일을 전달한다. 카드 승인 계획과 계좌 직접 납부 계획을 구분하고, 응답은 `registered_recurring_only` 및 `account_withdrawal_total_available=false`로 전체 카드대금 출금액을 알 수 없음을 명시한다. 세 목록은 위 순서로 나뉘며 digest도 이 순서의 전체 목록으로 계산한다.
 
 카드 PATCH/archive 및 계좌에 연결된 자산 PATCH/archive에서 새 종료일을 저장할 때 서버는 가계 잠금 안에서 연결을 다시 읽는다. 영향이 있으면 `closure_ack=true`와 조회에서 받은 `usage_digest`가 필요하며, 누락은 409 `PAYMENT_LINK_CONFIRMATION_REQUIRED`, 조회 이후 내용·버전·종료일 변경은 409 `PAYMENT_LINKS_CHANGED`다. digest는 페이지 밖의 연결까지 포함하며 권한 증명이 아니다. 종료일을 바꾸면 다시 조회한다. 확인 필드만 보낸 PATCH는 거부한다. 확인 필드는 DB·감사 변경 필드 목록에 저장하지 않는다.
 

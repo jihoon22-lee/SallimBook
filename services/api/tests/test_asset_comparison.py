@@ -1,6 +1,7 @@
 """Shared synthetic vectors plus authenticated comparison/trend API checks."""
 
 from datetime import UTC, datetime
+from functools import partial
 from uuid import UUID, uuid4
 
 import pytest
@@ -640,3 +641,29 @@ class TestComparisonDatabase:
             assert first["state"] == "confirmed" and first["value_state"] == "missing_value"
             assert first["confirmed_amount_krw"] is None
             assert second["confirmed_amount_krw"] == "0" and second["included_in_total"] is False
+
+
+def test_items_list_assets_before_liabilities_by_name_across_pages():
+    keys = [UUID(int=n) for n in (5, 4, 3, 2, 1)]
+    current = snapshot(
+        "2026-02",
+        [
+            row("100", asset_id=keys[0], name="나 예금"),
+            row("100", asset_id=keys[1], kind="liability", name="가 대출"),
+            row("100", asset_id=keys[2], name="가 예금"),
+            row("100", asset_id=keys[3], name="나 예금"),
+            row("100", asset_id=keys[4], kind="liability", name="다 대출"),
+        ],
+    )
+    read = partial(compare_snapshots, None, current, "2026-01", "2026-02", ComparisonFilters())
+    pages, cursor = [], None
+    while True:
+        result = read(cursor=cursor, limit=2)
+        pages.append([item.asset_id for item in result.items])
+        cursor = result.next_cursor
+        if cursor is None:
+            break
+    assert pages == [[keys[2], keys[3]], [keys[0], keys[1]], [keys[4]]]
+    with pytest.raises(DomainError) as error:
+        read(cursor=uuid4(), limit=2)
+    assert (error.value.code, error.value.status) == ("NOT_FOUND", 404)

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from test_accounts import make_actor
 from test_cards import create_card, version
 from test_income import headers, make_account
+from test_pagination import ids, pairs
 from test_recurring import generate, post_rule, rule_payload, settle
 
 from sallimbook.assets.router import router as asset_router
@@ -99,6 +100,19 @@ def usage(client, actor, kind, identifier, **query):
     return response.json()
 
 
+def link_pages(client, actor, kind, identifier, section):
+    name = {"rules": "rule_cursor", "obligations": "obligation_cursor", "cards": "card_cursor"}
+    pages, cursor = [], None
+    while True:
+        query = {"limit": 2} | ({name[section]: cursor} if cursor else {})
+        value = usage(client, actor, kind, identifier, **query)[section]
+        pages.append(value["items"])
+        cursor = value["next_cursor"]
+        if cursor is None:
+            return pages
+        assert cursor == value["items"][-1]["id"]
+
+
 def closure_body(value, **changes):
     return {
         "ended_on": "2026-01-31",
@@ -110,6 +124,39 @@ def closure_body(value, **changes):
 
 @pytest.mark.database
 class TestPaymentLinks:
+    def test_link_pages_follow_dates_and_card_entry_order(self, setup, db_engine):
+        app, actor = setup
+        account = make_account(db_engine, actor)
+        order = (3, 1, 4, 0, 2)
+        with TestClient(app) as client:
+            cards = [
+                create_card(client, actor, settlement_account_id=str(account.id))["id"]
+                for _ in range(5)
+            ]
+            starts = ["2026-03-01", "2026-02-01", "2026-03-01", "2026-01-01", "2026-02-01"]
+            planned = [
+                post_rule(client, actor, card_id=cards[0], effective_from=day)["id"]
+                for day in starts
+            ]
+            anchors = ["2026-01-20", "2026-01-10", "2026-01-20", "2026-01-05", "2026-01-10"]
+            due = [
+                post_rule(client, actor, card_id=cards[1], anchor_date=day)["id"] for day in anchors
+            ]
+            for rule in due:
+                generate(client, actor, rule, end="2026-01-31")
+            rules = link_pages(client, actor, "card", cards[0], "rules")
+            assert ids(rules, "rule_id") == pairs([planned[i] for i in order])
+            obligations = link_pages(client, actor, "card", cards[1], "obligations")
+            assert ids(obligations, "rule_id") == pairs([due[i] for i in order])
+            linked = link_pages(client, actor, "account", account.id, "cards")
+            assert ids(linked) == pairs(cards[::-1])
+            stale = client.get(
+                f"/api/v1/cards/{cards[0]}/payment-links",
+                headers=actor.headers,
+                params={"as_of_date": "2026-01-31", "rule_cursor": str(uuid4())},
+            )
+            assert stale.status_code == 404 and stale.json()["error"]["code"] == "NOT_FOUND"
+
     def test_direct_indirect_current_future_and_unpaid_are_separate(self, setup, db_engine):
         app, actor = setup
         account = make_account(db_engine, actor)

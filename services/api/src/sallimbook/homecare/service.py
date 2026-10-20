@@ -14,6 +14,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.pagination import check_limit, keyset_page
 from sallimbook.core.types import SEOUL, krw_string
 from sallimbook.homecare.calculations import MAX_QUANTITY, consumable_status, next_check_on
 from sallimbook.homecare.models import (
@@ -158,13 +159,16 @@ def _active(row, kind):
         raise DomainError(code, message, 422)
 
 
-def _page(session, query, model, cursor, limit):
-    if type(limit) is not int or not 1 <= limit <= 200:
-        raise DomainError("INVALID_PAGE_SIZE", "목록 크기를 확인해 주세요.", 422)
-    if cursor is not None:
-        query = query.where(model.id < cursor)
-    rows = list(session.scalars(query.order_by(model.id.desc()).limit(limit + 1)))
-    return rows[:limit], rows[limit - 1].id if len(rows) > limit else None
+def _page(session, principal, query, model, cursor, limit):
+    return keyset_page(
+        session,
+        query,
+        model=model,
+        household_id=principal.household_id,
+        keys=(model.created_at,),
+        cursor=cursor,
+        limit=limit,
+    )
 
 
 def _status_filter(query, model, status):
@@ -246,7 +250,7 @@ def list_appliances(session, principal, *, status="active", cursor=None, limit=5
     query = _status_filter(
         select(Appliance).where(Appliance.household_id == principal.household_id), Appliance, status
     )
-    rows, next_cursor = _page(session, query, Appliance, cursor, limit)
+    rows, next_cursor = _page(session, principal, query, Appliance, cursor, limit)
     current = today()
     return _finish(
         session,
@@ -305,7 +309,7 @@ def list_consumables(session, principal, *, status="active", cursor=None, limit=
         Consumable,
         status,
     )
-    rows, next_cursor = _page(session, query, Consumable, cursor, limit)
+    rows, next_cursor = _page(session, principal, query, Consumable, cursor, limit)
     return _finish(
         session,
         ConsumableListResponse(
@@ -363,6 +367,7 @@ def _latest_replacements(session, principal, link_ids):
         .order_by(
             ConsumableReplacement.appliance_consumable_id,
             ConsumableReplacement.replaced_on.desc(),
+            ConsumableReplacement.created_at.desc(),
             ConsumableReplacement.id.desc(),
         )
     )
@@ -490,8 +495,7 @@ def _link_page(
     limit=50,
     usable_only=False,
 ):
-    if type(limit) is not int or not 1 <= limit <= 200:
-        raise DomainError("INVALID_PAGE_SIZE", "목록 크기를 확인해 주세요.", 422)
+    check_limit(limit)
     if appliance_id is not None:
         scoped_entity(session, Appliance, appliance_id, principal)
     if consumable_id is not None:
@@ -522,10 +526,17 @@ def _link_page(
             Appliance.ended_on.is_(None),
             Consumable.ended_on.is_(None),
         )
-    if cursor is not None:
-        query = query.where(ApplianceConsumable.id < cursor)
-    rows = list(session.execute(query.order_by(ApplianceConsumable.id.desc()).limit(limit + 1)))
-    return rows[:limit], rows[limit - 1][0].id if len(rows) > limit else None
+    return keyset_page(
+        session,
+        query,
+        model=ApplianceConsumable,
+        household_id=principal.household_id,
+        keys=(ApplianceConsumable.created_at,),
+        cursor=cursor,
+        limit=limit,
+        scalars=False,
+        cursor_of=lambda row: row[0].id,
+    )
 
 
 def list_appliance_consumables(session, principal, **query):
@@ -928,14 +939,21 @@ def _movement_response(row, reversed_by):
 def list_stock_movements(session, principal, consumable_id, *, cursor=None, limit=50):
     scoped_entity(session, Consumable, consumable_id, principal)
     query = _movement_query(principal).where(StockMovement.consumable_id == consumable_id)
-    if cursor is not None:
-        query = query.where(StockMovement.id < cursor)
-    rows = list(session.execute(query.order_by(StockMovement.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=StockMovement,
+        household_id=principal.household_id,
+        keys=(StockMovement.occurred_on, StockMovement.created_at),
+        cursor=cursor,
+        limit=limit,
+        scalars=False,
+        cursor_of=lambda row: row[0].id,
+    )
     return _finish(
         session,
         StockMovementListResponse(
-            items=[_movement_response(*row) for row in rows[:limit]],
-            next_cursor=rows[limit - 1][0].id if len(rows) > limit else None,
+            items=[_movement_response(*row) for row in rows], next_cursor=next_cursor
         ),
     )
 
@@ -981,14 +999,21 @@ def list_replacements(session, principal, link_id, *, cursor=None, limit=50):
     query = _replacement_query(principal).where(
         ConsumableReplacement.appliance_consumable_id == link_id
     )
-    if cursor is not None:
-        query = query.where(ConsumableReplacement.id < cursor)
-    rows = list(session.execute(query.order_by(ConsumableReplacement.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=ConsumableReplacement,
+        household_id=principal.household_id,
+        keys=(ConsumableReplacement.replaced_on, ConsumableReplacement.created_at),
+        cursor=cursor,
+        limit=limit,
+        scalars=False,
+        cursor_of=lambda row: row[0].id,
+    )
     return _finish(
         session,
         ReplacementListResponse(
-            items=[_replacement_response(*row) for row in rows[:limit]],
-            next_cursor=rows[limit - 1][0].id if len(rows) > limit else None,
+            items=[_replacement_response(*row) for row in rows], next_cursor=next_cursor
         ),
     )
 
