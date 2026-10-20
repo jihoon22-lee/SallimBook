@@ -10,7 +10,7 @@ internal enum class FinanceOperation {
     LIST_APPLIANCE_CONSUMABLES, CREATE_APPLIANCE_CONSUMABLE, GET_APPLIANCE_CONSUMABLE, UPDATE_APPLIANCE_CONSUMABLE, LIST_CONSUMABLE_REPLACEMENTS, CREATE_CONSUMABLE_REPLACEMENT, GET_CONSUMABLE_REPLACEMENT, CANCEL_CONSUMABLE_REPLACEMENT, LIST_APPLIANCES, CREATE_APPLIANCE, GET_APPLIANCE, UPDATE_APPLIANCE, LIST_CONSUMABLES, CREATE_CONSUMABLE, GET_CONSUMABLE, UPDATE_CONSUMABLE, LIST_STOCK_MOVEMENTS, CREATE_STOCK_MOVEMENT, GET_STOCK_MOVEMENT, CANCEL_STOCK_MOVEMENT, GET_HOMECARE_STATUS,
     MEDICAL_NODE_SUMMARY, INSURANCE_CASE_SUMMARY, LIST_INSURANCE_CLAIMS, CREATE_INSURANCE_CLAIM, GET_INSURANCE_CLAIM, UPDATE_INSURANCE_CLAIM, INSURANCE_CLAIM_HISTORY, LIST_MEDICAL_EXPENSES, CREATE_MEDICAL_EXPENSE, GET_MEDICAL_EXPENSE, CORRECT_MEDICAL_EXPENSE, MEDICAL_EXPENSE_HISTORY, LIST_MEDICAL_REFUNDS, CREATE_MEDICAL_REFUND, VOID_MEDICAL_EXPENSE, GET_MEDICAL_REFUND, CORRECT_MEDICAL_REFUND, MEDICAL_REFUND_HISTORY, VOID_MEDICAL_REFUND, GET_PAYOUT_ALLOCATION, LINK_PAYOUT_ALLOCATION, PAYOUT_ALLOCATION_HISTORY, LIST_INSURANCE_PAYOUTS, CREATE_INSURANCE_PAYOUT, GET_INSURANCE_PAYOUT, CORRECT_INSURANCE_PAYOUT, INSURANCE_PAYOUT_HISTORY, LIST_INSURANCE_RETURNS, CREATE_INSURANCE_RETURN, VOID_INSURANCE_PAYOUT, GET_INSURANCE_RETURN, CORRECT_INSURANCE_RETURN, INSURANCE_RETURN_HISTORY, VOID_INSURANCE_RETURN,
     LIST_ASSETS, GET_ASSET, CREATE_ASSET, UPDATE_ASSET, ARCHIVE_ASSET, DELETE_ASSET,
-    LIST_ACCOUNTS, GET_ACCOUNT, CREATE_ACCOUNT, UPDATE_ACCOUNT,
+    LIST_ACCOUNTS, GET_ACCOUNT, CREATE_ACCOUNT, UPDATE_ACCOUNT, DELETE_ACCOUNT,
     GET_ASSET_MONTH, GET_ASSET_MONTH_REVISION, LIST_ASSET_MONTH_REVISIONS, CREATE_ASSET_MONTH_DRAFT,
     UPDATE_ASSET_MONTH_VALUE, SYNCHRONIZE_ASSET_MONTH_SCOPE, CONFIRM_ASSET_MONTH, REOPEN_ASSET_MONTH,
     CARRY_PREVIOUS_ASSET_MONTH,
@@ -166,7 +166,8 @@ internal object FinancePolicy {
         if (InsuranceEventPolicy.supports(operation)) return InsuranceEventPolicy.prepare(operation, value)
         if (InsurancePolicy.supports(operation)) return InsurancePolicy.prepare(operation, value)
         val args = objectValue(value)
-        val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
+        val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT,
+            FinanceOperation.UPDATE_ACCOUNT, FinanceOperation.DELETE_ACCOUNT)
         val base = if (account) "/api/v1/accounts" else "/api/v1/assets"
         val idKey = if (account) "accountId" else "assetId"
         return when (operation) {
@@ -194,7 +195,7 @@ internal object FinancePolicy {
                 PaymentLinksPolicy.closure(input)
                 FinanceRequest("POST", "$base/${id(args[idKey])}/archive", input, tag(args["ifMatch"]))
             }
-            FinanceOperation.DELETE_ASSET -> {
+            FinanceOperation.DELETE_ASSET, FinanceOperation.DELETE_ACCOUNT -> {
                 if (args.keys != setOf(idKey, "ifMatch")) invalid()
                 FinanceRequest("DELETE", "$base/${id(args[idKey])}", null, tag(args["ifMatch"]))
             }
@@ -258,8 +259,9 @@ internal object FinancePolicy {
                                 if (account) FinanceOperation.UPDATE_ACCOUNT else FinanceOperation.UPDATE_ASSET
                             }
                             "DELETE" -> {
-                                if (account || body != null) invalid()
-                                args["ifMatch"] = ifMatch; FinanceOperation.DELETE_ASSET
+                                if (body != null) invalid()
+                                args["ifMatch"] = ifMatch
+                                if (account) FinanceOperation.DELETE_ACCOUNT else FinanceOperation.DELETE_ASSET
                             }
                             else -> invalid()
                         }
@@ -322,7 +324,7 @@ internal object FinancePolicy {
             if (NativeHomecarePolicy.supports(operation)) return NativeHomecarePolicy.response(operation, request, status, value)
             if (InsuranceEventPolicy.supports(operation)) return InsuranceEventPolicy.response(operation, request, status, value)
             if (InsurancePolicy.supports(operation)) return InsurancePolicy.response(operation, request, status, value)
-            if (operation == FinanceOperation.DELETE_ASSET) {
+            if (operation in setOf(FinanceOperation.DELETE_ASSET, FinanceOperation.DELETE_ACCOUNT)) {
                 if (status != 204 || value != null) invalid()
                 return null
             }

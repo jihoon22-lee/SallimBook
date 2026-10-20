@@ -216,3 +216,30 @@ test("asset and account end dates stop at Seoul today and a stored future end as
     "보유 종료일은 서울 기준 오늘보다 늦을 수 없어요",
   );
 });
+
+test("asset misregistration delete refuses an account-linked asset and removes an unreferenced one", async ({
+  page,
+}) => {
+  const state = await mockFinance(page);
+  await page.goto(`/assets/${uid(11)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await expect(
+    page.getByText("계좌로 등록한 금융 자산은 계좌 상세에서 계좌와 함께 삭제할 수 있어요.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByLabel("잘못 등록한 자산이며 실제 삭제할 것을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "오등록 자산 삭제", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("연결된 기록이 있어 삭제할 수 없어요");
+  await page.goto(`/assets/${uid(10)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("잘못 등록한 자산이며 실제 삭제할 것을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "오등록 자산 삭제", exact: true }).click();
+  await expect(page).toHaveURL(/\/assets$/);
+  await expect(page.getByText("자산이 삭제된 것을 확인했어요.", { exact: true })).toBeVisible();
+  expect(state.assets.map((asset) => asset.id)).toEqual([uid(11), uid(12)]);
+});

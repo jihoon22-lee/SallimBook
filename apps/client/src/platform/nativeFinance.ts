@@ -160,6 +160,8 @@ export const nativeFinance = {
     metadataOnly(input);
     return metadata(() => plugin.updateAccount({ accountId, input, ifMatch }));
   },
+  deleteAccount: (accountId: string, ifMatch: string) =>
+    metadata(() => plugin.deleteAccount({ accountId, ifMatch })),
   getAssetMonth: (options: Parameters<SallimBookAuth["getAssetMonth"]>[0]) =>
     metadata(() => plugin.getAssetMonth(options)),
   getAssetMonthRevision: (options: Parameters<SallimBookAuth["getAssetMonthRevision"]>[0]) =>

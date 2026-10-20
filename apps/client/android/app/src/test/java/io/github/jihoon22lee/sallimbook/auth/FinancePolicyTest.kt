@@ -115,13 +115,36 @@ class FinancePolicyTest {
         invalid(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.LIST_ASSETS, request, 200, list+mapOf("token" to "synthetic")) }
     }
 
+    @Test fun accountDeleteIsABodylessVersionedMetadataCommand() {
+        val delete = FinancePolicy.prepare(FinanceOperation.DELETE_ACCOUNT, mapOf("accountId" to accountId, "ifMatch" to "\"2\""))
+        assertEquals("DELETE", delete.method)
+        assertEquals("/api/v1/accounts/$accountId", delete.path)
+        assertNull(delete.body)
+        assertTrue(FinancePolicy.metadataHttpAllowed("DELETE", delete.path, null, "\"2\""))
+        assertNull(FinancePolicy.response(FinanceOperation.DELETE_ACCOUNT, delete, 204, null))
+        for (args in listOf(
+            mapOf("accountId" to accountId), mapOf("accountId" to accountId, "ifMatch" to "W/\"2\""),
+            mapOf("accountId" to accountId, "ifMatch" to "\"2\"", "input" to emptyMap<String, Any>()),
+            mapOf("accountId" to "../$accountId", "ifMatch" to "\"2\""),
+        )) invalid { FinancePolicy.prepare(FinanceOperation.DELETE_ACCOUNT, args) }
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", delete.path, emptyMap<String, Any>(), "\"2\""))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", delete.path, null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", "${delete.path}/reveal", null, "\"2\""))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", delete.path, null, "\"2\"", "synthetic-key"))
+        assertFalse(AuthPolicy.requestAllowed("DELETE", delete.path, "\"2\""))
+        invalid(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.DELETE_ACCOUNT, delete, 200, account()) }
+        invalid(AuthCode.ACCESS_DENIED) {
+            FinancePolicy.response(FinanceOperation.DELETE_ACCOUNT, delete, 204, mapOf("account_number" to "synthetic"))
+        }
+    }
+
     @Test fun numberRequestsStayOutsideBothGenericAndFinanceMetadataPaths() {
         val path = "/api/v1/accounts/$accountId"
         assertFalse(AuthPolicy.requestAllowed("GET", path, null))
         assertFalse(AuthPolicy.requestAllowed("POST", "$path/reveal", null))
         assertFalse(FinancePolicy.metadataHttpAllowed("POST", "$path/reveal", emptyMap<String, Any>(), null))
         assertFalse(FinancePolicy.metadataHttpAllowed("PATCH", path, mapOf("account_number" to null), "\"1\""))
-        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", path, null, "\"1\""))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", path, mapOf("account_number" to null), "\"1\""))
         assertTrue(FinancePolicy.numberPath(path, false))
         assertTrue(FinancePolicy.numberPath("$path/reveal", true))
         for (bad in listOf("$path/reveal?x=1", "$path/../reveal", "https://synthetic.invalid$path/reveal")) assertFalse(FinancePolicy.numberPath(bad, true))

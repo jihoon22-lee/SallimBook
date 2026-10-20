@@ -338,6 +338,10 @@ export interface SallimBookAuth {
     input: NativeAccountPatch;
     ifMatch: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AccountResponse"]>>>;
+  deleteAccount(options: {
+    accountId: string;
+    ifMatch: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   getAssetMonth(options: {
     month: string;
     query?: NonNullable<operations["getAssetMonth"]["parameters"]["query"]>;

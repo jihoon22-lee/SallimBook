@@ -244,3 +244,48 @@ test("new account linking lists active financial assets and preserves inputs on 
   await page.getByRole("button", { name: "금융 자산 다시 불러오기", exact: true }).click();
   await expect(page.getByRole("option", { name: "합성 새 연결 후보" })).toHaveCount(0);
 });
+
+test("account misregistration delete needs confirmation and treats a retried 404 as deleted", async ({
+  page,
+}) => {
+  const state = await mockFinance(page);
+  state.deleteFailureAfter = true;
+  await page.goto(`/accounts/${uid(30)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  const remove = page.getByRole("button", { name: "오등록 계좌 삭제", exact: true });
+  await expect(remove).toBeDisabled();
+  await page
+    .getByLabel("잘못 등록한 계좌이며 연결된 금융 자산과 함께 삭제할 것을 확인했어요.", {
+      exact: true,
+    })
+    .check();
+  await remove.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await remove.click();
+  await expect(page).toHaveURL(/\/accounts$/);
+  await expect(
+    page.getByText("계좌와 연결된 금융 자산이 삭제된 것을 확인했어요.", { exact: true }),
+  ).toBeVisible();
+  expect(state.deletes).toEqual([
+    { path: `/api/v1/accounts/${uid(30)}`, version: '"1"' },
+    { path: `/api/v1/accounts/${uid(30)}`, version: '"1"' },
+  ]);
+  expect(state.accounts).toHaveLength(0);
+  expect(state.assets.some((asset) => asset.id === uid(11))).toBe(false);
+});
+
+test("a referenced account explains why it stays and offers closure instead", async ({ page }) => {
+  const state = await mockFinance(page);
+  state.deleteInUse = true;
+  await page.goto(`/accounts/${uid(30)}`);
+  await page.getByRole("button", { name: "오등록 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("잘못 등록한 계좌이며 연결된 금융 자산과 함께 삭제할 것을 확인했어요.", {
+      exact: true,
+    })
+    .check();
+  await page.getByRole("button", { name: "오등록 계좌 삭제", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("계좌 사용 종료로 과거 기록을 보존해 주세요");
+  await expect(page.getByRole("button", { name: "오등록 계좌 삭제", exact: true })).toBeDisabled();
+  expect(state.accounts).toHaveLength(1);
+});
