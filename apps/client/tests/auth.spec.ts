@@ -38,6 +38,11 @@ async function mockIdentity(page: Page, loggedIn = false) {
     paths: [] as string[],
     validLoginShape: false,
     validAcceptShape: false,
+    passwordChanges: 0,
+    rejectPassword: false,
+    validPasswordShape: false,
+    signOutAttempts: 0,
+    validSignOutShape: false,
     csrf: `synthetic-csrf-${crypto.randomUUID()}`,
     invitationCode: `synthetic-invitation-${crypto.randomUUID()}`,
     devices: [
@@ -73,6 +78,14 @@ async function mockIdentity(page: Page, loggedIn = false) {
         },
       } satisfies components["schemas"]["ErrorResponse"],
     });
+  const revokeOthers = () =>
+    state.devices
+      .filter((device) => !device.current && device.status === "active")
+      .map((device) => {
+        device.status = "revoked";
+        device.version += 1;
+        return device;
+      }).length;
   async function csrfRejected(route: Route) {
     if (state.csrfFailuresRemaining > 0) {
       state.csrfFailuresRemaining -= 1;
@@ -153,6 +166,24 @@ async function mockIdentity(page: Page, loggedIn = false) {
       state.validReauthShape = Object.keys(route.request().postDataJSON()).join(",") === "password";
       if (state.rejectReauth) return failure(route, 403, "REAUTHENTICATION_FAILED");
       return route.fulfill({ json: member });
+    }
+    if (path === "/api/v1/auth/password" && method === "POST") {
+      state.passwordChanges += 1;
+      if (await csrfRejected(route)) return;
+      const body = route.request().postDataJSON();
+      state.validPasswordShape =
+        Object.keys(body).sort().join(",") === "current_password,new_password" &&
+        Boolean(body.current_password) &&
+        String(body.new_password).length >= 15;
+      if (state.rejectPassword) return failure(route, 403, "REAUTHENTICATION_FAILED");
+      return route.fulfill({ json: { revoked_devices: revokeOthers() } });
+    }
+    if (path === "/api/v1/devices/revoke-others" && method === "POST") {
+      state.signOutAttempts += 1;
+      if (await csrfRejected(route)) return;
+      state.validSignOutShape =
+        Object.keys(route.request().postDataJSON()).join(",") === "password";
+      return route.fulfill({ json: { revoked_devices: revokeOthers() } });
     }
     if (path === "/api/v1/devices" && method === "GET") {
       if (state.devicesUnauthorized) return failure(route, 401, "UNAUTHENTICATED");
@@ -512,4 +543,68 @@ test("login rate limit shows a wait message instead of a credential error", asyn
     await expect(page.getByRole("alert")).toContainText("잠시 후 다시 시도해 주세요");
     await expect(page.getByRole("alert")).not.toContainText("로그인 이름이나 비밀번호");
   }
+});
+
+test("password change checks the new password locally, clears every field and reloads devices", async ({
+  page,
+}) => {
+  const api = await mockIdentity(page, true);
+  await page.goto("/settings/auth");
+  const labels = ["현재 비밀번호", "새 비밀번호", "새 비밀번호 확인"];
+  async function submit(confirmation?: string) {
+    const next = `synthetic-new-${crypto.randomUUID()}`;
+    await page.getByLabel(labels[0], { exact: true }).fill(`synthetic-old-${crypto.randomUUID()}`);
+    await page.getByLabel(labels[1], { exact: true }).fill(next);
+    await page.getByLabel(labels[2], { exact: true }).fill(confirmation ?? next);
+    await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+  }
+  await submit("synthetic-mismatched-confirmation");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "새 비밀번호와 확인 입력이 달라요." }),
+  ).toBeVisible();
+  expect(api.passwordChanges).toBe(0);
+  for (const label of labels) await expect(page.getByLabel(label, { exact: true })).toHaveValue("");
+  api.rejectPassword = true;
+  await submit();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "현재 계정의 비밀번호를 다시 확인해 주세요." }),
+  ).toBeVisible();
+  api.rejectPassword = false;
+  await submit();
+  await expect(page.getByRole("status").filter({ hasText: "비밀번호를 바꿨어요." })).toBeVisible();
+  await expect(page.locator(".device-card").filter({ hasText: "합성 다른 기기" })).toContainText(
+    "연결 해제됨",
+  );
+  await expect(page.locator(".device-card").filter({ hasText: "합성 현재 기기" })).toContainText(
+    "연결됨",
+  );
+  expect(api.passwordChanges).toBe(2);
+  expect(api.validPasswordShape).toBe(true);
+  expect(api.loggedIn).toBe(true);
+  await expectNoPersistence(page);
+});
+
+test("signing out other devices confirms the password and keeps this device signed in", async ({
+  page,
+}) => {
+  const api = await mockIdentity(page, true);
+  await page.goto("/settings/auth");
+  await page.getByRole("button", { name: "다른 기기 모두 로그아웃", exact: true }).click();
+  await page
+    .getByLabel("현재 계정 비밀번호", { exact: true })
+    .fill(`synthetic-only-${crypto.randomUUID()}`);
+  await page.getByRole("button", { name: "다른 기기 로그아웃 확인", exact: true }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "다른 기기를 모두 로그아웃했어요." }),
+  ).toBeVisible();
+  await expect(page.locator(".device-card").filter({ hasText: "합성 다른 기기" })).toContainText(
+    "연결 해제됨",
+  );
+  await expect(page.locator(".device-card").filter({ hasText: "합성 현재 기기" })).toContainText(
+    "연결됨",
+  );
+  expect(api.signOutAttempts).toBe(1);
+  expect(api.validSignOutShape).toBe(true);
+  expect(api.loggedIn).toBe(true);
+  await expectNoPersistence(page);
 });
