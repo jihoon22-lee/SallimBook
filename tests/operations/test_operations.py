@@ -199,15 +199,24 @@ class DeploymentTests(unittest.TestCase):
                 self.assertIn(f'{build_context.ROLE_LABEL}="{role}"', dockerfile)
                 self.assertNotIn("ARG", dockerfile)
 
-    def test_container_health_requires_scanner_and_database_readiness(self):
-        with patch.object(health, "scanner_ready") as scanner, patch.object(
-            health.urllib.request, "urlopen"
-        ) as http:
+    def test_container_health_requires_scanner_inspector_and_database_readiness(self):
+        with (
+            patch.object(health, "scanner_ready") as scanner,
+            patch.object(health, "inspector_ready") as inspector,
+            patch.object(health.urllib.request, "urlopen") as http,
+        ):
             response = MagicMock(status=200)
             http.return_value.__enter__.return_value = response
+            health.check("inspector")
+            inspector.assert_called_once()
+            scanner.assert_not_called()
+            http.assert_not_called()
+            inspector.reset_mock()
             health.check("scanner")
+            inspector.assert_not_called()
             http.assert_not_called()
             health.check("api")
+            inspector.assert_called_once()
             http.assert_called_once()
             for reason in ("scanner-down", "scanner-stale"):
                 scanner.side_effect = RuntimeError(reason)
@@ -217,6 +226,13 @@ class DeploymentTests(unittest.TestCase):
                         health.check(mode)
                 http.assert_not_called()
             scanner.side_effect = None
+            inspector.side_effect = RuntimeError("inspector-down")
+            http.reset_mock()
+            for mode in ("inspector", "api"):
+                with self.subTest(mode=mode), self.assertRaises(RuntimeError):
+                    health.check(mode)
+            http.assert_not_called()
+            inspector.side_effect = None
             response.status = 503
             with self.assertRaises(RuntimeError):
                 health.check("api")

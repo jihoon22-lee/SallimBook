@@ -247,6 +247,7 @@ def _validate_document(
     scanner_socket: str | None,
     tesseract_path: str | None = "/usr/bin/tesseract",
     pdftoppm_path: str | None = "/usr/bin/pdftoppm",
+    inspector_socket: str | None = None,
 ) -> ValidatedDocument:
     """Inspect the exact immutable bytes before encryption; no permissive fallback."""
     if type(data) is not bytes or not data or declared_mime not in ALLOWED_MIME_TYPES:
@@ -254,17 +255,23 @@ def _validate_document(
     if len(data) > MAX_DOCUMENT_BYTES:
         _fail("DOCUMENT_TOO_LARGE")
     _scan(data, scanner_socket)
-    tesseract = _binary_path(tesseract_path)
-    pdftoppm = _binary_path(pdftoppm_path) if declared_mime == "application/pdf" else "-"
-    worker = Path(__file__).with_name("_validation_worker.py").resolve()
     try:
-        output = bounded_process(
-            [sys.executable, "-I", "-B", str(worker), declared_mime, tesseract, pdftoppm],
-            data,
-            timeout=WORKER_SECONDS,
-            output_limit=1024,
-            new_session=True,
-        )
+        if inspector_socket is not None:
+            output = _inspector_command(
+                _socket_path(inspector_socket), INSPECT_KINDS[declared_mime], data
+            )
+        else:
+            # Development/test only: production refuses to start without the inspector.
+            tesseract = _binary_path(tesseract_path)
+            pdftoppm = _binary_path(pdftoppm_path) if declared_mime == "application/pdf" else "-"
+            worker = Path(__file__).with_name("_validation_worker.py").resolve()
+            output = bounded_process(
+                [sys.executable, "-I", "-B", str(worker), declared_mime, tesseract, pdftoppm],
+                data,
+                timeout=WORKER_SECONDS,
+                output_limit=1024,
+                new_session=True,
+            )
         result = json.loads(output)
     except ProcessTimeout:
         _fail("DOCUMENT_TOO_COMPLEX")
@@ -295,6 +302,7 @@ def validate_document(
     scanner_socket: str | None,
     tesseract_path: str | None = "/usr/bin/tesseract",
     pdftoppm_path: str | None = "/usr/bin/pdftoppm",
+    inspector_socket: str | None = None,
 ) -> ValidatedDocument:
     """One expensive inspection per API process; busy callers fail without queuing bytes."""
     if not _INSPECTION_SLOT.acquire(blocking=False):
@@ -306,6 +314,7 @@ def validate_document(
             scanner_socket=scanner_socket,
             tesseract_path=tesseract_path,
             pdftoppm_path=pdftoppm_path,
+            inspector_socket=inspector_socket,
         )
     finally:
         _INSPECTION_SLOT.release()
