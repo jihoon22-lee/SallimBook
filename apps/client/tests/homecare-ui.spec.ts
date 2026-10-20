@@ -1,7 +1,7 @@
 import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import catalog from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
-import { mockHomecare, applianceRow, consumableRow } from "./support/homecare";
+import { mockHomecare, applianceRow, consumableRow, linkRow } from "./support/homecare";
 import { uid } from "./support/finance";
 const vectors = catalog.vectors;
 const appliance = `/appliances/${uid(100)}`,
@@ -503,4 +503,54 @@ test("appliance list and home warranty notices display server status without gue
   expect(
     state.reads.filter((r) => r.path === "/api/v1/appliances" && r.query.has("cursor")).length,
   ).toBeGreaterThan(0);
+});
+test("home today card ranks due, purchase, soon, low stock and unknown links and keeps the first four", async ({
+  page,
+}) => {
+  const state = await mockHomecare(page);
+  const far = "2026-12-01";
+  state.appliances = [
+    "합성 가습기",
+    "합성 공기청정기",
+    "합성 냉장고",
+    "합성 세탁기",
+    "합성 정수기",
+    "합성 제습기",
+    "합성 오븐",
+  ].map((name, i) => applianceRow(110 + i, { name }));
+  state.consumables = [
+    consumableRow(200),
+    consumableRow(201, {
+      name: "합성 예비 필터",
+      sku_or_model: "SYNTHETIC-SPARE",
+      stock_quantity: 1,
+      low_stock_threshold: 1,
+    }),
+  ];
+  state.replacements = [];
+  state.links = [
+    linkRow(310, { appliance_id: uid(115), next_check_override: "2026-10-17" }),
+    linkRow(311, { appliance_id: uid(110), next_check_override: far }),
+    linkRow(312, { appliance_id: uid(113), next_check_override: "2026-10-24" }),
+    linkRow(313, { appliance_id: uid(111), consumable_id: uid(201), next_check_override: far }),
+    linkRow(314, { appliance_id: uid(114), quantity_per_replacement: 4, next_check_override: far }),
+    linkRow(315, { appliance_id: uid(112), interval_unit: "manual", interval_count: null }),
+    linkRow(316, { appliance_id: uid(111), next_check_override: "2026-10-01" }),
+    linkRow(317, { appliance_id: uid(116), next_check_override: "2026-10-25" }),
+  ];
+  await page.goto("/");
+  const region = page.getByRole("region", { name: "살펴볼 소모품" });
+  await expect(region.locator(".care-count")).toHaveText("확인할 소모품 6개");
+  await expect(region.locator(".care-row h3")).toHaveText([
+    "합성 공기청정기 · 합성 공용 필터",
+    "합성 제습기 · 합성 공용 필터",
+    "합성 정수기 · 합성 공용 필터",
+    "합성 세탁기 · 합성 공용 필터",
+  ]);
+  const soon = region.locator(".care-row").nth(3).locator(".care-status");
+  await expect(soon).toHaveText("곧 교체 · 교체할 재고 있음");
+  await expect(soon).toHaveAttribute("data-attention", "soon");
+  await expect(region.getByRole("link", { name: "나머지 2개 확인할 소모품 보기" })).toBeVisible();
+  await region.getByLabel("오늘 소모품 보기").selectOption("soon");
+  await expect(region.locator(".care-row h3")).toHaveText(["합성 세탁기 · 합성 공용 필터"]);
 });
