@@ -67,7 +67,6 @@ p { margin-block: .65rem; }
 .month-control label { display: inline-flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--muted); font-weight: 600; }
 .month-picker input { min-width: 0; max-width: 100%; min-height: 48px; padding: 6px; border: 0; border-radius: 7px; background: transparent; color: var(--foreground); font-weight: 650; }
 .month-picker > .muted { padding-left: 2px; font-size: .75rem; }
-.month-caption { font-weight: 650; }
 .card { min-width: 0; padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card + .card, main > section + section, main > .card + .card { margin-top: 18px; }
 .card h2 { font-size: 1.125rem; font-weight: 720; margin: 0 0 12px; }
@@ -120,7 +119,6 @@ p { margin-block: .65rem; }
 .related-links .icon { color: var(--muted); }
 .related-links a:hover { border-color: var(--accent); }
 .status-chip { display: inline-flex; align-items: center; padding: 4px 9px; background: var(--selected); color: var(--accent); border-radius: 6px; font-size: .6875rem; font-weight: 650; line-height: 1.5; margin: 0 0 10px; }
-.planned-state { margin-top: 8px; }
 .month-action { margin: -4px 0 18px; font-size: .8125rem; }
 .auth-form, .finance-form, .finance-fields { display: grid; gap: 20px; min-width: 0; }
 .auth-form { max-width: 40rem; margin-top: 20px; }
@@ -190,9 +188,9 @@ details > summary { min-height: 48px; padding-block: 11px; cursor: pointer; font
 .table-scroll tbody tr:hover { background: var(--surface-subtle); }
 .table-scroll caption { text-align: left; padding: 15px 16px; font-weight: 700; color: var(--foreground); }
 .table-scroll .numeric { text-align: right; }
-.empty-state, .resource-state { text-align: center; padding-block: 38px; }
+.empty-state { text-align: center; padding-block: 38px; }
 .empty-state-icon { width: 52px; height: 52px; margin-bottom: 16px; }
-.empty-state p, .resource-state p { color: var(--muted); max-width: 30rem; margin-inline: auto; }
+.empty-state p { color: var(--muted); max-width: 30rem; margin-inline: auto; }
 .loading-state { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--muted); font-size: .8125rem; }
 .loading-state::before { content: ""; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; flex: 0 0 auto; animation: loading-turn .9s linear infinite; }
 @keyframes loading-turn { to { transform: rotate(360deg); } }

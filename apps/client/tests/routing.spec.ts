@@ -237,3 +237,11 @@ test("only the visited sub-page is the current page in desktop navigation", asyn
   const background = await section.evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(background).not.toBe("rgba(0, 0, 0, 0)");
 });
+
+test("more page keeps its related links", async ({ page }) => {
+  await page.goto("/more");
+  const links = page.getByRole("main").locator("ul.related-links a");
+  await expect(links).toHaveCount(4);
+  await expect(links.nth(0)).toContainText("가전 관리");
+  await expect(links.nth(2)).toContainText("설정");
+});

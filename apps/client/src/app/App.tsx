@@ -76,7 +76,7 @@ import { ExportsPage } from "../features/exports/ExportsPage";
 import { VaultPage } from "../features/vault/VaultPage";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
 import { MonthProvider } from "../shared/MonthContext";
-import { RelatedLinks } from "../shared/PlannedPage";
+import { RelatedLinks } from "../shared/RelatedLinks";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 import { useHistoryScroll } from "../shared/historyRestore";
 import { UnsavedChangesProvider, useLeavePrompt } from "../shared/UnsavedChanges";

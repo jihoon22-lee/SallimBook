@@ -2,7 +2,7 @@ import { Icon } from "../../shared/Icon";
 import { useCallback } from "react";
 import { Link } from "react-router";
 import { formatMonth, useMonth } from "../../shared/MonthContext";
-import { RelatedLinks } from "../../shared/PlannedPage";
+import { RelatedLinks } from "../../shared/RelatedLinks";
 import { useAuth } from "../auth/AuthProvider";
 import { formatKrw } from "../assets/months/model";
 import { CashflowError } from "../finance/FinancialFeedback";
