@@ -361,3 +361,27 @@ test("invalid dates and invalid months fail client validation", async ({ page })
   ).toBeVisible();
   expect(state.reads).toHaveLength(0);
 });
+
+test("a future month offers no draft and a server future-month rejection is explained", async ({
+  page,
+}) => {
+  const state = await mockMonths(page);
+  state.record = null;
+  await page.clock.setFixedTime(new Date("2025-01-31T14:59:00Z"));
+  await page.goto("/assets/months/2025-02");
+  await expect(
+    page.getByRole("heading", { name: "아직 시작하지 않은 달이에요", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "월 작성본 만들기", exact: true })).toHaveCount(0);
+  await page.clock.setFixedTime(new Date("2025-01-31T15:00:00Z"));
+  await page.route("**/api/v1/asset-months/2025-02/draft", (route) =>
+    route.fulfill({
+      status: 422,
+      json: { error: { code: "MONTH_IN_FUTURE", message: "synthetic", request_id: uid(99) } },
+    }),
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "월 작성본 만들기", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("아직 시작하지 않은 달은 기록할 수 없어요");
+  expect(state.writes).toHaveLength(0);
+});

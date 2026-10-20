@@ -29,7 +29,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
-from sallimbook.core.types import SEOUL, krw_string, month_end, month_start
+from sallimbook.core.types import SEOUL, krw_string, month_end, month_start, seoul_month
 from sallimbook.identity.service import utcnow
 
 SCOPE_FIELDS = (
@@ -318,6 +318,9 @@ def create_draft(
     lock_asset_scope(session, principal)
 
     def execute():
+        # Inside execute: a rejected request rolls back, so its key works once the month starts.
+        if month_start(month) > month_start(seoul_month(utcnow())):
+            raise DomainError("MONTH_IN_FUTURE", "아직 시작하지 않은 달은 기록할 수 없습니다.", 422)
         if (
             session.scalar(
                 select(AssetMonthRecord.id).where(

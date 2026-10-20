@@ -247,6 +247,7 @@ internal object AuthPolicy {
             "IDEMPOTENCY_CONFLICT" to (409 to "같은 식별자로 다른 내용을 보낼 수 없습니다."),
             "MONTH_NOT_FOUND" to (404 to "이 달의 자산 기록을 먼저 만들어 주세요."),
             "MONTH_ALREADY_EXISTS" to (409 to "이미 있는 월 기록을 불러와 주세요."),
+            "MONTH_IN_FUTURE" to (422 to "아직 시작하지 않은 달은 기록할 수 없습니다."),
             "MONTH_CONFIRMED" to (409 to "확정한 월은 정정 사유를 남기고 다시 열어 주세요."),
             "REVISION_CONFLICT" to (409 to "현재 월 기록을 다시 불러와 주세요."),
             "VALUE_CONFLICT" to (409 to "현재 입력 행을 다시 불러와 주세요."),

@@ -8,6 +8,8 @@ export function MonthError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
     MONTH_NOT_FOUND: "이 달은 아직 작성본을 만들지 않았어요.",
     MONTH_ALREADY_EXISTS: "다른 곳에서 이미 작성본을 만들었어요. 현재 월 기록을 확인해 주세요.",
+    MONTH_IN_FUTURE:
+      "아직 시작하지 않은 달은 기록할 수 없어요. 이번 달이나 지난 달을 선택해 주세요.",
     MONTH_CONFIRMED:
       "이미 확정된 월이에요. 최신 기록을 확인하고 필요하면 사유를 남겨 정정본을 열어 주세요.",
     MONTH_NOT_CONFIRMED: "확정한 월만 정정본으로 열 수 있어요. 현재 기록을 다시 확인해 주세요.",

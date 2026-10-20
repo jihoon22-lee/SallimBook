@@ -110,7 +110,7 @@ class AuthPolicyTest {
     }
 
     @Test fun assetMonthAndAccountErrorsKeepTheirCode() {
-        for ((status, code) in listOf(422 to "ASSET_END_IN_FUTURE")) {
+        for ((status, code) in listOf(422 to "ASSET_END_IN_FUTURE", 422 to "MONTH_IN_FUTURE")) {
             val error = AuthPolicy.safeError(
                 status, mapOf("error" to mapOf("code" to code, "message" to "synthetic")), uuid,
             )!!["error"] as Map<*, *>

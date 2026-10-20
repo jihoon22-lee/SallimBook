@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "react-router";
+import { formatMonth, seoulMonth } from "../../../shared/MonthContext";
 import { useAssetsApi } from "../api";
 import { amountBases, shareToPercent } from "../model";
 import type { Asset } from "../model";
@@ -94,6 +96,14 @@ export function CreateMonthDraft({
     );
     if (result.ok && command.mounted.current) await reload().catch(() => undefined);
   }
+  if (month > seoulMonth())
+    return (
+      <section className="card">
+        <h2>아직 시작하지 않은 달이에요</h2>
+        <p>{formatMonth(month)}이 시작되면 이 달의 자산 기록을 만들 수 있어요.</p>
+        <Link to={`/assets/months/${seoulMonth()}`}>이번 달 기록으로 이동</Link>
+      </section>
+    );
   return (
     <section className="card">
       <h2>이 달의 자산 기록 시작</h2>

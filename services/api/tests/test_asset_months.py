@@ -205,6 +205,34 @@ def confirm(client, actor, month, *, key=None, **acknowledgments):
 
 @pytest.mark.database
 class TestAssetMonthsDatabase:
+    def test_future_month_draft_is_rejected_until_the_seoul_month_starts(
+        self, months_app, account_actor, monkeypatch
+    ):
+        # 2026-01-31 23:59:59 Asia/Seoul
+        monkeypatch.setattr(
+            month_service, "utcnow", lambda: datetime(2026, 1, 31, 14, 59, 59, tzinfo=UTC)
+        )
+        key = uuid4().hex
+        with TestClient(months_app) as client:
+            add_asset(client, account_actor)
+            early = client.post(
+                "/api/v1/asset-months/2026-02/draft",
+                json={"copy_previous": True},
+                headers={**account_actor.headers, "Idempotency-Key": key},
+            )
+            assert early.status_code == 422
+            assert early.json()["error"]["code"] == "MONTH_IN_FUTURE"
+            assert (
+                client.get(
+                    "/api/v1/asset-months/2026-02", headers=account_actor.headers
+                ).status_code
+                == 404
+            )
+            monkeypatch.setattr(
+                month_service, "utcnow", lambda: datetime(2026, 1, 31, 15, 0, tzinfo=UTC)
+            )
+            assert draft(client, account_actor, "2026-02", key=key)["month"] == "2026-02"
+
     def test_basis_change_clears_carried_origin_with_the_amount(self, months_app, account_actor):
         with TestClient(months_app) as client:
             asset = add_asset(client, account_actor, amount_basis="whole", household_share="0.5")
