@@ -12,7 +12,7 @@ import { InsuranceError } from "../InsuranceSupport";
 import { ancestors, optional, preserveDraft } from "../model";
 import type { Schema } from "../model";
 import { ActualFields, ExpenseSummary, CaseSelect } from "./EventSupport";
-import { actualDraft, actualInput, exactSum } from "./model";
+import { actualDraft, actualInput, exactSum, needsCompare } from "./model";
 import type { ActualDraft } from "./model";
 import { useInsuranceEventsApi } from "./api";
 type Line = { label: string; amount: string; type: string };
@@ -120,7 +120,7 @@ export function ExpenseEditor({
   };
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!input || !ready || command.error?.status === 409) return;
+    if (!input || !ready || needsCompare(command.error)) return;
     const result = await command.run((signal) =>
       base
         ? api.correctMedicalExpense(
@@ -375,7 +375,7 @@ export function ExpenseEditor({
           )}
         </fieldset>
         <InsuranceError error={command.error} />
-        {base && command.error?.status === 409 && (
+        {base && needsCompare(command.error) && (
           <button type="button" onClick={() => void compare()}>
             의료비 현재 원본 비교
           </button>
@@ -412,7 +412,7 @@ export function ExpenseEditor({
           }
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || command.error?.status === 409}
+          disabled={!ready || needsCompare(command.error)}
           label={base ? "의료비 정정 저장" : "실제 의료비 저장"}
         />
       </form>

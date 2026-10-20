@@ -59,7 +59,7 @@ internal object InsuranceEventPolicy {
     private val routes = mapOf(
         FinanceOperation.MEDICAL_NODE_SUMMARY to Route("GET", "/api/v1/insurance/cases/{caseId}/nodes/{nodeId}/summary", "", "NodeSummaryResponse", mapOf(), false, false, 200),
         FinanceOperation.INSURANCE_CASE_SUMMARY to Route("GET", "/api/v1/insurance/cases/{caseId}/summary", "", "CaseSummaryResponse", mapOf(), false, false, 200),
-        FinanceOperation.LIST_INSURANCE_CLAIMS to Route("GET", "/api/v1/insurance/claims", "", "ClaimListResponse", mapOf("case_id" to nullable(id), "policy_id" to nullable(id), "claim_state" to nullable({ v -> validate("ClaimState", v); Unit }), "cursor" to nullable(id), "limit" to integer(1L, 200L)), false, false, 200),
+        FinanceOperation.LIST_INSURANCE_CLAIMS to Route("GET", "/api/v1/insurance/claims", "", "ClaimListResponse", mapOf("case_id" to nullable(id), "policy_id" to nullable(id), "claim_state" to nullable({ v -> validate("ClaimState", v); Unit }), "expense_id" to nullable(id), "cursor" to nullable(id), "limit" to integer(1L, 200L)), false, false, 200),
         FinanceOperation.CREATE_INSURANCE_CLAIM to Route("POST", "/api/v1/insurance/claims", "ClaimCreate", "ClaimResponse", mapOf(), false, false, 201),
         FinanceOperation.GET_INSURANCE_CLAIM to Route("GET", "/api/v1/insurance/claims/{claimId}", "", "ClaimResponse", mapOf(), false, false, 200),
         FinanceOperation.UPDATE_INSURANCE_CLAIM to Route("PATCH", "/api/v1/insurance/claims/{claimId}", "ClaimPatch", "ClaimResponse", mapOf(), true, false, 200),
@@ -243,8 +243,11 @@ internal object InsuranceEventPolicy {
             "expense_ids" to array(id, 0, 200),
             "household_id" to id,
             "id" to id,
+            "net_received_krw" to pattern("^(0|[1-9][0-9]{0,19})\$"),
             "policy_id" to id,
+            "received_krw" to pattern("^(0|[1-9][0-9]{0,19})\$"),
             "requested_krw" to nullable(pattern("^(0|[1-9][0-9]{0,19})\$")),
+            "returned_krw" to pattern("^(0|[1-9][0-9]{0,19})\$"),
             "submitted_on" to nullable(date),
             "updated_at" to timestamp,
             "updated_by_member_id" to id,
@@ -523,6 +526,7 @@ internal object InsuranceEventPolicy {
         if (schema == "BenefitSummary") {
             if (money(row["received_krw"]) - money(row["returned_krw"]) != money(row["net_received_krw"])) invalid()
         }
+        if (schema == "ClaimResponse" && money(row["received_krw"]) - money(row["returned_krw"]) != money(row["net_received_krw"])) invalid()
         if (schema in setOf("CaseSummaryResponse", "NodeSummaryResponse")) {
             if (money(row["medical_paid_krw"]) - money(row["medical_refunded_krw"]) != money(row["net_medical_krw"])) invalid()
         }

@@ -47,6 +47,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [ADR: auth domains and recovery](adr/auth-domains-and-recovery.md) | 계정 인증·앱 잠금·암호키 복구 분리 |
 | [ADR: private network and app identity](adr/private-network-and-app-identity.md) | 사용자 승인 앱 식별자·API 30·기존 WSL 서버 격리·전용 Tailscale 노드 |
 | [ADR: mobile first start](adr/mobile-first-start.md) | 웹/Android 직접 시작·배우자 연결·최초 등록의 사설망 신뢰 경계 |
+| [ADR: late insurance records](adr/late-insurance-records.md) | 종료 계약의 사후 청구·직접 보험금 배분 허용 |
 
 ## 문서 유지 규칙
 

@@ -10,7 +10,7 @@ import { InsuranceError } from "../InsuranceSupport";
 import { benefits, preserveDraft } from "../model";
 import type { Schema } from "../model";
 import { ActualFields, CashSummary } from "./EventSupport";
-import { actualDraft, actualInput, eventNames, eventPaths } from "./model";
+import { actualDraft, actualInput, eventNames, eventPaths, needsCompare } from "./model";
 import { useInsuranceEventsApi } from "./api";
 type Parent = Schema["ExpenseResponse"] | Schema["PayoutResponse"];
 type ReturnRow = Schema["RefundResponse"] | Schema["ReturnResponse"];
@@ -89,7 +89,7 @@ export function ReturnEditor({
   );
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!actual || !ready || command.error?.status === 409) return;
+    if (!actual || !ready || needsCompare(command.error)) return;
     const result = await command.run((signal) => {
       const common = {
         resourceId: base?.id ?? parent.id,
@@ -180,6 +180,12 @@ export function ReturnEditor({
           disabled={command.busy}
           accountOnly={kind === "return"}
         />
+        {base && (
+          <p className="muted">
+            원래 {eventNames[kind]} 사유 “{base.reason}”은 그대로 남아요. 정정 사유는 금전 이력에
+            기록돼요. 사유 자체가 틀렸다면 무효 처리 후 새로 기록해 주세요.
+          </p>
+        )}
         <div className="form-field">
           <label>
             {eventNames[kind]} {base ? "정정 사유" : "사유"}
@@ -196,7 +202,7 @@ export function ReturnEditor({
           <p>기존 {eventNames[kind]}은 무효로 보존하고 같은 부모 원본의 새 기록으로 정정해요.</p>
         )}
         <InsuranceError error={command.error} />
-        {command.error?.status === 409 && (
+        {needsCompare(command.error) && (
           <button type="button" onClick={() => void compare()}>
             현재 원본과 누적액 비교
           </button>
@@ -239,7 +245,7 @@ export function ReturnEditor({
           }
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || command.error?.status === 409}
+          disabled={!ready || needsCompare(command.error)}
           label={`${eventNames[kind]}${base ? " 정정" : ""} 저장`}
         />
       </form>

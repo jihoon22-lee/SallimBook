@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { Link, useParams } from "react-router";
 import { ApiError } from "../../../platform/api";
 import { isUuid, dateLabel } from "../../finance/dates";
+import { formatKrw } from "../../assets/months/model";
 import { useHouseholdMembers } from "../../finance/FinanceSupport";
 import { usePagedList, useResource } from "../../finance/queries";
 import { useUrlFilters } from "../../finance/useUrlFilters";
@@ -159,6 +160,11 @@ function CaseList() {
             </p>
             <p>
               {treatments[row.treatment_state]} · {finances[row.financial_state]}
+            </p>
+            <p className="record-facts">
+              <span>
+                순현금부담 <strong>{formatKrw(row.net_burden_krw)}</strong>
+              </span>
             </p>
           </li>
         ))}

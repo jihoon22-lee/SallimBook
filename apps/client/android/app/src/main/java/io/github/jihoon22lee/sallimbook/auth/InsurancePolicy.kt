@@ -38,6 +38,8 @@ internal object InsurancePolicy {
     }
     private fun choice(vararg values: String): InsuranceField = { if (it !is String || it !in values) invalid() }
     private fun nullable(rule: InsuranceField): InsuranceField = { if (it != null) rule(it) }
+    // Same bound as the server's SignedKrwString; a case's net burden can be negative.
+    private val signedKrw: InsuranceField = { if (it !is String || !Regex("^(0|-?[1-9][0-9]{0,19})\$").matches(it)) invalid() }
     private fun shape(value: Any?, fields: Map<String, InsuranceField>, required: Set<String> = fields.keys): Map<String, Any?> {
         val row = obj(value)
         if (!fields.keys.containsAll(row.keys) || !row.keys.containsAll(required)) invalid()
@@ -189,7 +191,7 @@ internal object InsurancePolicy {
             "PremiumLinkResponse" -> shape(value, audit + mapOf("policy_id" to id, "rule_id" to id, "active" to bool,
                 "ended_at" to nullable(timestamp), "rule" to { v: Any? -> FixedCostPolicy.ruleMetadata(v); Unit }))
             "CaseResponse" -> shape(value, caseFields + audit)
-            "CaseListItem" -> shape(value, (caseFields - setOf("diagnosis_note", "diagnosis_code")) + audit)
+            "CaseListItem" -> shape(value, (caseFields - setOf("diagnosis_note", "diagnosis_code")) + audit + mapOf("net_burden_krw" to signedKrw))
             "CaseRevisionResponse" -> shape(value, caseFields + mapOf("case_id" to id, "version" to positive, "changed_by_member_id" to id, "changed_at" to timestamp, "reason" to nullable(text(500))))
             "MedicalNodeResponse" -> shape(value, nodeFields + audit + mapOf("case_id" to id))
             else -> invalid()

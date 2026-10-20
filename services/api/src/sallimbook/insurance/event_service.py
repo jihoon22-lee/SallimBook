@@ -416,7 +416,16 @@ def correct_expense(session, principal, expense_id, payload, if_match, key):
     )
 
 
-def _new_refund(session, principal, expense, payload, *, correction_of=None, previous_cash=None):
+def _new_refund(
+    session,
+    principal,
+    expense,
+    payload,
+    *,
+    correction_of=None,
+    previous_cash=None,
+    kept_reason=None,
+):
     original = _source(session, principal, expense, "medical_payment", lock=True)
     source = cash.prepare_cash_record(
         session,
@@ -430,7 +439,8 @@ def _new_refund(session, principal, expense, payload, *, correction_of=None, pre
     row = MedicalRefund(
         expense_id=expense.id,
         cash_record_id=source.id,
-        reason=payload.reason,
+        # A correction fixes the money; the refund's own reason stays as recorded.
+        reason=kept_reason or payload.reason,
         correction_of_id=correction_of,
         **_actors(principal),
     )
@@ -531,6 +541,7 @@ def correct_refund(session, principal, refund_id, payload, if_match, key):
                 payload,
                 correction_of=row.id,
                 previous_cash=previous_cash,
+                kept_reason=row.reason,
             ),
             "medical_refund",
         )
@@ -599,11 +610,27 @@ def _claim_responses(session, principal, rows, *, detail=False):
         ):
             evidence[link.claim_id].append(link.expense_id)
     schema = ClaimResponse if detail else ClaimListItem
+    balances = {}
+    if detail and rows:
+        # Claim allocations must share the claim's case (CLAIM_ALLOCATION_MISMATCH).
+        payouts, returns = _payout_sources(session, principal, {row.case_id for row in rows})
+        balances = _summary([], payouts, [], returns).claims
+    money = ("received_krw", "returned_krw", "net_received_krw")
+
+    def amounts(row):
+        if not detail:
+            return {}
+        balance = balances.get(str(row.id), calc.ClaimBalance(0, 0, 0))
+        return {
+            "expense_ids": evidence[row.id],
+            **{name: krw_string(getattr(balance, name)) for name in money},
+        }
+
     return [
         schema(
-            **_values(row, schema, {"expense_ids", "expense_count"}),
+            **_values(row, schema, {"expense_ids", "expense_count", *money}),
             expense_count=len(evidence[row.id]),
-            **({"expense_ids": evidence[row.id]} if detail else {}),
+            **amounts(row),
         )
         for row in rows
     ]
@@ -620,11 +647,8 @@ def _submitted_date(payload):
 def create_claim(session, principal, payload):
     cash.lock_cash_household(session, principal)
     scoped_entity(session, InsuranceCase, payload.case_id, principal)
-    policy = scoped_entity(session, InsurancePolicy, payload.policy_id, principal)
-    if policy.status != "active":
-        raise DomainError(
-            "POLICY_UNAVAILABLE", "새 청구에는 사용 중인 보험계약을 선택해 주세요.", 422
-        )
+    # Claims are often filed after a policy ends; only the household boundary applies.
+    scoped_entity(session, InsurancePolicy, payload.policy_id, principal)
     _submitted_date(payload)
     _claim_expenses(session, principal, payload.case_id, payload.expense_ids)
     row = InsuranceClaim(
@@ -655,7 +679,15 @@ def get_claim(session, principal, claim_id):
 
 
 def list_claims(
-    session, principal, *, case_id=None, policy_id=None, claim_state=None, cursor=None, limit=50
+    session,
+    principal,
+    *,
+    case_id=None,
+    policy_id=None,
+    claim_state=None,
+    expense_id=None,
+    cursor=None,
+    limit=50,
 ):
     cash.lock_cash_household(session, principal)
     query = select(InsuranceClaim).where(InsuranceClaim.household_id == principal.household_id)
@@ -668,6 +700,17 @@ def list_claims(
             query = query.where(getattr(InsuranceClaim, field) == value)
     if claim_state is not None:
         query = query.where(InsuranceClaim.claim_state == claim_state)
+    if expense_id is not None:
+        # Claims currently citing this expense as evidence.
+        scoped_entity(session, MedicalExpense, expense_id, principal)
+        query = query.where(
+            InsuranceClaim.id.in_(
+                select(ClaimExpense.claim_id).where(
+                    ClaimExpense.household_id == principal.household_id,
+                    ClaimExpense.expense_id == expense_id,
+                )
+            )
+        )
     rows, next_cursor = _page(session, query, InsuranceClaim, cursor, limit)
     return _finish(
         session,
@@ -767,9 +810,10 @@ def claim_history(session, principal, claim_id, *, cursor=None, limit=50):
     )
 
 
-def _allocation_targets(session, principal, allocations, *, previous=()):
+def _allocation_targets(session, principal, allocations):
     _loaded(session, principal, InsuranceCase, {r.case_id for r in allocations})
-    policies = _loaded(
+    # Ended or lapsed policies still pay late benefits; only the household boundary applies.
+    _loaded(
         session,
         principal,
         InsurancePolicy,
@@ -781,7 +825,6 @@ def _allocation_targets(session, principal, allocations, *, previous=()):
         InsuranceClaim,
         {r.claim_id for r in allocations if r.claim_id is not None},
     )
-    historical = {(r.case_id, r.policy_id) for r in previous}
     for row in allocations:
         if row.claim_id is not None:
             claim = claims[row.claim_id]
@@ -789,17 +832,6 @@ def _allocation_targets(session, principal, allocations, *, previous=()):
                 raise DomainError(
                     "CLAIM_ALLOCATION_MISMATCH", "청구와 같은 사건·보험계약을 선택해 주세요.", 422
                 )
-            # A late receipt may settle an existing claim after its policy ended.
-        elif (
-            row.policy_id is not None
-            and policies[row.policy_id].status != "active"
-            and (row.case_id, row.policy_id) not in historical
-        ):
-            raise DomainError(
-                "POLICY_UNAVAILABLE",
-                "새 직접 지급 연결에는 사용 중인 보험계약을 선택해 주세요.",
-                422,
-            )
 
 
 def _remember_allocation(session, principal, row, reason=None):
@@ -875,10 +907,9 @@ def _new_payout(
     *,
     correction_of=None,
     correction_reason=None,
-    previous=(),
     previous_cash=None,
 ):
-    _allocation_targets(session, principal, payload.allocations, previous=previous)
+    _allocation_targets(session, principal, payload.allocations)
     source = cash.prepare_cash_record(
         session,
         principal,
@@ -1007,14 +1038,6 @@ def correct_payout(session, principal, payout_id, payload, if_match, key):
     def execute():
         row = scoped_entity(session, InsurancePayout, payout_id, principal, for_update=True)
         require_version(row, if_match)
-        previous = list(
-            session.scalars(
-                select(PayoutAllocation).where(
-                    PayoutAllocation.household_id == principal.household_id,
-                    PayoutAllocation.payout_id == row.id,
-                )
-            )
-        )
         _void_payout(session, principal, row, payload.reason)
         previous_cash = _source(session, principal, row, "insurance_receipt", active=False)
         replacement = _new_payout(
@@ -1023,7 +1046,6 @@ def correct_payout(session, principal, payout_id, payload, if_match, key):
             payload,
             correction_of=row.id,
             correction_reason=payload.reason,
-            previous=previous,
             previous_cash=previous_cash,
         )
         return _reference(replacement, "insurance_payout")
@@ -1060,7 +1082,7 @@ def update_allocation_links(session, principal, allocation_id, payload, if_match
             raise DomainError(
                 "CLAIM_ALLOCATION_MISMATCH", "청구와 보험계약 연결을 확인해 주세요.", 422
             ) from None
-        _allocation_targets(session, principal, [candidate], previous=[row])
+        _allocation_targets(session, principal, [candidate])
         row.policy_id, row.claim_id = candidate.policy_id, candidate.claim_id
         before = _bump(session, row, principal)
         _remember_allocation(session, principal, row, payload.reason)
@@ -1111,7 +1133,9 @@ def allocation_history(session, principal, allocation_id, *, cursor=None, limit=
     )
 
 
-def _new_return(session, principal, payout, payload, *, correction_of=None, previous_cash=None):
+def _new_return(
+    session, principal, payout, payload, *, correction_of=None, previous_cash=None, kept_reason=None
+):
     source = _source(session, principal, payout, "insurance_receipt", lock=True)
     allocation = scoped_entity(
         session, PayoutAllocation, payload.original_allocation_id, principal, for_update=True
@@ -1148,7 +1172,7 @@ def _new_return(session, principal, payout, payload, *, correction_of=None, prev
         payout_id=payout.id,
         original_allocation_id=allocation.id,
         cash_record_id=actual.id,
-        reason=payload.reason,
+        reason=kept_reason or payload.reason,
         correction_of_id=correction_of,
         **_actors(principal),
     )
@@ -1249,6 +1273,7 @@ def correct_return(session, principal, return_id, payload, if_match, key):
                 payload,
                 correction_of=row.id,
                 previous_cash=previous_cash,
+                kept_reason=row.reason,
             ),
             "insurance_return",
         )
@@ -1289,7 +1314,7 @@ def event_cash_history(session, principal, kind, resource_id, *, cursor=None, li
     )
 
 
-def _medical_sources(session, principal, case_id, *, node_ids=None):
+def _medical_sources(session, principal, case_ids, *, node_ids=None):
     query = (
         select(MedicalExpense, CashRecord)
         .join(
@@ -1299,7 +1324,7 @@ def _medical_sources(session, principal, case_id, *, node_ids=None):
         )
         .where(
             MedicalExpense.household_id == principal.household_id,
-            MedicalExpense.case_id == case_id,
+            MedicalExpense.case_id.in_(case_ids),
             CashRecord.state == "active",
         )
     )
@@ -1307,32 +1332,32 @@ def _medical_sources(session, principal, case_id, *, node_ids=None):
         query = query.where(MedicalExpense.node_id.in_(node_ids))
     rows = session.execute(query).all()
     payments = [
-        calc.MedicalPayment(str(row.id), str(case_id), source.amount_krw) for row, source in rows
+        calc.MedicalPayment(str(row.id), str(row.case_id), source.amount_krw)
+        for row, source in rows
     ]
     ids = [row.id for row, _ in rows]
-    refunds = []
-    if ids:
-        refund_rows = session.execute(
-            select(MedicalRefund, CashRecord)
-            .join(
-                CashRecord,
-                (CashRecord.id == MedicalRefund.cash_record_id)
-                & (CashRecord.household_id == MedicalRefund.household_id),
-            )
-            .where(
-                MedicalRefund.household_id == principal.household_id,
-                MedicalRefund.expense_id.in_(ids),
-                CashRecord.state == "active",
-            )
-        ).all()
-        refunds = [
-            calc.MedicalRefund(str(row.id), str(row.expense_id), source.amount_krw)
-            for row, source in refund_rows
-        ]
+    # Always issued (an empty IN matches nothing) so a list page costs the same queries.
+    refund_rows = session.execute(
+        select(MedicalRefund, CashRecord)
+        .join(
+            CashRecord,
+            (CashRecord.id == MedicalRefund.cash_record_id)
+            & (CashRecord.household_id == MedicalRefund.household_id),
+        )
+        .where(
+            MedicalRefund.household_id == principal.household_id,
+            MedicalRefund.expense_id.in_(ids),
+            CashRecord.state == "active",
+        )
+    ).all()
+    refunds = [
+        calc.MedicalRefund(str(row.id), str(row.expense_id), source.amount_krw)
+        for row, source in refund_rows
+    ]
     return payments, refunds
 
 
-def _payout_sources(session, principal, case_id):
+def _payout_sources(session, principal, case_ids):
     rows = session.execute(
         select(InsurancePayout, CashRecord)
         .join(
@@ -1346,14 +1371,12 @@ def _payout_sources(session, principal, case_id):
             InsurancePayout.id.in_(
                 select(PayoutAllocation.payout_id).where(
                     PayoutAllocation.household_id == principal.household_id,
-                    PayoutAllocation.case_id == case_id,
+                    PayoutAllocation.case_id.in_(case_ids),
                 )
             ),
         )
     ).all()
     ids = [row.id for row, _ in rows]
-    if not ids:
-        return [], []
     allocations = defaultdict(list)
     for allocation in session.scalars(
         select(PayoutAllocation).where(
@@ -1395,21 +1418,42 @@ def _payout_sources(session, principal, case_id):
     return payouts, returns
 
 
-def _balance(payments, payouts, refunds, returns, case_id):
+def _summary(payments, payouts, refunds, returns):
+    """The single place case and claim amounts are computed."""
     try:
-        summary = calc.insurance_summary(payments, payouts, refunds=refunds, returns=returns)
-        return summary.cases.get(str(case_id), calc.CaseBalance(*([0] * 10)))
+        return calc.insurance_summary(payments, payouts, refunds=refunds, returns=returns)
     except ValueError:
         raise DomainError(
             "AMOUNT_OUT_OF_RANGE", "집계 금액과 원본 연결을 확인해 주세요.", 422
         ) from None
 
 
+def _balance(payments, payouts, refunds, returns, case_id):
+    summary = _summary(payments, payouts, refunds, returns)
+    return summary.cases.get(str(case_id), calc.CaseBalance(*([0] * 10)))
+
+
+def case_burdens(session, principal, case_ids):
+    """Net cash burden per case for a list page, with the same queries for any page size."""
+    if not case_ids:
+        return {}
+    cash.lock_cash_household(session, principal)
+    payments, refunds = _medical_sources(session, principal, case_ids)
+    payouts, returns = _payout_sources(session, principal, case_ids)
+    summary = _summary(payments, payouts, refunds, returns)
+    return {
+        case_id: (
+            summary.cases[str(case_id)].net_burden_krw if str(case_id) in summary.cases else 0
+        )
+        for case_id in case_ids
+    }
+
+
 def case_summary(session, principal, case_id):
     cash.lock_cash_household(session, principal)
     scoped_entity(session, InsuranceCase, case_id, principal)
-    payments, refunds = _medical_sources(session, principal, case_id)
-    payouts, returns = _payout_sources(session, principal, case_id)
+    payments, refunds = _medical_sources(session, principal, [case_id])
+    payouts, returns = _payout_sources(session, principal, [case_id])
     balance = _balance(payments, payouts, refunds, returns, case_id)
     allocations = {row.id: row for payout in payouts for row in payout.allocations}
     received, returned = defaultdict(int), defaultdict(int)
@@ -1461,7 +1505,7 @@ def node_summary(session, principal, case_id, node_id):
             continue
         selected.add(identifier)
         pending.extend(children[identifier])
-    payments, refunds = _medical_sources(session, principal, case_id, node_ids=selected)
+    payments, refunds = _medical_sources(session, principal, [case_id], node_ids=selected)
     balance = _balance(payments, [], refunds, [], case_id)
     return _finish(
         session,

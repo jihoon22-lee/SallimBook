@@ -3790,6 +3790,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Net Burden Krw */
+            net_burden_krw: string;
             /**
              * Patient Member Id
              * Format: uuid
@@ -4217,13 +4219,19 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Net Received Krw */
+            net_received_krw: string;
             /**
              * Policy Id
              * Format: uuid
              */
             policy_id: string;
+            /** Received Krw */
+            received_krw: string;
             /** Requested Krw */
             requested_krw?: string | null;
+            /** Returned Krw */
+            returned_krw: string;
             /** Submitted On */
             submitted_on?: string | null;
             /**
@@ -20794,6 +20802,7 @@ export interface operations {
                 case_id?: string | null;
                 policy_id?: string | null;
                 claim_state?: components["schemas"]["ClaimState"] | null;
+                expense_id?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };

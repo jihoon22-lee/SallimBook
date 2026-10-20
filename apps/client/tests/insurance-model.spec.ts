@@ -5,7 +5,12 @@ import { medicalInput } from "../src/features/insurance/cases/MedicalTree";
 import { expenseInput } from "../src/features/insurance/events/ExpenseEditor";
 import { payoutInput } from "../src/features/insurance/events/PayoutEditor";
 import { actualInput, exactSum } from "../src/features/insurance/events/model";
-import { ancestors, descendants, preserveDraft } from "../src/features/insurance/model";
+import {
+  ancestors,
+  descendants,
+  nextSiblingOrder,
+  preserveDraft,
+} from "../src/features/insurance/model";
 import { caseRow, nodeRow, policyRow } from "./support/insurance";
 import { uid } from "./support/finance";
 const actual = {
@@ -139,4 +144,18 @@ test("conflict merge preserves only fields changed by this editor", () => {
       { title: "theirs", note: "new", amount: "3" },
     ),
   ).toEqual({ title: "mine", note: "new", amount: "2" });
+});
+
+test("new medical node defaults after its current siblings within the server bound", () => {
+  const nodes = [
+    nodeRow(91, { sort_order: 0 }),
+    nodeRow(92, { parent_id: uid(91), sort_order: 0 }),
+    nodeRow(93, { parent_id: uid(91), sort_order: 30 }),
+    nodeRow(94, { sort_order: 5 }),
+  ];
+  expect(nextSiblingOrder(nodes, "")).toBe(15);
+  expect(nextSiblingOrder(nodes, uid(91))).toBe(40);
+  expect(nextSiblingOrder(nodes, uid(93))).toBe(0);
+  expect(nextSiblingOrder([nodeRow(95, { sort_order: 999995 })], "")).toBe(1000000);
+  expect(nextSiblingOrder([nodeRow(95, { sort_order: 1000000 })], "")).toBe(1000000);
 });

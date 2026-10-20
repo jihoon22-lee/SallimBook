@@ -8,7 +8,7 @@ import { usePagedList } from "../../finance/queries";
 import { InsuranceError } from "../InsuranceSupport";
 import { CashSummary } from "./EventSupport";
 import { useInsuranceEventsApi } from "./api";
-import { eventNames } from "./model";
+import { eventNames, needsCompare } from "./model";
 import type { EventKind, EventRow } from "./model";
 export const getters = {
   expense: "getMedicalExpense",
@@ -95,7 +95,7 @@ export function VoidEvent({
   const key = useIdempotencyKey(JSON.stringify([kind, base.id, base.version, reason.trim()]));
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!reason.trim() || !ack || base.cash.state !== "active" || command.error?.status === 409)
+    if (!reason.trim() || !ack || base.cash.state !== "active" || needsCompare(command.error))
       return;
     const result = await command.run((signal) =>
       api[voiders[kind]](
@@ -146,7 +146,7 @@ export function VoidEvent({
           </label>
         </fieldset>
         <InsuranceError error={command.error} />
-        {command.error?.status === 409 && (
+        {needsCompare(command.error) && (
           <button type="button" onClick={() => void compare()}>
             무효 처리 전 원본 다시 비교
           </button>
@@ -173,7 +173,7 @@ export function VoidEvent({
           busy={command.busy}
           cancel={command.cancel}
           disabled={
-            !reason.trim() || !ack || base.cash.state !== "active" || command.error?.status === 409
+            !reason.trim() || !ack || base.cash.state !== "active" || needsCompare(command.error)
           }
           label="사유와 함께 금전 기록 무효 처리"
         />

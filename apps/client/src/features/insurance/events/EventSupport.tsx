@@ -1,7 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useId } from "react";
 import { Link } from "react-router";
 import type { Schema } from "../model";
-import { benefits } from "../model";
+import { benefits, policyStatuses } from "../model";
 import { InsuranceError } from "../InsuranceSupport";
 import { useInsuranceApi } from "../api";
 import { useInsuranceEventsApi } from "./api";
@@ -120,22 +120,25 @@ export function PolicySelect({
   label = "청구 보험계약",
   disabled = false,
   required = false,
-  activeOnly = false,
 }: {
   value: string;
   onChange: (id: string) => void;
   label?: string;
   disabled?: boolean;
   required?: boolean;
-  activeOnly?: boolean;
 }) {
   const api = useInsuranceApi();
+  const noteId = useId();
   const rows = useResource(
     useCallback(
       () => allPages((cursor) => api.policies({ limit: 200, ...(cursor ? { cursor } : {}) })),
       [api],
     ),
   );
+  // Claims and benefits for care before the end are often recorded later, so ended or
+  // lapsed policies stay selectable with their status spelled out.
+  const selected = rows.data?.find((row) => row.id === value);
+  const inactive = selected && selected.status !== "active" ? policyStatuses[selected.status] : "";
   return (
     <div className="form-field">
       <label>
@@ -145,17 +148,23 @@ export function PolicySelect({
           disabled={disabled || rows.loading}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          aria-describedby={inactive ? noteId : undefined}
         >
           <option value="">{required ? "계약 선택" : "계약 미지정"}</option>
-          {rows.data
-            ?.filter((row) => !activeOnly || row.status === "active" || row.id === value)
-            .map((row) => (
-              <option key={row.id} value={row.id} disabled={activeOnly && row.status !== "active"}>
-                {row.insurer} · {row.product_name}
-              </option>
-            ))}
+          {rows.data?.map((row) => (
+            <option key={row.id} value={row.id}>
+              {row.insurer} · {row.product_name}
+              {row.status === "active" ? "" : ` · ${policyStatuses[row.status]}`}
+            </option>
+          ))}
         </select>
       </label>
+      {inactive && (
+        <p className="muted" id={noteId}>
+          선택한 계약은 {inactive} 상태예요. 종료 전 진료에 대한 청구·보험금은 나중에도 기록할 수
+          있어요.
+        </p>
+      )}
       <InsuranceError error={rows.error} />
       {rows.error && (
         <button type="button" onClick={() => void rows.reload()}>
@@ -228,10 +237,15 @@ export function CaseMoneySummary({ caseId }: { caseId: string }) {
       )}
       {row && !result.error && !result.loading && (
         <>
+          {/* Screen spec order: paid − refunded = net medical; net medical − net benefit = burden. */}
           <dl className="metric-strip">
-            <div className="metric-primary">
-              <dt>순현금부담</dt>
-              <dd>{formatKrw(row.net_burden_krw)}</dd>
+            <div>
+              <dt>의료 지불금</dt>
+              <dd>{formatKrw(row.medical_paid_krw)}</dd>
+            </div>
+            <div>
+              <dt>환불</dt>
+              <dd>{formatKrw(row.medical_refunded_krw)}</dd>
             </div>
             <div>
               <dt>순의료비</dt>
@@ -241,18 +255,14 @@ export function CaseMoneySummary({ caseId }: { caseId: string }) {
               <dt>순보험금</dt>
               <dd>{formatKrw(row.net_received_krw)}</dd>
             </div>
+            <div className="metric-primary">
+              <dt>순현금부담</dt>
+              <dd>{formatKrw(row.net_burden_krw)}</dd>
+            </div>
           </dl>
           <details className="summary-details">
-            <summary>지불·환불·급부유형별 계산 내역</summary>
+            <summary>보험금 수령·반환과 급부유형별 계산 내역</summary>
             <dl className="metadata-grid">
-              <div>
-                <dt>의료 지불금</dt>
-                <dd>{formatKrw(row.medical_paid_krw)}</dd>
-              </div>
-              <div>
-                <dt>병원·약국 환불</dt>
-                <dd>{formatKrw(row.medical_refunded_krw)}</dd>
-              </div>
               <div>
                 <dt>실제 보험금 수령</dt>
                 <dd>{formatKrw(row.insurance_received_krw)}</dd>

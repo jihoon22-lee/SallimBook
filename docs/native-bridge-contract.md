@@ -329,6 +329,7 @@ TS 입력·응답은 공식 생성 DTO를 참조하고 기존 자원 수정·삭
 진료 노드는 서버의 부모 우선·형제 정렬 순서를 보존하고 UUID cursor를 위치로 취급하며,
 ID 중복·마지막 행 cursor·limit·사건 ID를 검증한다.
 네이티브는 진료 노드에 금액을 추가하거나 보험료를 자산 스냅샷에 자동 합산하지 않는다.
+사건 목록 응답의 각 행은 부호 있는 원 문자열 `net_burden_krw`를 반드시 포함해야 하며 누락·형식 오류는 거부한다(`caseListCarriesSignedNetBurden`).
 
 `editInsurancePolicyNumberUI({policyId, ifMatch})`와
 `showInsurancePolicyNumberUI({policyId})`는 별도의 비공개 native Activity를 연다.
@@ -367,6 +368,9 @@ Home/화면 꺼짐·30초 만료·앱 잠금·늦은 HTTP 응답 시나리오는
 경로의 `resource_id`, `claim_id`, `allocation_id`, `case_id`, `node_id`는 bridge에서
 `resourceId`, `claimId`, `allocationId`, `caseId`, `nodeId`로 전달한다.
 TS 본문/응답/조회 조건은 생성 `components`와 `operations`를 참조한다.
+`listInsuranceClaims`는 `expense_id` 조회 조건을 허용한다(`claimListAcceptsExpenseFilter`). 청구 응답의
+`received_krw`·`returned_krw`·`net_received_krw`는 원 문자열이며 `net_received_krw`가 두 값의 정확한 차이가
+아니면 응답을 거부한다(`claimMoneyMustBeExactDifference`). 최종 계산은 서버가 판단한다.
 
 금전 생성·정정·무효와 배분 연결에는 `idempotencyKey`, 기존 대상의 변경에는 `ifMatch`를
 요구한다. 환불/반환 생성의 버전은 부모 의료비/보험금 도메인 버전이다. 청구 생성에는

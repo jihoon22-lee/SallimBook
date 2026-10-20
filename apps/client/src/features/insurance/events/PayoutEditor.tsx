@@ -11,7 +11,7 @@ import { InsuranceError } from "../InsuranceSupport";
 import { benefits, optional, preserveDraft } from "../model";
 import type { Schema } from "../model";
 import { ActualFields, CashSummary, CaseSelect, PolicySelect } from "./EventSupport";
-import { actualDraft, actualInput, claimStates, exactSum } from "./model";
+import { actualDraft, actualInput, claimStates, exactSum, needsCompare } from "./model";
 import type { ActualDraft } from "./model";
 import { useInsuranceEventsApi } from "./api";
 export type AllocationDraft = {
@@ -75,7 +75,6 @@ export function AllocationFields({
       <PolicySelect
         label="배분 보험계약"
         value={value.policyId}
-        activeOnly={!value.claimId}
         onChange={(id) => onChange({ ...value, policyId: id, claimId: "" })}
       />
       <div className="form-field">
@@ -238,7 +237,7 @@ export function PayoutEditor({
   };
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!input || !ready || command.error?.status === 409) return;
+    if (!input || !ready || needsCompare(command.error)) return;
     const result = await command.run((signal) =>
       base
         ? api.correctInsurancePayout(
@@ -359,7 +358,7 @@ export function PayoutEditor({
           )}
         </fieldset>
         <InsuranceError error={command.error} />
-        {base && command.error?.status === 409 && (
+        {base && needsCompare(command.error) && (
           <button type="button" onClick={() => void compare()}>
             보험금 수령 현재 원본 비교
           </button>
@@ -400,7 +399,7 @@ export function PayoutEditor({
           }
           busy={command.busy}
           cancel={command.cancel}
-          disabled={!ready || command.error?.status === 409}
+          disabled={!ready || needsCompare(command.error)}
           label={base ? "보험금 수령 정정 저장" : "실제 보험금 수령 저장"}
         />
       </form>

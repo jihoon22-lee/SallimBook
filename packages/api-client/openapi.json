@@ -3295,6 +3295,12 @@
             "title": "Id",
             "type": "string"
           },
+          "net_burden_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Net Burden Krw",
+            "type": "string"
+          },
           "patient_member_id": {
             "format": "uuid",
             "title": "Patient Member Id",
@@ -3340,7 +3346,8 @@
           "start_on",
           "end_on",
           "treatment_state",
-          "financial_state"
+          "financial_state",
+          "net_burden_krw"
         ],
         "title": "CaseListItem",
         "type": "object"
@@ -4433,9 +4440,21 @@
             "title": "Id",
             "type": "string"
           },
+          "net_received_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Net Received Krw",
+            "type": "string"
+          },
           "policy_id": {
             "format": "uuid",
             "title": "Policy Id",
+            "type": "string"
+          },
+          "received_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Received Krw",
             "type": "string"
           },
           "requested_krw": {
@@ -4450,6 +4469,12 @@
               }
             ],
             "title": "Requested Krw"
+          },
+          "returned_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Returned Krw",
+            "type": "string"
           },
           "submitted_on": {
             "anyOf": [
@@ -4489,7 +4514,10 @@
           "case_id",
           "policy_id",
           "expense_count",
-          "expense_ids"
+          "expense_ids",
+          "received_krw",
+          "returned_krw",
+          "net_received_krw"
         ],
         "title": "ClaimResponse",
         "type": "object"
@@ -32206,6 +32234,23 @@
                 }
               ],
               "title": "Claim State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expense_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expense Id"
             }
           },
           {

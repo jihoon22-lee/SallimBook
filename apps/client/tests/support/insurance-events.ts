@@ -88,7 +88,20 @@ export function claimRow(id = 1200, expenses: string[] = []): S["ClaimResponse"]
     decision_note: null,
     expense_ids: expenses,
     expense_count: expenses.length,
+    received_krw: "0",
+    returned_krw: "0",
+    net_received_krw: "0",
   };
+}
+/** A claim revision as the server returns it: no received/returned money fields. */
+function claimRevisionBase(row: S["ClaimResponse"]) {
+  const {
+    received_krw: _received,
+    returned_krw: _returned,
+    net_received_krw: _net,
+    ...revision
+  } = structuredClone(row);
+  return revision;
 }
 export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>) {
   core.cases.push({ ...caseRow(95), title: "합성 두 번째 사건" });
@@ -137,7 +150,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
   const rememberClaim = (row: S["ClaimResponse"], reason: string | null = null) => {
     const history = state.claimHistories.get(row.id) ?? [];
     history.push({
-      ...structuredClone(row),
+      ...claimRevisionBase(row),
       claim_id: row.id,
       changed_by_member_id: uid(2),
       changed_at: timestamp,
@@ -376,7 +389,8 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
               state.claims.filter(
                 (c) =>
                   (!query.has("case_id") || c.case_id === query.get("case_id")) &&
-                  (!query.has("policy_id") || c.policy_id === query.get("policy_id")),
+                  (!query.has("policy_id") || c.policy_id === query.get("policy_id")) &&
+                  (!query.has("expense_id") || c.expense_ids.includes(query.get("expense_id")!)),
               ),
               query,
             ),
@@ -388,7 +402,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
             historyPage(
               state.claimHistories.get(id) ?? [
                 {
-                  ...claim,
+                  ...claimRevisionBase(claim),
                   claim_id: claim.id,
                   changed_at: timestamp,
                   changed_by_member_id: uid(2),
@@ -535,7 +549,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
         ...entity(state.nextId++),
         expense_id: parent.id,
         correction_of_id: original?.id ?? null,
-        reason: body.reason,
+        reason: original?.reason ?? body.reason,
         cash: newCash(body, "medical_refund", parent.cash),
       };
       parent.version++;
@@ -554,7 +568,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
         payout_id: parent.id,
         original_allocation_id: body.original_allocation_id,
         correction_of_id: original?.id ?? null,
-        reason: body.reason,
+        reason: original?.reason ?? body.reason,
         cash: newCash(body, "insurance_return", parent.cash),
       };
       parent.version++;

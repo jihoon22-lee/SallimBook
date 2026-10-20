@@ -20,7 +20,7 @@ import type { Schema } from "../model";
 import { useInsuranceEventsApi } from "../events/api";
 import { CaseSelect, PolicySelect } from "../events/EventSupport";
 import { PayoutList } from "../events/EventPages";
-import { claimStates } from "../events/model";
+import { claimStates, needsCompare } from "../events/model";
 type Draft = {
   caseId: string;
   policyId: string;
@@ -108,6 +108,12 @@ export function ClaimSummary({
         <Link to={`/insurance/policies/${row.policy_id}`}>청구 계약</Link>
       </div>
       <p>현재 비용 근거 {row.expense_ids.length}개</p>
+      {"received_krw" in row && (
+        <p className="record-facts">
+          이 청구의 실제 수령 {formatKrw(row.received_krw)} · 반환 {formatKrw(row.returned_krw)} ·
+          순수령 {formatKrw(row.net_received_krw)}
+        </p>
+      )}
       <ul>
         {row.expense_ids.map((id, index) => (
           <li key={id}>
@@ -168,7 +174,7 @@ export function ClaimEditor({
     setDraft((old) => ({ ...old, [field]: value }));
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!input || !valid || command.error?.status === 409) return;
+    if (!input || !valid || needsCompare(command.error)) return;
     const result = await command.run(
       () =>
         base && changes
@@ -218,7 +224,6 @@ export function ClaimEditor({
                 onChange={(id) => setDraft((old) => ({ ...old, caseId: id, expenses: [] }))}
               />
               <PolicySelect
-                activeOnly
                 required
                 value={draft.policyId}
                 onChange={(id) => change("policyId", id)}
@@ -370,7 +375,7 @@ export function ClaimEditor({
         <div className="form-actions save-actions">
           <button
             type="submit"
-            disabled={!valid || command.busy || command.uncertain || command.error?.status === 409}
+            disabled={!valid || command.busy || command.uncertain || needsCompare(command.error)}
           >
             {base ? "청구 정정 저장" : "청구 기록 저장"}
           </button>

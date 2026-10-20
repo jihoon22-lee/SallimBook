@@ -259,3 +259,36 @@ test("referenced node deletion fails safely and foreign policy exposes no metada
   ).toHaveCount(0);
   await expect(page.getByRole("link", { name: "보험 계약 수정", exact: true })).toHaveCount(0);
 });
+
+test("tree keeps server sibling order and new nodes default after their siblings", async ({
+  page,
+}) => {
+  const state = await mockInsurance(page);
+  state.nodes.push(
+    nodeRow(89, { label: "합성 나중 등록 외래", start_on: null, sort_order: 0 }),
+    nodeRow(88, { label: "합성 셋째 외래", sort_order: 30 }),
+  );
+  await page.goto(`/insurance/cases/${uid(90)}`);
+  await expect(
+    page.getByRole("region", { name: "사건 진료 트리", exact: true }).getByRole("link"),
+  ).toHaveText(["합성 첫 외래", "합성 처방", "합성 약국", "합성 나중 등록 외래", "합성 셋째 외래"]);
+  await page.getByRole("button", { name: "사건 아래 진료 추가", exact: true }).click();
+  await expect(page.getByLabel("진료 표시 순서", { exact: true })).toHaveValue("40");
+  await page.getByRole("button", { name: "진료 편집 취소", exact: true }).click();
+  await page.goto(`/insurance/cases/${uid(90)}/nodes/${uid(91)}`);
+  await page.getByRole("button", { name: "이 진료 아래 추가", exact: true }).click();
+  await expect(page.getByLabel("진료 표시 순서", { exact: true })).toHaveValue("10");
+  await page.getByRole("combobox", { name: "상위 진료", exact: true }).selectOption("");
+  await expect(page.getByLabel("진료 표시 순서", { exact: true })).toHaveValue("40");
+});
+
+test("case list shows each case's net cash burden including negative values", async ({ page }) => {
+  const state = await mockInsurance(page);
+  state.caseBurdens.set(state.cases[0]!.id, "-50000");
+  await page.goto("/insurance/cases");
+  await expect(
+    page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("link", { name: state.cases[0]!.title, exact: true }) }),
+  ).toContainText("순현금부담 -50,000원");
+});

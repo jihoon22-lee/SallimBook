@@ -67,6 +67,7 @@ export function nodeRow(
 export function insuranceFixture() {
   const initial = caseRow();
   const state = {
+    caseBurdens: new Map<string, string>(),
     policies: [policyRow()],
     cases: [initial],
     nodes: [
@@ -306,7 +307,10 @@ export function insuranceFixture() {
                   (!query.has("financial_state") ||
                     c.financial_state === query.get("financial_state")),
               )
-              .map(({ diagnosis_note: _note, diagnosis_code: _code, ...c }) => c),
+              .map(({ diagnosis_note: _note, diagnosis_code: _code, ...c }) => ({
+                ...c,
+                net_burden_krw: state.caseBurdens.get(c.id) ?? "0",
+              })),
             query,
           ),
         );

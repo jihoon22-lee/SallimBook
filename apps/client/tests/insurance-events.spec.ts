@@ -375,3 +375,115 @@ test("an expense dated on an account's last day can use that account", async ({ 
   await page.getByLabel("의료비 지불 실제 날짜", { exact: true }).fill("2025-02-15");
   await expect(closed).toHaveJSProperty("disabled", false);
 });
+
+test("ended policy stays selectable for a late claim and a direct allocation with a status note", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.core.policies.push({ ...policyRow(84), product_name: "합성 종료 계약", status: "ended" });
+  await page.goto(`/insurance/claims/new?case=${uid(90)}`);
+  const policy = page.getByRole("combobox", { name: "청구 보험계약", exact: true });
+  const ended = policy.locator(`option[value="${uid(84)}"]`);
+  await expect(ended).toHaveText("합성 보험사 · 합성 종료 계약 · 계약 종료");
+  await expect(ended).toHaveJSProperty("disabled", false);
+  await policy.selectOption(uid(84));
+  await expect(
+    page.getByText(
+      "선택한 계약은 계약 종료 상태예요. 종료 전 진료에 대한 청구·보험금은 나중에도 기록할 수 있어요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByRole("checkbox", { name: /SYNTHETIC-RECEIPT-1001/ }).check();
+  await page.getByRole("button", { name: "청구 기록 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "보험 청구 상세", exact: true })).toBeVisible();
+  expect(state.claims.at(-1)!.policy_id).toBe(uid(84));
+  await page.goto(`/insurance/payouts/new?case=${uid(90)}`);
+  await expect(
+    page
+      .getByRole("combobox", { name: "배분 보험계약", exact: true })
+      .locator(`option[value="${uid(84)}"]`),
+  ).toHaveJSProperty("disabled", false);
+});
+
+test("correcting a refund keeps its reason and explains where the correction reason goes", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  await page.goto(`/insurance/expenses/${uid(1001)}/refunds/new`);
+  await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("1000");
+  await page.getByLabel("의료비 환불 사유", { exact: true }).fill("합성 본인부담 환불");
+  await page.getByRole("button", { name: "의료비 환불 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "의료비 환불 상세", exact: true })).toBeVisible();
+  await page.goto(`/insurance/refunds/${state.refunds.at(-1)!.id}/correct`);
+  await expect(
+    page.getByText(
+      "원래 의료비 환불 사유 “합성 본인부담 환불”은 그대로 남아요. 정정 사유는 금전 이력에 기록돼요. 사유 자체가 틀렸다면 무효 처리 후 새로 기록해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("900");
+  await page.getByLabel("의료비 환불 정정 사유", { exact: true }).fill("합성 금액 오타 정정");
+  await page.getByRole("button", { name: "의료비 환불 정정 저장", exact: true }).click();
+  await expect(page.getByText("사유: 합성 본인부담 환불", { exact: true })).toBeVisible();
+  expect(state.refunds.at(-1)!.reason).toBe("합성 본인부담 환불");
+});
+
+test("claim detail shows only this claim's received, returned and net amounts", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.claims.push({
+    ...claimRow(1200, [uid(1001)]),
+    received_krw: "600000",
+    returned_krw: "50000",
+    net_received_krw: "550000",
+  });
+  await page.goto(`/insurance/claims/${uid(1200)}`);
+  await expect(
+    page.getByText("이 청구의 실제 수령 600,000원 · 반환 50,000원 · 순수령 550,000원", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
+test("case summary leads with the five specified totals in calculation order", async ({ page }) => {
+  await mockInsuranceEvents(page);
+  await page.goto(`/insurance/cases/${uid(90)}`);
+  const summary = page.getByRole("region", { name: "사건 실제 비용과 순부담", exact: true });
+  await expect(summary.locator("dl.metric-strip dt")).toHaveText([
+    "의료 지불금",
+    "환불",
+    "순의료비",
+    "순보험금",
+    "순현금부담",
+  ]);
+  await expect(summary.locator("dl.metric-strip .metric-primary dt")).toHaveText("순현금부담");
+  await expect(summary.getByText("의료 지불금", { exact: true })).toHaveCount(1);
+});
+
+test("an expense shows the claims citing it and a rule conflict does not offer a version compare", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.claims.push(claimRow(1200, [uid(1001)])); // The mock refuses voiding a cited expense with MEDICAL_EXPENSE_IN_CLAIM, like the server.
+  await page.goto(`/insurance/expenses/${uid(1001)}`);
+  const citing = page.getByRole("region", { name: "이 비용을 인용한 청구", exact: true });
+  await expect(citing.getByRole("link")).toHaveCount(1);
+  await expect(citing.getByRole("link").first()).toHaveAttribute(
+    "href",
+    `/insurance/claims/${uid(1200)}`,
+  );
+  await page.getByRole("button", { name: "의료비 무효 검토", exact: true }).click();
+  await page.getByLabel("금전 기록 무효 사유", { exact: true }).fill("합성 오등록");
+  await page
+    .getByLabel("실제 환불·반환이 아닌 오등록 무효임을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "사유와 함께 금전 기록 무효 처리", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("청구에 연결된 의료비예요.");
+  await expect(
+    page.getByRole("button", { name: "무효 처리 전 원본 다시 비교", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "사유와 함께 금전 기록 무효 처리", exact: true }),
+  ).toBeEnabled();
+});

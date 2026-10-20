@@ -107,3 +107,33 @@ production build는 성공하며 Vite의 500KB 초과 단일 chunk 경고가 남
 
 PR 리뷰 보완: 청구 상세의 수령 목록에서 추가할 때도 사건·계약·청구를 모두 이어받는다.
 해당 경로에서 저장한 원본이 청구 목록에 나타나는 회귀를 포함해 금전 화면 32개를 통과했다.
+
+## 사후 청구·청구별 금액·사건 목록 부담 — 2026-10-20
+
+종료 계약의 사후 청구·직접 배분([ADR 0009](../adr/late-insurance-records.md)), 사건 목록 순현금부담,
+청구별 실제 수령·반환·순수령, 비용의 인용 청구, 환불·반환 정정의 사유 보존, 진료 형제 순서를 추가했다.
+마이그레이션은 없다. 새 API 필드는 `CaseListItem.net_burden_krw`, `ClaimResponse.received_krw`·`returned_krw`·
+`net_received_krw`이고 `GET /insurance/claims`에 `expense_id` 조건을 더했다. 새 오류 코드는 없다.
+
+| 범위 | 시험 |
+|---|---|
+| 서버 DB | `test_inactive_policy_accepts_late_claim_and_direct_allocation`, `test_case_list_shows_each_case_net_burden_with_constant_queries`, `test_claim_detail_counts_only_its_own_allocations_and_returns`, `test_claims_can_be_listed_by_cited_expense`, `test_reversal_correction_keeps_its_original_reason`, `test_node_pages_follow_tree_order_with_date_and_creation_ties`, `test_same_transaction_siblings_fall_back_to_uuid` |
+| 서버 단위 | `test_claim_balance_counts_only_its_allocations_and_their_returns` |
+| Android JVM | `caseListCarriesSignedNetBurden`, `claimMoneyMustBeExactDifference`, `claimListAcceptsExpenseFilter` |
+| 브라우저 | 종료 계약 선택·안내, 환불 정정 사유 안내, 청구별 금액, 사건 요약 5개 수치 순서, 인용 청구·규칙 409 비교 미제공, 사건 목록 음수 부담, 서버 형제 순서·새 노드 기본 순서 |
+
+브라우저 mock은 청구 이력에서 청구 금액 필드를 제거해 실제 `ClaimRevisionResponse`와 같게 맞췄다.
+
+```bash
+pnpm typecheck
+uv run --project services/api ruff check services/api/src services/api/tests services/api/migrations
+uv run --project services/api pytest services/api/tests -m 'not database' -q
+TMPDIR="$HOME/.cache/sallimbook-tmp" pnpm test:database services/api/tests/test_insurance_events.py services/api/tests/test_insurance_core.py services/api/tests/test_income.py services/api/tests/test_exports.py -q
+pnpm --filter @sallimbook/client exec playwright test tests/insurance-core.spec.ts tests/insurance-events.spec.ts tests/insurance-model.spec.ts tests/insurance-native-ui.spec.ts tests/insurance-native-bridge.spec.ts tests/insurance-events-native-bridge.spec.ts tests/design-refresh.spec.ts
+uv run --project services/api python scripts/test_web_auth.py --insurance
+```
+
+결과: typecheck·ruff 통과, DB 미사용 pytest **912 passed**(10 skipped), DB 시험 **162 passed**와 `alembic check` 변경 없음,
+브라우저 **158 passed**, JVM `InsurancePolicyTest` 16·`InsuranceEventPolicyTest` 16·`AuthPolicyTest` 12 통과,
+`pnpm api:generate` 후 생성 client 변경 없음, 실제 HTTPS 보험 흐름 종료 코드 0.
+Android 실기기에서 새 목록·청구 필드 표시는 확인하지 않았다(미실행).

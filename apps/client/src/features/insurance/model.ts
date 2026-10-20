@@ -64,3 +64,9 @@ export function ancestors(nodes: MedicalNode[], id: string): MedicalNode[] {
   }
   return result;
 }
+/** A new node's default display order: after its current siblings, within the server bound. */
+export function nextSiblingOrder(nodes: MedicalNode[], parentId: string): number {
+  const siblings = nodes.filter((row) => (row.parent_id ?? "") === parentId);
+  if (!siblings.length) return 0;
+  return Math.min(1000000, Math.max(...siblings.map((row) => row.sort_order ?? 0)) + 10);
+}

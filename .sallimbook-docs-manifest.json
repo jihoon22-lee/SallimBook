@@ -66,12 +66,12 @@
       "git_sha1": "3b8fc6f363dfeb61ae4efff9a77ca6eb4e35f6ca"
     },
     "docs/api-contract.md": {
-      "sha256": "8c2c499b13af6ef351936ea3056c873ab3059a8445410782db73bc53a5043c91",
-      "git_sha1": "adb55ae6b2af1d01fdf76ac53cec2cf994ea50a0"
+      "sha256": "512722c81ac691427308426cb9d6e1dde1909865cd303d84a8504b692f089695",
+      "git_sha1": "7126c6dc695822f8e8b655d20329ea94f47f07a4"
     },
     "docs/screen-specifications.md": {
-      "sha256": "ec20b127a24d264fff17cdc95d82716426bacad25c93d1cffdbbe3eb7f4bf667",
-      "git_sha1": "55abb3f55149fb3e8fd7a5155a8d6f6332fe86e6"
+      "sha256": "78ecef2e5ccdd7ac2486229ab5873d23bea8dee74278eab2ed6636a182af5f83",
+      "git_sha1": "8165f8fdbd6ffe1966d265d93273acc0e241446c"
     },
     "docs/security-authentication.md": {
       "sha256": "757b1a2e0596afb6dc5d1d50efac340da0b28bad5e4f605eb102218413c177d5",
@@ -82,8 +82,8 @@
       "git_sha1": "7e9827ebf39404d2d5cb7db850a7bfec0cf53d64"
     },
     "docs/insurance-workflows.md": {
-      "sha256": "69f31432e1da3442901d867f590e907f42026ae14c6044873b4b1c22e0878f0e",
-      "git_sha1": "b57943062f2217b26c34f1d0853a13dee01716a1"
+      "sha256": "62f5e12222691de73f39749c8f7bd43ba4f321d8dcf9dbae98a938a122229d7d",
+      "git_sha1": "f46bf015dcb2926d345b5c72d3fc2127d31cc615"
     },
     "docs/development-environment.md": {
       "sha256": "a16f30af56a57497e050494f9dcde60227af45f365fd376ff577ad66dfb867ec",
@@ -122,12 +122,12 @@
       "git_sha1": "4d927ddc17db103d9192bc15ad739a9078090c7f"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "b277cf8616d743aa73baefdb76cfedf586f3072ff26e43a3d5b3241a890cbede",
-      "git_sha1": "55259ff24ebf33dd439b2d646f59771442602058"
+      "sha256": "bd199b1b1726190a3041b884c6ad3eccc4cab4cffa2e93d5047f521a05e69184",
+      "git_sha1": "c79793fff1077cc1323f348975bc4bf533ebee95"
     },
     "docs/README.md": {
-      "sha256": "819b879836406a21200dad6bb3c9e3d9848b4caf7604a2e1479c5780e6af17f9",
-      "git_sha1": "3ee096660ec4f9fc42da0e98870ae5c35f6a7c97"
+      "sha256": "07e29fb741d3519319ed7450b4855352ca2dc5b3530975adc80a6ec3fcbb7de2",
+      "git_sha1": "ba40a92599d0e3e91045c211ef60aecd4c8fc615"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -270,8 +270,8 @@
       "git_sha1": "3ee8330ea99693bea87ed5d29398cc5d96910274"
     },
     "docs/testing/insurance-client.md": {
-      "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",
-      "git_sha1": "5e32b8103f3c239ee875ee9bf68ca67b1666305b"
+      "sha256": "3704dbac754c3e8a2ed8ac406a229c6418f524624cdb19a08ead3d6151269460",
+      "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
     },
     "docs/operations-runbook.md": {
       "sha256": "9b3795492bc15320a525d19c2a3347612894bf9188324109b1b87f1cd2e20dc5",

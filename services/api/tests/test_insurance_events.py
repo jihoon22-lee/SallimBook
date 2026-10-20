@@ -286,6 +286,22 @@ def summary(client, actor, case):
     return read(client, actor, f"/cases/{case['id']}/summary")
 
 
+def test_claim_balance_counts_only_its_allocations_and_their_returns():
+    case_id, claim_id, linked_id = str(uuid4()), str(uuid4()), str(uuid4())
+    payout = calc.Payout(
+        str(uuid4()),
+        1000,
+        (
+            calc.Allocation(linked_id, case_id, 600, "reimbursement", claim_id),
+            calc.Allocation(str(uuid4()), case_id, 400, "other"),
+        ),
+    )
+    returned = calc.InsuranceReturn(str(uuid4()), payout.id, linked_id, 50)
+    result = calc.insurance_summary([], [payout], returns=[returned])
+    assert result.claims == {claim_id: calc.ClaimBalance(600, 50, 550)}
+    assert result.cases[case_id].net_received_krw == 950
+
+
 @pytest.mark.database
 class TestInsuranceEventFixtures:
     def test_t12_to_t16_and_t22_originals_claims_refunds_returns_and_subtrees(
@@ -567,6 +583,70 @@ class TestInsuranceEventFixtures:
 
 @pytest.mark.database
 class TestInsuranceEventCorrections:
+    def test_claims_can_be_listed_by_cited_expense(self, app, actors):
+        actor, _, foreign = actors
+        with TestClient(app) as client:
+            case, policy = new_case(client, actor), new_policy(client, actor)
+            node = new_node(client, actor, case)
+            cited, other = (
+                new_expense(client, actor, case, node),
+                new_expense(client, actor, case, node),
+            )
+            claim = create_metadata(
+                client,
+                actor,
+                "/claims",
+                {"case_id": case["id"], "policy_id": policy["id"], "expense_ids": [cited["id"]]},
+            )
+            create_metadata(
+                client, actor, "/claims", {"case_id": case["id"], "policy_id": policy["id"]}
+            )
+            found = read(client, actor, f"/claims?case_id={case['id']}&expense_id={cited['id']}")
+            assert [row["id"] for row in found["items"]] == [claim["id"]]
+            assert read(client, actor, f"/claims?expense_id={other['id']}")["items"] == []
+            hidden_case = new_case(client, foreign)
+            hidden = new_expense(
+                client, foreign, hidden_case, new_node(client, foreign, hidden_case)
+            )
+            assert (
+                client.get(
+                    f"{BASE}/claims?expense_id={hidden['id']}", headers=actor.headers
+                ).status_code
+                == 404
+            )
+
+    @pytest.mark.parametrize("source", ["refund", "return"])
+    def test_reversal_correction_keeps_its_original_reason(self, app, actors, source):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            if source == "refund":
+                parent = new_expense(client, actor, case, new_node(client, actor, case))
+                create_path = f"/medical-expenses/{parent['id']}/refunds"
+                collection, body = "/medical-refunds", actual("30", reason="합성 본인부담 환불")
+            else:
+                parent = new_payout(client, actor, [allocation(case["id"])])
+                create_path, collection = f"/payouts/{parent['id']}/returns", "/returns"
+                body = actual(
+                    "30",
+                    original_allocation_id=parent["allocations"][0]["id"],
+                    reason="합성 중복 수령 반환",
+                )
+            first = money(client, actor, create_path, body, version=1)
+            replacement = money(
+                client,
+                actor,
+                f"{collection}/{first['id']}/correct",
+                body | {"amount_krw": "20", "reason": "합성 금액 오타 정정"},
+                version=1,
+            )
+            corrected = read(client, actor, f"{collection}/{replacement['id']}")
+            assert corrected["reason"] == body["reason"]
+            voided = read(client, actor, f"{collection}/{first['id']}/history")["items"][0]
+            assert voided["state"] == "void" and voided["reason"] == "합성 금액 오타 정정"
+            created = read(client, actor, f"{collection}/{replacement['id']}/history")["items"][0]
+            assert created["reason"] == "합성 금액 오타 정정"
+
     @pytest.mark.parametrize("source", ["expense", "refund", "payout", "return"])
     def test_correction_keeps_a_link_that_closed_after_the_original(
         self, app, actors, db_engine, source
@@ -788,6 +868,49 @@ class TestInsuranceEventCorrections:
         with Session(db_engine) as session:
             assert session.scalar(select(func.count()).select_from(CashRecord)) == 3
 
+    @pytest.mark.parametrize("status", ["ended", "lapsed"])
+    def test_inactive_policy_accepts_late_claim_and_direct_allocation(self, app, actors, status):
+        actor, _, foreign = actors
+        with TestClient(app) as client:
+            case, policy = new_case(client, actor), new_policy(client, actor)
+            changed = client.patch(
+                f"{BASE}/policies/{policy['id']}",
+                headers=headers(actor, version=1),
+                json={"status": status},
+            )
+            assert changed.status_code == 200
+            claim = create_metadata(
+                client, actor, "/claims", {"case_id": case["id"], "policy_id": policy["id"]}
+            )
+            assert claim["policy_id"] == policy["id"]
+            direct = new_payout(client, actor, [allocation(case["id"], policy_id=policy["id"])])
+            assert direct["allocations"][0]["policy_id"] == policy["id"]
+            assert direct["allocations"][0]["claim_id"] is None
+            loose = new_payout(client, actor, [allocation(case["id"])])
+            linked = client.patch(
+                f"{BASE}/payout-allocations/{loose['allocations'][0]['id']}",
+                headers=headers(actor, version=1),
+                json={"policy_id": policy["id"], "reason": "합성 종료 계약 연결"},
+            )
+            assert linked.status_code == 200
+            other = new_policy(client, foreign)
+            assert (
+                client.post(
+                    BASE + "/claims",
+                    headers=actor.headers,
+                    json={"case_id": case["id"], "policy_id": other["id"]},
+                ).status_code
+                == 404
+            )
+            assert (
+                client.post(
+                    BASE + "/payouts",
+                    headers=headers(actor),
+                    json=actual(allocations=[allocation(case["id"], policy_id=other["id"])]),
+                ).status_code
+                == 404
+            )
+
     def test_direct_receipt_later_claim_link_has_history_and_no_second_cash(
         self, app, actors, db_engine
     ):
@@ -805,20 +928,6 @@ class TestInsuranceEventCorrections:
                 json={"status": "ended"},
             )
             assert ended.status_code == 200
-            assert (
-                client.post(
-                    BASE + "/claims",
-                    headers=actor.headers,
-                    json={"case_id": case["id"], "policy_id": policy["id"]},
-                ).status_code
-                == 422
-            )
-            direct = client.post(
-                BASE + "/payouts",
-                headers=headers(actor),
-                json=actual(allocations=[allocation(case["id"], policy_id=policy["id"])]),
-            )
-            assert direct.status_code == 422
             path = f"{BASE}/payout-allocations/{allocated['id']}"
             body = {
                 "policy_id": policy["id"],
@@ -928,6 +1037,81 @@ class TestInsuranceEventCorrections:
 
 @pytest.mark.database
 class TestInsuranceEventBoundaries:
+    def test_claim_detail_counts_only_its_own_allocations_and_returns(self, app, actors):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case, other, policy = (
+                new_case(client, actor),
+                new_case(client, actor),
+                new_policy(client, actor),
+            )
+            claim = create_metadata(
+                client, actor, "/claims", {"case_id": case["id"], "policy_id": policy["id"]}
+            )
+            assert (claim["received_krw"], claim["returned_krw"], claim["net_received_krw"]) == (
+                "0",
+                "0",
+                "0",
+            )
+            deposit = new_payout(
+                client,
+                actor,
+                [
+                    allocation(case["id"], "600", policy_id=policy["id"], claim_id=claim["id"]),
+                    allocation(case["id"], "100"),
+                    allocation(other["id"], "300"),
+                ],
+            )
+            linked = next(row for row in deposit["allocations"] if row["claim_id"] == claim["id"])
+            money(
+                client,
+                actor,
+                f"/payouts/{deposit['id']}/returns",
+                actual("50", original_allocation_id=linked["id"], reason="합성 일부 반환"),
+                version=1,
+            )
+            detail = read(client, actor, f"/claims/{claim['id']}")
+            assert (detail["received_krw"], detail["returned_krw"], detail["net_received_krw"]) == (
+                "600",
+                "50",
+                "550",
+            )
+            listed = read(client, actor, f"/claims?case_id={case['id']}")["items"][0]
+            assert "received_krw" not in listed
+
+    def test_case_list_shows_each_case_net_burden_with_constant_queries(
+        self, app, actors, db_engine
+    ):
+        actor = actors[0]
+        with TestClient(app) as client:
+            first, second, empty = (new_case(client, actor) for _ in range(3))
+            new_expense(client, actor, first, new_node(client, actor, first), "1000")
+            new_expense(client, actor, second, new_node(client, actor, second), "500")
+            # One deposit split across two cases counts once in each case.
+            new_payout(
+                client, actor, [allocation(first["id"], "300"), allocation(second["id"], "700")]
+            )
+
+            def listed(limit):
+                queries = []
+
+                def capture(conn, cursor, statement, *args):
+                    if statement.startswith("SELECT"):
+                        queries.append(statement)
+
+                event.listen(db_engine, "before_cursor_execute", capture)
+                try:
+                    items = read(client, actor, f"/cases?limit={limit}")["items"]
+                finally:
+                    event.remove(db_engine, "before_cursor_execute", capture)
+                return {row["id"]: row["net_burden_krw"] for row in items}, len(queries)
+
+            burdens, many = listed(50)
+            assert burdens == {first["id"]: "700", second["id"]: "-200", empty["id"]: "0"}
+            for case in (first, second, empty):
+                assert summary(client, actor, case)["net_burden_krw"] == burdens[case["id"]]
+            assert listed(1)[1] == many
+
     def test_partial_refund_total_cap_exact_limit_and_immutable_replay(
         self, app, actors, db_engine
     ):

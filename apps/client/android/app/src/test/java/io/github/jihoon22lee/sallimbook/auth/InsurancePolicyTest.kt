@@ -83,11 +83,19 @@ class InsurancePolicyTest {
     @Test fun caseListExcludesDiagnosisWhileDetailsAndHistoryAcceptBoundedSyntheticNotes() {
         val detail = caseInput() + audit + mapOf("diagnosis_note" to "합성 메모", "diagnosis_code" to "SYNTHETIC")
         response(FinanceOperation.GET_INSURANCE_CASE, mapOf("caseId" to id), detail)
-        val list = mapOf("items" to listOf(detail - setOf("diagnosis_note", "diagnosis_code")), "next_cursor" to null)
+        val list = mapOf("items" to listOf(detail - setOf("diagnosis_note", "diagnosis_code") + mapOf("net_burden_krw" to "0")), "next_cursor" to null)
         response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), list)
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), mapOf("items" to listOf(detail), "next_cursor" to null)) }
         bad { request(FinanceOperation.UPDATE_INSURANCE_CASE, mapOf("caseId" to id, "ifMatch" to tag) + input(mapOf("reason" to "합성 사유"))) }
         bad { request(FinanceOperation.CREATE_INSURANCE_CASE, input(caseInput() + mapOf("diagnosis_note" to "x".repeat(2001)))) }
+    }
+    @Test fun caseListCarriesSignedNetBurden() {
+        val item = caseInput() - setOf("diagnosis_note", "diagnosis_code") + audit
+        fun list(row: Map<String, Any?>) = mapOf("items" to listOf(row), "next_cursor" to null)
+        response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), list(item + mapOf("net_burden_krw" to "-200")))
+        // Response violations are refused as ACCESS_DENIED, like the diagnosis fields above.
+        bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), list(item)) }
+        bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), list(item + mapOf("net_burden_krw" to "1.5"))) }
     }
     @Test fun treatmentAndFinancialStatesRemainIndependentAndTreatmentDatesCoherent() {
         request(FinanceOperation.CREATE_INSURANCE_CASE, input(caseInput()))
