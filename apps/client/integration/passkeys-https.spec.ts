@@ -158,6 +158,14 @@ test("real passkey registration login scoped actions and revocation keep their s
       ),
     ).toBe(401);
     console.log("SAFE_PHASE=REVOKED_LOGIN_REJECTED");
+    // L15: a revoked credential must not block registering again on the same authenticator.
+    await passwordLogin(page, "합성 재등록 브라우저");
+    await page.getByLabel("패스키 이름", { exact: true }).fill("합성 재등록 패스키");
+    await page.getByRole("button", { name: "패스키 등록", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "합성 재등록 패스키", exact: true }),
+    ).toBeVisible();
+    console.log("SAFE_PHASE=PASSKEY_REREGISTERED");
   } finally {
     // Context teardown destroys its virtual authenticators, including pending ceremonies.
     // CDP removal can wait on an active browser prompt, so close the isolated target first.

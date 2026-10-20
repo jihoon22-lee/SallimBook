@@ -277,15 +277,15 @@ def _active_account(
 
 
 def _descriptors(
-    session: Session, principal: Principal, rp_id: str, *, include_revoked: bool = False
+    session: Session, principal: Principal, rp_id: str
 ) -> list[PublicKeyCredentialDescriptor]:
+    # Revoked credentials stay out so the same authenticator can register again.
     query = select(AuthCredential).where(
         AuthCredential.household_id == principal.household_id,
         AuthCredential.user_id == principal.user_id,
         AuthCredential.rp_id == rp_id,
+        AuthCredential.revoked_at.is_(None),
     )
-    if not include_revoked:
-        query = query.where(AuthCredential.revoked_at.is_(None))
     return [
         PublicKeyCredentialDescriptor(
             id=credential.credential_id,
@@ -342,7 +342,7 @@ def registration_options(
             require_resident_key=True,
             user_verification=UserVerificationRequirement.REQUIRED,
         ),
-        exclude_credentials=_descriptors(session, principal, policy.rp_id, include_revoked=True),
+        exclude_credentials=_descriptors(session, principal, policy.rp_id),
     )
     session.add(challenge)
     session.flush()

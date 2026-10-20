@@ -620,6 +620,27 @@ def seed_expired_ceremonies(session, account, credential_id, count):
 
 @pytest.mark.database
 class TestPasskeyDatabase:
+    def test_registration_excludes_only_active_credentials(
+        self, db_engine, passkey_account, enrolled
+    ):
+        authenticator, credential_id = enrolled
+
+        def excluded():
+            with Session(db_engine) as session:
+                options = service.registration_options(
+                    session,
+                    passkey_account.principal,
+                    RegisterOptionsRequest(label="합성 재등록 키"),
+                    NATIVE_POLICY,
+                )
+            return [item["id"] for item in options.public_key.get("excludeCredentials", [])]
+
+        assert excluded() == [bytes_to_base64url(authenticator.credential_id)]
+        with Session(db_engine) as session:
+            session.get(AuthCredential, credential_id).revoked_at = identity.utcnow()
+            session.commit()
+        assert excluded() == []
+
     def test_device_and_passkey_lists_are_newest_first_and_owner_scoped(
         self, passkey_app, passkey_account, db_engine
     ):
