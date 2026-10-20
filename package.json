@@ -15,6 +15,7 @@
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,mts,cts,js,mjs,cjs}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,mts,cts,js,mjs,cjs}\"",
+    "lint": "eslint --max-warnings 0 eslint.config.mjs apps/client plugins packages/api-client",
     "api:generate": "uv run --project services/api python scripts/export_openapi.py && pnpm --filter @sallimbook/api-client generate",
     "android:sync": "pnpm build && pnpm --filter @sallimbook/client exec cap sync android",
     "android:build": "pnpm android:sync && python3 scripts/build_android.py",
@@ -24,6 +25,12 @@
     "test:web": "pnpm --filter @sallimbook/client exec playwright test"
   },
   "devDependencies": {
-    "prettier": "3.9.10"
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.0"
   }
 }
