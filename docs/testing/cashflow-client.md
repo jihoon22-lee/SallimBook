@@ -148,3 +148,46 @@ uv run --project services/api --frozen ruff check services/api/tests/test_recurr
 uv run --project services/api --frozen ruff format --check services/api/tests/test_recurring.py
 git diff --check
 ```
+
+## 고정 납부·수입·금전 연결 보완 (M1·M2·M3·M6·L1~L3) — 2026-10-20
+
+검토의 M1(수동 예외 고정 해제), M2(시작 전 예정 버전 철회), M3-a/M3-b(기록 날짜·정정 원본 기준의
+결제수단 판정), M6(수입 정정 자기 중복 제외), L1(납부 완료 회차 추가 납부 확인), L2(정밀도 전환의
+계좌·메모 보존), L3(회차 이력 action 계약)를 보완했다. 마이그레이션은 `0015_rule_revocation`이고 API 형태
+변경은 `ObligationHistoryItem.action`의 `ObligationHistoryAction` enum 하나다. 새 오류 코드는 없다.
+
+추가한 시험:
+
+- DB: `test_manual_override_tracks_only_live_exceptions`, `test_reopen_and_void_clear_manual_override`,
+  `test_revocation_is_one_way_and_frees_the_period`, `test_manual_override_must_match_live_exception`,
+  `test_upgrade_normalizes_stale_manual_override_rows`, `test_downgrade_refuses_revoked_rule_versions`,
+  `test_end_before_pending_version_revokes_it`, `test_change_at_pending_start_replaces_it_once`,
+  `test_revocation_refused_when_pending_occurrence_was_handled`(납부·건너뛰기),
+  `test_started_or_first_version_cannot_be_revoked`, `test_closed_account_accepts_records_dated_through_its_end`,
+  `test_settlement_accepts_closed_account_through_its_end_date`,
+  `test_correction_keeps_a_link_that_closed_after_the_original`(의료비·환불·보험금·반환)
+- 모듈: `test_revocation_column_reuses_known_audit_field`, `test_history_action_contract_matches_database_check`
+- Playwright: 예정 변경 앞 종료·같은 시작일 교체·철회 거부 안내, 종료일 이하 카드·계좌 선택(고정 납부·수입·의료비),
+  수입 정정 자기 중복 제외와 다른 월합계 검토 유지, 납부 완료 회차 추가 납부 확인, 정밀도 전환의 계좌·메모
+  이어받기와 다른 계좌 안내, 회차 이력의 `regenerate` 라벨
+
+실행 결과(합성 데이터, 전용 18745 시험 DB와 HTTPS 시험 환경):
+
+- `pnpm test:database` recurring·income·insurance_events·payment_links·cards·insurance_core·exports·database
+  **322개 통과**, Alembic drift 없음과 downgrade/upgrade 왕복 통과
+- `pytest -m 'not database'` 911개 통과, Ruff·Prettier·typecheck 통과, `pnpm api:generate` 후 생성 client 변경 없음
+- Playwright 고정 납부·수입·보험 사건·카드·결제수단 종료·업무 흐름·모델·native UI/bridge **214개 통과**
+- Android JVM `FixedCostPolicyTest` 15, `CashflowPolicyTest` 9, `NativeAuditWireTest` 10 통과(정책 변경 없음 확인)
+- 실제 HTTPS `test_web_auth.py --cashflow`, `--insurance` 통과
+
+배포 메모: 수정 전 코드로 이미 종료·변경된 규칙의 미래 회차 중 `manual_override`가 남아 대체되지 않은 행은
+마이그레이션이 플래그를 정규화한 뒤에도 그대로다. 배포 직후 "고정 납부 > 예정 회차 생성"을 오늘이 포함된 월부터
+이미 생성한 마지막 월까지(요청당 최대 366일) 다시 실행하면 미납·예외 없는 미래 회차가 현재 규칙대로 갱신된다.
+운영 DB의 정규화 대상 건수와 Android 실기기 확인은 미실행이다.
+
+```bash
+TMPDIR="$HOME/.cache/sallimbook-tmp" pnpm test:database services/api/tests/test_recurring.py services/api/tests/test_income.py services/api/tests/test_insurance_events.py services/api/tests/test_payment_links.py services/api/tests/test_cards.py services/api/tests/test_insurance_core.py services/api/tests/test_exports.py services/api/tests/test_database.py -q
+pnpm --filter @sallimbook/client exec playwright test tests/fixed.spec.ts tests/income.spec.ts tests/insurance-events.spec.ts tests/cards.spec.ts tests/payment-closure.spec.ts tests/task-journeys.spec.ts tests/cashflow-model.spec.ts tests/cashflow-native-ui.spec.ts tests/cashflow-native-bridge.spec.ts tests/insurance-events-native-bridge.spec.ts
+uv run --project services/api python scripts/test_web_auth.py --cashflow
+uv run --project services/api python scripts/test_web_auth.py --insurance
+```
