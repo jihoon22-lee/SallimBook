@@ -10144,11 +10144,24 @@
         "title": "ObligationAction",
         "type": "object"
       },
+      "ObligationHistoryAction": {
+        "enum": [
+          "create",
+          "regenerate",
+          "reschedule",
+          "skip",
+          "unskip",
+          "complete",
+          "reopen",
+          "settle",
+          "void_settlement"
+        ],
+        "type": "string"
+      },
       "ObligationHistoryItem": {
         "properties": {
           "action": {
-            "title": "Action",
-            "type": "string"
+            "$ref": "#/components/schemas/ObligationHistoryAction"
           },
           "expected_amount_krw": {
             "anyOf": [

@@ -248,7 +248,7 @@ export async function mockCashflow(page: Page) {
   state.incomes.forEach(rememberIncome);
   const rememberObligation = (
     row: S["ObligationResponse"],
-    action: string,
+    action: S["ObligationHistoryItem"]["action"],
     reason: string | null = null,
   ) => {
     const list = state.obligationHistory.get(row.id) ?? [];
@@ -866,7 +866,11 @@ export async function mockCashflow(page: Page) {
         row.skipped || row.manually_completed || row.scheduled_date !== row.nominal_date;
       row.version++;
       refreshObligation(row);
-      rememberObligation(row, action ?? "reschedule", body.reason);
+      rememberObligation(
+        row,
+        (action as S["ObligationHistoryItem"]["action"] | undefined) ?? "reschedule",
+        body.reason,
+      );
       return finish(response({ id: row.id, version: row.version }));
     }
     if (domain === "settlements") {

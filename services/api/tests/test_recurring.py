@@ -1,10 +1,12 @@
 """Synthetic recurrence, settlement, replay and household boundary regressions."""
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from threading import Barrier
+from typing import get_args
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,7 +15,7 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import CheckConstraint, delete, func, select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
@@ -33,7 +35,12 @@ from sallimbook.cashflow.recurring_models import (
     ScheduledObligation,
 )
 from sallimbook.cashflow.recurring_router import router
-from sallimbook.cashflow.recurring_schemas import GenerateObligations, RuleCreate, SettlementCreate
+from sallimbook.cashflow.recurring_schemas import (
+    GenerateObligations,
+    ObligationHistoryAction,
+    RuleCreate,
+    SettlementCreate,
+)
 from sallimbook.cashflow.scheduling import occurrence_dates, payment_breakdown, settlement_totals
 from sallimbook.config import Settings
 from sallimbook.core.audit import AuditEvent
@@ -234,6 +241,20 @@ def test_revocation_column_reuses_known_audit_field():
     assert "revoked_at" in RecurringRuleVersion.__table__.columns
     assert "revoked_at" in PUBLIC_COLUMNS["recurring_rule_versions"]
     assert "revoked_at" in KNOWN_FIELDS
+
+
+def test_history_action_contract_matches_database_check():
+    check = next(
+        str(constraint.sqltext)
+        for constraint in ObligationRevision.__table__.constraints
+        if isinstance(constraint, CheckConstraint) and "action IN" in str(constraint.sqltext)
+    )
+    values = get_args(ObligationHistoryAction.__value__)
+    assert set(re.findall(r"'([a-z_]+)'", check)) == set(values)
+    app = FastAPI()
+    app.include_router(router)
+    schemas = app.openapi()["components"]["schemas"]
+    assert set(schemas["ObligationHistoryAction"]["enum"]) == set(values)
 
 
 @pytest.mark.database

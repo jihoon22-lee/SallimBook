@@ -19,6 +19,18 @@ ForeignAmount = Annotated[
     str, StringConstraints(strict=True, max_length=40, pattern=r"^(0|[1-9][0-9]*)(\.[0-9]{1,8})?$")
 ]
 type EconomicType = Literal["expense", "loan", "asset_transfer"]
+# Same values as the obligation_revisions action CHECK.
+type ObligationHistoryAction = Literal[
+    "create",
+    "regenerate",
+    "reschedule",
+    "skip",
+    "unskip",
+    "complete",
+    "reopen",
+    "settle",
+    "void_settlement",
+]
 
 
 class ScheduleTerms(InputModel):
@@ -210,7 +222,7 @@ class ObligationHistoryItem(BaseModel):
     manual_override: bool
     skipped: bool
     manually_completed: bool
-    action: str
+    action: ObligationHistoryAction
     reason: str | None = Field(repr=False)
     updated_at: datetime
 

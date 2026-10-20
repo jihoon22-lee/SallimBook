@@ -21,6 +21,7 @@ import {
   displayedTerms,
   economicTypes,
   generationValid,
+  historyLabel,
   obligationStates,
   settlementEntry,
   withdrawalPlan,
@@ -650,18 +651,6 @@ function ObligationHistory({ id }: { id: string }) {
     useCallback((cursor?: number) => api.history(id, cursor), [api, id]),
     historyKey,
   );
-  const names: Record<string, string> = {
-    create: "회차 생성",
-    generate: "회차 생성",
-    reschedule: "예정일 변경",
-    skip: "건너뛰기",
-    unskip: "건너뛰기 복원",
-    complete: "수동 완료",
-    reopen: "수동 완료 재개",
-    settle: "실제 납부",
-    void_settlement: "납부 무효",
-    supersede: "규칙 변경으로 대체",
-  };
   return (
     <section className="card">
       <h2>회차 변경 이력</h2>
@@ -671,7 +660,7 @@ function ObligationHistory({ id }: { id: string }) {
         {history.items.map((row) => (
           <li key={historyKey(row)}>
             <h3>
-              버전 {row.version} · {names[row.action] ?? "회차 상태 변경"}
+              버전 {row.version} · {historyLabel(row)}
             </h3>
             <p>
               예정일 {dateLabel(row.scheduled_date)} · 예정액{" "}

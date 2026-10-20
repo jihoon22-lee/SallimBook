@@ -6,6 +6,23 @@ export type Rule = components["schemas"]["RuleResponse"];
 export type RuleTerms = components["schemas"]["RuleVersionResponse"];
 export type Obligation = components["schemas"]["ObligationResponse"];
 export type Settlement = components["schemas"]["SettlementResponse"];
+export type ObligationHistoryItem = components["schemas"]["ObligationHistoryItem"];
+const historyLabels: Record<ObligationHistoryItem["action"], string> = {
+  create: "회차 생성",
+  regenerate: "규칙 변경 반영",
+  reschedule: "예정일 변경",
+  skip: "건너뛰기",
+  unskip: "건너뛰기 복원",
+  complete: "수동 완료",
+  reopen: "수동 완료 재개",
+  settle: "실제 납부",
+  void_settlement: "납부 무효",
+};
+export function historyLabel(row: ObligationHistoryItem): string {
+  if (row.action === "regenerate" && row.schedule_state === "superseded") return "규칙 종료로 대체";
+  // An older cached response may still carry an action this build does not know.
+  return historyLabels[row.action] ?? "회차 상태 변경";
+}
 export const economicTypes = {
   expense: "소비성 비용",
   loan: "대출 원리금",

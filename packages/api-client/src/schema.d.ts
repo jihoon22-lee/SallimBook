@@ -6248,10 +6248,11 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** @enum {string} */
+        ObligationHistoryAction: "create" | "regenerate" | "reschedule" | "skip" | "unskip" | "complete" | "reopen" | "settle" | "void_settlement";
         /** ObligationHistoryItem */
         ObligationHistoryItem: {
-            /** Action */
-            action: string;
+            action: components["schemas"]["ObligationHistoryAction"];
             /** Expected Amount Krw */
             expected_amount_krw: string | null;
             /**

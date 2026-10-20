@@ -1,6 +1,7 @@
 import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import type { components } from "@sallimbook/api-client";
 import fixtures from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
 import { incomeRow, mockCashflow, sampleCard } from "./support/cashflow";
 import { uid } from "./support/finance";
@@ -464,4 +465,43 @@ test("a paid occurrence asks before recording an additional payment", async ({ p
   await expect(
     page.getByRole("heading", { name: "이미 납부를 마친 회차예요", exact: true }),
   ).toBeVisible();
+});
+
+test("occurrence history names rule-driven regeneration", async ({ page }) => {
+  const state = await mockCashflow(page);
+  const row = state.obligations[0]!;
+  row.version = 3;
+  const item = (
+    version: number,
+    action: components["schemas"]["ObligationHistoryItem"]["action"],
+    patch: Partial<components["schemas"]["ObligationHistoryItem"]> = {},
+  ): components["schemas"]["ObligationHistoryItem"] => ({
+    id: row.id,
+    version,
+    rule_version_id: row.rule_version_id,
+    expected_amount_krw: row.expected_amount_krw,
+    nominal_date: row.nominal_date,
+    scheduled_date: row.scheduled_date,
+    schedule_state: "active",
+    manual_override: false,
+    skipped: false,
+    manually_completed: false,
+    action,
+    reason: null,
+    updated_at: "2025-02-20T03:00:00Z",
+    ...patch,
+  });
+  state.obligationHistory.set(row.id, [
+    item(1, "create"),
+    item(2, "regenerate", { expected_amount_krw: "34000" }),
+    item(3, "regenerate", { schedule_state: "superseded" }),
+  ]);
+  await page.goto(`/fixed-payments/${uid(70)}`);
+  await expect(
+    page.getByRole("heading", { name: "버전 2 · 규칙 변경 반영", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "버전 3 · 규칙 종료로 대체", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /회차 상태 변경$/ })).toHaveCount(0);
 });
