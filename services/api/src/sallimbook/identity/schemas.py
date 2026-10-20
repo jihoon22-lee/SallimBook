@@ -84,6 +84,10 @@ class MemberResponse(BaseModel):
     role: Literal["owner", "member"]
 
 
+class RevokedDevicesResponse(BaseModel):
+    revoked_devices: int = Field(ge=0)
+
+
 class WebLoginResponse(BaseModel):
     member: MemberResponse
     csrf_token: str = Field(repr=False)

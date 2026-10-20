@@ -292,6 +292,123 @@ class TestIdentityDatabase:
             devices = session.scalar(select(func.count()).select_from(RegisteredDevice))
         assert devices == (0 if replacement == "changed" else 1)
 
+    @pytest.mark.parametrize("transport", ["web", "native"])
+    def test_revoke_other_devices_keeps_this_device_and_requires_the_password(
+        self, identity_app, db_engine, account, transport
+    ):
+        path = "/api/v1/devices/revoke-others"
+        with (
+            TestClient(identity_app, base_url="https://testserver") as client,
+            TestClient(identity_app, base_url="https://testserver") as device,
+        ):
+            other = native_login(device, account)
+            headers = (
+                csrf(web_login(client, account))
+                if transport == "web"
+                else {**NATIVE, **bearer(native_login(client, account))}
+            )
+            if transport == "web":
+                missing = client.post(
+                    path, headers={"Origin": ORIGIN}, json={"password": account.password}
+                )
+                assert missing.json()["error"]["code"] == "CSRF_FAILED"
+            wrong = client.post(path, headers=headers, json={"password": secrets.token_urlsafe(24)})
+            assert wrong.status_code == 403
+            assert wrong.json()["error"]["code"] == "REAUTHENTICATION_FAILED"
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 200
+            stale = service.utcnow() - timedelta(minutes=6)
+            with Session(db_engine) as session:
+                for auth in session.scalars(select(AuthSession)):
+                    auth.authenticated_at = stale
+                session.commit()
+            result = client.post(path, headers=headers, json={"password": account.password})
+            assert result.status_code == 200 and result.json() == {"revoked_devices": 1}
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 401
+            refreshed = device.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": other["refresh_token"]},
+            )
+            assert refreshed.status_code == 401
+            again = client.post(path, headers=headers, json={"password": account.password})
+            assert again.status_code == 200 and again.json() == {"revoked_devices": 0}
+        with Session(db_engine) as session:
+            rows = session.execute(
+                select(
+                    RegisteredDevice.id, RegisteredDevice.status, AuthSession.authenticated_at
+                ).join(AuthSession, AuthSession.device_id == RegisteredDevice.id)
+            ).all()
+            events = session.execute(
+                select(AuditEvent.entity_id, AuditEvent.safe_diff).where(
+                    AuditEvent.entity_type == "registered_device", AuditEvent.action == "revoke"
+                )
+            ).all()
+        assert sorted(status for _, status, _ in rows) == ["active", "revoked"]
+        assert all((at > stale) == (status == "active") for _, status, at in rows)
+        revoked = next(identifier for identifier, status, _ in rows if status == "revoked")
+        assert [(entity, diff["changed_fields"]) for entity, diff in events] == [
+            (revoked, ["revoked_at", "status"])
+        ]
+
+    def test_revoke_others_shares_the_reauthentication_limit(self, identity_app, account):
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            headers = {**NATIVE, **bearer(tokens)}
+            paths = ["/api/v1/auth/native/reauthenticate"] * 3
+            paths += ["/api/v1/devices/revoke-others"] * 2
+            for path in paths:
+                wrong = client.post(
+                    path, headers=headers, json={"password": secrets.token_urlsafe(24)}
+                )
+                assert wrong.status_code == 403
+            limited = client.post(
+                "/api/v1/devices/revoke-others",
+                headers=headers,
+                json={"password": account.password},
+            )
+            assert limited.status_code == 429
+            assert limited.json()["error"]["code"] == "RATE_LIMITED"
+            assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 200
+
+    def test_revoke_others_relocks_when_a_login_finishes_before_the_account_lock(
+        self, identity_app, db_engine, account, monkeypatch
+    ):
+        lock = service.lock_session_devices
+        concurrent = []
+
+        def login_after_first_lock(session, principal, *, additional_device_ids=()):
+            locked = lock(session, principal, additional_device_ids=additional_device_ids)
+            if not concurrent:
+                with Session(db_engine) as other:
+                    concurrent.append(
+                        service.login(
+                            other,
+                            LoginRequest(
+                                login_name=account.login_name,
+                                password=account.password,
+                                device_label="합성 동시 기기",
+                            ),
+                            "synthetic-concurrent",
+                            "native",
+                        )
+                    )
+            return locked
+
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            other = native_login(client, account)
+            tokens = native_login(client, account)
+            monkeypatch.setattr(service, "lock_session_devices", login_after_first_lock)
+            result = client.post(
+                "/api/v1/devices/revoke-others",
+                headers={**NATIVE, **bearer(tokens)},
+                json={"password": account.password},
+            )
+            assert result.status_code == 200 and result.json() == {"revoked_devices": 2}
+            late = {"Authorization": "Bearer " + concurrent[0].token}
+            assert client.get("/api/v1/me", headers=late).status_code == 401
+            assert client.get("/api/v1/me", headers=bearer(other)).status_code == 401
+            assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 200
+
     def test_security_events_keep_metadata_only(self, identity_app, db_engine, account):
         with Session(db_engine) as session:
             fixture_events = set(session.scalars(select(AuditEvent.id)))  # bootstrap acceptance
