@@ -41,6 +41,7 @@ async function bridge(page: Page, handle: (call: Call) => unknown) {
               "synchronizeAssetMonthScope",
               "confirmAssetMonth",
               "reopenAssetMonth",
+              "carryPreviousAssetMonth",
               "getAssetComparison",
               "getAssetTrends",
               "getAsset",
@@ -292,5 +293,82 @@ test("native cancellation discards a late response and preserves retry identity"
   expect(writes).toHaveLength(2);
   expect(writes[0]!.args.idempotencyKey).toBeTruthy();
   expect(writes[0]!.args).toEqual(writes[1]!.args);
+  expect(native.http).toEqual([]);
+});
+
+test("native carry-previous keeps the revision version and one key across an ambiguous retry", async ({
+  page,
+}) => {
+  const state = await mockMonths(page);
+  let failure = true;
+  for (const row of state.record!.values)
+    Object.assign(row, {
+      input_amount_krw: null,
+      owned_amount_krw: null,
+      verification_state: "missing",
+      origin: "manual",
+      origin_revision_id: null,
+    });
+  state.record!.totals = total(state.record!.values);
+  const confirmed = {
+    month: "2025-01",
+    revision_id: uid(90),
+    revision_no: 1,
+    version: 1,
+    state: "confirmed",
+    previous_revision_id: null,
+    reopened_reason: null,
+    confirmed_at: "2025-01-31T12:00:00Z",
+    created_at: "2025-01-01T00:00:00Z",
+  };
+  const native = await bridge(page, ({ method, args }) => {
+    if (method === "getAssetMonth") return ok(state.record);
+    if (method === "getAssetMonthRevision") return ok(state.previous);
+    if (method === "listAssetMonthRevisions")
+      return ok({ items: args.month === "2025-01" ? [confirmed] : [], next_cursor: null });
+    if (method === "carryPreviousAssetMonth") {
+      if (failure) {
+        failure = false;
+        return fail("NETWORK_UNAVAILABLE");
+      }
+      Object.assign(state.record!.values[0]!, {
+        input_amount_krw: "1001",
+        owned_amount_krw: "501",
+        verification_state: "carried_unconfirmed",
+        origin: "carried",
+        origin_revision_id: uid(90),
+        version: 2,
+      });
+      state.record!.version++;
+      state.record!.totals = total(state.record!.values);
+      return ok({
+        month: "2025-02",
+        revision_id: uid(91),
+        revision_no: 1,
+        version: state.record!.version,
+      });
+    }
+    return fail("INVALID_REQUEST");
+  });
+  await page.goto("/assets/months/2025-02");
+  await page.getByRole("button", { name: "전월 확정값 불러오기 검토", exact: true }).click();
+  const carry = page.getByRole("button", { name: "전월 확정값 불러오기", exact: true });
+  await carry.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await carry.click();
+  await expect(
+    page.getByText("이전 기록에서 불러온 금액이에요. 이번 달 실제 값과 기준일을 확인해 주세요.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const writes = native.calls.filter((c) => c.method === "carryPreviousAssetMonth");
+  expect(writes).toHaveLength(2);
+  expect(writes[1]!.args).toEqual(writes[0]!.args);
+  expect(writes[0]!.args).toMatchObject({
+    month: "2025-02",
+    ifMatch: '"1"',
+    input: { revision_id: uid(91) },
+  });
+  expect(writes[0]!.args.idempotencyKey).toBeTruthy();
   expect(native.http).toEqual([]);
 });

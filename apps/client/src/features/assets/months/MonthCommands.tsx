@@ -10,7 +10,14 @@ import { ScopeChanges, assetScope } from "./ScopeChanges";
 import { dateLabel } from "../../finance/dates";
 import { useAssetMonthsApi } from "./api";
 import { MonthError, MonthSummary } from "./MonthFeedback";
-import { formatKrw, monthEnd, previousMonth, scopeDifferences, scopeIdentity } from "./model";
+import {
+  carryCandidates,
+  formatKrw,
+  monthEnd,
+  previousMonth,
+  scopeDifferences,
+  scopeIdentity,
+} from "./model";
 import type { MonthRecord, MonthValue } from "./model";
 import { useIdempotencyKey, useMonthCommand } from "./useMonthCommand";
 import { ApiError, toApiError } from "../../../platform/api";
@@ -88,7 +95,14 @@ export function CreateMonthDraft({
   const api = useAssetMonthsApi();
   const command = useMonthCommand();
   const [copyPrevious, setCopyPrevious] = useState(true);
+  const [priorRefresh, setPriorRefresh] = useState(0);
+  const prior = usePreviousConfirmation(month, priorRefresh);
+  const [ackUnconfirmed, setAckUnconfirmed] = useState(false);
+  // The acknowledgment does not change the request body, so the key fingerprint stays as is.
   const key = useIdempotencyKey(JSON.stringify(["draft", month, copyPrevious]));
+  const priorMonth = previousMonth(month);
+  const unconfirmedPrior =
+    copyPrevious && !prior.loading && !prior.error && prior.exists && !prior.record;
   async function create(event: FormEvent) {
     event.preventDefault();
     const result = await command.run((signal) =>
@@ -125,9 +139,50 @@ export function CreateMonthDraft({
           불러온 금액은 미확인 상태이며 기준일은 비워요. 전월 확정값이 없거나 금액 입력 기준이
           바뀌었으면 미입력으로 남겨요.
         </p>
+        {copyPrevious && prior.loading && <p role="status">전월 기록 상태를 확인하고 있어요.</p>}
+        {copyPrevious && prior.error && (
+          <>
+            <MonthError error={prior.error} />
+            <button type="button" onClick={() => setPriorRefresh((value) => value + 1)}>
+              전월 기록 상태 다시 확인
+            </button>
+          </>
+        )}
+        {unconfirmedPrior && priorMonth && (
+          <section className="month-warning">
+            <h3>전월 기록이 아직 확정되지 않았어요</h3>
+            <p>
+              {formatMonth(priorMonth)} 기록을 확정하면 그 금액을 미확인 값으로 불러올 수 있어요.
+              지금 시작하면 모든 항목이 미입력으로 시작하고, 나중에 "전월 확정값 불러오기"로 손대지
+              않은 미입력 항목만 채울 수 있어요.
+            </p>
+            <Link to={`/assets/months/${priorMonth}`}>전월 먼저 확정하기</Link>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={ackUnconfirmed}
+                disabled={command.busy}
+                onChange={(event) => setAckUnconfirmed(event.target.checked)}
+              />
+              전월 확정값 없이 시작하는 것을 확인했어요.
+            </label>
+          </section>
+        )}
+        {copyPrevious && !prior.loading && !prior.error && !prior.exists && (
+          <p className="muted">
+            전월 기록이 없어 불러올 금액이 없어요. 모든 항목을 이번 달에 직접 확인해요.
+          </p>
+        )}
         <MonthError error={command.error} />
         <div className="form-actions">
-          <button type="submit" disabled={command.busy}>
+          <button
+            type="submit"
+            disabled={
+              command.busy ||
+              (copyPrevious && (prior.loading || Boolean(prior.error))) ||
+              (unconfirmedPrior && !ackUnconfirmed)
+            }
+          >
             {command.busy ? "작성본 만드는 중…" : "월 작성본 만들기"}
           </button>
           {command.busy && (
@@ -155,12 +210,14 @@ function usePreviousConfirmation(month: string, refresh: number) {
   const [record, setRecord] = useState<MonthRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
+  const [exists, setExists] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     const priorMonth = previousMonth(month);
     setLoading(true);
     setRecord(null);
     setError(null);
+    setExists(false);
     void (async () => {
       if (!priorMonth) return;
       let cursor: number | null = null;
@@ -171,6 +228,8 @@ function usePreviousConfirmation(month: string, refresh: number) {
           { limit: 200, ...(cursor === null ? {} : { cursor }) },
           controller.signal,
         );
+        if (cursor === null && history.items.length > 0 && !controller.signal.aborted)
+          setExists(true);
         const confirmed = history.items.find((item) => item.state === "confirmed");
         if (confirmed) {
           const value = await api.all(priorMonth, controller.signal, confirmed.revision_no);
@@ -193,7 +252,7 @@ function usePreviousConfirmation(month: string, refresh: number) {
       });
     return () => controller.abort();
   }, [api, month, refresh]);
-  return { record, loading, error };
+  return { record, exists, loading, error };
 }
 
 export function ConfirmMonth({ initial, reload, close }: RecordActionProps) {
@@ -385,6 +444,95 @@ export function ConfirmMonth({ initial, reload, close }: RecordActionProps) {
             onClick={close}
           >
             확정 검토 닫기
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+export function CarryPreviousMonth({ initial, reload, close }: RecordActionProps) {
+  const api = useAssetMonthsApi();
+  const command = useMonthCommand();
+  const [refresh, setRefresh] = useState(0);
+  const prior = usePreviousConfirmation(initial.month, refresh);
+  const candidates = useMemo(() => carryCandidates(initial, prior.record), [initial, prior.record]);
+  const [blocked, setBlocked] = useState(false);
+  const body = { revision_id: initial.revision_id };
+  const key = useIdempotencyKey(JSON.stringify(["carry", initial.month, initial.version, body]));
+  const priorMonth = previousMonth(initial.month);
+  async function carry(event: FormEvent) {
+    event.preventDefault();
+    if (blocked || candidates.length === 0) return;
+    const result = await command.run((signal) =>
+      api.carry(initial.month, body, initial.version, key, signal),
+    );
+    if (!command.mounted.current) return;
+    if (result.ok) {
+      close();
+      await reload().catch(() => undefined);
+    } else if (result.error.status === 409 && result.error.code !== "OPERATION_IN_PROGRESS")
+      setBlocked(true);
+  }
+  return (
+    <section className="card month-action-panel" aria-labelledby="month-carry-title">
+      <h2 id="month-carry-title">전월 확정값 불러오기</h2>
+      <p>
+        아직 손대지 않은 미입력 항목에만 전월 확정 금액을 넣어요. 직접 입력했거나 사유를 남기고 비운
+        항목, 금액 입력 기준이 바뀐 항목은 그대로 둬요. 불러온 금액은 미확인 상태라 이번 달 실제
+        값과 기준일을 다시 확인해야 해요.
+      </p>
+      <form className="finance-form" onSubmit={(event) => void carry(event)}>
+        {prior.loading && <p role="status">전월 확정 기록을 확인하고 있어요.</p>}
+        {prior.error && (
+          <>
+            <MonthError error={prior.error} />
+            <button type="button" onClick={() => setRefresh((value) => value + 1)}>
+              전월 확정 기록 다시 확인
+            </button>
+          </>
+        )}
+        {!prior.loading && !prior.error && !prior.record && (
+          <p>
+            전월 확정 기록이 없어 불러올 금액이 없어요.{" "}
+            {priorMonth && <Link to={`/assets/months/${priorMonth}`}>전월 먼저 확정하기</Link>}
+          </p>
+        )}
+        {prior.record && candidates.length === 0 && <p>불러올 수 있는 미입력 항목이 없어요.</p>}
+        {candidates.length > 0 && (
+          <ul>
+            {candidates.map(({ row, source }) => (
+              <li key={row.asset_id}>
+                {row.name}: {formatKrw(source.input_amount_krw)} · {amountBases[row.amount_basis]}
+              </li>
+            ))}
+          </ul>
+        )}
+        <MonthError error={command.error} />
+        {blocked && (
+          <p>현재 월 기록을 다시 확인한 뒤 이 검토를 새로 열어 주세요. 자동 재시도하지 않아요.</p>
+        )}
+        <div className="form-actions">
+          <button
+            type="submit"
+            disabled={
+              command.busy || blocked || prior.loading || !prior.record || candidates.length === 0
+            }
+          >
+            전월 확정값 불러오기
+          </button>
+          {command.busy && (
+            <button type="button" onClick={command.cancel}>
+              요청 대기 중단
+            </button>
+          )}
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={command.busy}
+            onClick={close}
+          >
+            불러오기 검토 닫기
           </button>
         </div>
       </form>

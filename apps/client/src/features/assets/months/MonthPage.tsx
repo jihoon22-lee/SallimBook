@@ -10,6 +10,7 @@ import type { HouseholdMember } from "../../finance/FinanceSupport";
 import { amountBases, assetKinds, categories, shareToPercent } from "../model";
 import { useAssetMonthsApi } from "./api";
 import {
+  CarryPreviousMonth,
   ConfirmMonth,
   CreateMonthDraft,
   ReopenMonth,
@@ -19,7 +20,7 @@ import { MonthError, MonthSummary } from "./MonthFeedback";
 import { snapshotOwner } from "./ScopeChanges";
 import { MonthRowEditor } from "./MonthRowEditor";
 import type { EditingValue } from "./MonthRowEditor";
-import { carriedNote, formatKrw, monthStates, verificationStates } from "./model";
+import { carriedNote, formatKrw, monthStates, untouchedMissing, verificationStates } from "./model";
 import type { MonthRecord, MonthValue } from "./model";
 
 function SnapshotList({
@@ -227,7 +228,7 @@ function MonthHistory({ month, refresh }: { month: string; refresh: string }) {
   );
 }
 
-type Panel = { type: "confirm" | "reopen" | "sync"; initial: MonthRecord };
+type Panel = { type: "confirm" | "reopen" | "sync" | "carry"; initial: MonthRecord };
 function MonthWorkspace({
   month,
   revisionNo,
@@ -383,6 +384,15 @@ function MonthWorkspace({
             </button>
           ) : (
             <>
+              {record.values.some(untouchedMissing) && (
+                <button
+                  type="button"
+                  disabled={locked}
+                  onClick={() => setPanel({ type: "carry", initial: record })}
+                >
+                  전월 확정값 불러오기 검토
+                </button>
+              )}
               <button
                 type="button"
                 disabled={locked}
@@ -420,6 +430,9 @@ function MonthWorkspace({
       )}
       {panel?.type === "reopen" && (
         <ReopenMonth initial={panel.initial} reload={reload} close={() => setPanel(null)} />
+      )}
+      {panel?.type === "carry" && (
+        <CarryPreviousMonth initial={panel.initial} reload={reload} close={() => setPanel(null)} />
       )}
       {panel?.type === "sync" && (
         <SynchronizeMonthScope

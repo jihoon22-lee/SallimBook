@@ -155,3 +155,32 @@ export function carriedNote(row: MonthValue): string | null {
     return "이전 기록에서 불러온 금액이에요. 직접 확인을 마쳤어요.";
   return null;
 }
+
+/** Mirrors the server's untouched-missing rule; a reasonless clear looks the same. */
+export function untouchedMissing(row: MonthValue): boolean {
+  return (
+    row.verification_state === "missing" &&
+    row.origin === "manual" &&
+    row.origin_revision_id === null &&
+    row.as_of_date === null &&
+    row.change_reason === null
+  );
+}
+
+/** Rows carry-previous would fill, for display only; the server does the filling. */
+export function carryCandidates(
+  record: MonthRecord,
+  prior: MonthRecord | null,
+): { row: MonthValue; source: MonthValue }[] {
+  if (prior?.state !== "confirmed") return [];
+  const sources = new Map(prior.values.map((value) => [value.asset_id, value]));
+  return record.values.flatMap((row) => {
+    const source = sources.get(row.asset_id);
+    return source &&
+      untouchedMissing(row) &&
+      source.amount_basis === row.amount_basis &&
+      source.input_amount_krw !== null
+      ? [{ row, source }]
+      : [];
+  });
+}
