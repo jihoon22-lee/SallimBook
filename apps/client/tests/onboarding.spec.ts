@@ -59,7 +59,12 @@ test("empty household home starts entirely in browser with no operator token or 
   expect(state.validSetup).toBe(true);
   expect(state.setupWrites).toBe(1);
   expect(state.loginWrites).toBe(0);
-  await expect(page.locator("input[type=password]")).toHaveCount(0);
+  // The setup form is gone; the account screen's own password-change fields start empty.
+  await expect(page.locator("input[name=password],input[name=password_confirmation]")).toHaveCount(
+    0,
+  );
+  for (const input of await page.locator("input[type=password]").all())
+    await expect(input).toHaveValue("");
   await noPersistence(page);
 });
 
