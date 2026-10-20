@@ -51,9 +51,7 @@ def test_explicit_production_browser_origin_is_allowed():
     with TestClient(create_app(settings)) as client:
         response = client.options(
             "/api/v1/health",
-            headers={
-                "Origin": "https://synthetic.invalid", "Access-Control-Request-Method": "GET"
-            },
+            headers={"Origin": "https://synthetic.invalid", "Access-Control-Request-Method": "GET"},
         )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://synthetic.invalid"
