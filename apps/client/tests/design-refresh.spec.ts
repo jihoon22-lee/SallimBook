@@ -3,6 +3,7 @@ import { mockComparison } from "./support/comparison";
 import { mockHomecare } from "./support/homecare";
 import { mockOnboarding } from "./support/onboarding";
 import { mockFinance, uid } from "./support/finance";
+import { mockCashflow } from "./support/cashflow";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
 async function homeData(page: import("@playwright/test").Page) {
@@ -268,3 +269,23 @@ for (const scheme of ["light", "dark"] as const)
     });
     expect(contrast(muted!, selected!)).toBeGreaterThanOrEqual(4.5);
   });
+
+test("narrow home keeps the month label, 12px status text and 48px segmented buttons", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await homeData(page);
+  await page.goto("/");
+  const label = page.locator(".dashboard-heading .month-control label");
+  expect((await label.boundingBox())!.width).toBeGreaterThan(20);
+  for (const selector of [".snapshot-check", ".dashboard-heading .month-picker > .muted"]) {
+    const sizes = await page
+      .locator(selector)
+      .evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
+    for (const size of sizes) expect(size).toBeGreaterThanOrEqual(12);
+  }
+  await mockCashflow(page);
+  await page.goto("/fixed-payments");
+  for (const button of await page.locator(".segmented-control button").all())
+    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+});
