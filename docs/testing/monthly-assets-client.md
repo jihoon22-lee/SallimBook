@@ -58,3 +58,15 @@ adapter 8개를 연결했다. 월·revision 조회, 이력, 작성본 생성, �
 [비교·추이 검증](assets-comparison-client.md)을 참조한다.
 실제 Android 잠금/생체인증/기기 전환·운영 배포는 이 웹 검사로 검증했다고 간주하지 않는다.
 비교·추이·홈 연결은 SB-013에서 같은 월 기록을 조회한다.
+
+## 미래 월·전월 미확정 경고·전월 확정값 불러오기 — 2026-10-20
+
+- 서버: `test_future_month_draft_is_rejected_until_the_seoul_month_starts`, `test_carry_previous_fills_only_untouched_missing_rows_once`, `test_carry_previous_requires_a_confirmed_previous_month_and_an_open_revision`, `test_basis_change_clears_carried_origin_with_the_amount`, OpenAPI 헤더 시험.
+- 브라우저: `a future month offers no draft and a server future-month rejection is explained`, `starting a month after an unconfirmed previous month needs an explicit acknowledgment`, `carry-previous fills only untouched missing rows and reuses its key after an ambiguous failure`, `carry candidates mirror the server rule for untouched missing rows`, `carried notes follow the verification state, including legacy cleared carried rows`.
+- Android 정책·bridge: `CashflowPolicyTest.nineMonthlyCommandsRoundTripOnlyTheirAllowedRoutesAndHeaders`, `carryPreviousNeedsRevisionVersionAndKeyAndEchoesTheRevision`, `AuthPolicyTest.assetMonthAndAccountErrorsKeepTheirCode`, `native carry-previous keeps the revision version and one key across an ambiguous retry`, `47 named metadata commands retain DTO values and mutation keys without web HTTP`.
+
+검증 결과(2026-10-20): `pnpm typecheck`·ruff(check/format)·`pnpm format:check` 통과, DB 미사용 pytest **912 passed**,
+`test_assets`·`test_accounts`·`test_asset_months`·`test_asset_comparison`·`test_exports` DB 시험 **232 passed**와 `alembic check` 변경 없음,
+브라우저 10개 spec **262 passed**, JVM `AuthPolicyTest` 13·`CashflowPolicyTest` 10·`FinancePolicyTest` 13·`ComparisonPolicyTest` 12 통과,
+`pnpm api:generate` 후 생성 client 변경 없음, 실제 HTTPS `--finance`·`--months`·`--comparison` 각각 종료 코드 0.
+Android 실기기 화면 확인은 미실행이다.

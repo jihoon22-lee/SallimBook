@@ -83,3 +83,18 @@ PR #70 리뷰 보완으로 명시한 asset_id의 합계 제외 관측값도 기�
 TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp uv run --project services/api python scripts/test_database.py services/api/tests/test_asset_comparison.py -q
 TMPDIR=/home/jihoon/.cache/sallimbook/test-tmp pnpm --filter @sallimbook/client exec playwright test tests/comparison.spec.ts --config playwright.comparison.config.ts --workers 1
 ```
+
+## 홈 이번 달·최근 확정 비교와 증감 색 — 2026-10-20
+
+- `latest confirmed month needs two consecutive confirmed months`: 연속 확정 두 달만 고르고 연 경계·끊긴 달·정정 중인 달을 구분한다.
+- `home switches between this month and the latest confirmed comparison`: 제목 줄 전환, 24개월 추이 범위, 서버 비교 결과 그대로 표시, 새로고침 시 이번 달로 복귀.
+- `home record action starts or continues the month and asks for an asset first`: 기록 시작·이어서 확인·자산 등록, 미래 달에는 동작 없음, "확정 후 비교"와 전환 설명.
+- `delta signs come from server decimal strings without numeric conversion`, `net asset decreases are marked negative on home and comparison screens`: 부호 색과 "관찰 금액" 열 이름.
+- `selected month follows the Seoul month at midnight unless another month was chosen`(routing): 서울 자정·연 경계, 직접 고른 월 유지, 앱 복귀 시 갱신.
+- 390px 홈의 소모품 첫 상태가 하단 탐색 위에 있는지 기존 `design-refresh` 시험으로 다시 확인했다.
+
+검증 결과(2026-10-20): `pnpm typecheck`·ruff(check/format)·`pnpm format:check` 통과, DB 미사용 pytest **912 passed**,
+`test_assets`·`test_accounts`·`test_asset_months`·`test_asset_comparison`·`test_exports` DB 시험 **232 passed**와 `alembic check` 변경 없음,
+브라우저 10개 spec **262 passed**, JVM `AuthPolicyTest` 13·`CashflowPolicyTest` 10·`FinancePolicyTest` 13·`ComparisonPolicyTest` 12 통과,
+`pnpm api:generate` 후 생성 client 변경 없음, 실제 HTTPS `--finance`·`--months`·`--comparison` 각각 종료 코드 0.
+Android 실기기 화면 확인은 미실행이다.

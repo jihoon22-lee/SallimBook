@@ -117,6 +117,7 @@ step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
 수정·종료·삭제는 `If-Match`가 필요하며 다른 가계의 자산/소유자는 404, 버전 충돌은 409다.
 생성 계약에도 `If-Match` 필수 여부와 `ETag`·`Location` 응답 헤더를 명시한다. 누락된 버전 헤더는 `400 VERSION_REQUIRED`로 반환한다.
 종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다.
+생성·수정·종료에서 보유 종료일은 서울 기준 오늘보다 늦을 수 없으며 `422 ASSET_END_IN_FUTURE`로 거부한다. 이미 저장된 미래 종료일은 그대로 읽고 다른 필드를 고칠 수 있으며, 종료일을 다른 날짜로 바꾸는 쓰기만 검사한다(비우기는 허용).
 metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액은 후속 API다.
 PATCH에서 생략한 필드는 유지한다. null로 지울 수 있는 필드는 `owner_member_id`, `ended_on`, `note`뿐이며
 OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다.
@@ -124,13 +125,14 @@ OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다
 ### 7) 금융계좌 (SB-011)
 
 `POST /api/v1/accounts`, `GET /api/v1/accounts`, `GET/PATCH /api/v1/accounts/{account_id}`,
-`POST /api/v1/accounts/{account_id}/reveal`을 구현했다.
+`POST /api/v1/accounts/{account_id}/reveal`, `DELETE /api/v1/accounts/{account_id}`를 구현했다.
 생성 시 기존 금융 자산 `asset_id` 또는 새 자산 입력 `asset` 중 하나만 받는다. 자산 1건에 계좌는 1건이다.
 생성·상세·목록·수정 응답에는 `masked_number`, `has_number`와 연결 자산을 제공하며 번호 원문·암호문은 없다.
 번호는 생성/PATCH의 선택 입력이고 PATCH에서 명시적 null로 지울 수 있다. 키 설정이 없어도 번호 없는 metadata 조회·저장과 번호 제거는 가능하다.
 전체 보기는 서버 재인증 또는 해당 계좌 UUID에 바인딩한 `account.reveal` 증명을 요구하며, 감사 commit 후 원문과 `display_for_seconds=30`을 반환한다.
 계좌 PATCH에는 계좌 version의 `If-Match`를 사용한다. 자산 소유·종료 변경은 자산 API와 자산 version을 사용한다.
 목록은 유형·소유자·active/closed/all 및 UUID cursor를 지원한다. 개설일과 자산 종료일을 양쪽 수정 경로에서 검증한다.
+`DELETE /accounts/{account_id}`는 계좌 version의 `If-Match`만 받아 오등록 계좌와 연결 자산을 한 트랜잭션에서 함께 지우고 204를 반환한다. 카드 결제계좌·수입·고정 납부·월 기록·문서·대출 규칙 같은 참조가 하나라도 있으면 둘 다 남기고 `409 ACCOUNT_IN_USE`를 반환한다. 재전송은 지울 행이 없어 404가 되며 다른 행을 지우지 않는다. 계좌·자산 각각 `delete` 감사가 남는다.
 금액·잔액은 받지 않으며 계좌의 종료일과 상태는 자산에서 파생한다. 웹 전용 번호 컴포넌트와 Android 네이티브 입력/전체 보기 화면을 연결했다. Android 실기기 보안 검증은 별도 출시 조건이다.
 
 ### 8) 월간 자산 확인·정정 (SB-012)
@@ -145,10 +147,12 @@ OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다
 | POST /asset-months/{month}/sync-scope | `revision_id`, revision If-Match; 현재 자산 범위를 명시 반영하고 변경된 행을 미확인으로 돌림 |
 | POST /asset-months/{month}/confirm | `revision_id`, revision If-Match·멱등키; 미확인 거부, 날짜/비교 범위 변화 확인 필요 |
 | POST /asset-months/{month}/reopen | `revision_id`, 필수 `reason`, revision If-Match·멱등키; 이전 확정본을 보존한 새 revision |
+| POST /asset-months/{month}/carry-previous | `revision_id`, revision If-Match·멱등키; 전월 최신 확정본의 금액을 손대지 않은 미입력 행(사유 없음·출처 없음·기준일 없음)에만 미확인 값으로 채움. 금액 입력 기준이 다르면 건너뜀. 전월 확정본이 없으면 `409 PREVIOUS_MONTH_UNCONFIRMED`, 확정한 월은 `409 MONTH_CONFIRMED`. 채울 행이 없으면 버전·감사 변화 없는 200 |
 | GET /asset-months/{month}/revisions | 정정 사유·확정 시각을 포함한 revision 목록 |
 | GET /asset-months/{month}/revisions/{revision_no} | 해당 변경본의 당시 범위·금액 조회 |
 
-draft·confirm·reopen 응답은 `month`, `revision_id`, `revision_no`, 원래 `version`만 가진다. 이후 편집해도 같은 멱등키는
+서울 기준 이번 달 이후의 월 작성본은 `422 MONTH_IN_FUTURE`로 거부한다. 검사는 멱등 실행 안에 있어 거부된 요청의 키는 그 달이 시작된 뒤 다시 쓸 수 있고, 이미 저장된 미래 월 작성본의 조회·수정은 막지 않는다. 금액 입력 기준을 바꿔 범위 반영으로 금액을 비운 행은 출처도 `manual`로 돌린다.
+draft·confirm·reopen·carry-previous 응답은 `month`, `revision_id`, `revision_no`, 원래 `version`만 가진다. 이후 편집해도 같은 멱등키는
 같은 참조를 반환한다. 값 PATCH는 수정 행·현재 revision version·전체 합계를 반환한다.
 필수 버전·멱등 헤더와 성공 응답의 `ETag`·`Location`도 OpenAPI 및 생성 client에 명시한다.
 월 GET의 `version`은 현재 revision version이고 값 행마다 별도 version이 있다. 부모 revision이 바뀌면
@@ -284,13 +288,14 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 재인증 | POST /auth/step-up/options, /auth/step-up/verify | 짧은 목적 제한 인증 상태 |
 | 사용자 | GET /me, GET /household/members | 허용된 공동 가계만 |
 | 초대·기기 | POST /household/invitations, GET /devices, DELETE /devices/{id} | 최근 로그인 또는 X-Step-Up-Token, 기기 세션 폐기 |
-| 홈 | GET /dashboard?month=YYYY-MM | 자산은 선택 월, 소모품은 서버 오늘 |
+| 홈 | GET /asset-comparison?to=YYYY-MM&limit=1, GET /asset-trends?from=...&to=..., GET /homecare/status | 별도 dashboard API 없음. 자산은 선택 월 비교 또는 최근 24개월에서 연속 확정 두 달의 비교, 소모품은 서버 오늘 |
 | 자산 | GET/POST /assets, GET/PATCH/DELETE /assets/{id} | 종료/삭제 의미 구분 |
-| 계좌 | GET/POST /accounts, GET/PATCH /accounts/{id} | 자산 원본과 1:1 |
+| 계좌 | GET/POST /accounts, GET/PATCH/DELETE /accounts/{id} | 자산 원본과 1:1, 참조 없을 때만 삭제(`ACCOUNT_IN_USE`) |
 | 계좌번호 | POST /accounts/{id}/reveal | 서버 재인증, no-store, 반환 audit |
 | 월 기록 | POST /asset-months/{month}/draft | 전월확정 복사; 반복 호출 중복 없음 |
 | 월 기록 | GET /asset-months/{month}, PATCH /asset-months/{month}/values/{assetId} | 행 상태·기준일·version |
 | 월 확정 | POST /asset-months/{month}/confirm, /reopen | 미확인 거부, 새 revision |
+| 월 기록 | POST /asset-months/{month}/carry-previous | 손대지 않은 미입력 행만 전월 확정값으로 채움(`PREVIOUS_MONTH_UNCONFIRMED`) |
 | 비교 | GET /asset-comparison?from=...&to=... | 전체와 동일 범위 차이·경고 |
 | 수입 | GET /income?month=..., POST /income | 보험금 원본은 지급 API에서만 생성 |
 | 수입 정정 | PATCH /income/{id}, POST /income/{id}/void | 월확정 범위와 별개 감사 |
@@ -319,6 +324,8 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 CVC의 업로드/동기화/다운로드 API는 **존재하지 않는다**.
 
 ## 3. 홈 응답 설계
+
+아래는 초기 설계의 합성 예시이며 구현된 API가 아니다. 홈은 위 표의 비교·추이·소모품 API를 각각 호출한다.
 
 ```json
 {

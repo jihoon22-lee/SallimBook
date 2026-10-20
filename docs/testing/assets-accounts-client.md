@@ -67,3 +67,16 @@ UI 서버는 18748을 사용하고 이미 점유된 포트를 재사용하지 �
 기존 금융 자산에 계좌를 연결할 때 사용 종료된 항목은 선택 목록에서 제외한다.
 선택 뒤 다른 기기에서 자산이 종료된 경우에도 서버가 잠금 안에서 거부하고 입력을 보존한다.
 회귀 추가 후 계좌 API70개와 drift/down/up, 계좌 화면20개, JVM65개 및 release Kotlin 컴파일을 통과했다.
+
+## 미래 종료일·오등록 삭제·연결된 자산 제외 — 2026-10-20
+
+- 서버: `test_future_end_date_is_rejected_at_the_seoul_day_boundary`, `test_legacy_future_end_stays_readable_and_editable_until_changed`, `test_nested_asset_future_end_creates_neither_account_nor_asset`, `test_account_delete_is_atomic_and_refuses_referenced_rows`, 계좌 OpenAPI의 `deleteAccount`.
+- 브라우저: `asset and account end dates stop at Seoul today and a stored future end asks for correction`, `account misregistration delete needs confirmation and treats a retried 404 as deleted`, `a referenced account explains why it stays and offers closure instead`, `asset misregistration delete refuses an account-linked asset and removes an unreferenced one`, `native misregistration deletes send only ids and versions through named commands`, 기존 자산 연결 선택지 시험(이미 계좌가 있는 자산 제외, 배우자가 먼저 연결한 경우의 409 유지).
+- Android 정책: `FinancePolicyTest.accountDeleteIsABodylessVersionedMetadataCommand`, `AuthPolicyTest.assetMonthAndAccountErrorsKeepTheirCode`.
+- 운영 데이터: 미래 종료일이 이미 저장된 자산 건수는 사용자가 운영 DB 읽기 전용 세션에서 확인한다(대기). 데이터는 자동으로 고치지 않고 상세 화면 안내로 고친다.
+
+검증 결과(2026-10-20): `pnpm typecheck`·ruff(check/format)·`pnpm format:check` 통과, DB 미사용 pytest **912 passed**,
+`test_assets`·`test_accounts`·`test_asset_months`·`test_asset_comparison`·`test_exports` DB 시험 **232 passed**와 `alembic check` 변경 없음,
+브라우저 10개 spec **262 passed**, JVM `AuthPolicyTest` 13·`CashflowPolicyTest` 10·`FinancePolicyTest` 13·`ComparisonPolicyTest` 12 통과,
+`pnpm api:generate` 후 생성 client 변경 없음, 실제 HTTPS `--finance`·`--months`·`--comparison` 각각 종료 코드 0.
+Android 실기기 화면 확인은 미실행이다.

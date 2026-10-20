@@ -148,7 +148,8 @@ Activity가 아닌 프로세스 공통 네이티브 정책이 요청 세대를 �
 | `createAsset`, `createAccount` | 생성 DTO; 계좌번호 제외 | 생성한 메타데이터 |
 | `updateAsset`, `updateAccount` | UUID, 변경 DTO, ifMatch | 최신 메타데이터; 계좌번호 제외 |
 | `archiveAsset` | 자산 UUID, 종료일, ifMatch | 과거 기록을 보존한 종료 자산 |
-| `deleteAsset` | 자산 UUID, ifMatch | 상태만; 현재 UI는 삭제 대신 사용 종료 제공 |
+| `deleteAsset` | 자산 UUID, ifMatch | 204 상태만; 자산 상세의 오등록 삭제 검토에서 사용 |
+| `deleteAccount` | 계좌 UUID, ifMatch | 204 상태만; 본문·멱등키 없음, 계좌와 연결 자산을 함께 삭제 |
 | `editAccountNumberUI` | accountId, ifMatch | saved/deleted/cancelled |
 | `showAccountNumberUI`, `showAccountNumberWithPasskeyUI` | accountId | completed/cancelled |
 
@@ -157,6 +158,7 @@ step-up grant를 JS로 전달하지 않는다. 입력 화면은 번호를 미리
 최대 30초 표시 정책을 사용한다. 취소·인증 실패·버전 충돌도 메타데이터를 다시 확인하므로 서버 반영 후
 응답 취소를 이전 값으로 오해하지 않는다. 오류는 허용된 `AuthCode`만 전달한다.
 패스키 확인 버튼은 별도로 제공하며 인증 scope는 `account.reveal`과 정확한 계좌 ID에 고정한다.
+`DELETE_ACCOUNT`는 정확히 `accountId`·강한 `ifMatch`만 받고 본문이나 `Idempotency-Key`가 있으면 거부하며, 응답은 204·`null`만 허용한다(`FinancePolicyTest.accountDeleteIsABodylessVersionedMetadataCommand`). 계좌번호 경로와 일반 `request` 허용 범위는 바꾸지 않는다.
 
 웹 전체 번호는 전용 `AccountNumber` 컴포넌트만 받는다. 일반 계좌 DTO·React state·브라우저 저장소에
 넣지 않고 제한된 output DOM에 최대 30초 표시한다. blur/pagehide/숨김/화면 이탈/계좌 버전 변경 시
@@ -166,10 +168,11 @@ step-up grant를 JS로 전달하지 않는다. 입력 화면은 번호를 미리
 
 ## 10. 월별 자산 메타데이터 (SB-012)
 
-`nativeFinance`는 생성 DTO를 사용하는 8개 이름 있는 명령을 제공한다.
+`nativeFinance`는 생성 DTO를 사용하는 9개 이름 있는 명령을 제공한다.
 `getAssetMonth`, `getAssetMonthRevision`, `listAssetMonthRevisions`는 제한된 월·변경본·페이지 인자만 받는다.
 `createAssetMonthDraft`, `updateAssetMonthValue`, `synchronizeAssetMonthScope`, `confirmAssetMonth`,
-`reopenAssetMonth`는 해당 입력 DTO와 필요한 `ifMatch`·`idempotencyKey`만 받는다.
+`reopenAssetMonth`, `carryPreviousAssetMonth`는 해당 입력 DTO와 필요한 `ifMatch`·`idempotencyKey`만 받는다.
+`carryPreviousAssetMonth`는 `{revision_id}` 본문과 revision `ifMatch`·`idempotencyKey`를 모두 요구하고 다른 키(`asset_ids`·`copy_previous` 등)를 거부하며, 응답은 200 참조의 월·`revision_id`가 요청과 같아야 한다(`CashflowPolicyTest.carryPreviousNeedsRevisionVersionAndKeyAndEchoesTheRevision`).
 일반 `request`의 허용 경로는 늘리지 않는다. 네이티브 HTTP는 이름 있는 명령에서 만든 고정 경로와
 본문·버전·중복 방지 키 조합을 다시 검증하며 다른 경로에 `Idempotency-Key`를 붙일 수 없다.
 
