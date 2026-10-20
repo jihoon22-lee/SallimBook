@@ -13,6 +13,17 @@ export function signedKrw(value: string | null): string {
     ? `+${formatKrw(value)}`
     : formatKrw(value);
 }
+/** The latest month confirmed together with the calendar month before it, or null. */
+export function latestConfirmedMonth(points: TrendPoint[]): string | null {
+  const confirmed = new Set(
+    points.filter((point) => point.state === "confirmed").map((point) => point.month),
+  );
+  for (let index = points.length - 1; index >= 0; index--) {
+    const month = points[index]!.month;
+    if (confirmed.has(month) && confirmed.has(monthsBefore(month, 1))) return month;
+  }
+  return null;
+}
 export type DeltaSign = "positive" | "negative" | "zero" | "unavailable";
 /** Reads only the sign of a server decimal string; it is never converted to a number. */
 export function deltaSign(value: string | null): DeltaSign {

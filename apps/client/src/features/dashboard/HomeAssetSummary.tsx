@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../shared/Icon";
 import { ApiError, toApiError } from "../../platform/api";
 import { formatMonth, useMonth } from "../../shared/MonthContext";
 import { useAuth } from "../auth/AuthProvider";
 import { useAssetComparisonApi } from "../assets/comparison/api";
+import { useAssetsApi } from "../assets/api";
 import {
   ComparisonDates,
   ComparisonError,
@@ -14,26 +15,125 @@ import {
   ScopeWarning,
 } from "../assets/comparison/ComparisonFeedback";
 import { formatKrw, monthStates } from "../assets/months/model";
-import { deltaSign, percentLabel, signedKrw } from "../assets/comparison/model";
+import {
+  deltaSign,
+  latestConfirmedMonth,
+  monthsBefore,
+  percentLabel,
+  signedKrw,
+} from "../assets/comparison/model";
 import { DeltaText } from "../assets/comparison/ComparisonFeedback";
 import type { Comparison } from "../assets/comparison/model";
-function CurrentAssetSummary() {
+type HomeAssetView = "month" | "confirmed";
+
+type RecordAction = { to: string; label: string; primary: boolean };
+
+/**
+ * The month's record action: start, continue or view, or asset registration when the
+ * household has no asset yet. A month that has not started has none.
+ */
+function useRecordAction(
+  month: string,
+  currentMonth: string,
+  state: Comparison["current"]["state"] | null,
+): RecordAction | null {
+  const assets = useAssetsApi();
+  const [hasAssets, setHasAssets] = useState<boolean | null>(null);
+  useEffect(() => {
+    setHasAssets(null);
+    if (state !== "missing" || month > currentMonth) return;
+    let active = true;
+    // A failed check still offers the month record, where the asset list is shown again.
+    void assets
+      .list({ limit: 1 })
+      .then((value) => active && setHasAssets(value.items.length > 0))
+      .catch(() => active && setHasAssets(true));
+    return () => {
+      active = false;
+    };
+  }, [assets, state, month, currentMonth]);
+  if (state === null || month > currentMonth) return null;
+  const label = month === currentMonth ? "이번 달" : formatMonth(month);
+  const to = `/assets/months/${month}`;
+  if (state === "confirmed") return { to, label: `${label} 기록 보기`, primary: false };
+  if (state === "draft" || state === "reopened")
+    return { to, label: `${label} 기록 이어서 확인`, primary: true };
+  if (hasAssets === null) return null;
+  return hasAssets
+    ? { to, label: `${label} 기록 시작`, primary: true }
+    : { to: "/assets/new", label: "자산 등록", primary: true };
+}
+
+/** Sits in the card's title row so today's consumables stay above the 390px navigation. */
+function HomeAssetViews({
+  view,
+  setView,
+  hintId,
+}: {
+  view: HomeAssetView;
+  setView: (view: HomeAssetView) => void;
+  hintId: string;
+}) {
+  const { month, currentMonth } = useMonth();
+  const views: [HomeAssetView, string][] = [
+    ["month", month === currentMonth ? "이번 달" : formatMonth(month)],
+    ["confirmed", "최근 확정 비교"],
+  ];
+  return (
+    <div
+      className="segmented-control"
+      role="group"
+      aria-label="자산 변화 보기"
+      aria-describedby={hintId}
+    >
+      {views.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={view === value}
+          onClick={() => setView(value)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CurrentAssetSummary({ view, hintId }: { view: HomeAssetView; hintId: string }) {
   const api = useAssetComparisonApi();
-  const { month } = useMonth();
+  const { month, currentMonth } = useMonth();
   const [data, setData] = useState<Comparison | null>(null);
+  const [target, setTarget] = useState(month);
+  const [noConfirmed, setNoConfirmed] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
+  const end = month > currentMonth ? currentMonth : month;
   useEffect(() => {
     const controller = new AbortController();
     setData(null);
     setError(null);
+    setNoConfirmed(false);
     setLoading(true);
-    void api
-      .comparison({ to: month, limit: 1 }, controller.signal)
-      .then((value) => {
-        if (!controller.signal.aborted) setData(value);
-      })
+    void (async () => {
+      let to = month;
+      if (view === "confirmed") {
+        // Server values only: the client picks the month by state and never computes a delta.
+        const trend = await api.trend({ from: monthsBefore(end, 23), to: end }, controller.signal);
+        const confirmed = latestConfirmedMonth(trend.points);
+        if (confirmed === null) {
+          if (!controller.signal.aborted) setNoConfirmed(true);
+          return;
+        }
+        to = confirmed;
+      }
+      const value = await api.comparison({ to, limit: 1 }, controller.signal);
+      if (!controller.signal.aborted) {
+        setTarget(to);
+        setData(value);
+      }
+    })()
       .catch((failure) => {
         if (!controller.signal.aborted) setError(toApiError(failure));
       })
@@ -41,7 +141,22 @@ function CurrentAssetSummary() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [api, month, retry]);
+  }, [api, month, end, view, retry]);
+  const monthLabel = month === currentMonth ? "이번 달" : formatMonth(month);
+  const action = useRecordAction(
+    month,
+    currentMonth,
+    view === "month" && data ? data.current.state : null,
+  );
+  const compare = (className?: string) => (
+    <Link
+      className={className}
+      to={`/assets/compare?to=${target}`}
+      aria-label="월간 비교 자세히 보기"
+    >
+      월간 비교 <Icon name="arrow-right" size={14} />
+    </Link>
+  );
   const totals = data?.current.totals;
   const dateCaution =
     data &&
@@ -52,8 +167,17 @@ function CurrentAssetSummary() {
           period.dates.non_month_end_asset_ids.length > 0 ||
           period.dates.missing_date_asset_ids.length > 0),
     );
+  // The 390px home keeps today's consumables above the navigation, so the hint for an
+  // unconfirmed month stays in the change line instead of a paragraph of its own.
+  const unconfirmedMonth = view === "month" && data?.state === "unconfirmed";
   return (
     <>
+      {unconfirmedMonth && (
+        <span className="sr-only" id={hintId}>
+          {monthLabel} 기록을 확정하면 전월과 비교해요. 확정된 비교는 &apos;최근 확정 비교&apos;에서
+          볼 수 있어요.
+        </span>
+      )}
       <ComparisonError error={error} />
       {loading && (
         <p className="loading-state" role="status">
@@ -65,7 +189,19 @@ function CurrentAssetSummary() {
           홈 자산 정보 다시 확인
         </button>
       )}
-      {!data && (
+      {noConfirmed && (
+        <>
+          <p className="muted">
+            최근 24개월 안에 연속으로 확정한 두 달이 없어요. 두 달을 확정하면 여기에서 비교할 수
+            있어요.
+          </p>
+          <div className="form-actions home-card-actions">
+            <Link to={`/assets/months/${end}`}>{formatMonth(end)} 기록 확인</Link>
+            <Link to="/assets">자산 관리</Link>
+          </div>
+        </>
+      )}
+      {!data && !noConfirmed && (
         <div className="form-actions home-card-actions">
           <Link
             className="button-link"
@@ -80,6 +216,12 @@ function CurrentAssetSummary() {
       )}
       {data && (
         <>
+          {view === "confirmed" && (
+            <p className="muted">
+              {formatMonth(data.from_month ?? monthsBefore(target, 1))} → {formatMonth(target)} 확정
+              기록 비교
+            </p>
+          )}
           <div className="asset-hero">
             <span className="metric-label">확인 월 순자산</span>
             <strong className="asset-hero-value">
@@ -92,7 +234,11 @@ function CurrentAssetSummary() {
             <div className="asset-hero-change">
               <span>전체 순자산 변화</span>
               <strong className="money-delta" data-sign={deltaSign(data.total_delta_krw)}>
-                {data.total_delta_krw === null ? "비교할 수 없음" : signedKrw(data.total_delta_krw)}
+                {data.total_delta_krw !== null
+                  ? signedKrw(data.total_delta_krw)
+                  : unconfirmedMonth
+                    ? "확정 후 비교"
+                    : "비교할 수 없음"}
               </strong>
             </div>
           </div>
@@ -173,18 +319,19 @@ function CurrentAssetSummary() {
               <ScopeWarning data={data} />
               <ComparisonDates data={data} />
               <ComparisonNotes data={data} />
+              {/* One primary action stays beside the summary; the others live here. */}
               <div className="form-actions">
-                <Link to={`/assets/months/${month}`}>이 달 기록 확인</Link>
-                <Link to="/assets">자산 관리</Link>
+                {action && !action.primary && <Link to={action.to}>{action.label}</Link>}
+                {action?.primary && compare()}
               </div>
             </details>
-            <Link
-              className="button-link"
-              to={`/assets/compare?to=${month}`}
-              aria-label="월간 비교 자세히 보기"
-            >
-              월간 비교 <Icon name="arrow-right" size={14} />
-            </Link>
+            {action?.primary ? (
+              <Link className="button-link" to={action.to}>
+                {action.label}
+              </Link>
+            ) : (
+              compare("button-link")
+            )}
           </div>
         </>
       )}
@@ -194,19 +341,29 @@ function CurrentAssetSummary() {
 export function HomeAssetSummary() {
   const { state } = useAuth();
   const { month } = useMonth();
+  // Component state only: reopening home starts again at the selected month.
+  const [view, setView] = useState<HomeAssetView>("month");
+  const hintId = useId();
+  const authenticated = state.status === "authenticated";
   return (
     <section className="card home-assets" aria-labelledby="assets-title">
       <div className="section-title">
         <div>
-          <p className="eyebrow">월간 기록 · {formatMonth(month)}</p>
+          <p className="eyebrow">
+            {authenticated ? "월간 기록" : `월간 기록 · ${formatMonth(month)}`}
+          </p>
           <h2 id="assets-title">자산의 변화</h2>
         </div>
-        <span className="section-icon">
-          <Icon name="assets" size={22} />
-        </span>
+        {authenticated ? (
+          <HomeAssetViews view={view} setView={setView} hintId={hintId} />
+        ) : (
+          <span className="section-icon">
+            <Icon name="assets" size={22} />
+          </span>
+        )}
       </div>
-      {state.status === "authenticated" ? (
-        <CurrentAssetSummary />
+      {authenticated ? (
+        <CurrentAssetSummary view={view} hintId={hintId} />
       ) : state.status === "loading" ? (
         <p role="status">로그인 상태를 확인하고 있어요.</p>
       ) : (

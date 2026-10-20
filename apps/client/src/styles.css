@@ -519,6 +519,8 @@ footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
   .home-assets .section-icon { width: 32px; height: 32px; }
   .home-assets .asset-mini-totals { margin-bottom: 6px; }
   .home-assets .snapshot-check { margin-block: 4px; }
+  .home-assets .section-title { margin-bottom: 6px; }
+  .home-assets .section-title .segmented-control button { min-height: 34px; padding: 4px 10px; font-size: .75rem; }
   .home-today .section-title { margin-bottom: 8px; }
   .home-today .care-row-heading h3 { font-size: .8125rem; }
   .home-today .care-item-meta { margin-bottom: 4px; }
