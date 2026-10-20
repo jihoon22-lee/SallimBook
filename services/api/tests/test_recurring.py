@@ -220,6 +220,80 @@ def settle(client, actor, obligation, *, amount="35000", key=None, **extra):
 
 @pytest.mark.database
 class TestRecurringDatabase:
+    def test_manual_override_tracks_only_live_exceptions(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            march = obligation_for(client, actor, "2026-03")
+            path = f"/api/v1/obligations/{march['id']}"
+            steps = (
+                ("post", "/skip", {}, True),
+                ("post", "/unskip", {}, False),
+                ("patch", "", {"scheduled_date": "2026-03-30"}, True),
+                ("patch", "", {"scheduled_date": "2026-03-31"}, False),
+            )
+            for version, (method, suffix, body, expected) in enumerate(steps, start=1):
+                result = getattr(client, method)(
+                    path + suffix,
+                    headers=headers(actor, version=version),
+                    json=body | {"reason": "합성 예외 확인"},
+                )
+                assert result.status_code == 200, result.text
+                assert client.get(path, headers=actor.headers).json()["manual_override"] is expected
+            latest = client.get(path + "/history", headers=actor.headers).json()["items"][0]
+            assert (latest["action"], latest["manual_override"]) == ("reschedule", False)
+            ended = client.post(
+                f"/api/v1/recurring-rules/{rule['id']}/end",
+                headers=headers(actor, version=1),
+                json={"effective_on": "2026-02-15", "reason": "합성 해지"},
+            )
+            assert ended.status_code == 200, ended.text
+            assert client.get(path, headers=actor.headers).json()["status"] == "superseded"
+            summary = client.get(
+                "/api/v1/obligations/summary?month=2026-03", headers=actor.headers
+            ).json()
+            assert (summary["obligation_count"], summary["expected_known_krw"]) == (0, "0")
+
+    def test_reopen_and_void_clear_manual_override(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            feb = obligation_for(client, actor, "2026-02")
+            path = f"/api/v1/obligations/{feb['id']}"
+            payment = settle(client, actor, feb, amount="10").json()
+            for version, action, expected in ((2, "complete", True), (3, "reopen", False)):
+                result = client.post(
+                    f"{path}/{action}",
+                    headers=headers(actor, version=version),
+                    json={"reason": "합성 완료 확인"},
+                )
+                assert result.status_code == 200, result.text
+                assert client.get(path, headers=actor.headers).json()["manual_override"] is expected
+            again = client.post(
+                f"{path}/complete",
+                headers=headers(actor, version=4),
+                json={"reason": "합성 재완료"},
+            )
+            assert again.status_code == 200, again.text
+            voided = client.post(
+                f"/api/v1/settlements/{payment['id']}/void",
+                headers=headers(actor, version=1),
+                json={"reason": "합성 납부 오등록"},
+            )
+            assert voided.status_code == 200, voided.text
+            current = client.get(path, headers=actor.headers).json()
+            assert (
+                current["manually_completed"],
+                current["manual_override"],
+                current["status"],
+            ) == (
+                False,
+                False,
+                "unpaid",
+            )
+
     def test_t10_repeat_generation_and_failure_catchup(self, recurring_app, actors, db_engine):
         actor = actors[0]
         t10 = vector("T-10")

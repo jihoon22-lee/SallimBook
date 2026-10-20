@@ -407,7 +407,13 @@ def _remember(session, principal, row, action, *, reason=None, before=None):
     session.flush()
 
 
+def _has_exception(row: ScheduledObligation) -> bool:
+    """The occurrence differs from what its rule would generate; keep it on regeneration."""
+    return row.skipped or row.manually_completed or row.scheduled_date != row.nominal_date
+
+
 def _touch(session, principal, row, action, reason=None):
+    row.manual_override = _has_exception(row)
     before = row.version
     row.version += 1
     row.updated_at = datetime.now(UTC)
@@ -709,7 +715,6 @@ def obligation_action(session, principal, obligation_id, payload, if_match, key,
             row.manually_completed = False
         else:
             raise ValueError("Unknown obligation action")
-        row.manual_override = True
         _touch(session, principal, row, action, payload.reason)
         return IdempotentResult(row.id, "obligation", row.version, 200)
 

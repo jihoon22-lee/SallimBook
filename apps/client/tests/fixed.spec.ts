@@ -263,6 +263,8 @@ test("skipping and restoring an unpaid occurrence create no cash event", async (
   expect(state.payments).toHaveLength(0);
   expect(state.obligations[0]!.skipped).toBe(false);
   expect(state.writes.map((write) => write.path.split("/").at(-1))).toEqual(["skip", "unskip"]);
+  expect(state.obligations[0]!.manual_override).toBe(false);
+  await expect(page.getByText("2025.02.28 · 수동 예외", { exact: true })).toHaveCount(0);
 });
 
 test("calendar loads every page and places occurrences by scheduled day without creating cash", async ({

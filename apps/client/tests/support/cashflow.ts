@@ -857,7 +857,8 @@ export async function mockCashflow(page: Page) {
       if (action === "unskip") row.skipped = false;
       if (action === "complete") row.manually_completed = true;
       if (action === "reopen") row.manually_completed = false;
-      row.manual_override = true;
+      row.manual_override =
+        row.skipped || row.manually_completed || row.scheduled_date !== row.nominal_date;
       row.version++;
       refreshObligation(row);
       rememberObligation(row, action ?? "reschedule", body.reason);
@@ -872,6 +873,8 @@ export async function mockCashflow(page: Page) {
       payment.cash.reason = body.reason;
       const row = state.obligations.find((r) => r.id === payment.obligation_id)!;
       row.manually_completed = false;
+      row.manual_override =
+        row.skipped || row.manually_completed || row.scheduled_date !== row.nominal_date;
       row.version++;
       refreshObligation(row);
       rememberObligation(row, "void_settlement", body.reason);
