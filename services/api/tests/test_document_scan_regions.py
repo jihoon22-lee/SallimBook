@@ -7,10 +7,14 @@ import zlib
 
 import pytest
 from PIL import Image
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, NameObject
 
 from sallimbook.documents import _validation_worker as worker
 
 MARKERS = (b"<?=", b"<svg", b"PK\x03\x04")
+# 마커를 스트림 경계에서 13바이트 넘게 띄운다(경계 중첩 검사 구간 밖).
+MARKER_LINE = b"q Q % synthetic padding <?= <svg PK\x03\x04 javascript: synthetic padding\n"
 
 
 def image_bytes(kind="PNG", size=(400, 200)):
@@ -139,3 +143,90 @@ def test_unparseable_image_structure_scans_whole_file():
     assert worker._scannable_ranges(image_bytes("PNG")[:20], "image/png") == ((0, 20),)
     assert worker._scannable_ranges(b"synthetic", "image/jpeg") == ((0, 9),)
     assert worker._scannable_ranges(b"%PDF-synthetic", "application/pdf") == ((0, 14),)
+
+
+def pdf_bytes(change):
+    writer = PdfWriter()
+    writer.add_blank_page(300, 300)
+    change(writer)
+    output = io.BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def contents(raw, *, filtered):
+    def change(writer):
+        stream = DecodedStreamObject()
+        stream._data = zlib.compress(raw, 0) if filtered else raw
+        if filtered:
+            stream[NameObject("/Filter")] = NameObject("/FlateDecode")
+        writer.pages[0][NameObject("/Contents")] = writer._add_object(stream)
+
+    return change
+
+
+def manual_pdf(extra, payload):
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R >>",
+        b"<< /Length %d %s >>\nstream\n%s\nendstream" % (len(payload), extra, payload),
+    ]
+    output = b"%PDF-1.7\n"
+    offsets = []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(output))
+        output += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+    xref = len(output)
+    output += b"xref\n0 5\n0000000000 65535 f\r\n" + b"".join(
+        b"%010d 00000 n\r\n" % offset for offset in offsets
+    )
+    return output + b"trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % xref
+
+
+@pytest.mark.parametrize("filtered", [False, True])
+def test_pdf_ranges_cover_everything_except_stream_data(filtered):
+    raw = zlib.compress(MARKER_LINE, 0) if filtered else MARKER_LINE
+    data = pdf_bytes(contents(MARKER_LINE, filtered=filtered))
+    start = data.index(b"stream\n") + len(b"stream\n")
+    with worker._pdf(data) as reader:  # 스트림 안 마커는 더 이상 거부 사유가 아니다
+        assert reader.pages[0]["/Contents"].get_object()._data == raw  # pypdf 원시 bytes 계약
+        assert worker._scannable_ranges(data, "application/pdf", reader) == (
+            (0, start),
+            (start + len(raw), len(data)),
+        )
+
+
+def test_pdf_object_syntax_and_comment_markers_are_still_rejected():
+    titled = pdf_bytes(lambda writer: writer.add_metadata({"/Title": "SYNTHETICZZ"}))
+    assert_rejected(lambda: worker._pdf(titled.replace(b"SYNTHETICZZ", b"<svg onload")))
+    plain = pdf_bytes(contents(b"q Q\n", filtered=False))
+    assert_rejected(
+        lambda: worker._pdf(plain.replace(b"%\xe2\xe3\xcf\xd3", b"%<?= "))
+    )  # 같은 길이: xref 유지
+
+
+def test_pdf_stream_copy_inside_dictionary_cannot_hide_markers():
+    payload = b"q Q % <svg onload\n"
+    assert_rejected(
+        lambda: worker._pdf(manual_pdf(b"/SyntheticCopy (stream\n" + payload + b")", payload))
+    )
+    with worker._pdf(manual_pdf(b"/SyntheticCopy (stream\nq Q\n)", b"q Q\n")) as reader:
+        assert len(reader.pages) == 1
+
+
+def test_pdf_stream_location_mismatch_scans_whole_file():
+    data = pdf_bytes(contents(b"q Q\n", filtered=False))
+    with worker._pdf(data) as reader:
+        reader.pages[0]["/Contents"].get_object()._data = b"synthetic bytes absent from file"
+        assert worker._scannable_ranges(data, "application/pdf", reader) == ((0, len(data)),)
+
+
+def test_inspect_document_reaches_ocr_for_pdf_with_stream_markers():
+    data = pdf_bytes(contents(MARKER_LINE, filtered=True))
+    assert_rejected(
+        lambda: worker.inspect_document(
+            data, "application/pdf", "/missing/tesseract", "/missing/pdftoppm"
+        ),
+        "DOCUMENT_OCR_UNAVAILABLE",
+    )

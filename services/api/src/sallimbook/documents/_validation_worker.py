@@ -262,6 +262,47 @@ def _png_ranges(data: bytes) -> tuple[tuple[int, int], ...] | None:
     return None
 
 
+_STREAM_KEYWORD = re.compile(rb"stream *(?:\r\n|\r|\n)")
+_MAX_STREAM_CANDIDATES = 64
+
+
+def _pdf_ranges(data: bytes, reader) -> tuple[tuple[int, int], ...] | None:
+    """Everything except raw stream data located after a parsed object's `stream` keyword."""
+    from pypdf.generic import IndirectObject, StreamObject
+
+    located = sorted(
+        (offset, generation, object_id)
+        for generation, rows in reader.xref.items()
+        for object_id, offset in rows.items()
+        if object_id != 0 and generation != 65535 and object_id not in reader.xref_objStm
+    )
+    excluded: list[tuple[int, int]] = []
+    # Search windows end at the next object's offset, so total work stays linear in file size.
+    for index, (offset, generation, object_id) in enumerate(located):
+        window_end = located[index + 1][0] if index + 1 < len(located) else len(data)
+        value = IndirectObject(object_id, generation, reader).get_object()
+        if not isinstance(value, StreamObject) or not value._data:
+            continue
+        raw = value._data
+        for candidates, match in enumerate(_STREAM_KEYWORD.finditer(data, offset, window_end), 1):
+            if candidates > _MAX_STREAM_CANDIDATES:
+                return None
+            if match.end() + len(raw) <= window_end and data.startswith(raw, match.end()):
+                excluded.append((match.end(), match.end() + len(raw)))
+                break
+        else:
+            return None
+    ranges: list[tuple[int, int]] = []
+    opened = 0
+    for start, end in sorted(excluded):
+        if start < opened:
+            return None
+        ranges.append((opened, start))
+        opened = end
+    ranges.append((opened, len(data)))
+    return _merge([(start, end) for start, end in ranges if start < end] or [(0, 0)])
+
+
 def _scannable_ranges(data: bytes, mime: str, reader=None) -> tuple[tuple[int, int], ...]:
     """Sorted half-open ranges that the marker scan covers; the whole file if unparseable."""
     ranges = None
@@ -269,6 +310,8 @@ def _scannable_ranges(data: bytes, mime: str, reader=None) -> tuple[tuple[int, i
         ranges = _jpeg_ranges(data)
     elif mime == "image/png":
         ranges = _png_ranges(data)
+    elif mime == "application/pdf" and reader is not None:
+        ranges = _pdf_ranges(data, reader)
     return ranges if ranges is not None else ((0, len(data)),)
 
 
@@ -643,7 +686,16 @@ def _pdf(data: bytes):
             form_fields_maximum_depth=MAX_DEPTH,
             xform_maximum_invocations_per_extraction=1000,
         ):
-            return _read_pdf(data)
+            reader = _read_pdf(data)
+            try:
+                # Stream locations are known only after the strict parse.
+                _polyglot(
+                    data, "application/pdf", _scannable_ranges(data, "application/pdf", reader)
+                )
+            except BaseException:
+                reader.close()
+                raise
+            return reader
     except PyPdfError, ValueError, TypeError, OSError, RecursionError:
         raise Rejected from None
 
@@ -819,7 +871,8 @@ def _render(data: bytes, page_number: int, pdftoppm: str):
 def inspect_document(data: bytes, mime: str, tesseract: str, pdftoppm: str) -> dict:
     if not data or len(data) > MAX_BYTES:
         raise Rejected
-    _polyglot(data, mime)
+    if mime != "application/pdf":
+        _polyglot(data, mime)
     if mime == "application/pdf":
         reader = _pdf(data)
         try:
