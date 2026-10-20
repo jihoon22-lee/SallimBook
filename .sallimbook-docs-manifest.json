@@ -126,8 +126,8 @@
       "git_sha1": "2808958bdbd46ba26b1315bf488670e67db124ec"
     },
     "docs/README.md": {
-      "sha256": "07e29fb741d3519319ed7450b4855352ca2dc5b3530975adc80a6ec3fcbb7de2",
-      "git_sha1": "ba40a92599d0e3e91045c211ef60aecd4c8fc615"
+      "sha256": "d025f6764d6f5c305019e0f12a9b7b05706d1eae170afde99b546638c57a8472",
+      "git_sha1": "086b49c41bf041210dc1e20d47bbc5779a1cfccc"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -396,6 +396,10 @@
     "docs/testing/scenario-ux.md": {
       "sha256": "e38dd1b6f7cda62e22364d0cde113ddd161b685787cfda483591a5c994f7c4d4",
       "git_sha1": "953b42329d6853cd12490f5fc0c66b5a934d3ab6"
+    },
+    "docs/adr/document-inspection-isolation.md": {
+      "sha256": "4f990b4b00a39b94641512523344eb25e6392e48f2ec42c6db53b7b77c4c5157",
+      "git_sha1": "9cbaacba280cc37a3e1639780bf3bc3015573532"
     }
   }
 }
