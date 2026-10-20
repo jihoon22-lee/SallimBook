@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
+from operator import attrgetter
 from uuid import UUID
 
 from sqlalchemy import select
@@ -30,6 +31,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.pagination import page_after
 from sallimbook.core.types import SEOUL, krw_string, month_end, month_start, seoul_month
 from sallimbook.identity.service import utcnow
 
@@ -185,6 +187,11 @@ def _value_response(row: AssetMonthValue) -> MonthValueResponse:
     )
 
 
+def value_order(row) -> tuple[bool, str, UUID]:
+    """Display order for month values: assets, then liabilities, each by name then asset id."""
+    return (row.kind == "liability", row.name, row.asset_id)
+
+
 def _response(
     session: Session,
     principal: Principal,
@@ -197,7 +204,9 @@ def _response(
     if type(limit) is not int or not 1 <= limit <= 200:
         raise DomainError("INVALID_PAGE_SIZE", "조회 건수를 확인해 주세요.", 422)
     rows = _values(session, revision)
-    filtered = rows if cursor is None else [row for row in rows if row.asset_id > cursor]
+    shown, next_cursor = page_after(
+        sorted(rows, key=value_order), cursor=cursor, limit=limit, key=attrgetter("asset_id")
+    )
     month = _month_text(record.period_month)
     return MonthResponse(
         month=month,
@@ -213,8 +222,8 @@ def _response(
         totals=_totals(rows),
         scope_stale=revision.state != "confirmed"
         and _scope_stale(rows, _eligible_assets(session, principal, month)),
-        values=[_value_response(row) for row in filtered[:limit]],
-        next_cursor=filtered[limit - 1].asset_id if len(filtered) > limit else None,
+        values=[_value_response(row) for row in shown],
+        next_cursor=next_cursor,
     )
 
 
