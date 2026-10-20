@@ -252,9 +252,12 @@ p.chmod(0o600); os.chown(p,10001,10001)
                     assert state["Config"]["User"] == "10002:10003"
                     assert state["HostConfig"]["NetworkMode"] == "none"
                     assert state["HostConfig"]["PidsLimit"] == 32
-                    assert not state["HostConfig"]["Binds"]
+                    # Compose passes named volumes through Binds; no host path may appear.
+                    assert all(not bind.startswith("/") for bind in state["HostConfig"]["Binds"] or [])
                     # The /tmp tmpfs is in HostConfig.Tmpfs, not in Mounts.
-                    assert {m["Destination"] for m in state["Mounts"]} == {"/run/inspector"}
+                    assert {(m["Type"], m["Destination"]) for m in state["Mounts"]} == {
+                        ("volume", "/run/inspector")
+                    }
                 else:
                     assert state["Config"]["User"] == "10001:10001"
                 if name == "api":
