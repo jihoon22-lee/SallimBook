@@ -59,6 +59,39 @@ uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/NEW_RENDER
 
 ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검사에 실패한다. scanner와 API의 Compose healthcheck는 실제 Unix PING과 VERSIONCOMMANDS, 고정 엔진·INSTREAM 지원·DB freshness를 기존 업로드 검사와 같은 함수로 확인한다. API healthcheck는 DB HTTP readiness도 확인하며, scanner가 healthy가 된 뒤 API를 시작하고 API가 healthy가 된 뒤 웹을 시작한다. 실행 중 scanner 중단·stale 상태는 API container를 unhealthy로 바꾼다. 기존 `/api/v1/ready`의 DB 검사 계약은 유지하며 운영 준비 상태는 Compose health를 기준으로 확인한다. unhealthy 표시는 서비스를 자동 중지시키는 기능이 아니며 첨부 업로드는 기존 검사에서도 실패 시 거부한다. `SALLIMBOOK_CVD_REFRESH`를 실제 갱신일로 바꿔 새 이미지로 배포한다. 오래된 이미지의 태그만 다시 붙여 검사 실패를 우회하지 않는다.
 
+### 문서 검사기 배포와 되돌리기
+
+문서 검사기(inspector)를 처음 배포하거나 되돌릴 때는 **자동화의 운영 코드(`operator_source_commit`)와 배포 고정값(`deployment_directory`·`deployment_sha256`)을 함께 바꾸고 함께 되돌린다.** 서비스 집합이 6개에서 7개로 바뀌므로 둘 중 하나만 바꾸면 매시간 `health`와 매일 `cvd-refresh`가 `SERVICE_SET`으로 실패한다. 마이그레이션은 없다.
+
+배포 전 확인:
+
+1. `free -m`의 가용 메모리가 기존 컨테이너 한도 합계에 inspector 1152MiB를 더한 값보다 큰지 확인한다.
+2. 현재 설정으로 `python -m ops.automation run CURRENT.json --sha256 CURRENT_SHA256 --task health`가 성공하는지 확인한다. `RECOVERY_REQUIRED`면 같은 운영 소스로 `--task recover`를 먼저 끝낸다.
+3. 배포 중 예약 작업이 끼어들지 않게 현재 예약을 멈춘다. 활성 unit은 `systemctl --user list-timers 'PROJECT-*' --all`로 확인하고, 예를 들어 `systemctl --user disable --now PROJECT-startup.service PROJECT-health.timer PROJECT-cvd-refresh.timer`를 실행한다.
+
+배포:
+
+1. 위 절차로 새 이미지와 렌더 디렉터리를 만들고 `docker compose -f NEW/compose.json config --quiet`와 `uv run --project services/api python -m ops.preflight NEW`를 통과시킨 뒤 배포한다.
+2. 검사기 변경이 포함된 병합 커밋으로 깨끗한 새 운영 checkout을 만들고, 그 SHA·새 렌더·새 state 디렉터리로 새 자동화 설정 JSON을 만든다. 기존 설정·checkout·state는 고치지 않고 보존한다(되돌리기용).
+3. `python -m ops.automation validate NEW.json --sha256 NEW_SHA256` → `python -m ops.schedule render NEW.json --sha256 NEW_SHA256 --output NEW_SCHEDULE` → `python -m ops.schedule validate NEW_SCHEDULE` → 기존 unit 파일 정리(별도 운영 절차, `install`은 덮어쓰지 않는다) → `python -m ops.schedule install NEW_SCHEDULE` → `python -m ops.schedule activate NEW_SCHEDULE` 순서로 실행하고, 새 설정으로 `--task health`를 수동 실행해 성공하는지 확인한다.
+
+배포 후 확인표:
+
+| 확인 | 기대값 |
+|---|---|
+| `docker compose -f NEW/compose.json ps --all` | 서비스 7개 running, api·db·scanner·inspector healthy |
+| `docker inspect --format '{{.HostConfig.NetworkMode}} {{.Config.User}} {{.HostConfig.Memory}} {{.HostConfig.PidsLimit}}' <inspector 컨테이너>` | `none 10002:10003 1207959552 32` |
+| 앱에서 인쇄한 합성 영수증 사진 한 장 업로드 | 성공 |
+| 다음 예약 `health` | 성공(`latest-*.json` 또는 journal) |
+
+되돌리기(필요할 때만):
+
+1. 새 예약을 멈춘다(위의 `systemctl --user disable --now` 명령).
+2. `docker compose -f PREVIOUS/compose.json up -d --wait --remove-orphans`로 이전 렌더에 되돌린다. 같은 프로젝트 이름이므로 inspector 컨테이너는 orphan으로 제거되고, 이전 API 이미지는 로컬 워커로 동작한다.
+3. 남은 볼륨을 지운다: `docker volume rm PROJECT_inspector_socket`(`PROJECT`는 manifest의 `project`). 다시 배포할 때 새 볼륨이 이미지 디렉터리의 소유권(10002:10003, 0750)을 받는다.
+4. 새 unit 파일을 정리하고(별도 운영 절차) 이전 schedule 디렉터리로 `ops.schedule install`·`activate`를 실행한 뒤, 이전 설정으로 `--task health`가 성공하는지 확인한다.
+5. 되돌린 경우 문서 검사 격리가 다시 해제된 상태로 기록하고 원인을 조사한다.
+
 ## 3. 전용 네트워크와 비밀 주입
 
 생성 Compose는 프로젝트별 네트워크·볼륨만 사용한다. `ports`, `container_name`, `network_mode: host`, `/dev/net/tun`, `NET_ADMIN`, Docker socket을 사용하지 않는다. PostgreSQL은 내부 DB 네트워크, API는 내부 app/DB 네트워크에만 연결한다. API는 하나의 worker로 실행하여 현재 프로세스별 업로드·내보내기 한도와 맞춘다.
@@ -105,7 +138,7 @@ Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy �
 | `field-keyring.json` | API UID 10001 소유 0400/0600 | 기존 서버 field/document keyring, 백업 데이터와 별도 보관 |
 | `documents/` | API UID 10001 소유 0700 | 암호화 `.sbdoc` 객체; 파일은 0600 |
 
-API/scanner의 root filesystem은 읽기 전용이고 처리 임시 파일은 tmpfs다. 메모리 한도와 같은 swap 한도를 설정한다. scanner는 네트워크가 없고 Unix socket만 공유한다. 이 설정 외에 호스트 swap/WSL 메모리 설정을 자동 수정하지 않는다. 실제 cgroup/tmpfs/스캐너 신선도·서비스 재시작 인수는 배포 전에 확인한다.
+API/scanner/inspector의 root filesystem은 읽기 전용이고 처리 임시 파일은 tmpfs다. 메모리 한도와 같은 swap 한도를 설정한다. scanner는 네트워크가 없고 Unix socket만 공유한다. 문서 구조 검사·OCR을 맡는 inspector는 UID 10002·GID 10003, 네트워크 없음, 비밀·문서 저장소·scanner socket mount 없음이며 전용 볼륨의 socket 하나만 API와 공유한다(메모리 1152MiB, PID 32). API는 그 socket을 읽기 위해 그룹 10003만 추가로 가진다. 이 설정 외에 호스트 swap/WSL 메모리 설정을 자동 수정하지 않는다. 실제 cgroup/tmpfs/스캐너 신선도·서비스 재시작 인수는 배포 전에 확인한다.
 
 DB 최초 owner/migration 역할은 `sallimbook_admin`이며 API에는 전달하지 않는다. API의 `sallimbook_app`은 LOGIN만 허용하고 superuser/DB 생성/역할 생성/replication/RLS 우회/역할 상속을 주지 않는다. schema CREATE, TRUNCATE, 테이블 소유권, trigger 비활성화, Alembic version 수정 권한도 없다. 업무 테이블의 필요한 SELECT/INSERT/UPDATE/DELETE와 sequence/function 사용만 허용한다. 감사 이력 `audit_events`는 SELECT/INSERT만 허용하고 UPDATE/DELETE는 금지한다. `public` schema/database의 PUBLIC 기본 권한을 회수하고 migration admin이 만드는 후속 객체의 default privileges도 설정한다.
 
@@ -259,7 +292,7 @@ PATH=/VERIFIED_AGE_AND_POSTGRES_TOOL_DIRECTORY:$PATH \
 
 `test_deployment`는 새로 빌드한 웹 이미지와 network-none 단발 컨테이너로 Compose/Caddy 설정·이미지 버전·파일 capability 제거·umask 077에서의 cap-drop root 설정 읽기·UID 10001 설정 읽기를 검사한다. 공개 JSON/404 및 사설 APK의 GET/HEAD·내용·다운로드 header·그 외 경로/POST 거부도 확인한다. API나 실제 APK 서명 검사를 대신하지 않는다. 실제 tailnet 노드를 만들지 않는다. `test_recovery`는 공통 DB 시험 lock과 `sallimbook-dev`의 `db-test`만 사용하고 새 UUID 이름의 합성 source/restore DB를 만든다. 종료 시 자신이 만든 DB만 제거하고 test 컨테이너를 중지한다. 임시 합성 age/field key는 시험 종료 후 제거하며 실제 키를 사용하지 않는다. vault rotation fixture는 서버 metadata/상태전이를 검사하는 opaque fixture이며 클라이언트 암호학 증거가 아니다.
 
-`test_runtime`은 새 `sallimbook-ops-smoke-*` Compose 프로젝트·내부 네트워크·합성 볼륨에서 migration, 제한된 DB 역할, UID10001/scanner socket/tmpfs, 실제 한국어 OCR/ClamAV 업로드와 암호화 저장·다운로드를 검사하고 그 프로젝트만 제거한다. 호스트 포트/노드를 만들지 않는다. `test_release`는 임시 합성 서명키로 연속 두 release를 만들고 서명/버전/변조 거부를 검사한 뒤 키·APK를 제거한다. 실제 서명키나 기기 설치는 사용하지 않는다. Docker 네트워크를 생성/제거하는 시험과 Chromium 전체 검사는 순차 실행하여 `ERR_NETWORK_CHANGED` 간섭을 피한다.
+`test_runtime`은 새 `sallimbook-ops-smoke-*` Compose 프로젝트·내부 네트워크·합성 볼륨에서 migration, 제한된 DB 역할, UID10001/scanner socket/tmpfs, 실제 한국어 OCR/ClamAV 업로드와 암호화 저장·다운로드, inspector 격리(UID·네트워크·비밀·저장소·capability·socket 권한)·메모리 소진 격리·inspector 중지 복구를 검사하고 그 프로젝트만 제거한다. 호스트 포트/노드를 만들지 않는다. `test_release`는 임시 합성 서명키로 연속 두 release를 만들고 서명/버전/변조 거부를 검사한 뒤 키·APK를 제거한다. 실제 서명키나 기기 설치는 사용하지 않는다. Docker 네트워크를 생성/제거하는 시험과 Chromium 전체 검사는 순차 실행하여 `ERR_NETWORK_CHANGED` 간섭을 피한다.
 
 운영 완료에는 별도로 실제 허용/비허용 기기의 사설 접근, 외부 443의 JSON 이외 차단, DB 비노출, 실제 패스키, 이전 앱-새 API, 두 기기 데이터 보존 업데이트, WSL 재시작 복귀, 서명키/서버키/복구코드 별도 보관, 전체 도메인 fixture·G1~G6 인수, 실제 새 환경 복원 시각과 RPO/RTO 측정이 필요하다. 이 문서나 단위검사만으로 SB-036~040을 완료 처리하지 않는다.
 
