@@ -1,5 +1,5 @@
 import { Icon } from "./Icon";
-import { createContext, useContext, useId, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 export function seoulMonth(date = new Date()): string {
@@ -19,13 +19,47 @@ export function formatMonth(month: string): string {
   return `${month.slice(0, 4)}년 ${Number(month.slice(5))}월`;
 }
 
-const MonthContext = createContext<{ month: string; setMonth: (month: string) => void } | null>(
+type MonthState = { month: string; currentMonth: string };
+const MonthContext = createContext<(MonthState & { setMonth: (month: string) => void }) | null>(
   null,
 );
 
+/**
+ * Keeps the Seoul month current while the app stays open. The selected month follows a new
+ * month only while it was following the current one; a month chosen by hand stays.
+ */
 export function MonthProvider({ children }: { children: ReactNode }) {
-  const [month, setMonth] = useState(() => seoulMonth());
-  return <MonthContext.Provider value={{ month, setMonth }}>{children}</MonthContext.Provider>;
+  const [state, setState] = useState<MonthState>(() => {
+    const current = seoulMonth();
+    return { month: current, currentMonth: current };
+  });
+  useEffect(() => {
+    const follow = () =>
+      setState((old) => {
+        const current = seoulMonth();
+        return current === old.currentMonth
+          ? old
+          : { currentMonth: current, month: old.month === old.currentMonth ? current : old.month };
+      });
+    const visible = () => {
+      if (document.visibilityState === "visible") follow();
+    };
+    const timer = window.setInterval(follow, 30_000);
+    window.addEventListener("focus", follow);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", follow);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, []);
+  // A stable setter keeps effects keyed on it (AssetMonthPage) from re-running.
+  const setMonth = useCallback(
+    (month: string) => setState((old) => (old.month === month ? old : { ...old, month })),
+    [],
+  );
+  const value = useMemo(() => ({ ...state, setMonth }), [state, setMonth]);
+  return <MonthContext.Provider value={value}>{children}</MonthContext.Provider>;
 }
 
 export function useMonth() {
