@@ -70,8 +70,8 @@
       "git_sha1": "00f3eaec56b38ea37944ed1710ffc04ec281a43a"
     },
     "docs/screen-specifications.md": {
-      "sha256": "3199323d5184068c91851ccf14acff6424daaed231f94b97f04192bd325adfe1",
-      "git_sha1": "f37cf83fb2970cedb0ba39b7ccd84b89ca5ae207"
+      "sha256": "021ba88a9c58de117a3d82e6ffdd3f38d8795a9768f296dfc32affdcffd62fa5",
+      "git_sha1": "7e37f8aa182bda561934c3fea4ab726d89656646"
     },
     "docs/security-authentication.md": {
       "sha256": "4d1153a5bdb74a544c2f0076adfd1c1808f36355ebfe36ebc41e48395023b701",
@@ -106,8 +106,8 @@
       "git_sha1": "ef012269cc1891ba65bc869badbf5efed032294b"
     },
     "docs/design-system.md": {
-      "sha256": "b406de5ae6e6bd77ffc505e14f2716cbcc73109e59b051b116505d5ab10d891c",
-      "git_sha1": "1d8228187a9d8ed633573e10ac50efaa6a360a04"
+      "sha256": "a1e8da02f7fbcc446ba021fd45b02f6de2822442e965c8264a1fc14198a4ee4b",
+      "git_sha1": "b4354ece03397e646527ed737793e02378371d77"
     },
     "docs/future-integrations.md": {
       "sha256": "9efb2233e7edebb057fe8c4ba6e557c86ba34d8085eb43998ac471f9adbf9689",
@@ -378,8 +378,8 @@
       "git_sha1": "f298843ae8cb09e51ee8cf6bdcb49459fdeddf09"
     },
     "docs/testing/design-refresh.md": {
-      "sha256": "2d78085d608778318a904b768f7346b20ba5a928ce6acc0a28cd66c0092769b9",
-      "git_sha1": "425b939a4e128e7aa08b92bd6fe487feb99b0870"
+      "sha256": "a5128aaaa9f0a4c50f42932b431576abad96711042d15ef0807d45d7e0aa0433",
+      "git_sha1": "ca5a0f50d029e9a600739c3703e78f64cc225c4d"
     },
     "docs/testing/android-ci.md": {
       "sha256": "f7db991f52d15e3642cb4255e4a9d41630fcba34d5902d5f5c7d17305abf41d9",
@@ -394,8 +394,8 @@
       "git_sha1": "3f4b07b8d692c4a30015430c6122d4d4c36f9a43"
     },
     "docs/testing/scenario-ux.md": {
-      "sha256": "87f8255f70ce6c01a95dc67adbc889a315496f153e3f9aac5ee90cd2f7d08c25",
-      "git_sha1": "743ecb3c6b1eb34381008b4e9916fbf1570e237d"
+      "sha256": "e38dd1b6f7cda62e22364d0cde113ddd161b685787cfda483591a5c994f7c4d4",
+      "git_sha1": "953b42329d6853cd12490f5fc0c66b5a934d3ab6"
     }
   }
 }

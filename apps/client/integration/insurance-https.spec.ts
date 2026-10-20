@@ -118,9 +118,11 @@ async function createPayout(
     await page
       .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
       .check();
+    // A mismatched total keeps save enabled and explains the reason on submit.
+    await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }),
-    ).toBeDisabled();
+      page.getByText("배분 합계가 실제 입금액과 같아야 해요.", { exact: true }),
+    ).toBeFocused();
     await second.getByLabel("사건 배분금액 (원)", { exact: true }).fill("200000");
   }
   await page
