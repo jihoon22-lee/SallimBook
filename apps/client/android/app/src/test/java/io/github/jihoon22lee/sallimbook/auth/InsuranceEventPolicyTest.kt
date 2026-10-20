@@ -28,8 +28,9 @@ class InsuranceEventPolicyTest {
     private fun payout() = audit + mapOf("insurer_note" to null, "correction_of_id" to null, "correction_reason" to null, "cash" to cash("insurance_receipt"), "allocation_count" to 1, "allocations" to listOf(allocation()))
     private fun refund() = audit + mapOf("expense_id" to other, "correction_of_id" to null, "reason" to "합성 환불", "cash" to cash("medical_refund"))
     private fun returned() = audit + mapOf("payout_id" to other, "original_allocation_id" to child, "correction_of_id" to null, "reason" to "합성 반환", "cash" to cash("insurance_return"))
-    private fun claim() = audit + claimInput + mapOf("claim_reference" to null, "submitted_on" to null, "requested_krw" to null, "decided_krw" to "0", "claim_state" to "draft", "decision_note" to null, "expense_count" to 1)
-    private fun claimRevision() = (claim() - audit.keys - "expense_count") + mapOf("claim_id" to id, "version" to 7, "changed_by_member_id" to household, "changed_at" to now, "reason" to null)
+    private fun claim() = audit + claimInput + mapOf("claim_reference" to null, "submitted_on" to null, "requested_krw" to null, "decided_krw" to "0", "claim_state" to "draft", "decision_note" to null, "expense_count" to 1, "received_krw" to "600", "returned_krw" to "50", "net_received_krw" to "550")
+    private val claimMoney = setOf("received_krw", "returned_krw", "net_received_krw")
+    private fun claimRevision() = (claim() - audit.keys - "expense_count" - claimMoney) + mapOf("claim_id" to id, "version" to 7, "changed_by_member_id" to household, "changed_at" to now, "reason" to null)
     private fun allocationRevision() = allocationInput + mapOf("allocation_id" to child, "payout_id" to id, "version" to 7, "changed_by_member_id" to household, "changed_at" to now, "reason" to null)
     private fun page(vararg items: Any?) = mapOf("items" to items.toList(), "next_cursor" to null)
     private fun summary() = mapOf<String, Any?>("case_id" to other, "medical_paid_krw" to "100", "medical_refunded_krw" to "0", "net_medical_krw" to "100", "insurance_received_krw" to "150", "insurance_returned_krw" to "0", "net_received_krw" to "150", "net_burden_krw" to "-50",
@@ -78,7 +79,7 @@ class InsuranceEventPolicyTest {
             val body: Any = when (op) {
                 FinanceOperation.MEDICAL_NODE_SUMMARY -> mapOf("case_id" to other, "node_id" to child, "subtree_node_count" to 2, "medical_paid_krw" to "100", "medical_refunded_krw" to "0", "net_medical_krw" to "100")
                 FinanceOperation.INSURANCE_CASE_SUMMARY -> summary()
-                FinanceOperation.LIST_INSURANCE_CLAIMS -> page(claim() - "expense_ids")
+                FinanceOperation.LIST_INSURANCE_CLAIMS -> page(claim() - "expense_ids" - claimMoney)
                 FinanceOperation.CREATE_INSURANCE_CLAIM, FinanceOperation.GET_INSURANCE_CLAIM, FinanceOperation.UPDATE_INSURANCE_CLAIM -> claim()
                 FinanceOperation.INSURANCE_CLAIM_HISTORY -> page(claimRevision())
                 FinanceOperation.LIST_MEDICAL_EXPENSES -> page(expense() - "lines")
@@ -185,6 +186,10 @@ class InsuranceEventPolicyTest {
         assertFalse(FinancePolicy.metadataHttpAllowed("POST", path, expenseInput, tag, "synthetic"))
         assertFalse(FinancePolicy.metadataHttpAllowed("GET", "$path/$id/history?cursor=01", null, null))
         assertFalse(FinancePolicy.metadataHttpAllowed("POST", path, expenseInput, null, "bad key"))
+    }
+    @Test fun claimMoneyMustBeExactDifference() {
+        response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim())
+        bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim() + mapOf("net_received_krw" to "551")) }
     }
     @Test fun responseDefaultsAndImmutableHistoryFieldsCannotBeOmittedOrChanged() {
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim() - "claim_state") }

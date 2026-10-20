@@ -286,6 +286,22 @@ def summary(client, actor, case):
     return read(client, actor, f"/cases/{case['id']}/summary")
 
 
+def test_claim_balance_counts_only_its_allocations_and_their_returns():
+    case_id, claim_id, linked_id = str(uuid4()), str(uuid4()), str(uuid4())
+    payout = calc.Payout(
+        str(uuid4()),
+        1000,
+        (
+            calc.Allocation(linked_id, case_id, 600, "reimbursement", claim_id),
+            calc.Allocation(str(uuid4()), case_id, 400, "other"),
+        ),
+    )
+    returned = calc.InsuranceReturn(str(uuid4()), payout.id, linked_id, 50)
+    result = calc.insurance_summary([], [payout], returns=[returned])
+    assert result.claims == {claim_id: calc.ClaimBalance(600, 50, 550)}
+    assert result.cases[case_id].net_received_krw == 950
+
+
 @pytest.mark.database
 class TestInsuranceEventFixtures:
     def test_t12_to_t16_and_t22_originals_claims_refunds_returns_and_subtrees(
@@ -989,6 +1005,48 @@ class TestInsuranceEventCorrections:
 
 @pytest.mark.database
 class TestInsuranceEventBoundaries:
+    def test_claim_detail_counts_only_its_own_allocations_and_returns(self, app, actors):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case, other, policy = (
+                new_case(client, actor),
+                new_case(client, actor),
+                new_policy(client, actor),
+            )
+            claim = create_metadata(
+                client, actor, "/claims", {"case_id": case["id"], "policy_id": policy["id"]}
+            )
+            assert (claim["received_krw"], claim["returned_krw"], claim["net_received_krw"]) == (
+                "0",
+                "0",
+                "0",
+            )
+            deposit = new_payout(
+                client,
+                actor,
+                [
+                    allocation(case["id"], "600", policy_id=policy["id"], claim_id=claim["id"]),
+                    allocation(case["id"], "100"),
+                    allocation(other["id"], "300"),
+                ],
+            )
+            linked = next(row for row in deposit["allocations"] if row["claim_id"] == claim["id"])
+            money(
+                client,
+                actor,
+                f"/payouts/{deposit['id']}/returns",
+                actual("50", original_allocation_id=linked["id"], reason="합성 일부 반환"),
+                version=1,
+            )
+            detail = read(client, actor, f"/claims/{claim['id']}")
+            assert (detail["received_krw"], detail["returned_krw"], detail["net_received_krw"]) == (
+                "600",
+                "50",
+                "550",
+            )
+            listed = read(client, actor, f"/claims?case_id={case['id']}")["items"][0]
+            assert "received_krw" not in listed
+
     def test_case_list_shows_each_case_net_burden_with_constant_queries(
         self, app, actors, db_engine
     ):

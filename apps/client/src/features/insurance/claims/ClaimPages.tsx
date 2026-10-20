@@ -108,6 +108,12 @@ export function ClaimSummary({
         <Link to={`/insurance/policies/${row.policy_id}`}>청구 계약</Link>
       </div>
       <p>현재 비용 근거 {row.expense_ids.length}개</p>
+      {"received_krw" in row && (
+        <p className="record-facts">
+          이 청구의 실제 수령 {formatKrw(row.received_krw)} · 반환 {formatKrw(row.returned_krw)} ·
+          순수령 {formatKrw(row.net_received_krw)}
+        </p>
+      )}
       <ul>
         {row.expense_ids.map((id, index) => (
           <li key={id}>

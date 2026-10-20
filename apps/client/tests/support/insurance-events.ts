@@ -88,6 +88,9 @@ export function claimRow(id = 1200, expenses: string[] = []): S["ClaimResponse"]
     decision_note: null,
     expense_ids: expenses,
     expense_count: expenses.length,
+    received_krw: "0",
+    returned_krw: "0",
+    net_received_krw: "0",
   };
 }
 export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>) {
@@ -136,8 +139,15 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
   };
   const rememberClaim = (row: S["ClaimResponse"], reason: string | null = null) => {
     const history = state.claimHistories.get(row.id) ?? [];
+    // Revisions carry no money: received/returned amounts live on the current claim only.
+    const {
+      received_krw: _received,
+      returned_krw: _returned,
+      net_received_krw: _net,
+      ...revision
+    } = structuredClone(row);
     history.push({
-      ...structuredClone(row),
+      ...revision,
       claim_id: row.id,
       changed_by_member_id: uid(2),
       changed_at: timestamp,

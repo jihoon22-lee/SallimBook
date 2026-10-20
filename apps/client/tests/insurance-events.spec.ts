@@ -427,3 +427,21 @@ test("correcting a refund keeps its reason and explains where the correction rea
   await expect(page.getByText("사유: 합성 본인부담 환불", { exact: true })).toBeVisible();
   expect(state.refunds.at(-1)!.reason).toBe("합성 본인부담 환불");
 });
+
+test("claim detail shows only this claim's received, returned and net amounts", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.claims.push({
+    ...claimRow(1200, [uid(1001)]),
+    received_krw: "600000",
+    returned_krw: "50000",
+    net_received_krw: "550000",
+  });
+  await page.goto(`/insurance/claims/${uid(1200)}`);
+  await expect(
+    page.getByText("이 청구의 실제 수령 600,000원 · 반환 50,000원 · 순수령 550,000원", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});

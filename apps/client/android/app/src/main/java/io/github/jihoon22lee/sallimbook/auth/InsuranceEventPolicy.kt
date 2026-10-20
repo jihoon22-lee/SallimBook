@@ -243,8 +243,11 @@ internal object InsuranceEventPolicy {
             "expense_ids" to array(id, 0, 200),
             "household_id" to id,
             "id" to id,
+            "net_received_krw" to pattern("^(0|[1-9][0-9]{0,19})\$"),
             "policy_id" to id,
+            "received_krw" to pattern("^(0|[1-9][0-9]{0,19})\$"),
             "requested_krw" to nullable(pattern("^(0|[1-9][0-9]{0,19})\$")),
+            "returned_krw" to pattern("^(0|[1-9][0-9]{0,19})\$"),
             "submitted_on" to nullable(date),
             "updated_at" to timestamp,
             "updated_by_member_id" to id,
@@ -523,6 +526,7 @@ internal object InsuranceEventPolicy {
         if (schema == "BenefitSummary") {
             if (money(row["received_krw"]) - money(row["returned_krw"]) != money(row["net_received_krw"])) invalid()
         }
+        if (schema == "ClaimResponse" && money(row["received_krw"]) - money(row["returned_krw"]) != money(row["net_received_krw"])) invalid()
         if (schema in setOf("CaseSummaryResponse", "NodeSummaryResponse")) {
             if (money(row["medical_paid_krw"]) - money(row["medical_refunded_krw"]) != money(row["net_medical_krw"])) invalid()
         }

@@ -6,7 +6,7 @@ module does not select reporting periods, persist records, or prove atomicity.
 """
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from sallimbook.core.types import krw_string
@@ -123,11 +123,21 @@ class CaseBalance:
 
 
 @dataclass(frozen=True)
+class ClaimBalance:
+    """Money actually received for one claim: its allocations and their returns only."""
+
+    received_krw: int
+    returned_krw: int
+    net_received_krw: int
+
+
+@dataclass(frozen=True)
 class InsuranceSummary:
     cases: dict[str, CaseBalance]
     actual_receipts_krw: int
     actual_returns_krw: int
     net_receipts_krw: int
+    claims: dict[str, ClaimBalance] = field(default_factory=dict)
 
 
 def insurance_summary(
@@ -177,6 +187,7 @@ def insurance_summary(
         case(payment.case_id)["refunded"] += amount
 
     allocations: dict[str, tuple[str, Allocation]] = {}
+    claims: dict[str, dict[str, int]] = {}
     for payout in payout_sources.values():
         for allocation in payout.allocations:
             if allocation.id in allocations:
@@ -185,6 +196,10 @@ def insurance_summary(
             amount = _positive(allocation.amount_krw)
             case(allocation.case_id)["received"] += amount
             case(allocation.case_id)[allocation.benefit_type] += amount
+            if allocation.claim_id is not None:
+                claims.setdefault(allocation.claim_id, {"received": 0, "returned": 0})[
+                    "received"
+                ] += amount
     returned_by_allocation: dict[str, int] = {}
     for returned in return_sources.values():
         original = allocations.get(returned.allocation_id)
@@ -198,6 +213,8 @@ def insurance_summary(
         returned_by_allocation[allocation.id] = total
         case(allocation.case_id)["returned"] += amount
         case(allocation.case_id)[allocation.benefit_type] -= amount
+        if allocation.claim_id is not None:
+            claims[allocation.claim_id]["returned"] += amount
 
     cases = {}
     for case_id, values in balances.items():
@@ -223,4 +240,17 @@ def insurance_summary(
         int(krw_string(receipts)),
         int(krw_string(returned)),
         int(krw_string(receipts - returned)),
+        {
+            claim_id: ClaimBalance(
+                *(
+                    int(krw_string(value))
+                    for value in (
+                        values["received"],
+                        values["returned"],
+                        values["received"] - values["returned"],
+                    )
+                )
+            )
+            for claim_id, values in claims.items()
+        },
     )
