@@ -567,6 +567,38 @@ class TestInsuranceEventFixtures:
 
 @pytest.mark.database
 class TestInsuranceEventCorrections:
+    @pytest.mark.parametrize("source", ["refund", "return"])
+    def test_reversal_correction_keeps_its_original_reason(self, app, actors, source):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            if source == "refund":
+                parent = new_expense(client, actor, case, new_node(client, actor, case))
+                create_path = f"/medical-expenses/{parent['id']}/refunds"
+                collection, body = "/medical-refunds", actual("30", reason="합성 본인부담 환불")
+            else:
+                parent = new_payout(client, actor, [allocation(case["id"])])
+                create_path, collection = f"/payouts/{parent['id']}/returns", "/returns"
+                body = actual(
+                    "30",
+                    original_allocation_id=parent["allocations"][0]["id"],
+                    reason="합성 중복 수령 반환",
+                )
+            first = money(client, actor, create_path, body, version=1)
+            replacement = money(
+                client,
+                actor,
+                f"{collection}/{first['id']}/correct",
+                body | {"amount_krw": "20", "reason": "합성 금액 오타 정정"},
+                version=1,
+            )
+            corrected = read(client, actor, f"{collection}/{replacement['id']}")
+            assert corrected["reason"] == body["reason"]
+            voided = read(client, actor, f"{collection}/{first['id']}/history")["items"][0]
+            assert voided["state"] == "void" and voided["reason"] == "합성 금액 오타 정정"
+            created = read(client, actor, f"{collection}/{replacement['id']}/history")["items"][0]
+            assert created["reason"] == "합성 금액 오타 정정"
+
     @pytest.mark.parametrize("source", ["expense", "refund", "payout", "return"])
     def test_correction_keeps_a_link_that_closed_after_the_original(
         self, app, actors, db_engine, source

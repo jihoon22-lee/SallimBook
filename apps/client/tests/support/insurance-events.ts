@@ -535,7 +535,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
         ...entity(state.nextId++),
         expense_id: parent.id,
         correction_of_id: original?.id ?? null,
-        reason: body.reason,
+        reason: original?.reason ?? body.reason,
         cash: newCash(body, "medical_refund", parent.cash),
       };
       parent.version++;
@@ -554,7 +554,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
         payout_id: parent.id,
         original_allocation_id: body.original_allocation_id,
         correction_of_id: original?.id ?? null,
-        reason: body.reason,
+        reason: original?.reason ?? body.reason,
         cash: newCash(body, "insurance_return", parent.cash),
       };
       parent.version++;

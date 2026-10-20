@@ -416,7 +416,16 @@ def correct_expense(session, principal, expense_id, payload, if_match, key):
     )
 
 
-def _new_refund(session, principal, expense, payload, *, correction_of=None, previous_cash=None):
+def _new_refund(
+    session,
+    principal,
+    expense,
+    payload,
+    *,
+    correction_of=None,
+    previous_cash=None,
+    kept_reason=None,
+):
     original = _source(session, principal, expense, "medical_payment", lock=True)
     source = cash.prepare_cash_record(
         session,
@@ -430,7 +439,8 @@ def _new_refund(session, principal, expense, payload, *, correction_of=None, pre
     row = MedicalRefund(
         expense_id=expense.id,
         cash_record_id=source.id,
-        reason=payload.reason,
+        # A correction fixes the money; the refund's own reason stays as recorded.
+        reason=kept_reason or payload.reason,
         correction_of_id=correction_of,
         **_actors(principal),
     )
@@ -531,6 +541,7 @@ def correct_refund(session, principal, refund_id, payload, if_match, key):
                 payload,
                 correction_of=row.id,
                 previous_cash=previous_cash,
+                kept_reason=row.reason,
             ),
             "medical_refund",
         )
@@ -1087,7 +1098,9 @@ def allocation_history(session, principal, allocation_id, *, cursor=None, limit=
     )
 
 
-def _new_return(session, principal, payout, payload, *, correction_of=None, previous_cash=None):
+def _new_return(
+    session, principal, payout, payload, *, correction_of=None, previous_cash=None, kept_reason=None
+):
     source = _source(session, principal, payout, "insurance_receipt", lock=True)
     allocation = scoped_entity(
         session, PayoutAllocation, payload.original_allocation_id, principal, for_update=True
@@ -1124,7 +1137,7 @@ def _new_return(session, principal, payout, payload, *, correction_of=None, prev
         payout_id=payout.id,
         original_allocation_id=allocation.id,
         cash_record_id=actual.id,
-        reason=payload.reason,
+        reason=kept_reason or payload.reason,
         correction_of_id=correction_of,
         **_actors(principal),
     )
@@ -1225,6 +1238,7 @@ def correct_return(session, principal, return_id, payload, if_match, key):
                 payload,
                 correction_of=row.id,
                 previous_cash=previous_cash,
+                kept_reason=row.reason,
             ),
             "insurance_return",
         )

@@ -180,6 +180,12 @@ export function ReturnEditor({
           disabled={command.busy}
           accountOnly={kind === "return"}
         />
+        {base && (
+          <p className="muted">
+            원래 {eventNames[kind]} 사유 “{base.reason}”은 그대로 남아요. 정정 사유는 금전 이력에
+            기록돼요. 사유 자체가 틀렸다면 무효 처리 후 새로 기록해 주세요.
+          </p>
+        )}
         <div className="form-field">
           <label>
             {eventNames[kind]} {base ? "정정 사유" : "사유"}

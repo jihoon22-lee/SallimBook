@@ -404,3 +404,26 @@ test("ended policy stays selectable for a late claim and a direct allocation wit
       .locator(`option[value="${uid(84)}"]`),
   ).toHaveJSProperty("disabled", false);
 });
+
+test("correcting a refund keeps its reason and explains where the correction reason goes", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  await page.goto(`/insurance/expenses/${uid(1001)}/refunds/new`);
+  await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("1000");
+  await page.getByLabel("의료비 환불 사유", { exact: true }).fill("합성 본인부담 환불");
+  await page.getByRole("button", { name: "의료비 환불 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "의료비 환불 상세", exact: true })).toBeVisible();
+  await page.goto(`/insurance/refunds/${state.refunds.at(-1)!.id}/correct`);
+  await expect(
+    page.getByText(
+      "원래 의료비 환불 사유 “합성 본인부담 환불”은 그대로 남아요. 정정 사유는 금전 이력에 기록돼요. 사유 자체가 틀렸다면 무효 처리 후 새로 기록해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByLabel("의료비 환불 금액 (원)", { exact: true }).fill("900");
+  await page.getByLabel("의료비 환불 정정 사유", { exact: true }).fill("합성 금액 오타 정정");
+  await page.getByRole("button", { name: "의료비 환불 정정 저장", exact: true }).click();
+  await expect(page.getByText("사유: 합성 본인부담 환불", { exact: true })).toBeVisible();
+  expect(state.refunds.at(-1)!.reason).toBe("합성 본인부담 환불");
+});
