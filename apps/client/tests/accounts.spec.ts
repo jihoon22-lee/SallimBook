@@ -51,11 +51,14 @@ test("existing financial asset linking rejects duplicate linkage and preserves a
   page,
 }) => {
   const state = await mockFinance(page);
+  // The picker hides linked assets, so the duplicate comes from a spouse linking it meanwhile.
+  const linked = state.accounts.splice(0);
   await page.goto("/accounts/new");
   await page.getByLabel("금융기관", { exact: true }).fill("합성 연결 기관");
   await page.getByLabel("계좌 유형", { exact: true }).selectOption("brokerage");
   await page.getByLabel("금융 자산 연결", { exact: true }).selectOption("existing");
   await page.getByLabel("연결할 금융 자산", { exact: true }).selectOption(uid(11));
+  state.accounts.push(...linked);
   await page.getByRole("button", { name: "계좌 등록", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("이미 다른 계좌와 연결된");
   await expect(page.getByLabel("금융기관", { exact: true })).toHaveValue("합성 연결 기관");
@@ -223,10 +226,14 @@ test("new account linking lists active financial assets and preserves inputs on 
   await page.getByLabel("계좌 유형", { exact: true }).selectOption("brokerage");
   await page.getByLabel("금융 자산 연결", { exact: true }).selectOption("existing");
   await expect(page.getByLabel("연결할 금융 자산", { exact: true }).locator("option")).toHaveCount(
-    3,
+    2,
   );
   await expect(page.getByRole("option", { name: "합성 사용 종료 금융 자산" })).toHaveCount(0);
+  // sampleAccount already links uid(11).
+  await expect(page.getByRole("option", { name: "합성 개인 금융 자산" })).toHaveCount(0);
   expect(state.queries.at(-1)?.get("status")).toBe("active");
+  expect(state.accountQueries.at(-1)?.get("status")).toBe("all");
+  expect(state.accountQueries.at(-1)?.get("limit")).toBe("200");
   await page.getByLabel("연결할 금융 자산", { exact: true }).selectOption(uid(72));
   await page.route("**/api/v1/accounts", async (route) => {
     if (route.request().method() === "POST")

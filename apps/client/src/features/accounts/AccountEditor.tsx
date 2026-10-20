@@ -52,8 +52,29 @@ export function AccountEditor({ initial }: { initial?: Account }) {
         all.push(...response.items);
         cursor = response.next_cursor;
       } while (cursor && active);
+      // Any account, closed ones included, already owns its asset; the server's 409 stays final.
+      const linked = new Set<string>();
+      let accountCursor: string | null = null;
+      const seen = new Set<string>();
+      do {
+        const response = await api.list({
+          status: "all",
+          limit: 200,
+          ...(accountCursor ? { cursor: accountCursor } : {}),
+        });
+        for (const account of response.items) linked.add(account.asset_id);
+        accountCursor = response.next_cursor;
+        if (accountCursor) {
+          if (seen.has(accountCursor)) throw new ApiError(0, "REQUEST_FAILED");
+          seen.add(accountCursor);
+        }
+      } while (accountCursor && active);
       if (active)
-        setAvailable(all.filter((item) => item.status === "active" && item.ended_on === null));
+        setAvailable(
+          all.filter(
+            (item) => item.status === "active" && item.ended_on === null && !linked.has(item.id),
+          ),
+        );
     })()
       .catch((failure) => {
         if (active) setAssetError(toApiError(failure));
@@ -64,7 +85,7 @@ export function AccountEditor({ initial }: { initial?: Account }) {
     return () => {
       active = false;
     };
-  }, [initial, mode, assetsApi, assetRetry]);
+  }, [initial, mode, api, assetsApi, assetRetry]);
   const changed = base
     ? (Object.keys(draft) as (keyof AccountDraft)[]).filter(
         (key) => draft[key] !== accountDraft(base)[key],
@@ -259,6 +280,11 @@ export function AccountEditor({ initial }: { initial?: Account }) {
                       </option>
                     ))}
                   </select>
+                  {!assetLoading && !assetError && available.length === 0 && (
+                    <p className="muted">
+                      연결할 수 있는 사용 중 금융 자산이 없어요. 새 금융 자산과 함께 등록해 주세요.
+                    </p>
+                  )}
                 </div>
                 <FinanceError error={assetError} />
                 <button
