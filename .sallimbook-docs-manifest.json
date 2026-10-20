@@ -38,8 +38,8 @@
       "git_sha1": "a238a22b0cbd6e0e66d3912c0147623fc4840419"
     },
     "CONTRIBUTING.md": {
-      "sha256": "bfd86fc9c271e6b5139a9421568ff429c1b4de98c68581c7d1b9560424cd9ff5",
-      "git_sha1": "67e2a97123ddddcc51235a7ca41d127f4bc4f1ef"
+      "sha256": "acc150b1986b3760e780c8fe98ee4477603d718e0ccce5b6be6950b236b6f4db",
+      "git_sha1": "e9a38f5ee6fed120d1a0d0ae69eb9e6084fcc510"
     },
     "README.md": {
       "sha256": "bec0f4f0d3965c2352196a69b535f1c3fafc562e9bc517550200e354258bbda4",
@@ -86,12 +86,12 @@
       "git_sha1": "f46bf015dcb2926d345b5c72d3fc2127d31cc615"
     },
     "docs/development-environment.md": {
-      "sha256": "a16f30af56a57497e050494f9dcde60227af45f365fd376ff577ad66dfb867ec",
-      "git_sha1": "9a5833e0b80bbd31b750276a5db4caeeb7e7bfc4"
+      "sha256": "108d9079245e6867b1135458da2816b1d8294dd9898273778bb8fb731cde0df9",
+      "git_sha1": "4b9d6f91a74d1efef01967749a02f08be25b0951"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "eab8aaec6ac234e0a2828d88c954b2a2d050011c89943d3f2ac4d3a0dfa34ffa",
-      "git_sha1": "96f8a310581f35ff74556e730bc45a03192f14a4"
+      "sha256": "5740d6e3c5a063cb9da9dc5b35980a10d05abc2a5b84088b815635ef622ff64b",
+      "git_sha1": "93ea643beeb2095301d443cafee3e4ce3ef1564d"
     },
     "docs/deployment-backup-operations.md": {
       "sha256": "d390cf51ec3b36cde1188d3c9d8d96dfe5d4c9d1a98906fee327a309f64495e5",

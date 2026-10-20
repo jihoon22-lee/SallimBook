@@ -83,6 +83,22 @@ Python은 기존 ruff 0.17.1의 `ruff format`을 `services/api`의 src·tests·m
 CI는 `types-contract` job에서 `pnpm format:check`를, `api-unit` job에서 `ruff format --check`를 실행한다.
 일괄 서식 커밋은 `.git-blame-ignore-revs`에 기록했다. 로컬 blame에는 `git config blame.ignoreRevsFile .git-blame-ignore-revs`를 한 번 설정한다.
 
+### 린트
+
+웹 클라이언트·플러그인·생성 client 래퍼의 TS/JS는 `pnpm lint`(ESLint, `--max-warnings 0`)로 검사한다. 설정은 루트 `eslint.config.mjs`이며
+생성 파일 `packages/api-client/src/schema.d.ts`와 Android 프로젝트는 제외한다. CI는 `types-contract` job에서 `pnpm format:check` 다음에 실행한다.
+2026-10-19~20에 [npm registry](https://registry.npmjs.org/) 배포 메타데이터의 peer 범위를 확인하고 정확한 버전으로 고정했다.
+
+| 패키지 | 버전(배포일) | 근거 |
+|---|---|---|
+| eslint, @eslint/js | 9.39.5 (2026-07-10) | 9.x 최신. jsx-a11y 6.10.2의 peer가 `eslint ^9`까지라 10.x로 올리지 않는다 |
+| typescript-eslint | 8.72.0 (2026-10-19) | peer를 만족하는 최신 안정판(eslint ^9, typescript <6.1) |
+| eslint-plugin-react-hooks | 7.1.1 (2026-04-17) | 최신. `rules-of-hooks`·`exhaustive-deps`만 쓰고 React Compiler 진단 규칙은 끈다 |
+| eslint-plugin-jsx-a11y | 6.10.2 (2024-10-26) | 최신 |
+| typescript | 5.9.3 (2025-09-30) | typescript-eslint peer 범위 안에서 기존 타입 검사 버전 유지 |
+
+[ESLint 버전 지원 정책](https://eslint.org/version-support/)상 9.x는 유지보수 기간에 있다. jsx-a11y가 ESLint 10을 지원하면 함께 올린다.
+
 ## 4. 저장소와 실행 환경
 
 WSL의 Linux 파일시스템에 clone을 두고 프로젝트별 의존성을 관리한다.
