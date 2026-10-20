@@ -259,6 +259,39 @@ def test_rehash_is_skipped_not_failed_when_slots_are_busy(monkeypatch):
 
 @pytest.mark.database
 class TestIdentityDatabase:
+    @pytest.mark.parametrize("replacement", ["changed", "rehashed"])
+    def test_login_rechecks_password_hash_under_account_lock(
+        self, db_engine, account, monkeypatch, replacement
+    ):
+        verify = service._verify_admitted
+
+        def replace_after_verification(session, buckets, encoded, password):
+            verified = verify(session, buckets, encoded, password)
+            with Session(db_engine) as other:
+                user = other.get(User, account.user_id)
+                user.password_hash = service.hash_password(
+                    secrets.token_urlsafe(24) if replacement == "changed" else account.password
+                )
+                other.commit()
+            return verified
+
+        monkeypatch.setattr(service, "_verify_admitted", replace_after_verification)
+        request = LoginRequest(
+            login_name=account.login_name,
+            password=account.password,
+            device_label="합성 경합 기기",
+        )
+        with Session(db_engine) as session:
+            if replacement == "changed":
+                with pytest.raises(DomainError) as error:
+                    service.login(session, request, "synthetic-race", "native")
+                assert (error.value.code, error.value.status) == ("UNAUTHENTICATED", 401)
+            else:
+                service.login(session, request, "synthetic-race", "native")
+        with Session(db_engine) as session:
+            devices = session.scalar(select(func.count()).select_from(RegisteredDevice))
+        assert devices == (0 if replacement == "changed" else 1)
+
     def test_security_events_keep_metadata_only(self, identity_app, db_engine, account):
         with Session(db_engine) as session:
             fixture_events = set(session.scalars(select(AuditEvent.id)))  # bootstrap acceptance

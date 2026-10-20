@@ -683,12 +683,9 @@ def login(
     buckets = _login_buckets(request.login_name, source)
     _admit_attempt(session, buckets, now)
     user = session.scalar(select(User).where(User.login_name == request.login_name))
-    verified = _verify_admitted(
-        session,
-        buckets,
-        user.password_hash if user else _DUMMY_HASH,
-        request.password.get_secret_value(),
-    )
+    password = request.password.get_secret_value()
+    encoded = user.password_hash if user else _DUMMY_HASH
+    verified = _verify_admitted(session, buckets, encoded, password)
     member = (
         None
         if user is None
@@ -701,9 +698,13 @@ def login(
     )
     if not verified or user is None or user.disabled_at is not None or member is None:
         raise _unauthenticated()
-    _upgrade_hash(user, request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
     result = issue_session(session, user, member, request.device_label, transport)
+    # issue_session locked and reloaded the users row. A hash that changed after our
+    # verification is rechecked: a same-password rehash passes, an old password does not.
+    if user.password_hash != encoded and not _verify_password(user.password_hash, password):
+        raise _unauthenticated()
+    _upgrade_hash(user, password)
     session.commit()
     return result
 
@@ -815,6 +816,8 @@ def issue_session(
 
     This is an internal service, not an authentication bypass endpoint. The optional device
     ID must come from server ceremony state, never from a client's device identifier.
+    Locks the users row so password changes and sign-out of other devices serialize with
+    new sessions.
     """
     if transport not in {"web", "native"}:
         raise ValueError("Unsupported authentication transport")
@@ -829,6 +832,7 @@ def issue_session(
             HouseholdMember.household_id == member.household_id,
             HouseholdMember.status == "active",
         )
+        .with_for_update(of=User, key_share=True)
         .execution_options(populate_existing=True)
     ).one_or_none()
     if active is None:
