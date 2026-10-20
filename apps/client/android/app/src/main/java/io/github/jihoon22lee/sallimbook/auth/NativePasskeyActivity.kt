@@ -174,7 +174,7 @@ class NativePasskeyActivity : AppCompatActivity() {
             if (mode in setOf(REVOKE, DEVICE, ACCOUNT)) visibility = View.GONE
             column.addView(this)
         }
-        code = label("").apply { setTextIsSelectable(false); isLongClickable = false }
+        code = NativeSecretViews.sensitive(label("")).apply { setTextIsSelectable(false); isLongClickable = false }
         status = label(if (mode in setOf(REVOKE, DEVICE, ACCOUNT)) "대상을 확인하고 있어요." else "")
         submit = Button(this).apply {
             text = when (mode) { REVOKE -> "이 패스키 삭제"; DEVICE -> "인증하고 기기 연결 해제"; INVITE -> "인증하고 초대 만들기"; REGISTER -> "패스키 등록"; ACCOUNT -> "인증하고 계좌번호 표시"; else -> "패스키 로그인" }

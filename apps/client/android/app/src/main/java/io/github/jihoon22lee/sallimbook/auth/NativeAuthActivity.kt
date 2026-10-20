@@ -164,7 +164,7 @@ class NativeAuthActivity : AppCompatActivity() {
             displayName = field("표시 이름", false, 80)
         }
         if (mode == CREATE_INVITATION) {
-            invitationText = label("").apply { setTextIsSelectable(false); isLongClickable = false; freezesText = false }
+            invitationText = NativeSecretViews.sensitive(label("")).apply { setTextIsSelectable(false); isLongClickable = false; freezesText = false }
         }
         status = label("")
         submit = Button(this).apply {
