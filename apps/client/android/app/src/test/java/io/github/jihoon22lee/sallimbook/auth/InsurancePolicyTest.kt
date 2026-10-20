@@ -136,11 +136,13 @@ class InsurancePolicyTest {
         }
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_MEDICAL_NODES, args, page + mapOf("next_cursor" to other)) }
     }
-    @Test fun metadataPagesValidateLimitsDescendingIdsDuplicatesAndNextCursor() {
+    @Test fun metadataPagesKeepServerOrderButValidateLimitsDuplicatesAndNextCursor() {
         val op = FinanceOperation.LIST_INSURANCE_POLICIES
         val items = listOf(policy(), policy() + mapOf("id" to child))
         response(op, emptyMap(), mapOf("items" to items, "next_cursor" to child))
-        for (rows in listOf(items.reversed(), listOf(policy(), policy()))) bad(AuthCode.ACCESS_DENIED) { response(op, emptyMap(), mapOf("items" to rows, "next_cursor" to null)) }
+        response(op, emptyMap(), mapOf("items" to items.reversed(), "next_cursor" to id))
+        bad(AuthCode.ACCESS_DENIED) { response(op, emptyMap(), mapOf("items" to listOf(policy(), policy()), "next_cursor" to null)) }
+        bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("cursor" to id)), mapOf("items" to items.reversed(), "next_cursor" to null)) }
         bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("limit" to 1)), mapOf("items" to items, "next_cursor" to null)) }
         bad(AuthCode.ACCESS_DENIED) { response(op, emptyMap(), mapOf("items" to items, "next_cursor" to other)) }
         for (limit in listOf(0, 201, 1.5, "1")) bad { request(op, mapOf("query" to mapOf("limit" to limit))) }

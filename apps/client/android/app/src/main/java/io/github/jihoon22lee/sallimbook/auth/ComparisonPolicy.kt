@@ -177,8 +177,8 @@ internal object ComparisonPolicy {
         if (items.size > count) invalid()
         items.forEach { comparisonItem(it, available) }
         val itemIds = items.map { obj(it)["asset_id"] as String }
-        if (itemIds.distinct().size != itemIds.size || itemIds != itemIds.sorted()) invalid()
-        q["cursor"]?.let { cursor -> if (itemIds.any { it <= cursor as String }) invalid() }
+        if (itemIds.distinct().size != itemIds.size) invalid()
+        q["cursor"]?.let { cursor -> if (cursor in itemIds) invalid() }
         row["next_cursor"]?.let {
             FinancePolicy.id(it)
             if (itemIds.isEmpty() || it != itemIds.last()) invalid()

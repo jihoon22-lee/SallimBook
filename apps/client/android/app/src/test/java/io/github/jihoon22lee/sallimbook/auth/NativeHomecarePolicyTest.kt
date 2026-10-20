@@ -220,7 +220,7 @@ class NativeHomecarePolicyTest {
     }
     @Test fun listsValidateFiltersOrderingCursorBoundsAndHouseholdConsistency() {
         val op = FinanceOperation.LIST_CONSUMABLES
-        for (change in listOf(mapOf("status" to "ended"), mapOf("cursor" to applianceId))) bad(AuthCode.ACCESS_DENIED) {
+        for (change in listOf(mapOf("status" to "ended"), mapOf("cursor" to consumableId))) bad(AuthCode.ACCESS_DENIED) {
             response(op, mapOf("query" to change), page(consumable()))
         }
         bad(AuthCode.ACCESS_DENIED) { response(op, emptyMap(), page(consumable(), consumable())) }
@@ -262,5 +262,14 @@ class NativeHomecarePolicyTest {
             assertFalse(safe.toString().contains("SYNTHETIC PRIVATE"))
             assertEquals("INTERNAL_ERROR", (AuthPolicy.safeError(500, raw, householdId)!!["error"] as Map<*, *>)["code"])
         }
+    }
+    @Test fun listsKeepServerOrderButRejectRepeatedRowsCursorAndWrongNextCursor() {
+        val op = FinanceOperation.LIST_CONSUMABLES
+        val ascending = listOf(consumable() + mapOf("id" to applianceId), consumable())
+        response(op, emptyMap(), mapOf("items" to ascending, "next_cursor" to null))
+        val two = mapOf("query" to mapOf("limit" to 2))
+        response(op, two, mapOf("items" to ascending, "next_cursor" to consumableId))
+        bad(AuthCode.ACCESS_DENIED) { response(op, two, mapOf("items" to ascending, "next_cursor" to applianceId)) }
+        bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("cursor" to consumableId)), mapOf("items" to ascending, "next_cursor" to null)) }
     }
 }

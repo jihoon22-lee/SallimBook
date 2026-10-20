@@ -236,9 +236,8 @@ internal object InsurancePolicy {
                 val row = entity(schema, item); bound(row)
                 val current = row[if (history) "version" else "id"].toString()
                 if (!seen.add(current)) invalid()
-                // Medical nodes follow server tree/sibling order; UUID cursor is an opaque position.
-                if (operation != FinanceOperation.LIST_MEDICAL_NODES && previous != null &&
-                    (if (history) current.toLong() >= previous.toLong() else current >= previous)) invalid()
+                // All metadata pages keep server order; the UUID cursor is an opaque position.
+                if (history && previous != null && current.toLong() >= previous.toLong()) invalid()
                 previous = current
             }
             page["next_cursor"]?.let {

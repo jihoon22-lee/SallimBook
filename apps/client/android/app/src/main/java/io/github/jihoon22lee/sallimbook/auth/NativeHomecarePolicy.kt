@@ -308,20 +308,22 @@ internal object NativeHomecarePolicy {
                     "HomecareStatusResponse" -> "HomecareStatusItem"
                     else -> invalid()
                 }
-                var previous = (q["cursor"] as? String)?.lowercase()
+                // Server order is kept; rows and the requested cursor may not repeat.
+                val seen = mutableSetOf<String>().apply { (q["cursor"] as? String)?.lowercase()?.let(::add) }
+                var last: String? = null
                 val households = mutableSetOf<Any?>()
                 val dates = mutableSetOf<Any?>()
                 for (item in items) {
                     val row = entity(schema, item); bound(row, schema)
                     val current = (row["id"] as String).lowercase()
-                    if (previous != null && current >= previous) invalid()
-                    previous = current
+                    if (!seen.add(current)) invalid()
+                    last = current
                     households.add(row["household_id"])
                     if ("as_of" in row) dates.add(row["as_of"])
                     if (statusPage && (row["active"] != true || row["as_of"] != page["as_of"])) invalid()
                 }
                 if (households.size > 1 || dates.size > 1) invalid()
-                page["next_cursor"]?.let { id(it); if (items.isEmpty() || (it as String).lowercase() != previous) invalid() }
+                page["next_cursor"]?.let { id(it); if (items.isEmpty() || (it as String).lowercase() != last) invalid() }
                 return page
             }
             val row = entity(route.output, value); bound(row, route.output)

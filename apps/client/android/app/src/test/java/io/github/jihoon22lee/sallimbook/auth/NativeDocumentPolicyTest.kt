@@ -135,4 +135,12 @@ class NativeDocumentPolicyTest {
             assertEquals("INTERNAL_ERROR", (AuthPolicy.safeError(500, raw, id)!!["error"] as Map<*, *>)["code"])
         }
     }
+    @Test fun listsKeepServerOrderButRejectRepeatedRowsOrCursor() {
+        val op = FinanceOperation.LIST_DOCUMENTS
+        val ascending = listOf(document + mapOf("id" to link), document)
+        FinancePolicy.response(op, FinancePolicy.prepare(op, emptyMap<String, Any?>()), 200, mapOf("items" to ascending, "next_cursor" to null))
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, FinancePolicy.prepare(op, emptyMap<String, Any?>()), 200, mapOf("items" to listOf(document, document), "next_cursor" to null)) }
+        val cursor = FinancePolicy.prepare(op, mapOf("query" to mapOf("cursor" to link)))
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, cursor, 200, mapOf("items" to ascending, "next_cursor" to null)) }
+    }
 }
