@@ -17,9 +17,15 @@ import {
 import { dateLabel, isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 import { allPages, usePagedList, useResource } from "../finance/queries";
 import { useFixedApi } from "./api";
-import { displayedTerms, economicTypes, generationValid, obligationStates } from "./model";
+import {
+  displayedTerms,
+  economicTypes,
+  generationValid,
+  obligationStates,
+  withdrawalPlan,
+} from "./model";
 import type { Obligation, Rule, Settlement } from "./model";
-import { RuleEditor } from "./RuleEditor";
+import { RuleCommandError, RuleEditor, WithdrawalNotice } from "./RuleEditor";
 import { RuleSummary } from "./RuleSummary";
 import { ObligationCalendar } from "./ObligationCalendar";
 import {
@@ -444,14 +450,12 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
   const [latest, setLatest] = useState<Rule | null>(null);
   const [ack, setAck] = useState(false);
   const key = useIdempotencyKey(JSON.stringify([row.id, row.version, date, reason.trim()]));
-  const lastFrom = [...row.versions]
-    .sort((a, b) => a.effective_from.localeCompare(b.effective_from))
-    .at(-1)!.effective_from;
+  const plan = withdrawalPlan(row, date);
   const valid =
     (!row.ended_on || (row.ended_on > todaySeoul() && date < row.ended_on)) &&
     isDateOnly(date) &&
     date >= todaySeoul() &&
-    date > lastFrom &&
+    date > plan.floor &&
     !!reason.trim() &&
     ack;
   async function submit(event: FormEvent) {
@@ -474,8 +478,8 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
     <section className="card">
       <h2>납부 규칙 종료</h2>
       <p>
-        마지막 적용일 {dateLabel(lastFrom)}보다 뒤의 종료 적용일을 선택해요. 과거 납부와 수동 예외는
-        남겨요.
+        현재 적용 중인 시작일 {dateLabel(plan.floor)}보다 뒤의 종료 적용일을 선택해요. 과거 납부와
+        수동 예외는 남겨요.
         {row.ended_on
           ? ` 현재 종료 적용일 ${dateLabel(row.ended_on)}보다 앞당기는 것만 가능해요.`
           : ""}
@@ -518,7 +522,8 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
             종료 적용일 이후의 미래 미납 회차가 바뀌는 것을 확인했어요.
           </label>
         </fieldset>
-        <CashflowError error={command.error} />
+        <WithdrawalNotice withdrawn={plan.withdrawn} />
+        <RuleCommandError error={command.error} />
         {command.error?.status === 409 && (
           <button type="button" onClick={() => void compare()}>
             종료 전 현재 규칙 비교

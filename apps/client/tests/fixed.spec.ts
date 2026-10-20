@@ -1,5 +1,6 @@
 import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import fixtures from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
 import { mockCashflow } from "./support/cashflow";
 import { uid } from "./support/finance";
@@ -286,4 +287,92 @@ test("calendar loads every page and places occurrences by scheduled day without 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await day.getByRole("link", { name: "합성 AI 구독", exact: true }).click();
   await expect(page.getByRole("heading", { name: "고정 납부 상세", exact: true })).toBeVisible();
+});
+
+function withPendingChange(state: Awaited<ReturnType<typeof mockCashflow>>) {
+  const rule = state.rules[0]!;
+  rule.versions[0]!.effective_until = "2025-12-01";
+  rule.versions.push({
+    ...structuredClone(rule.versions[0]!),
+    id: uid(260),
+    effective_from: "2025-12-01",
+    effective_until: null,
+    expected_amount_krw: "34000",
+    reason: "합성 예정 변경",
+  });
+  return rule;
+}
+async function endRuleOn(page: Page, date: string) {
+  await page.goto(`/fixed-payments/rules/${uid(60)}`);
+  await page.getByRole("button", { name: "납부 규칙 종료 검토", exact: true }).click();
+  await page.getByLabel("규칙 종료 적용일", { exact: true }).fill(date);
+  await page.getByLabel("규칙 종료 사유", { exact: true }).fill("합성 해지");
+  await page
+    .getByLabel("종료 적용일 이후의 미래 미납 회차가 바뀌는 것을 확인했어요.", { exact: true })
+    .check();
+}
+test("ending before a pending change withdraws it and keeps the current terms", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  const rule = withPendingChange(state);
+  await endRuleOn(page, "2025-11-15");
+  await expect(
+    page.getByText("2025.12.01 적용 예정 변경은 함께 철회돼요.", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "납부 규칙 종료 저장", exact: true }).click();
+  await expect(page.getByText("종료 사유: 합성 해지", { exact: true })).toBeVisible();
+  expect(state.writes.at(-1)!.body).toEqual({ effective_on: "2025-11-15", reason: "합성 해지" });
+  expect(rule.ended_on).toBe("2025-11-15");
+  expect(rule.versions.map((row) => [row.effective_from, row.effective_until])).toEqual([
+    ["2025-01-01", "2025-11-15"],
+  ]);
+});
+test("a pending amount typo is replaced at its own start date", async ({ page }) => {
+  const state = await mockCashflow(page);
+  const rule = withPendingChange(state);
+  await page.goto(`/fixed-payments/rules/${uid(60)}/edit`);
+  await page.getByLabel("원화 예정금액 (원)", { exact: true }).fill("35000");
+  await page.getByLabel("적용 시작일", { exact: true }).fill("2025-12-01");
+  await expect(
+    page.getByText("2025.12.01 적용 예정 변경은 함께 철회돼요.", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("규칙 변경 사유", { exact: true }).fill("합성 금액 오타 수정");
+  await page
+    .getByLabel(
+      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
+      { exact: true },
+    )
+    .check();
+  await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
+  expect(
+    rule.versions.map((row) => [row.effective_from, row.effective_until, row.expected_amount_krw]),
+  ).toEqual([
+    ["2025-01-01", "2025-12-01", "33000"],
+    ["2025-12-01", null, "35000"],
+  ]);
+  expect(state.writes.at(-1)!.body).toMatchObject({
+    effective_from: "2025-12-01",
+    expected_amount_krw: "35000",
+    reason: "합성 금액 오타 수정",
+  });
+  expect(state.writes.at(-1)!.version).toBe('"1"');
+});
+test("a pending change with handled occurrences explains why it cannot be withdrawn", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  withPendingChange(state);
+  state.withdrawalBlocked = true;
+  await endRuleOn(page, "2025-11-15");
+  await page.getByRole("button", { name: "납부 규칙 종료 저장", exact: true }).click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "철회할 예정 변경에 실제 납부나 수동 변경한 회차가 있어요." }),
+  ).toBeVisible();
+  await expect(page.getByLabel("규칙 종료 적용일", { exact: true })).toHaveValue("2025-11-15");
+  expect(state.rules[0]!.versions).toHaveLength(2);
+  expect(state.rules[0]!.ended_on).toBeNull();
 });

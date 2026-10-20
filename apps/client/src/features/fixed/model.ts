@@ -1,4 +1,5 @@
 import type { components } from "@sallimbook/api-client";
+import type { ApiErrorCode } from "../../platform/api";
 import { isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 import { parseKrw } from "../assets/months/model";
 export type Rule = components["schemas"]["RuleResponse"];
@@ -49,6 +50,36 @@ export function displayedTerms(rule: Rule, date = todaySeoul()): RuleTerms {
     sorted.at(-1)!
   );
 }
+/**
+ * Same split as the server's _split_at: a cutoff must follow the version already running
+ * today (or the first version), and not-yet-started versions from the cutoff on are revoked.
+ */
+export function withdrawalPlan(
+  rule: Rule,
+  date: string,
+  today = todaySeoul(),
+): { floor: string; withdrawn: RuleTerms[] } {
+  const sorted = [...rule.versions].sort((a, b) =>
+    a.effective_from.localeCompare(b.effective_from),
+  );
+  const floor = (sorted.filter((row) => row.effective_from <= today).at(-1) ?? sorted[0]!)
+    .effective_from;
+  const withdrawn = isDateOnly(date)
+    ? sorted.filter(
+        (row) =>
+          row.effective_from > floor && row.effective_from > today && row.effective_from >= date,
+      )
+    : [];
+  return { floor, withdrawn };
+}
+// The shared CashflowError wording is about occurrences and the last start date; rule
+// changes and ends need the revocation meaning instead.
+export const ruleCommandMessages: Partial<Record<ApiErrorCode, string>> = {
+  OBLIGATION_HAS_PAYMENT:
+    "철회할 예정 변경에 실제 납부나 수동 변경한 회차가 있어요. 그 회차를 먼저 정리하거나 예정 변경 이후 날짜를 선택해 주세요.",
+  RULE_PERIOD_OVERLAP:
+    "현재 적용 중인 시작일 뒤이면서 종료 적용일 전인 날짜를 선택해 주세요. 종료일을 연장하거나 지난 규칙을 덮어쓰지 않아요.",
+};
 export function ruleDraft(row?: RuleTerms): RuleDraft {
   return row
     ? {
