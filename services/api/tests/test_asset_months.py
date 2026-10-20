@@ -205,6 +205,39 @@ def confirm(client, actor, month, *, key=None, **acknowledgments):
 
 @pytest.mark.database
 class TestAssetMonthsDatabase:
+    def test_basis_change_clears_carried_origin_with_the_amount(self, months_app, account_actor):
+        with TestClient(months_app) as client:
+            asset = add_asset(client, account_actor, amount_basis="whole", household_share="0.5")
+            draft(client, account_actor, "2026-01")
+            observe(client, account_actor, "2026-01", asset["id"], "100", "2026-01-31")
+            assert confirm(client, account_actor, "2026-01").status_code == 200
+            draft(client, account_actor, "2026-02")
+            assert read_month(client, account_actor, "2026-02")["values"][0]["origin"] == "carried"
+            assert (
+                client.patch(
+                    f"/api/v1/assets/{asset['id']}",
+                    json={"amount_basis": "owned"},
+                    headers={**account_actor.headers, "If-Match": f'"{asset["version"]}"'},
+                ).status_code
+                == 200
+            )
+            before = read_month(client, account_actor, "2026-02")
+            assert (
+                client.post(
+                    "/api/v1/asset-months/2026-02/sync-scope",
+                    json={"revision_id": before["revision_id"]},
+                    headers={**account_actor.headers, "If-Match": f'"{before["version"]}"'},
+                ).status_code
+                == 200
+            )
+            row = read_month(client, account_actor, "2026-02")["values"][0]
+            assert (
+                row["input_amount_krw"],
+                row["verification_state"],
+                row["origin"],
+                row["origin_revision_id"],
+            ) == (None, "missing", "manual", None)
+
     @pytest.mark.parametrize("during_confirmation", [False, True])
     def test_revision_origin_cannot_be_rewritten_before_or_during_confirmation(
         self, months_app, account_actor, db_engine, during_confirmation

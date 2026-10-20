@@ -19,7 +19,7 @@ import { MonthError, MonthSummary } from "./MonthFeedback";
 import { snapshotOwner } from "./ScopeChanges";
 import { MonthRowEditor } from "./MonthRowEditor";
 import type { EditingValue } from "./MonthRowEditor";
-import { formatKrw, monthStates, verificationStates } from "./model";
+import { carriedNote, formatKrw, monthStates, verificationStates } from "./model";
 import type { MonthRecord, MonthValue } from "./model";
 
 function SnapshotList({
@@ -92,14 +92,7 @@ function SnapshotList({
                 </button>
               </div>
             )}
-            {row.origin === "carried" && (
-              <p className="muted">
-                이전 기록에서 불러온 금액이에요.
-                {row.verification_state === "carried_unconfirmed"
-                  ? " 이번 달 실제 값과 기준일을 확인해 주세요."
-                  : " 직접 확인을 마쳤어요."}
-              </p>
-            )}
+            {carriedNote(row) && <p className="muted">{carriedNote(row)}</p>}
             {row.change_reason && <p>값 변경 사유: {row.change_reason}</p>}
             <details className="record-details">
               <summary>이 기록의 소유·지분·보유기간</summary>

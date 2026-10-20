@@ -501,7 +501,9 @@ def synchronize_scope(
         value.source_asset_version = asset.version
         if changed:
             if different_basis:
+                # The cleared amount is no longer the carried one, so its origin goes too.
                 value.input_amount_krw = None
+                value.origin, value.origin_revision_id = "manual", None
             value.owned_amount_krw = (
                 None
                 if value.input_amount_krw is None

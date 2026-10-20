@@ -307,7 +307,11 @@ export async function mockMonths(page: Page) {
             source_asset_version: asset.version,
           });
           if (changed) {
-            if (basisChanged) row.input_amount_krw = null;
+            if (basisChanged) {
+              row.input_amount_krw = null;
+              row.origin = "manual";
+              row.origin_revision_id = null;
+            }
             row.owned_amount_krw =
               row.input_amount_krw === null
                 ? null

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import fixtures from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
 import {
+  carriedNote,
   formatKrw,
   monthEnd,
   ownedPreview,
@@ -8,6 +9,7 @@ import {
   previousMonth,
   valueInput,
 } from "../src/features/assets/months/model";
+import type { MonthValue } from "../src/features/assets/months/model";
 import { mockMonths, verifyAll } from "./support/months";
 import { uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -314,6 +316,22 @@ test("explicit scope synchronization clears amounts when whole and owned bases d
   expect(state.record!.values[0]!.verification_state).toBe("missing");
   expect(state.writes[0]?.operation).toBe("sync-scope");
   expect(state.writes[0]?.body.revision_id).toBe(uid(91));
+  expect(state.record!.values[0]!.origin).toBe("manual");
+  expect(state.record!.values[0]!.origin_revision_id).toBeNull();
+  await expect(page.getByText("직접 확인을 마쳤어요", { exact: false })).toHaveCount(0);
+});
+
+test("carried notes follow the verification state, including legacy cleared carried rows", () => {
+  const row = (
+    verification_state: MonthValue["verification_state"],
+    origin: MonthValue["origin"],
+  ) => ({ verification_state, origin }) as MonthValue;
+  expect(carriedNote(row("missing", "carried"))).toBeNull();
+  expect(carriedNote(row("carried_unconfirmed", "carried"))).toContain(
+    "이번 달 실제 값과 기준일을 확인해 주세요",
+  );
+  expect(carriedNote(row("verified", "carried"))).toContain("직접 확인을 마쳤어요");
+  expect(carriedNote(row("verified", "manual"))).toBeNull();
 });
 
 test("pagination refuses mixed revisions then loads one complete snapshot on explicit retry", async ({
