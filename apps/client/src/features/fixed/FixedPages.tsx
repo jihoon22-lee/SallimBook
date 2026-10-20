@@ -1,5 +1,5 @@
 import { TaskNotice, TaskPanel } from "../../shared/TaskLayout";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
 import { Link, useParams, useSearchParams } from "react-router";
@@ -779,12 +779,14 @@ function ObligationDetail({ id }: { id: string }) {
     setAction("");
     setVoiding(null);
     setExtraConfirmed(false);
-    if (params.has("task")) {
-      const next = new URLSearchParams(params);
-      next.delete("task");
-      setParams(next, { replace: true });
-    }
   }
+  // Drop ?task= only after the closed panel unmounts, so its unsaved guard is gone first.
+  useEffect(() => {
+    if (action || !params.has("task")) return;
+    const next = new URLSearchParams(params);
+    next.delete("task");
+    setParams(next, { replace: true });
+  }, [action, params, setParams]);
   function saved() {
     const message = voiding
       ? "납부 무효 처리를 저장했어요."

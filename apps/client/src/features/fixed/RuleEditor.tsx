@@ -20,6 +20,7 @@ import {
 import type { Rule, RuleDraft } from "./model";
 import { LiabilitySelect, PaymentMethod } from "./PaymentMethod";
 import { RuleSummary } from "./RuleSummary";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 const lastTerms = (row: Rule) =>
   [...row.versions].sort((a, b) => a.effective_from.localeCompare(b.effective_from)).at(-1)!;
 export function RuleCommandError({ error }: { error: ApiError | null }) {
@@ -42,6 +43,8 @@ export function WithdrawalNotice({ withdrawn }: { withdrawn: { effective_from: s
   );
 }
 export function RuleEditor({ initial }: { initial?: Rule }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useFixedApi();
   const navigate = useNavigate();
   const command = useMonthCommand();
@@ -94,8 +97,10 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         ? api.changeRule(base.id, changed, base.version, key, signal)
         : api.createRule(input, key, signal),
     );
-    if (result.ok && command.mounted.current) navigate(`/fixed-payments/rules/${result.value.id}`);
-    else if (!result.ok && result.error.code === "VERSION_CONFLICT") setConflict(true);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/fixed-payments/rules/${result.value.id}`, { replace: true });
+    } else if (!result.ok && result.error.code === "VERSION_CONFLICT") setConflict(true);
   }
   async function compare() {
     if (!base) return;
@@ -113,7 +118,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         짧은 달은 말일로 보정하고 다음 달에는 원래 기준일로 돌아와요. 주말·공휴일은 자동으로
         이동하지 않아요.
       </p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onInput={() => setDirty(true)} onSubmit={(event) => void submit(event)}>
         <fieldset disabled={command.busy}>
           <legend>반복 규칙</legend>
           <div className="form-grid">

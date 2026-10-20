@@ -21,6 +21,7 @@ import {
   MetadataFeedback,
   useMetadataCommand,
 } from "../InsuranceSupport";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 export type CaseDraft = {
   title: string;
   patient: string;
@@ -113,6 +114,8 @@ export function CaseSummary({
   );
 }
 export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const members = useHouseholdMembers();
   const api = useInsuranceApi();
   const navigate = useNavigate();
@@ -144,7 +147,10 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
           : api.createCase(input),
       !base,
     );
-    if (result && command.mounted.current) navigate(`/insurance/cases/${result.id}`);
+    if (result && command.mounted.current) {
+      guard.release();
+      navigate(`/insurance/cases/${result.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -169,7 +175,7 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
         여러 보험계약의 청구와 지급을 한 사건에 연결할 수 있어요. 치료 종료와 정산 종료는 각각
         기록해요.
       </p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>사건 내용</legend>
           <div className="form-grid">
@@ -307,6 +313,7 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
           </button>
           {!command.busy && (
             <Link
+              replace
               className="button-link secondary-button"
               to={base ? `/insurance/cases/${base.id}` : "/insurance/cases"}
             >

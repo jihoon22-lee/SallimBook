@@ -15,6 +15,7 @@ import { ActualFields, ExpenseSummary, CaseSelect } from "./EventSupport";
 import { actualDraft, actualInput, exactSum, needsCompare } from "./model";
 import type { ActualDraft } from "./model";
 import { useInsuranceEventsApi } from "./api";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 type Line = { label: string; amount: string; type: string };
 type Draft = {
   actual: ActualDraft;
@@ -86,6 +87,8 @@ export function ExpenseEditor({
   caseId?: string;
   nodeId?: string;
 }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useInsuranceEventsApi();
   const core = useInsuranceApi();
   const command = useMonthCommand();
@@ -134,7 +137,10 @@ export function ExpenseEditor({
           )
         : api.createMedicalExpense({ input, idempotencyKey: key }, signal),
     );
-    if (result.ok && command.mounted.current) navigate(`/insurance/expenses/${result.value.id}`);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/insurance/expenses/${result.value.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -149,7 +155,7 @@ export function ExpenseEditor({
     <section className="card">
       <h2>{base ? "의료비 원본 정정" : "실제 의료비 기록"}</h2>
       <RecordedMoneyNotice />
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>어떤 진료의 비용인가요</legend>
           <CaseSelect

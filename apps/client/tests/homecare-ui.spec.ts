@@ -89,6 +89,7 @@ test("metadata uncertain create requires checking list before another attempt", 
   await expect(page.getByRole("button", { name: "가전 등록", exact: true })).toBeDisabled();
   expect(state.appliances.filter((a) => a.name === "합성 응답 유실 제품")).toHaveLength(1);
   await page.getByRole("link", { name: "현재 목록", exact: true }).click();
+  await page.getByRole("button", { name: "입력 버리고 나가기", exact: true }).click();
   await expect(page.getByRole("link", { name: "합성 응답 유실 제품", exact: true })).toBeVisible();
 });
 test("consumable conflict merges threshold only while unit with existing stock history is rejected", async ({

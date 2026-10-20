@@ -564,7 +564,7 @@ function DeviceDetail({ id, replacing }: { id: string; replacing: boolean }) {
                     )
                   }
                   render={(current) => <DeviceStatus row={current} unit={data.consumable.unit} />}
-                  deleted={() => navigate(`/consumables/${data.consumable.id}`)}
+                  deleted={() => navigate(`/consumables/${data.consumable.id}`, { replace: true })}
                   listPath={`/consumables/${data.consumable.id}`}
                 />
               </details>
@@ -573,7 +573,7 @@ function DeviceDetail({ id, replacing }: { id: string; replacing: boolean }) {
           {replacing ? (
             <ReplacementEditor
               initial={data}
-              saved={() => navigate(`/appliance-consumables/${id}`)}
+              saved={() => navigate(`/appliance-consumables/${id}`, { replace: true })}
             />
           ) : (
             <>

@@ -19,8 +19,11 @@ import {
 } from "./HomecareSupport";
 import { DeviceStatus } from "./DeviceLinks";
 import { CancelStock, StockSummary } from "./StockPages";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 type Context = { link: DeviceLink; appliance: Appliance; consumable: Consumable };
 export function ReplacementEditor({ initial, saved }: { initial: Context; saved: () => void }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
   const command = useMonthCommand();
   const [base, setBase] = useState(initial);
@@ -65,7 +68,10 @@ export function ReplacementEditor({ initial, saved }: { initial: Context; saved:
         signal,
       ),
     );
-    if (result.ok && command.mounted.current) saved();
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      saved();
+    }
   }
   async function compare() {
     try {
@@ -87,7 +93,7 @@ export function ReplacementEditor({ initial, saved }: { initial: Context; saved:
         {base.appliance.name}에서 {base.consumable.name}을 실제 사용한 수량만 차감해요. 지난 주기를
         놓쳤더라도 놓친 횟수만큼 재고를 자동 차감하지 않아요.
       </p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset
           disabled={
             command.busy ||

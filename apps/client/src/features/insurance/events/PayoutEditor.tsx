@@ -14,6 +14,7 @@ import { ActualFields, CashSummary, CaseSelect, PolicySelect } from "./EventSupp
 import { actualDraft, actualInput, claimStates, exactSum, needsCompare } from "./model";
 import type { ActualDraft } from "./model";
 import { useInsuranceEventsApi } from "./api";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 export type AllocationDraft = {
   caseId: string;
   policyId: string;
@@ -219,6 +220,8 @@ export function PayoutEditor({
   policyId?: string;
   claimId?: string;
 }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useInsuranceEventsApi();
   const command = useMonthCommand();
   const navigate = useNavigate();
@@ -251,7 +254,10 @@ export function PayoutEditor({
           )
         : api.createInsurancePayout({ input, idempotencyKey: key }, signal),
     );
-    if (result.ok && command.mounted.current) navigate(`/insurance/payouts/${result.value.id}`);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/insurance/payouts/${result.value.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -270,7 +276,7 @@ export function PayoutEditor({
         입금 한 번을 원본 한 건으로 기록하고 사건별로 배분해요. 청구가 없어도 저장하고 나중에 같은
         배분을 청구에 연결할 수 있어요.
       </p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <ActualFields
           title="보험금 수령"
           draft={draft.actual}

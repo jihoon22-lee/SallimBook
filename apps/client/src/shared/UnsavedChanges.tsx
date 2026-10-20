@@ -55,7 +55,13 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
   );
   const open = blocker.state === "blocked";
   const stay = useCallback(() => blocker.reset?.(), [blocker]);
-  const leave = useCallback(() => blocker.proceed?.(), [blocker]);
+  const leave = useCallback(() => {
+    // The person chose to discard; the left screen's guards must not block a quick next
+    // navigation (e.g. back) before their unmount cleanup runs.
+    for (const entry of entries.current.values()) entry.dirty = false;
+    recount();
+    blocker.proceed?.();
+  }, [blocker, recount]);
 
   useEffect(() => {
     if (!dirtyCount) return;

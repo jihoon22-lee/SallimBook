@@ -12,6 +12,7 @@ import type { Schema } from "../model";
 import { ActualFields, CashSummary } from "./EventSupport";
 import { actualDraft, actualInput, eventNames, eventPaths, needsCompare } from "./model";
 import { useInsuranceEventsApi } from "./api";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 type Parent = Schema["ExpenseResponse"] | Schema["PayoutResponse"];
 type ReturnRow = Schema["RefundResponse"] | Schema["ReturnResponse"];
 export function ReturnEditor({
@@ -23,6 +24,8 @@ export function ReturnEditor({
   initialParent: Parent;
   initial?: ReturnRow;
 }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useInsuranceEventsApi();
   const command = useMonthCommand();
   const navigate = useNavigate();
@@ -111,8 +114,10 @@ export function ReturnEditor({
         ? api.correctInsuranceReturn(options, signal)
         : api.createInsuranceReturn(options, signal);
     });
-    if (result.ok && command.mounted.current)
-      navigate(`/insurance/${eventPaths[kind]}/${result.value.id}`);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/insurance/${eventPaths[kind]}/${result.value.id}`, { replace: true });
+    }
   }
   async function compare() {
     try {
@@ -142,7 +147,7 @@ export function ReturnEditor({
           : "보험사에 실제 돌려준 금액을 원래 입금의 사건별 배분에 연결해요."}
       </p>
       <CashSummary cash={parent.cash} />
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         {kind === "return" && (
           <div className="form-field">
             <label>

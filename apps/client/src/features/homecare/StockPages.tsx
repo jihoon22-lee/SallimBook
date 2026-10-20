@@ -18,6 +18,7 @@ import {
   recordedLabel,
   ResourceFeedback,
 } from "./HomecareSupport";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 export function StockSummary({ row }: { row: Consumable }) {
   return (
     <p>
@@ -139,6 +140,8 @@ export function StockMovements({ consumable }: { consumable: Consumable }) {
   );
 }
 function StockEditor({ initial }: { initial: Consumable }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
   const navigate = useNavigate();
   const command = useMonthCommand();
@@ -166,8 +169,10 @@ function StockEditor({ initial }: { initial: Consumable }) {
         signal,
       ),
     );
-    if (result.ok && command.mounted.current)
-      navigate(`/consumables/${stock.id}/stock/${result.value.id}`);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/consumables/${stock.id}/stock/${result.value.id}`, { replace: true });
+    }
   }
   async function compare() {
     try {
@@ -182,7 +187,7 @@ function StockEditor({ initial }: { initial: Consumable }) {
       <h2>입고·반품·재고 조정</h2>
       <StockSummary row={stock} />
       <p>구매한 날짜와 수량을 기록해요. 교체·재고 사용은 기기별 교체 화면에서 기록해 주세요.</p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy || stock.status !== "active"}>
           <legend>실제 재고 변화</legend>
           <div className="form-grid">

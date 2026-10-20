@@ -1,4 +1,4 @@
-import { TaskPanel } from "../../../shared/TaskLayout";
+import { TaskPanel, useTaskPanelRelease } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -124,6 +124,7 @@ function NodeEditor({
 }) {
   const api = useInsuranceApi();
   const command = useMetadataCommand();
+  const release = useTaskPanelRelease();
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() => draftOf(initial, parent, nodes));
   const [latest, setLatest] = useState<MedicalNode | null>(null);
@@ -150,7 +151,10 @@ function NodeEditor({
           : api.createNode(caseId, input),
       !base,
     );
-    if (result && command.mounted.current) saved(result.id);
+    if (result && command.mounted.current) {
+      release();
+      saved(result.id);
+    }
   }
   async function compare() {
     if (!base) return;
@@ -375,7 +379,7 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
       setDeleting(false);
       setAck(false);
       void list.reload();
-      navigate(`/insurance/cases/${caseId}`);
+      navigate(`/insurance/cases/${caseId}`, { replace: true });
     }
   }
   return (

@@ -18,6 +18,7 @@ import {
 } from "./model";
 import type { MonthRecord, MonthValue, ValueDraft } from "./model";
 import { useMonthCommand } from "./useMonthCommand";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 export type EditingValue = { revisionId: string; row: MonthValue };
 export function MonthRowEditor({
   month,
@@ -42,6 +43,8 @@ export function MonthRowEditor({
   const [latest, setLatest] = useState<MonthRecord | null>(null);
   const [ackScope, setAckScope] = useState(false);
   const [formError, setFormError] = useState("");
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChangesGuard(dirty);
   const section = useRef<HTMLElement>(null);
   useEffect(() => {
     section.current?.focus();
@@ -122,7 +125,11 @@ export function MonthRowEditor({
         {amountBases[base.row.amount_basis]} ·{" "}
         {base.row.inclusion_status === "included" ? "합계 포함" : "합계 제외"}
       </p>
-      <form className="finance-form" onSubmit={(event) => void submit(event)}>
+      <form
+        className="finance-form"
+        onInput={() => setDirty(true)}
+        onSubmit={(event) => void submit(event)}
+      >
         <fieldset className="finance-fields" disabled={command.busy}>
           <legend>확인한 금액과 날짜</legend>
           <div className="form-field">

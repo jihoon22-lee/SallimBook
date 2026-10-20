@@ -28,6 +28,7 @@ import { DeleteHomecare } from "./DeleteHomecare";
 import { DeviceLinks } from "./DeviceLinks";
 import { StockMovements } from "./StockPages";
 import { TodayConsumables } from "./TodayConsumables";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 export function ConsumableSummary({ row }: { row: Consumable }) {
   return (
     <>
@@ -71,6 +72,8 @@ export function ConsumableSummary({ row }: { row: Consumable }) {
   );
 }
 function ConsumableEditor({ initial }: { initial?: Consumable }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
   const navigate = useNavigate();
   const command = useMetadataCommand();
@@ -107,7 +110,10 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
           : api.createConsumable({ input }),
       !base,
     );
-    if (row && command.mounted.current) navigate(`/consumables/${row.id}`);
+    if (row && command.mounted.current) {
+      guard.release();
+      navigate(`/consumables/${row.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -137,7 +143,7 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
         처음에는 재고 0으로 등록돼요. 구매·기초 수량은 날짜와 함께 입고 또는 사유 있는 조정으로
         기록해 주세요.
       </p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>소모품 정보</legend>
           <div className="form-grid">
@@ -385,7 +391,7 @@ function ConsumableDetail({ id, edit }: { id: string; edit: boolean }) {
                   api.deleteConsumable({ consumableId: id, ifMatch: etag(current.version) }, signal)
                 }
                 render={(current) => <ConsumableSummary row={current} />}
-                deleted={() => navigate("/consumables")}
+                deleted={() => navigate("/consumables", { replace: true })}
                 listPath="/consumables?status=all"
               />
             </section>

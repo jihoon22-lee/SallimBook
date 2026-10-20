@@ -24,7 +24,10 @@ import {
 } from "./model";
 import type { Income, IncomeConversion, IncomeDraft } from "./model";
 import { IncomeFields } from "./IncomeFields";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 function ConversionWorkspace() {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useIncomeApi();
   const command = useMonthCommand();
   const navigate = useNavigate();
@@ -121,7 +124,10 @@ function ConversionWorkspace() {
     if (!payload || !sourceReady || !ack || !reason.trim() || sourceTotal !== replacementTotal)
       return;
     const result = await command.run((signal) => api.convert(payload, key, signal));
-    if (result.ok && command.mounted.current) navigate("/income");
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate("/income", { replace: true });
+    }
   }
   return (
     <>
@@ -227,7 +233,7 @@ function ConversionWorkspace() {
       {sourceReady && (
         <section className="card">
           <h2>{destination === "day" ? "실제 입금일별 기록으로 전환" : "월합계 기록으로 전환"}</h2>
-          <form onSubmit={(event) => void submit(event)}>
+          <form onInput={() => setDirty(true)} onSubmit={(event) => void submit(event)}>
             {replacements.map((draft, index) => (
               <section className="conversion-row" key={index} aria-label={`대체 수입 ${index + 1}`}>
                 <h3>대체 수입 {index + 1}</h3>

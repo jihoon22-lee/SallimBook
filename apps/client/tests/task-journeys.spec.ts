@@ -330,7 +330,7 @@ test("a claim starts from the case shortcut and references an existing expense w
   expect(state.expenses).toHaveLength(before);
 });
 
-test("a claim's receipt task retains its allocation context and can be cancelled without a write", async ({
+test("a claim's receipt task retains its allocation context and can be cancelled after confirming without a write", async ({
   page,
 }) => {
   const state = await mockInsuranceEvents(page);
@@ -346,7 +346,10 @@ test("a claim's receipt task retains its allocation context and can be cancelled
   );
   await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("50000");
   await page.getByRole("link", { name: "입력 취소", exact: true }).click();
+  await page.getByRole("button", { name: "입력 버리고 나가기", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/insurance/cases/${row.case_id}$`));
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/insurance/claims/${row.id}$`));
   expect(state.writes).toHaveLength(0);
 });
 

@@ -17,6 +17,7 @@ import {
 } from "../InsuranceSupport";
 import { policyDraft, policyInput } from "./model";
 import type { PolicyDraft } from "./model";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 export function PolicySummary({ row }: { row: Policy }) {
   const members = useHouseholdMembers();
   const name = (id: string | null | undefined) =>
@@ -86,6 +87,8 @@ export function PolicySummary({ row }: { row: Policy }) {
   );
 }
 export function PolicyEditor({ initial }: { initial?: Policy }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useInsuranceApi();
   const assetsApi = useAssetsApi();
   const navigate = useNavigate();
@@ -133,7 +136,10 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
           : api.createPolicy(input),
       !base,
     );
-    if (result && command.mounted.current) navigate(`/insurance/policies/${result.id}`);
+    if (result && command.mounted.current) {
+      guard.release();
+      navigate(`/insurance/policies/${result.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -165,7 +171,7 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
     <section className="card">
       <h2>보험 계약 기본정보</h2>
       <p>증권번호는 계약 저장 후 별도 보호 화면에서 관리해요.</p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>계약 내용</legend>
           <div className="form-grid">
@@ -297,6 +303,7 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
           </button>
           {!command.busy && (
             <Link
+              replace
               className="button-link secondary-button"
               to={base ? `/insurance/policies/${base.id}` : "/insurance/policies"}
             >

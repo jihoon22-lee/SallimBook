@@ -10,6 +10,7 @@ import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { isDateOnly, todaySeoul } from "../finance/dates";
 import type { Income, IncomeReturn } from "./model";
 import { useIncomeApi } from "./api";
+import { useTaskPanelRelease } from "../../shared/TaskLayout";
 export function IncomeCommand({
   initial,
   action,
@@ -23,6 +24,7 @@ export function IncomeCommand({
 }) {
   const api = useIncomeApi();
   const navigate = useNavigate();
+  const release = useTaskPanelRelease();
   const { month } = useMonth();
   const command = useMonthCommand();
   const [source, setSource] = useState(initial);
@@ -67,6 +69,7 @@ export function IncomeCommand({
         : api.return(source.id, body, source.version, key, signal),
     );
     if (result.ok && command.mounted.current) {
+      release();
       if (action === "return") navigate(`/income/${result.value.id}`);
       else onSaved();
     }

@@ -85,6 +85,25 @@ test("referenced card deletion is rejected while an unreferenced mistaken card c
   await page.getByRole("button", { name: "오등록 카드 삭제", exact: true }).click();
   await expect(page).toHaveURL(/\/cards$/);
   expect(state.cards.map((row) => row.id)).toEqual([uid(50)]);
+  await page.goBack();
+  await expect(page).not.toHaveURL(new RegExp(`/cards/${uid(55)}$`));
+});
+
+test("saving a new card does not prompt and back lands on the card list", async ({ page }) => {
+  const state = await mockCashflow(page);
+  await page.goto("/cards");
+  await page.getByRole("link", { name: "카드 등록", exact: true }).click();
+  await page.getByRole("combobox", { name: "카드 소유자", exact: true }).selectOption(uid(5));
+  await page.getByLabel("카드사", { exact: true }).fill("합성 새 카드사");
+  await page.getByLabel("카드명", { exact: true }).fill("합성 새 상품");
+  await page.getByLabel("카드 별칭", { exact: true }).fill("합성 통신 카드");
+  await page.getByRole("combobox", { name: "카드 결제계좌", exact: true }).selectOption(uid(30));
+  await page.getByRole("button", { name: "카드 등록 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "합성 통신 카드", exact: true })).toBeVisible();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/cards$/);
+  expect(state.writes).toHaveLength(1);
 });
 test("card closure shows every linked page and changing date clears acknowledgement before saving", async ({
   page,

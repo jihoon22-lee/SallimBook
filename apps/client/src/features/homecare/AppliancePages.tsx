@@ -28,6 +28,7 @@ import {
 import { DeleteHomecare } from "./DeleteHomecare";
 import { completeToday } from "./TodayConsumables";
 import { DeviceLinks } from "./DeviceLinks";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 export function ApplianceSummary({ row }: { row: Appliance }) {
   return (
     <>
@@ -82,6 +83,8 @@ export function ApplianceSummary({ row }: { row: Appliance }) {
   );
 }
 export function ApplianceEditor({ initial }: { initial?: Appliance }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
   const navigate = useNavigate();
   const command = useMetadataCommand();
@@ -118,7 +121,10 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
           : api.createAppliance({ input }),
       !base,
     );
-    if (row && command.mounted.current) navigate(`/appliances/${row.id}`);
+    if (row && command.mounted.current) {
+      guard.release();
+      navigate(`/appliances/${row.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -145,7 +151,7 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
     <section className="card">
       <h2>제품·구매·보증 정보</h2>
       <p>구매 금액은 자산과 수입·지출 기록에 자동 합산하지 않아요.</p>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>가전 정보</legend>
           <div className="form-grid">
@@ -410,7 +416,7 @@ function ApplianceDetail({ id, edit }: { id: string; edit: boolean }) {
                   api.deleteAppliance({ applianceId: id, ifMatch: etag(current.version) }, signal)
                 }
                 render={(current) => <ApplianceSummary row={current} />}
-                deleted={() => navigate("/appliances")}
+                deleted={() => navigate("/appliances", { replace: true })}
                 listPath="/appliances?status=all"
               />
             </section>

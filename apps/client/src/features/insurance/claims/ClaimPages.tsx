@@ -21,6 +21,7 @@ import { useInsuranceEventsApi } from "../events/api";
 import { CaseSelect, PolicySelect } from "../events/EventSupport";
 import { PayoutList } from "../events/EventPages";
 import { claimStates, needsCompare } from "../events/model";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 type Draft = {
   caseId: string;
   policyId: string;
@@ -137,6 +138,8 @@ export function ClaimEditor({
   caseId?: string;
   policyId?: string;
 }) {
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const api = useInsuranceEventsApi();
   const command = useMetadataCommand();
   const navigate = useNavigate();
@@ -186,7 +189,10 @@ export function ClaimEditor({
           : api.createInsuranceClaim({ input }),
       !base,
     );
-    if (result && command.mounted.current) navigate(`/insurance/claims/${result.id}`);
+    if (result && command.mounted.current) {
+      guard.release();
+      navigate(`/insurance/claims/${result.id}`, { replace: true });
+    }
   }
   async function compare() {
     if (!base) return;
@@ -208,7 +214,7 @@ export function ClaimEditor({
   return (
     <section className="card">
       <h2>{base ? "청구 상태·근거 정정" : "청구 기록"}</h2>
-      <form onSubmit={(e) => void submit(e)}>
+      <form onInput={() => setDirty(true)} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>청구와 근거</legend>
           {base ? (
@@ -381,6 +387,7 @@ export function ClaimEditor({
           </button>
           {!command.busy && (
             <Link
+              replace
               className="button-link secondary-button"
               to={
                 base
