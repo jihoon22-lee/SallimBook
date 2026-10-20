@@ -280,3 +280,51 @@ test("another month total still needs duplicate review during a correction", asy
   ).toBeVisible();
   expect(state.writes).toHaveLength(0);
 });
+
+async function loadConversion(page: Page) {
+  await page.goto("/income/convert");
+  await page.getByRole("combobox", { name: "전환 구성원", exact: true }).selectOption(uid(2));
+  await page.getByRole("button", { name: "원본 수입 전체 확인", exact: true }).click();
+  return page.getByRole("region", { name: "대체 수입 1", exact: true });
+}
+test("precision conversion keeps the shared account and note of its sources", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.incomes[0]!.note = "합성 급여 메모";
+  const first = await loadConversion(page);
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "3,000,000원 · 월합계" }),
+  ).toContainText("합성 개인 금융 자산 · 메모 합성 급여 메모");
+  await expect(first.getByRole("combobox", { name: "입금계좌", exact: true })).toHaveValue(uid(30));
+  // A filled textarea inside its label adds its value to the accessible name.
+  await expect(first.getByLabel("수입 메모")).toHaveValue("합성 급여 메모");
+  await first.getByLabel("실제 입금일", { exact: true }).fill("2025-02-10");
+  await page.getByLabel("전환 사유", { exact: true }).fill("합성 입금일 확인");
+  await page.getByLabel("원본 전체와 같은 합계의 대체 기록을 확인했어요.", { exact: true }).check();
+  await page.getByRole("button", { name: "합계를 유지하고 전환", exact: true }).click();
+  await expect(page).toHaveURL(/\/income$/);
+  expect(state.writes[0]!.body.replacements).toEqual([
+    expect.objectContaining({
+      amount_krw: "3000000",
+      occurred_on: "2025-02-10",
+      account_id: uid(30),
+      note: "합성 급여 메모",
+    }),
+  ]);
+});
+test("precision conversion leaves differing source accounts for the user to choose", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  state.incomes.push(incomeRow(45, { amount_krw: "500000", account_id: null }));
+  const first = await loadConversion(page);
+  await expect(first.getByRole("combobox", { name: "입금계좌", exact: true })).toHaveValue("");
+  await expect(
+    page.getByText(
+      "원본마다 계좌가 달라 대체 기록에 넣지 않았어요. 원본 목록을 보고 직접 입력해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: "500,000원 · 월합계" })).toContainText(
+    "계좌 연결 안 함",
+  );
+});

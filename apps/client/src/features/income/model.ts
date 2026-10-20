@@ -124,3 +124,20 @@ export function preserveIncomeChanges(
 export function conversionTotal(rows: { amount_krw: string }[]): string {
   return rows.reduce((sum, row) => sum + BigInt(row.amount_krw), 0n).toString();
 }
+/** Replacement drafts inherit an account or note only when every source agrees on it. */
+export function sharedSourceValues(rows: Income[]): {
+  account: string;
+  note: string;
+  mixed: ("account" | "note")[];
+} {
+  const accounts = new Set(rows.map((row) => row.account_id ?? ""));
+  const notes = new Set(rows.map((row) => row.note ?? ""));
+  return {
+    account: accounts.size === 1 ? [...accounts][0]! : "",
+    note: notes.size === 1 ? [...notes][0]! : "",
+    mixed: [
+      ...(accounts.size > 1 ? ["account" as const] : []),
+      ...(notes.size > 1 ? ["note" as const] : []),
+    ],
+  };
+}
