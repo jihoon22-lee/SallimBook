@@ -615,20 +615,24 @@ def list_nodes(session, principal, case_id, *, cursor=None, limit=50):
         _child(session, principal, MedicalNode, cursor, "case_id", case_id)
     # UUID remains the opaque cursor, but its current tree path determines page
     # membership. PostgreSQL orders parents before descendants and siblings by
-    # (sort_order, id), without fetching every clinical row into Python.
+    # (sort_order, start_on nulls last, created_at, id), without fetching every clinical
+    # row into Python. Record comparison puts a NULL start_on after dated siblings, the
+    # same way for ORDER BY and the cursor's ">".
     rows = list(
         session.scalars(
             select(MedicalNode).from_statement(
                 text("""
-                    WITH RECURSIVE tree(id, parent_id, sort_order) AS (
-                        SELECT id, parent_id, sort_order FROM medical_nodes
+                    WITH RECURSIVE tree(id, parent_id, sort_order, start_on, created_at) AS (
+                        SELECT id, parent_id, sort_order, start_on, created_at
+                        FROM medical_nodes
                         WHERE household_id = :household_id AND case_id = :case_id
                           AND parent_id IS NULL
                         UNION ALL
-                        SELECT n.id, n.parent_id, n.sort_order FROM medical_nodes n
+                        SELECT n.id, n.parent_id, n.sort_order, n.start_on, n.created_at
+                        FROM medical_nodes n
                         JOIN tree t ON n.parent_id = t.id
                         WHERE n.household_id = :household_id AND n.case_id = :case_id
-                    ) SEARCH DEPTH FIRST BY sort_order, id SET tree_path
+                    ) SEARCH DEPTH FIRST BY sort_order, start_on, created_at, id SET tree_path
                     SELECT n.* FROM tree t JOIN medical_nodes n ON n.id = t.id
                     WHERE CAST(:cursor AS uuid) IS NULL OR t.tree_path > (
                         SELECT tree_path FROM tree WHERE id = CAST(:cursor AS uuid)

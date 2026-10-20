@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from threading import Barrier, Event
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -685,13 +685,13 @@ class TestInsuranceCase:
             )
 
     @pytest.mark.parametrize("limit", [1, 2, 3])
-    def test_node_pages_follow_tree_order_with_uuid_ties(self, app, actors, limit):
+    def test_node_pages_follow_tree_order_with_date_and_creation_ties(self, app, actors, limit):
         actor = actors[0]
         with TestClient(app) as client:
             case = create(client, actor, "/cases", case_payload(actor))
             path = f"/cases/{case['id']}/nodes"
 
-            def node(order, parent=None):
+            def node(order, parent=None, start_on=None):
                 return create(
                     client,
                     actor,
@@ -701,15 +701,19 @@ class TestInsuranceCase:
                         "label": "합성 정렬 항목",
                         "sort_order": order,
                         "parent_id": parent,
+                        **({"start_on": start_on} if start_on else {}),
                     },
                 )
 
             last = node(1000000)
             first = node(0)
-            child_last = node(100, first["id"])
-            ties = sorted([node(2, first["id"]), node(2, first["id"])], key=lambda r: r["id"])
-            deep = node(1000000, ties[0]["id"])
-            expected = [first, ties[0], deep, ties[1], child_last, last]
+            later = node(5, first["id"], "2025-02-03")
+            undated_first = node(5, first["id"])
+            earlier = node(5, first["id"], "2025-02-01")
+            undated_second = node(5, first["id"])
+            low = node(1, first["id"])
+            deep = node(0, earlier["id"])
+            expected = [first, low, earlier, deep, later, undated_first, undated_second, last]
             actual, cursor = [], None
             for _ in range(len(expected) + 1):
                 query = {"limit": limit, **({"cursor": cursor} if cursor else {})}
@@ -729,6 +733,29 @@ class TestInsuranceCase:
             assert client.get(
                 BASE + path, params={"cursor": last["id"]}, headers=actor.headers
             ).json() == {"items": [], "next_cursor": None}
+
+    def test_same_transaction_siblings_fall_back_to_uuid(self, app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = create(client, actor, "/cases", case_payload(actor))
+            ids = sorted([uuid4(), uuid4()])
+            with Session(db_engine) as session:
+                session.add_all(
+                    MedicalNode(
+                        id=identifier,
+                        household_id=actor.household_id,
+                        case_id=UUID(case["id"]),
+                        created_by_member_id=actor.member_id,
+                        updated_by_member_id=actor.member_id,
+                        kind="group",
+                        label="합성 동시 항목",
+                        sort_order=0,
+                    )
+                    for identifier in reversed(ids)
+                )
+                session.commit()
+            listed = client.get(f"{BASE}/cases/{case['id']}/nodes", headers=actor.headers).json()
+            assert [row["id"] for row in listed["items"]] == [str(i) for i in ids]
 
     def test_node_cursor_is_scoped_and_order_changes_on_reload(self, app, actors):
         actor, _, foreign = actors
