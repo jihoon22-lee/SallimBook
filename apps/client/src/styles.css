@@ -88,6 +88,9 @@ p { margin-block: .65rem; }
 .asset-hero-change { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-size: .8125rem; }
 .asset-hero-change > span { color: var(--muted); }
 .asset-hero-change strong { color: var(--accent); font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.money-delta[data-sign="positive"] { color: var(--positive); }
+.money-delta[data-sign="negative"] { color: var(--danger); }
+.money-delta[data-sign="zero"], .money-delta[data-sign="unavailable"] { color: var(--foreground); }
 .asset-mini-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0 12px; padding-top: 15px; border-top: 1px solid var(--border); }
 .asset-mini-totals dt { color: var(--muted); font-size: .75rem; }
 .asset-mini-totals dd { margin: 3px 0 0; font-weight: 650; font-variant-numeric: tabular-nums; }

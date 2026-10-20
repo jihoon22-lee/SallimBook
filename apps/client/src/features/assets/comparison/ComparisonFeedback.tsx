@@ -3,8 +3,16 @@ import type { ApiError } from "../../../platform/api";
 import { formatMonth } from "../../../shared/MonthContext";
 import { FinanceError } from "../../finance/FinanceSupport";
 import { formatKrw, monthStates } from "../months/model";
-import { percentLabel, signedKrw } from "./model";
+import { deltaSign, percentLabel, signedKrw } from "./model";
 import type { Comparison } from "./model";
+/** Colors a net-asset change by its sign; the +/- text still carries the meaning. */
+export function DeltaText({ value, text }: { value: string | null; text: string }) {
+  return (
+    <span className="money-delta" data-sign={deltaSign(value)}>
+      {text}
+    </span>
+  );
+}
 export function ComparisonError({ error }: { error: ApiError | null }) {
   if (!error) return null;
   const messages: Partial<Record<ApiError["code"], string>> = {
@@ -75,20 +83,32 @@ export function ComparisonNumbers({ data }: { data: Comparison }) {
         <div>
           <dt>전체 순자산 변화</dt>
           <dd>
-            {data.total_delta_krw === null ? "비교할 수 없음" : signedKrw(data.total_delta_krw)}
+            <DeltaText
+              value={data.total_delta_krw}
+              text={
+                data.total_delta_krw === null ? "비교할 수 없음" : signedKrw(data.total_delta_krw)
+              }
+            />
           </dd>
         </div>
         <div>
           <dt>동일 범위 변화</dt>
           <dd>
-            {data.common_scope_delta_krw === null
-              ? "비교할 수 없음"
-              : signedKrw(data.common_scope_delta_krw)}
+            <DeltaText
+              value={data.common_scope_delta_krw}
+              text={
+                data.common_scope_delta_krw === null
+                  ? "비교할 수 없음"
+                  : signedKrw(data.common_scope_delta_krw)
+              }
+            />
           </dd>
         </div>
         <div>
           <dt>순자산 증감률</dt>
-          <dd>{percentLabel(data.change_percent)}</dd>
+          <dd>
+            <DeltaText value={data.change_percent} text={percentLabel(data.change_percent)} />
+          </dd>
         </div>
       </dl>
       <ComparisonNotes data={data} />

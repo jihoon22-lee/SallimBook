@@ -3,6 +3,7 @@ import { mockComparison } from "./support/comparison";
 import { uid } from "./support/finance";
 import {
   chartCoordinates,
+  deltaSign,
   monthsBefore,
   percentLabel,
   signedKrw,
@@ -247,3 +248,55 @@ for (const mode of ["available", "unconfirmed"] as const)
       await expect(page.getByText("합계 제외", { exact: true }).first()).toBeVisible();
     }
   });
+
+test("delta signs come from server decimal strings without numeric conversion", () => {
+  expect(["-1", "-0.01", "-99999999999999999999"].map(deltaSign)).toEqual([
+    "negative",
+    "negative",
+    "negative",
+  ]);
+  expect(["0", "0.00", "-0.00"].map(deltaSign)).toEqual(["zero", "zero", "zero"]);
+  expect(["1", "191.43", "99999999999999999999"].map(deltaSign)).toEqual([
+    "positive",
+    "positive",
+    "positive",
+  ]);
+  expect([null, "1e3", "1,000", ""].map(deltaSign)).toEqual([
+    "unavailable",
+    "unavailable",
+    "unavailable",
+    "unavailable",
+  ]);
+});
+
+test("net asset decreases are marked negative on home and comparison screens", async ({ page }) => {
+  const state = await mockComparison(page);
+  await page.clock.setFixedTime(new Date("2025-02-20T00:00:00Z"));
+  // Net assets 700원 → 40원.
+  state.after[0]!.owned_amount_krw = "0";
+  state.after[3]!.owned_amount_krw = "0";
+  await page.goto("/");
+  const hero = page.locator(".asset-hero-change .money-delta");
+  await expect(hero).toHaveText("-660원");
+  await expect(hero).toHaveAttribute("data-sign", "negative");
+  await expect(hero).toHaveCSS("color", "rgb(163, 53, 63)");
+  await page.goto(path);
+  await expect(
+    page.locator('.money-delta[data-sign="negative"]').filter({ hasText: "-660원" }),
+  ).toHaveCount(1);
+  // The joint home's net-asset effect.
+  await expect(
+    page.locator('.money-delta[data-sign="negative"]').filter({ hasText: "-500원" }),
+  ).toHaveCount(1);
+  // An asset increase and a liability decrease.
+  await expect(
+    page.locator('.money-delta[data-sign="positive"]').filter({ hasText: "+20원" }),
+  ).toHaveCount(2);
+  // A liability's own amount change is not colored.
+  await expect(page.locator(".money-delta").filter({ hasText: "-20원" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "월별 추이 금액 표" })
+      .getByRole("columnheader", { name: "관찰 금액", exact: true }),
+  ).toBeVisible();
+});

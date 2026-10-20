@@ -21,6 +21,7 @@ import {
   ComparisonError,
   ComparisonNumbers,
   ComparisonStatus,
+  DeltaText,
   PeriodLabels,
   ScopeWarning,
 } from "./ComparisonFeedback";
@@ -129,9 +130,14 @@ export function ComparisonItemCard({
         <div>
           <dt>순자산에 반영된 변화</dt>
           <dd>
-            {item.net_assets_effect_krw === null
-              ? "비교할 수 없음"
-              : signedKrw(item.net_assets_effect_krw)}
+            <DeltaText
+              value={item.net_assets_effect_krw}
+              text={
+                item.net_assets_effect_krw === null
+                  ? "비교할 수 없음"
+                  : signedKrw(item.net_assets_effect_krw)
+              }
+            />
           </dd>
         </div>
       </dl>

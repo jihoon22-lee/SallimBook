@@ -13,6 +13,13 @@ export function signedKrw(value: string | null): string {
     ? `+${formatKrw(value)}`
     : formatKrw(value);
 }
+export type DeltaSign = "positive" | "negative" | "zero" | "unavailable";
+/** Reads only the sign of a server decimal string; it is never converted to a number. */
+export function deltaSign(value: string | null): DeltaSign {
+  if (value === null || !/^-?[0-9]{1,20}(\.[0-9]{1,2})?$/.test(value)) return "unavailable";
+  if (/^-?[0.]+$/.test(value)) return "zero";
+  return value.startsWith("-") ? "negative" : "positive";
+}
 export function percentLabel(value: string | null): string {
   return value === null
     ? "계산하지 않음"

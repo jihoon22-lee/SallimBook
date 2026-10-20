@@ -14,7 +14,8 @@ import {
   ScopeWarning,
 } from "../assets/comparison/ComparisonFeedback";
 import { formatKrw, monthStates } from "../assets/months/model";
-import { percentLabel, signedKrw } from "../assets/comparison/model";
+import { deltaSign, percentLabel, signedKrw } from "../assets/comparison/model";
+import { DeltaText } from "../assets/comparison/ComparisonFeedback";
 import type { Comparison } from "../assets/comparison/model";
 function CurrentAssetSummary() {
   const api = useAssetComparisonApi();
@@ -90,7 +91,7 @@ function CurrentAssetSummary() {
             </strong>
             <div className="asset-hero-change">
               <span>전체 순자산 변화</span>
-              <strong>
+              <strong className="money-delta" data-sign={deltaSign(data.total_delta_krw)}>
                 {data.total_delta_krw === null ? "비교할 수 없음" : signedKrw(data.total_delta_krw)}
               </strong>
             </div>
@@ -149,14 +150,24 @@ function CurrentAssetSummary() {
                 <div>
                   <dt>동일 범위 변화</dt>
                   <dd>
-                    {data.common_scope_delta_krw === null
-                      ? "비교할 수 없음"
-                      : signedKrw(data.common_scope_delta_krw)}
+                    <DeltaText
+                      value={data.common_scope_delta_krw}
+                      text={
+                        data.common_scope_delta_krw === null
+                          ? "비교할 수 없음"
+                          : signedKrw(data.common_scope_delta_krw)
+                      }
+                    />
                   </dd>
                 </div>
                 <div>
                   <dt>순자산 증감률</dt>
-                  <dd>{percentLabel(data.change_percent)}</dd>
+                  <dd>
+                    <DeltaText
+                      value={data.change_percent}
+                      text={percentLabel(data.change_percent)}
+                    />
+                  </dd>
                 </div>
               </dl>
               <ScopeWarning data={data} />
