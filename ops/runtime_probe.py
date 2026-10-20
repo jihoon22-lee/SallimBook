@@ -48,6 +48,9 @@ def main():
     )
     assert Path("/run/secrets/field-keyring.json").stat().st_uid == 10001
     assert Path("/proc/mounts").read_text().find(" /tmp tmpfs ") >= 0
+    assert settings.document_inspector_socket == Path("/run/inspector/inspector.sock")
+    assert 10003 in os.getgroups()
+    health.check("inspector")
     deadline = time.monotonic() + 90
     while True:
         try:

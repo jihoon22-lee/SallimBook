@@ -1,84 +1,57 @@
-"""Test-only bridge to the pinned real document tools in a disposable container.
+"""Test-only real document tools in disposable containers: ClamAV and the isolated inspector.
 
-No production parser limits change. Restricted worker processes speak a private Unix
-socket instead of starting Go's Docker CLI under the 768MiB address-space limit.
-Only fixed OCR/render argv and bounded stdin/stdout cross this broker; never filenames,
-HTTP, caller commands, environment overrides, parser bypasses, or plaintext disk spools.
+No production parser limits change. The inspector container runs the production inspection
+server with the production memory limit and no network, capabilities or writable root, so
+OCR/render tools run as children of the RLIMIT-bounded worker exactly as deployed. Only a
+private Unix socket directory is shared with this process; never filenames, HTTP, caller
+commands, environment overrides, parser bypasses, or plaintext disk spools.
 """
 
-import json
+import importlib.util
 import os
 import re
-import socketserver
-import struct
 import subprocess
-import sys
 import tempfile
-import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
 from sallimbook.core.errors import DomainError
-from sallimbook.documents._validation_worker import ProcessFailure, bounded_process
-from sallimbook.documents.validation import check_scanner_availability
+from sallimbook.documents.validation import (
+    check_inspector_availability,
+    check_scanner_availability,
+)
 from test_document_tools import IMAGE, tool_lock
 
-MAX_PIPE = 48_001_024
-WRAPPER = '''#!{python}
-import json, socket, struct, sys
-MAX = 48001024
-def receive(sock, count):
-    result = bytearray()
-    while len(result) < count:
-        block = sock.recv(min(65536, count-len(result)))
-        if not block: raise RuntimeError()
-        result.extend(block)
-    return bytes(result)
-try:
-    header = json.dumps(["{tool}", *sys.argv[1:]], separators=(",", ":")).encode()
-    if len(header) > 512: raise RuntimeError()
-    data = sys.stdin.buffer.read(MAX+1)
-    if len(data) > MAX: raise RuntimeError()
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(9)
-        sock.connect({socket!r})
-        sock.sendall(struct.pack("!II",len(header),len(data))+header+data)
-        size = struct.unpack("!I", receive(sock,4))[0]
-        if size > MAX: raise RuntimeError()
-        sys.stdout.buffer.write(receive(sock,size))
-except BaseException:
-    sys.exit(1)
-'''
+# Scripts run without the repository root on the import path; ops/deploy.py is stdlib-only.
+_deploy_spec = importlib.util.spec_from_file_location(
+    "sallimbook_ops_deploy", Path(__file__).resolve().parents[1] / "ops/deploy.py"
+)
+_deploy = importlib.util.module_from_spec(_deploy_spec)
+_deploy_spec.loader.exec_module(_deploy)
+INSPECTOR_MEMORY = _deploy.INSPECTOR_MEMORY
+LABEL = "io.sallimbook.purpose=document-https-test"
 
 
-def receive(connection, count):
-    result = bytearray()
-    while len(result) < count:
-        block = connection.recv(min(65536, count - len(result)))
-        if not block:
-            raise ValueError
-        result.extend(block)
-    return bytes(result)
+def _wait_ready(check, path, message):
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        try:
+            check(str(path))
+            return
+        except DomainError:
+            time.sleep(0.2)
+    raise RuntimeError(message)
 
 
-def allowed(arguments):
-    if arguments == ["tesseract", "--list-langs"]:
-        return "/usr/bin/tesseract", 8192
-    if arguments == [
-        "tesseract", "stdin", "stdout", "-l", "eng+kor", "--psm", "11", "--dpi", "200", "tsv"
-    ]:
-        return "/usr/bin/tesseract", 2 * 1024 * 1024
-    if (
-        len(arguments) == 9
-        and arguments[0:2] == ["pdftoppm", "-f"]
-        and re.fullmatch(r"(?:[1-9]|1[0-9]|20)", arguments[2])
-        and arguments[3:5] == ["-l", arguments[2]]
-        and arguments[5:] == ["-r", "200", "-singlefile", "-"]
-    ):
-        return "/usr/bin/pdftoppm", MAX_PIPE
-    raise ValueError
+def _start(arguments):
+    container = subprocess.check_output(
+        ["docker", "run", "--detach", *arguments], text=True, stderr=subprocess.DEVNULL
+    ).strip()
+    if not re.fullmatch(r"[a-f0-9]{64}", container):
+        raise RuntimeError("Private test container unavailable")
+    return container
 
 
 @contextmanager
@@ -95,75 +68,51 @@ def document_runtime():
         ).strip()
         if not re.fullmatch(r"sha256:[a-f0-9]{64}", image):
             raise RuntimeError("Pinned test tool image unavailable")
-        container = None
-        broker = None
-        thread = None
+        containers = []
         try:
             uid, gid = os.getuid(), os.getgid()
-            container = subprocess.check_output([
-                "docker", "run", "--detach", "--name", "sallimbook-document-https-" + uuid4().hex,
-                "--label", "io.sallimbook.purpose=document-https-test", "--network", "none",
-                "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                "--user", f"{uid}:{gid}", "--memory", "4g", "--memory-swap", "4g", "--cpus", "2",
-                "--pids-limit", "64", "--ulimit", "core=0", "--mount",
-                f"type=bind,src={socket_dir},dst=/run/sallimbook",
+            isolated = [
+                "--label", LABEL, "--network", "none", "--read-only", "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges", "--user", f"{uid}:{gid}",
+                "--ulimit", "core=0", "--mount", f"type=bind,src={socket_dir},dst=/run/sallimbook",
+            ]
+            containers.append(_start([
+                "--name", "sallimbook-document-https-" + uuid4().hex, *isolated,
+                "--memory", "4g", "--memory-swap", "4g", "--cpus", "2", "--pids-limit", "64",
                 "--tmpfs", f"/run/sallimbook/spool:rw,noexec,nosuid,nodev,size=96m,mode=0700,uid={uid},gid={gid}",
                 image, "/usr/local/sbin/clamd", "--config-file=/etc/sallimbook/clamd.conf",
-            ], text=True, stderr=subprocess.DEVNULL).strip()
-            if not re.fullmatch(r"[a-f0-9]{64}", container):
-                raise RuntimeError("Private test container unavailable")
-            deadline = time.monotonic() + 60
+            ]))
             scanner_socket = socket_dir / "clamd.sock"
-            while time.monotonic() < deadline:
-                try:
-                    check_scanner_availability(str(scanner_socket))
-                    break
-                except DomainError:
-                    time.sleep(0.2)
-            else:
-                raise RuntimeError("Real document scanner did not become ready")
+            _wait_ready(
+                check_scanner_availability, scanner_socket,
+                "Real document scanner did not become ready",
+            )
             info = scanner_socket.stat()
             if info.st_uid != uid or info.st_mode & 0o777 != 0o600:
                 raise RuntimeError("Private scanner permissions changed")
-
-            class Handler(socketserver.BaseRequestHandler):
-                def handle(self):
-                    try:
-                        self.request.settimeout(10)
-                        header_size, data_size = struct.unpack("!II", receive(self.request, 8))
-                        if not 1 <= header_size <= 512 or data_size > MAX_PIPE:
-                            return
-                        arguments = json.loads(receive(self.request, header_size))
-                        if not isinstance(arguments, list) or any(not isinstance(x, str) for x in arguments):
-                            return
-                        binary, maximum = allowed(arguments)
-                        data = receive(self.request, data_size)
-                        output = bounded_process(
-                            ["/usr/bin/docker", "exec", "-i", "-e", "OMP_THREAD_LIMIT=1", container, binary, *arguments[1:]],
-                            data, timeout=8, output_limit=maximum, new_session=True,
-                        )
-                        self.request.sendall(struct.pack("!I", len(output)) + output)
-                    except (OSError, ValueError, TypeError, struct.error, ProcessFailure):
-                        # Input, OCR text, command errors, and private paths are never logged.
-                        return
-
-            broker_socket = private / "broker.sock"
-            broker = socketserver.UnixStreamServer(str(broker_socket), Handler)
-            broker_socket.chmod(0o600)
-            thread = threading.Thread(target=broker.serve_forever, daemon=True)
-            thread.start()
-            wrappers = {}
-            for tool in ("tesseract", "pdftoppm"):
-                wrapper = private / tool
-                wrapper.write_text(WRAPPER.format(python=sys.executable, tool=tool, socket=str(broker_socket)))
-                wrapper.chmod(0o700)
-                wrappers[tool] = wrapper
-            yield { "document_scanner_socket": scanner_socket, "document_tesseract_path": wrappers["tesseract"], "document_pdftoppm_path": wrappers["pdftoppm"] }
+            containers.append(_start([
+                "--name", "sallimbook-document-https-inspector-" + uuid4().hex, *isolated,
+                "--memory", INSPECTOR_MEMORY, "--memory-swap", INSPECTOR_MEMORY,
+                "--pids-limit", "32",
+                "--tmpfs", f"/tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid={uid},gid={gid}",
+                image, "python", "-B", "-m", "sallimbook.documents.inspector",
+                "--socket", "/run/sallimbook/inspector.sock",
+            ]))
+            inspector_socket = socket_dir / "inspector.sock"
+            _wait_ready(
+                check_inspector_availability, inspector_socket,
+                "Isolated document inspector did not become ready",
+            )
+            info = inspector_socket.stat()
+            if info.st_uid != uid or info.st_mode & 0o777 != 0o660:
+                raise RuntimeError("Private inspector permissions changed")
+            yield {
+                "document_scanner_socket": scanner_socket,
+                "document_inspector_socket": inspector_socket,
+            }
         finally:
-            if broker:
-                broker.shutdown()
-                broker.server_close()
-            if thread:
-                thread.join(timeout=2)
-            if container:
-                subprocess.run(["docker", "rm", "--force", container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            for container in containers:
+                subprocess.run(
+                    ["docker", "rm", "--force", container],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+                )

@@ -1,4 +1,4 @@
-"""Run actual API/scanner/DB in a new disposable Compose project with no host ports."""
+"""Run actual API/scanner/inspector/DB in a new disposable Compose project with no host ports."""
 
 import argparse
 import json
@@ -47,13 +47,13 @@ def main(image):
         else:
             raise AssertionError("Actual image accepted a mismatched revision or role")
     image_id = inspected["Id"]
-    for mode in ("scanner", "api"):
+    for mode in ("scanner", "inspector", "api"):
         cold = subprocess.run(
             ["docker", "run", "--rm", "--network", "none", "--read-only",
              "--entrypoint", "python", image_id, "-m", "ops.health", mode],
             capture_output=True, timeout=15, check=False,
         )
-        assert cold.returncode == 1, "Cold scanner unexpectedly passed readiness"
+        assert cold.returncode == 1, "Cold readiness unexpectedly passed: " + mode
     project = "sallimbook-ops-smoke-" + uuid4().hex[:12]
     with tempfile.TemporaryDirectory(prefix=project + "-") as temporary:
         directory = Path(temporary)
@@ -103,9 +103,9 @@ def main(image):
         }
         production = render(config)["compose.json"]
         services = {
-            name: production["services"][name] for name in ("api", "db", "scanner")
+            name: production["services"][name] for name in ("api", "db", "scanner", "inspector")
         }
-        for name in ("api", "scanner"):
+        for name in ("api", "scanner", "inspector"):
             services[name]["image"] = image_id
             services[name]["restart"] = "no"
             services[name]["healthcheck"]["interval"] = "1s"
@@ -119,6 +119,7 @@ def main(image):
             "synthetic_secrets:/run/secrets:ro",
             "synthetic_documents:/srv/documents",
             "scanner_socket:/run/scanner:ro",
+            "inspector_socket:/run/inspector:ro",
         ]
         services["db"]["environment"]["POSTGRES_DB"] = database
         services["db"]["healthcheck"]["test"][-1] = database
@@ -211,6 +212,9 @@ p.chmod(0o600); os.chown(p,10001,10001)
                 for name in (
                     "db_data",
                     "scanner_socket",
+                    # Not mounted by init: like production, the empty volume takes the
+                    # image directory's owner and mode, which the inspector probe checks.
+                    "inspector_socket",
                     "synthetic_secrets",
                     "synthetic_documents",
                     "operator_secrets",
@@ -222,7 +226,7 @@ p.chmod(0o600); os.chown(p,10001,10001)
         command = ["docker", "compose", "-p", project, "-f", str(compose_file)]
         try:
             run(command + ["run", "--rm", "init"])
-            run(command + ["up", "-d", "--wait", "db", "scanner"])
+            run(command + ["up", "-d", "--wait", "db", "scanner", "inspector"])
             run(command + ["run", "--rm", "--no-deps", "migrate"])
             run(command + ["run", "--rm", "--no-deps", "provision"])
             run(command + ["run", "--rm", "--no-deps", "privilege_probe"], report=True)
@@ -231,18 +235,53 @@ p.chmod(0o600); os.chown(p,10001,10001)
                 command + ["exec", "-T", "api", "python", "-m", "ops.runtime_probe"],
                 report=True,
             )
-            for name in ("api", "scanner"):
+            run(
+                command + ["exec", "-T", "inspector", "python", "-B", "-m", "ops.inspector_probe"],
+                report=True,
+            )
+            for name in ("api", "scanner", "inspector"):
                 identifier = run(command + ["ps", "-q", name]).strip()
                 state = json.loads(run(["docker", "inspect", identifier]))[0]
-                assert state["Config"]["User"] == "10001:10001"
                 assert state["HostConfig"]["ReadonlyRootfs"] is True
                 assert (
                     state["HostConfig"]["Memory"] == state["HostConfig"]["MemorySwap"]
                 )
                 assert not state["HostConfig"]["PortBindings"]
                 assert state["State"]["Health"]["Status"] == "healthy"
-            run(command + ["stop", "scanner"])
+                if name == "inspector":
+                    assert state["Config"]["User"] == "10002:10003"
+                    assert state["HostConfig"]["NetworkMode"] == "none"
+                    assert state["HostConfig"]["PidsLimit"] == 32
+                    assert not state["HostConfig"]["Binds"]
+                    # The /tmp tmpfs is in HostConfig.Tmpfs, not in Mounts.
+                    assert {m["Destination"] for m in state["Mounts"]} == {"/run/inspector"}
+                else:
+                    assert state["Config"]["User"] == "10001:10001"
+                if name == "api":
+                    assert state["HostConfig"]["GroupAdd"] == ["10003"]
             api_id = run(command + ["ps", "-q", "api"]).strip()
+            # 64 MiB blocks of b"x" touch every page, so the cgroup limit (not malloc
+            # overcommit refusal) must stop this synthetic hog.
+            hog = subprocess.run(
+                command + ["exec", "-T", "inspector", "python", "-c",
+                           "blocks = [b'x' * (64 * 1024 ** 2) for _ in range(64)]"],
+                capture_output=True, timeout=120, check=False,
+            )
+            assert hog.returncode == 137, "Inspector memory limit did not stop the hog"
+            api_state = json.loads(run(["docker", "inspect", api_id]))[0]
+            assert api_state["State"]["OOMKilled"] is False
+            assert api_state["RestartCount"] == 0
+            assert api_state["State"]["Health"]["Status"] == "healthy"
+            inspector_id = run(command + ["ps", "-q", "inspector"]).strip()
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                state = json.loads(run(["docker", "inspect", inspector_id]))[0]
+                if state["State"]["Running"] and state["State"]["Health"]["Status"] == "healthy":
+                    break
+                time.sleep(0.25)
+            else:
+                raise AssertionError("Inspector server did not survive the hog")
+            run(command + ["stop", "scanner"])
             deadline = time.monotonic() + 20
             while time.monotonic() < deadline:
                 state = json.loads(run(["docker", "inspect", api_id]))[0]
@@ -265,8 +304,31 @@ p.chmod(0o600); os.chown(p,10001,10001)
                 time.sleep(0.25)
             else:
                 raise AssertionError("API readiness did not recover with the scanner")
+            run(command + ["stop", "inspector"])
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                state = json.loads(run(["docker", "inspect", api_id]))[0]
+                if state["State"]["Health"]["Status"] == "unhealthy":
+                    break
+                time.sleep(0.25)
+            else:
+                raise AssertionError("API stayed healthy after the inspector stopped")
+            run(command + ["exec", "-T", "api", "python", "-c", (
+                "import urllib.request; "
+                "urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready').close()"
+            )])
+            run(command + ["up", "-d", "--wait", "--wait-timeout", "120", "inspector"])
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                state = json.loads(run(["docker", "inspect", api_id]))[0]
+                if state["State"]["Health"]["Status"] == "healthy":
+                    break
+                time.sleep(0.25)
+            else:
+                raise AssertionError("API readiness did not recover with the inspector")
             print(
                 "PASS: image startup/migration/readiness, scanner-down unhealthy/recovery, "
+                "inspector isolation/memory containment/down-recovery, "
                 "production UID/mount/memory; no published ports, node, real account, or real key"
             )
         finally:

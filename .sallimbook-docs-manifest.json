@@ -298,8 +298,8 @@
       "git_sha1": "4bc2919e44d4c6fa082ca6f50d4007e95ad11221"
     },
     "scripts/test_document_runtime.py": {
-      "sha256": "a88659c4df7d11862f893fdc72cab1175b5acf0a1b70a513dc14a0bf88cf6b92",
-      "git_sha1": "8d7f77e4d155e2921f883cc7ba87a3e4a3066ac0"
+      "sha256": "3b75da1ec5812521e4fae37adccbdba54a5dc4f3711d44e5d2b7a3cdf8571513",
+      "git_sha1": "6cbccd7d8c5cdf5f886b5431334a815240342ebd"
     },
     "docs/testing/vault-overview.md": {
       "sha256": "546db5996e046fc5b32c1df3a09d6b87d104f42216a87db1593df99bb6eb7e83",
