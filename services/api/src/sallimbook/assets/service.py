@@ -29,6 +29,7 @@ from sallimbook.cashflow.payment_links import require_closure
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.service import utcnow
@@ -156,12 +157,17 @@ def list_assets(
         query = query.where(Asset.archived_at.is_(None))
     elif status == "archived":
         query = query.where(Asset.archived_at.is_not(None))
-    if cursor is not None:
-        query = query.where(Asset.id < cursor)
-    rows = list(session.scalars(query.order_by(Asset.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=Asset,
+        household_id=principal.household_id,
+        keys=(Asset.created_at,),
+        cursor=cursor,
+        limit=limit,
+    )
     result = AssetListResponse(
-        items=[asset_response(asset) for asset in rows[:limit]],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        items=[asset_response(asset) for asset in rows], next_cursor=next_cursor
     )
     session.commit()
     return result

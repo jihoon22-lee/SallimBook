@@ -12,7 +12,9 @@ from pydantic import ValidationError
 from sqlalchemy import event, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from test_accounts import create_account, make_actor
+from test_accounts import asset_payload, create_account, make_actor
+from test_income import make_account
+from test_pagination import api_pages, ids, pairs
 
 from sallimbook.accounts.router import router as account_router
 from sallimbook.assets.router import router as asset_router
@@ -444,3 +446,20 @@ def test_card_page_loads_account_statuses_in_one_batch(client, actor, db_engine)
     rows = response.json()["items"]
     assert len(rows) == 6
     assert sum(row["settlement_account_status"] == "closed" for row in rows) == 3
+
+
+def post_asset(client, actor, n):
+    response = client.post(
+        "/api/v1/assets", headers=actor.headers, json=asset_payload(name=f"합성 자산 {n}")
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def test_asset_account_and_card_lists_are_newest_first_across_pages(client, actor, db_engine):
+    assets = [post_asset(client, actor, n) for n in range(5)]
+    assert ids(api_pages(client, actor, "/api/v1/assets")) == pairs(assets[::-1])
+    accounts = [str(make_account(db_engine, actor).id) for _ in range(5)]
+    assert ids(api_pages(client, actor, "/api/v1/accounts")) == pairs(accounts[::-1])
+    cards = [create_card(client, actor)["id"] for _ in range(5)]
+    assert ids(api_pages(client, actor, "/api/v1/cards")) == pairs(cards[::-1])
