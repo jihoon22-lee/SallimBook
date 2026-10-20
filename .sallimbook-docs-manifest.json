@@ -74,8 +74,8 @@
       "git_sha1": "6962066cb0c4992a50cc7995dbc1971dde92e704"
     },
     "docs/security-authentication.md": {
-      "sha256": "e3f9db7cfbad0538e708ff1068fb0cdc82340b08f037e6a8baeb47fbb9b51182",
-      "git_sha1": "d3e14aaf28de08e7fa1223f61f6d5f3f2f467e18"
+      "sha256": "757b1a2e0596afb6dc5d1d50efac340da0b28bad5e4f605eb102218413c177d5",
+      "git_sha1": "0ff1493a52719d41cff0e494bbdb4760e31458ac"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -286,8 +286,8 @@
       "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
     },
     "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "5f0d2f7e8b524085404ed176a5140b0db7e99b11e50861743c83bbf82e54f86c",
-      "git_sha1": "b3212efcd703aadeb676be25602c455480f5aca2"
+      "sha256": "f6555ef579f392a3b15bab5fb4be957638199bf8e131953655884bfe7aee72e1",
+      "git_sha1": "74009062a4aeaf305131c0cf5f2e84a81618c03f"
     },
     "docs/testing/homecare-client.md": {
       "sha256": "aa1d5ca629bdd35c14b589f33d6783f2a90e08136ece569e2fef4ee4ef449920",
