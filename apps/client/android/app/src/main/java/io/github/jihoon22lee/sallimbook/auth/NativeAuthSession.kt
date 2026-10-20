@@ -224,7 +224,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                     .put("device_label", deviceLabel)
                 password.fill('\u0000')
                 val response = http.send("POST", "/api/v1/auth/native/login", gate, body = payload)
-                if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
+                if (response.status != 200) throw AuthFailure(AuthPolicy.credentialFailure(response.status))
                 acceptTokens(response.body, gate)
                 appLock.finishServerAuthentication(gate)
                 AuthOutcome.success(mapOf("status" to "authenticated"))
@@ -258,7 +258,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                     clearLocal()
                     throw AuthFailure(AuthCode.SESSION_EXPIRED)
                 }
-                if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
+                if (response.status != 200) throw AuthFailure(AuthPolicy.credentialFailure(response.status))
                 AuthPolicy.metadataBody("GET", "/api/v1/me", response.status, response.body)
                 gate.check()
                 appLock.finishServerAuthentication(gate)

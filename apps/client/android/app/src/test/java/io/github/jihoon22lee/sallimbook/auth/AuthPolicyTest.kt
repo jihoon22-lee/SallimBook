@@ -170,4 +170,10 @@ class AuthPolicyTest {
             } catch (failure: AuthFailure) { assertEquals(AuthCode.ACCESS_DENIED, failure.code) }
         }
     }
+
+    @Test fun credentialFailuresSeparateRateLimitAndOutageFromWrongCredentials() {
+        assertEquals(AuthCode.RATE_LIMITED, AuthPolicy.credentialFailure(429))
+        for (status in listOf(500, 502, 503)) assertEquals(AuthCode.NETWORK_UNAVAILABLE, AuthPolicy.credentialFailure(status))
+        for (status in listOf(400, 401, 403, 422)) assertEquals(AuthCode.AUTH_FAILED, AuthPolicy.credentialFailure(status))
+    }
 }
