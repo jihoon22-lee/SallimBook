@@ -432,10 +432,10 @@ test("asset and card closure commands preserve explicit confirmation and digest"
       const source = "/src/platform/nativeFinance.ts";
       const { nativeFinance } = await import(source);
       const input = { ended_on: "2026-01-31", closure_ack: true, usage_digest: "b".repeat(64) };
-      await nativeFinance.updateAsset(id, input, '\"7\"');
-      await nativeFinance.archiveAsset(id, input, '\"7\"');
-      await nativeFinance.updateCard({ cardId: id, input, ifMatch: '\"7\"' });
-      await nativeFinance.archiveCard({ cardId: id, input, ifMatch: '\"7\"' });
+      await nativeFinance.updateAsset(id, input, '"7"');
+      await nativeFinance.archiveAsset(id, input, '"7"');
+      await nativeFinance.updateCard({ cardId: id, input, ifMatch: '"7"' });
+      await nativeFinance.archiveCard({ cardId: id, input, ifMatch: '"7"' });
       const state = (
         window as unknown as {
           __cashflowBridge: { calls: { method: string; args: unknown }[]; http: number };
@@ -446,10 +446,10 @@ test("asset and card closure commands preserve explicit confirmation and digest"
     { id },
   );
   expect(result.calls).toEqual([
-    { method: "updateAsset", args: { assetId: id, input: result.input, ifMatch: '\"7\"' } },
-    { method: "archiveAsset", args: { assetId: id, input: result.input, ifMatch: '\"7\"' } },
-    { method: "updateCard", args: { cardId: id, input: result.input, ifMatch: '\"7\"' } },
-    { method: "archiveCard", args: { cardId: id, input: result.input, ifMatch: '\"7\"' } },
+    { method: "updateAsset", args: { assetId: id, input: result.input, ifMatch: '"7"' } },
+    { method: "archiveAsset", args: { assetId: id, input: result.input, ifMatch: '"7"' } },
+    { method: "updateCard", args: { cardId: id, input: result.input, ifMatch: '"7"' } },
+    { method: "archiveCard", args: { cardId: id, input: result.input, ifMatch: '"7"' } },
   ]);
   expect(result.http).toBe(0);
 });
