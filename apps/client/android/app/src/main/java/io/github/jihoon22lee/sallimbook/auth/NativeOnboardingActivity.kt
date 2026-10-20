@@ -130,7 +130,7 @@ class NativeOnboardingActivity : AppCompatActivity() {
         passwordLabel = passwordField.first; password = passwordField.second
         if (enrollment(mode)) confirmation = field("새 비밀번호 확인", true).second
         else { passwordLabel.visibility = View.GONE; password.visibility = View.GONE }
-        codeText = label("").apply { setTextIsSelectable(false); isLongClickable = false; freezesText = false }
+        codeText = NativeSecretViews.sensitive(label("")).apply { setTextIsSelectable(false); isLongClickable = false; freezesText = false }
         status = label("")
         submit = Button(this).apply {
             text = when (mode) { SETUP -> "가계 만들고 시작"; CONNECT -> "연결하고 시작"; else -> "연결 코드 만들기" }

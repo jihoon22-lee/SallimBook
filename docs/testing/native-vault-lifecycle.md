@@ -92,7 +92,9 @@ CVC는 별도 키·AAD를 사용하며 card ID와 **현재 secret envelope ID/re
 복구코드는 저장하지 않는다. 파일명과 키 별칭은 scope digest를 사용하며 카드 일반 metadata 수정만으로
 CVC를 지우지 않는다. PAN 수정·비밀 purge·현재 키 변경은 stale CVC를 폐기한다.
 
-로그아웃·세션/기기 접근 상실 시 전용 보관함 별칭과 파일을 제거하고 앱을 잠근다.
+로그아웃 또는 서버 401로 확인한 세션/기기 접근 상실 시 전용 보관함 별칭과 파일을 제거하고 앱을 잠근다.
+refresh의 일시적 실패와 응답 불명확은 로컬 자료를 지우지 않는다. 재로그인으로 기기 scope가 바뀌면 다음 fresh 상태 확인의 `reconcile`이 이전 scope 자료를 폐기한다.
+개별 대상 403(`VAULT_ACCESS_DENIED`, 예: 다른 구성원의 공유 요청)은 fresh 상태를 다시 조회해 본인 membership이 active가 아니거나 보관함이 초기화되지 않았을 때만 폐기한다.
 fresh 상태에서 membership 철회·계정/기기/scope 변경을 발견하면 이전 로컬 자료를 폐기한다.
 기기 키 원본을 다른 기기로 복사하지 않으며 오프라인 사본의 원격 삭제를 보장하지 않는다.
 allowBackup=false, fullBackupContent=false와 cloud/device-transfer 제외 규칙을 유지한다.

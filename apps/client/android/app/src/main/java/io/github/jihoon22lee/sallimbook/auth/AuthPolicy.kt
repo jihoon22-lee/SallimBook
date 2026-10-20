@@ -6,6 +6,13 @@ import java.time.OffsetDateTime
 
 /** Pure policy only. It does not authenticate a user, a web frame, or a device. */
 internal object AuthPolicy {
+    /** Login/reauthentication refusals: a rate limit or outage must not read as a wrong password. */
+    fun credentialFailure(status: Int): AuthCode = when (status) {
+        429 -> AuthCode.RATE_LIMITED
+        in 500..599 -> AuthCode.NETWORK_UNAVAILABLE
+        else -> AuthCode.AUTH_FAILED
+    }
+
     private val uuid = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
     private val version = Regex("\"[1-9][0-9]{0,18}\"")
     private val forbiddenFields = listOf(

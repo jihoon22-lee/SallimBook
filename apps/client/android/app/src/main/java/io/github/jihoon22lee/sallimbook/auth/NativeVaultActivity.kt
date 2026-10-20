@@ -130,7 +130,7 @@ class NativeVaultActivity : AppCompatActivity() {
         inputs.forEach { it.text.clear() }; inputs.clear(); controls.clear(); column.removeAllViews(); showing=false; recoveryShowing=false
         label("SallimBook · 카드 보관함",24f)
         label("보호 정보는 이 네이티브 화면에서만 처리합니다. 화면을 벗어나면 입력과 표시를 지웁니다.",14f)
-        status=label("현재 계정과 보관함을 확인하고 있어요."); secretOutput=label("",22f)
+        status=label("현재 계정과 보관함을 확인하고 있어요."); secretOutput=NativeSecretViews.sensitive(label("",22f))
     }
     private fun failure(code:String) { if(::status.isInitialized) status.text=NativeVaultErrors.message(code); if(code in setOf("APP_LOCKED","SESSION_EXPIRED")) close() }
     private fun busy(value:Boolean) { controls.forEach { it.isEnabled=!value }; if(value) status.text="보관함을 처리하고 있어요." }

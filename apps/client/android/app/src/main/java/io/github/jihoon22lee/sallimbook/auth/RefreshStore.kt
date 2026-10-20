@@ -16,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
 /** Only an encrypted refresh token is persisted. Access tokens never enter this store.
  * Hardware backing and vendor backup/transfer behavior still require physical-device tests.
  */
-internal class RefreshStore(context: Context, origin: String) {
+internal class RefreshStore(context: Context, origin: String) : RefreshTokenStore {
     private val app = context.applicationContext
     private val alias = app.packageName + ".auth.refresh.v1"
     private val file = AtomicFile(File(app.noBackupFilesDir, "sallimbook-auth-refresh-v1.bin"))
@@ -51,7 +51,7 @@ internal class RefreshStore(context: Context, origin: String) {
             .apply { init(specification) }.generateKey()
     }
 
-    fun save(refresh: String) {
+    override fun save(refresh: String) {
         val plaintext = refresh.toByteArray(Charsets.UTF_8)
         try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -84,8 +84,8 @@ internal class RefreshStore(context: Context, origin: String) {
         }
     }
 
-    /** Consume before a refresh POST. A crash/ambiguous response cannot replay the old token. */
-    fun takeForRotation(): String? {
+    /** Decrypts the stored token; the ciphertext stays until [consume]. */
+    override fun readForRotation(): String? {
         if (!hasRefresh()) return null
         var plaintext: ByteArray? = null
         try {
@@ -107,15 +107,23 @@ internal class RefreshStore(context: Context, origin: String) {
             plaintext = cipher.doFinal(envelope.copyOfRange(13, envelope.size))
             val refresh = plaintext.toString(Charsets.UTF_8)
             if (!Regex("[A-Za-z0-9_-]{32,128}").matches(refresh)) throw AuthFailure(AuthCode.KEY_INVALIDATED)
-            file.delete()
-            if (file.baseFile.exists() || File(file.baseFile.path + ".bak").exists() ||
-                File(file.baseFile.path + ".new").exists()) throw AuthFailure(AuthCode.KEY_INVALIDATED)
             return refresh
         } catch (_: Exception) {
             clear()
             throw AuthFailure(AuthCode.KEY_INVALIDATED)
         } finally {
             plaintext?.fill(0)
+        }
+    }
+
+    /** Called only from the refresh body write; a crash afterwards cannot replay the old token. */
+    override fun consume() {
+        try {
+            file.delete()
+            if (hasRefresh()) throw AuthFailure(AuthCode.KEY_INVALIDATED)
+        } catch (_: Exception) {
+            clear()
+            throw AuthFailure(AuthCode.KEY_INVALIDATED)
         }
     }
 

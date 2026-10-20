@@ -76,30 +76,31 @@ internal class NativeAuthSession private constructor(context: Context) {
     @Volatile var vaultGeneration = 0L
         private set
 
-    private fun clearLocal() {
+    private fun install(tokens: NativeTokens) {
+        accessToken = tokens.access
+        accessExpiresAt = SystemClock.elapsedRealtime() + maxOf(1, tokens.expiresIn - 5) * 1000L
+    }
+
+    /** Ends the account session. Only a confirmed server rejection also wipes the local vault. */
+    private fun dropSession(wipeVault: Boolean = false) {
         vaultGeneration += 1
         accessToken = null
         accessExpiresAt = 0L
-        try { vaultLocal.clearAll() } finally { try { store.clear() } finally { appLock.lock() } }
+        try { if (wipeVault) vaultLocal.clearAll() } finally { try { store.clear() } finally { appLock.lock() } }
     }
 
+    private fun clearLocal() = dropSession(wipeVault = true)
+
     private fun acceptTokens(body: Any?, gate: ForegroundRequest) {
-        val values = body as? Map<*, *> ?: throw AuthFailure(AuthCode.AUTH_FAILED)
-        val access = values["access_token"] as? String ?: throw AuthFailure(AuthCode.AUTH_FAILED)
-        val refresh = values["refresh_token"] as? String ?: throw AuthFailure(AuthCode.AUTH_FAILED)
-        val expires = values["expires_in"] as? Int ?: throw AuthFailure(AuthCode.AUTH_FAILED)
-        val refreshExpires = values["refresh_expires_at"] as? String ?: throw AuthFailure(AuthCode.AUTH_FAILED)
-        if (values["token_type"] != "Bearer" || expires !in 1..600 ||
-            !Regex("[A-Za-z0-9_-]{32,128}").matches(access) ||
-            !Regex("[A-Za-z0-9_-]{32,128}").matches(refresh)) throw AuthFailure(AuthCode.AUTH_FAILED)
-        try { OffsetDateTime.parse(refreshExpires) } catch (_: Exception) { throw AuthFailure(AuthCode.AUTH_FAILED) }
+        val tokens = NativeTokens.parse(body)
         gate.whileActive {
             // A usable in-memory session is published only after durable refresh encryption.
-            store.save(refresh)
-            accessToken = access
-            accessExpiresAt = SystemClock.elapsedRealtime() + maxOf(1, expires - 5) * 1000L
+            store.save(tokens.refresh)
+            install(tokens)
         }
     }
+
+    private val rotation by lazy { NativeRefreshRotation(store, http::refresh, ::install, ::clearLocal) { dropSession() } }
 
     private fun access(gate: ForegroundRequest, requiredMillis: Long = 0): String {
         requireAvailable()
@@ -107,18 +108,8 @@ internal class NativeAuthSession private constructor(context: Context) {
         accessToken?.let { if (NativeAccessLifetime.usable(SystemClock.elapsedRealtime(),accessExpiresAt,requiredMillis)) return it }
         accessToken = null
         accessExpiresAt = 0L
-        val refresh = store.takeForRotation() ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
-        val payload = JSONObject().put("refresh_token", refresh)
-        try {
-            // Exactly one attempt. The old persisted token was consumed before sending.
-            val response = http.send("POST", "/api/v1/auth/native/refresh", gate, body = payload)
-            if (response.status != 200) throw AuthFailure(AuthCode.SESSION_EXPIRED)
-            acceptTokens(response.body, gate)
-        } catch (failure: Exception) {
-            clearLocal()
-            if (failure is AuthFailure) throw failure
-            throw AuthFailure(AuthCode.SESSION_EXPIRED)
-        } finally { payload.remove("refresh_token") }
+        // Exactly one attempt; see NativeRefreshRotation for which outcomes end the session.
+        rotation.rotate(gate)
         // A valid but unusually short server lease is retained, not mistaken for session revocation.
         if (!NativeAccessLifetime.usable(SystemClock.elapsedRealtime(),accessExpiresAt,requiredMillis)) throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
         return accessToken ?: throw AuthFailure(AuthCode.SESSION_EXPIRED)
@@ -233,7 +224,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                     .put("device_label", deviceLabel)
                 password.fill('\u0000')
                 val response = http.send("POST", "/api/v1/auth/native/login", gate, body = payload)
-                if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
+                if (response.status != 200) throw AuthFailure(AuthPolicy.credentialFailure(response.status))
                 acceptTokens(response.body, gate)
                 appLock.finishServerAuthentication(gate)
                 AuthOutcome.success(mapOf("status" to "authenticated"))
@@ -267,7 +258,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                     clearLocal()
                     throw AuthFailure(AuthCode.SESSION_EXPIRED)
                 }
-                if (response.status != 200) throw AuthFailure(AuthCode.AUTH_FAILED)
+                if (response.status != 200) throw AuthFailure(AuthPolicy.credentialFailure(response.status))
                 AuthPolicy.metadataBody("GET", "/api/v1/me", response.status, response.body)
                 gate.check()
                 appLock.finishServerAuthentication(gate)

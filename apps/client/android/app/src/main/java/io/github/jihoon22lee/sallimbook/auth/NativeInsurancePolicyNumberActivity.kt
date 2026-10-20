@@ -103,7 +103,7 @@ class NativeInsurancePolicyNumberActivity : AppCompatActivity() {
         label(if (mode == EDIT) "SallimBook · 증권번호 입력" else "SallimBook · 증권번호 보기").textSize = 24f
         label("이 화면을 벗어나면 입력과 표시를 지웁니다. 증권번호는 서버에서 암호화하여 보관합니다.")
         status = label("보험계약을 확인하고 있어요.")
-        output = label("")
+        output = NativeSecretViews.sensitive(label(""))
         input = object : EditText(this) {
             override fun onTextContextMenuItem(id: Int): Boolean = false
         }.apply {

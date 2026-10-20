@@ -14,7 +14,7 @@ internal class NativeVaultSnapshot(val me: VaultRecord, val members: List<VaultR
 internal class NativeVaultConnection(
     private val appId: String, private val origin: String, token: (Long) -> String,
     private val account: NativeAuthHttp, private val vault: NativeVaultHttp, private val gate: ForegroundRequest,
-    private val local: NativeVaultStore,
+    private val local: NativeVaultLocalState,
 ) {
     private val access = NativeVaultAccess(gate,token)
     fun check() = gate.check()
@@ -23,10 +23,18 @@ internal class NativeVaultConnection(
         val response = access.send { vault.send(command,it,gate) }
         if(response.status !in 200..299) {
             val code=NativeVaultErrors.code(response.status,response.body)
-            if(code in setOf("SESSION_EXPIRED","VAULT_ACCESS_DENIED","VAULT_NOT_INITIALIZED")) local.clearAll()
+            // A per-target 403 (e.g. another member's share offer) says nothing about this device's
+            // registration; only a fresh status that shows the membership ended justifies wiping it.
+            if(code in setOf("SESSION_EXPIRED","VAULT_NOT_INITIALIZED") ||
+                code == "VAULT_ACCESS_DENIED" && command.operation != VaultOperation.STATUS && membershipEnded()) local.clearAll()
             throw NativeVaultFailure(code)
         }
         return NativeVaultWire.response(command,response.status,response.body).also { check() }
+    }
+    /** An unreachable recheck keeps local data; a 401 during it has already wiped in the nested call. */
+    private fun membershipEnded(): Boolean {
+        val status=try { call(NativeVaultCommand(VaultOperation.STATUS)) } catch(_: AuthFailure) { return false }
+        return status["initialized"] != true || status["own_membership"] != "active"
     }
     @Suppress("UNCHECKED_CAST")
     private fun identity(path: String): Any? {
