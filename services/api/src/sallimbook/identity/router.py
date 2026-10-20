@@ -34,6 +34,7 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    PasswordChangeRequest,
     ReauthenticationRequest,
     RefreshRequest,
     RevokedDevicesResponse,
@@ -184,6 +185,21 @@ def login_web(
 @router.get("/auth/web/csrf", response_model=CsrfResponse, operation_id="renewWebCsrf")
 def renew_web_csrf(principal: PrincipalDependency, session: SessionDependency) -> CsrfResponse:
     return CsrfResponse(csrf_token=service.renew_csrf(session, principal))
+
+
+@router.post(
+    "/auth/password",
+    response_model=RevokedDevicesResponse,
+    dependencies=[Depends(require_registration_transport)],
+    operation_id="changePassword",
+)
+def change_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+) -> RevokedDevicesResponse:
+    return service.change_password(session, principal, payload, request_source(request))
 
 
 @router.post(

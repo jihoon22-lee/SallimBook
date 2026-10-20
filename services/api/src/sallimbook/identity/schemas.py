@@ -32,6 +32,11 @@ class ReauthenticationRequest(InputModel):
     password: SecretStr = Field(min_length=1, max_length=128)
 
 
+class PasswordChangeRequest(InputModel):
+    current_password: SecretStr = Field(min_length=1, max_length=128)
+    new_password: SecretStr = Field(min_length=15, max_length=128)
+
+
 class InvitationRequest(InputModel):
     intended_login: LoginName
 

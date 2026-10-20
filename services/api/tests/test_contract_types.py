@@ -86,3 +86,4 @@ def test_audit_vocabulary_has_one_definition():
     assert audit_service.ACTIONS is audit.ACTIONS
     assert {"registered_device", "passkey", "invitation"} <= audit.ENTITY_TYPES
     assert {"login", "revoke", "accept"} <= audit.ACTIONS
+    assert "user" in audit.ENTITY_TYPES and "update" in audit.ACTIONS

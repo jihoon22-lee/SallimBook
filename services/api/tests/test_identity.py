@@ -39,7 +39,11 @@ from sallimbook.identity.auth_models import (
 from sallimbook.identity.dependencies import NATIVE_HEADER, SESSION_COOKIE
 from sallimbook.identity.models import Household
 from sallimbook.identity.router import router
-from sallimbook.identity.schemas import InvitationAcceptance, LoginRequest
+from sallimbook.identity.schemas import (
+    InvitationAcceptance,
+    LoginRequest,
+    PasswordChangeRequest,
+)
 
 ORIGIN = "https://sallimbook-test.invalid"
 NATIVE = {NATIVE_HEADER: "1"}
@@ -408,6 +412,157 @@ class TestIdentityDatabase:
             assert client.get("/api/v1/me", headers=late).status_code == 401
             assert client.get("/api/v1/me", headers=bearer(other)).status_code == 401
             assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 200
+
+    @pytest.mark.parametrize("transport", ["web", "native"])
+    def test_password_change_replaces_login_and_signs_out_other_devices(
+        self, identity_app, db_engine, account, transport
+    ):
+        replacement = secrets.token_urlsafe(24)
+        body = {"current_password": account.password, "new_password": replacement}
+        with (
+            TestClient(identity_app, base_url="https://testserver") as client,
+            TestClient(identity_app, base_url="https://testserver") as device,
+        ):
+            other = native_login(device, account)
+            tokens = None if transport == "web" else native_login(client, account)
+            headers = (
+                csrf(web_login(client, account)) if tokens is None else {**NATIVE, **bearer(tokens)}
+            )
+            if transport == "web":
+                missing = client.post(
+                    "/api/v1/auth/password", headers={"Origin": ORIGIN}, json=body
+                )
+                assert missing.json()["error"]["code"] == "CSRF_FAILED"
+            result = client.post("/api/v1/auth/password", headers=headers, json=body)
+            assert result.status_code == 200 and result.json() == {"revoked_devices": 1}
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 401
+            me = {} if tokens is None else bearer(tokens)
+            assert client.get("/api/v1/me", headers=me).status_code == 200
+
+            def login(password):
+                return device.post(
+                    "/api/v1/auth/native/login",
+                    headers=NATIVE,
+                    json={
+                        "login_name": account.login_name,
+                        "password": password,
+                        "device_label": "합성 Android",
+                    },
+                )
+
+            assert login(account.password).status_code == 401
+            assert login(replacement).status_code == 200
+        with Session(db_engine) as session:
+            stored = session.get(User, account.user_id).password_hash
+            rows = session.execute(
+                select(
+                    AuditEvent.entity_type,
+                    AuditEvent.action,
+                    AuditEvent.entity_id,
+                    AuditEvent.safe_diff,
+                ).where(AuditEvent.action.not_in(("login", "accept")))  # fixture accept
+            ).all()
+        events = Counter((kind, action, tuple(d["changed_fields"])) for kind, action, _, d in rows)
+        assert events == Counter(
+            [
+                ("registered_device", "revoke", ("revoked_at", "status")),
+                ("user", "update", ("password_hash",)),
+            ]
+        )
+        assert next(entity for kind, _, entity, _ in rows if kind == "user") == account.user_id
+        dumped = json.dumps([d for *_, d in rows], ensure_ascii=False)
+        for secret in (account.password, replacement, stored):
+            assert secret not in dumped
+
+    def test_password_change_rejects_wrong_same_or_short_passwords_without_side_effects(
+        self, identity_app, db_engine, account
+    ):
+        with (
+            TestClient(identity_app, base_url="https://testserver") as client,
+            TestClient(identity_app, base_url="https://testserver") as device,
+        ):
+            other = native_login(device, account)
+            headers = {**NATIVE, **bearer(native_login(client, account))}
+            cases = [
+                (
+                    {
+                        "current_password": secrets.token_urlsafe(24),
+                        "new_password": secrets.token_urlsafe(24),
+                    },
+                    403,
+                    "REAUTHENTICATION_FAILED",
+                ),
+                (
+                    {"current_password": account.password, "new_password": account.password},
+                    422,
+                    "VALIDATION_ERROR",
+                ),
+                (
+                    {
+                        "current_password": account.password,
+                        "new_password": secrets.token_urlsafe(24)[:14],
+                    },
+                    422,
+                    "VALIDATION_ERROR",
+                ),
+                ({"current_password": account.password}, 422, "VALIDATION_ERROR"),
+            ]
+            for body, status, code in cases:
+                response = client.post("/api/v1/auth/password", headers=headers, json=body)
+                assert (response.status_code, response.json()["error"]["code"]) == (status, code)
+            assert device.get("/api/v1/me", headers=bearer(other)).status_code == 200
+        with Session(db_engine) as session:
+            stored = session.get(User, account.user_id).password_hash
+            changed = session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action.not_in(("login", "accept")))  # fixture accept
+            )
+        assert service._verify_password(stored, account.password)
+        assert changed == 0
+
+    def test_concurrent_password_changes_from_two_devices_leave_one_winner(
+        self, db_engine, account
+    ):
+        logins = []
+        with Session(db_engine) as session:
+            for label in ("합성 첫 기기", "합성 둘째 기기"):
+                logins.append(
+                    service.login(
+                        session,
+                        LoginRequest(
+                            login_name=account.login_name,
+                            password=account.password,
+                            device_label=label,
+                        ),
+                        "synthetic-native",
+                        "native",
+                    )
+                )
+        barrier = Barrier(2)
+
+        def change(login):
+            with Session(db_engine) as session:
+                principal = service.authenticate(session, login.token, "native")
+                barrier.wait(timeout=10)
+                request = PasswordChangeRequest(
+                    current_password=account.password,
+                    new_password=secrets.token_urlsafe(24),
+                )
+                try:
+                    return service.change_password(
+                        session, principal, request, "synthetic-concurrency"
+                    ).revoked_devices
+                except DomainError as exc:
+                    return exc.status
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(change, login) for login in logins]
+            outcomes = [future.result(timeout=30) for future in futures]
+        assert sorted(outcomes) == [1, 401]
+        with Session(db_engine) as session:
+            statuses = sorted(session.scalars(select(RegisteredDevice.status)))
+        assert statuses == ["active", "revoked"]
 
     def test_security_events_keep_metadata_only(self, identity_app, db_engine, account):
         with Session(db_engine) as session:

@@ -42,6 +42,7 @@ from sallimbook.identity.schemas import (
     LoginRequest,
     MemberResponse,
     NativeTokenResponse,
+    PasswordChangeRequest,
     ReauthenticationRequest,
     RevokedDevicesResponse,
     SetupRequest,
@@ -491,6 +492,45 @@ def revoke_other_devices(
     auth.authenticated_at = now
     auth.last_seen_at = now
     revoked = _revoke_other_devices(session, principal, devices, now)
+    session.commit()
+    return RevokedDevicesResponse(revoked_devices=revoked)
+
+
+def change_password(
+    session: Session, principal: Principal, request: PasswordChangeRequest, source: str
+) -> RevokedDevicesResponse:
+    """Replace the password and revoke every other device of this user in one transaction."""
+    current = request.current_password.get_secret_value()
+    replacement = request.new_password.get_secret_value()
+    if hmac.compare_digest(current.encode(), replacement.encode()):
+        raise DomainError(
+            "VALIDATION_ERROR", "현재 비밀번호와 다른 새 비밀번호를 입력해 주세요.", 422
+        )
+    buckets = _reauth_buckets(principal.user_id, source)
+    _admit_attempt(session, buckets, utcnow())
+    auth, devices, user = _refund_busy(
+        session, buckets, lambda: _lock_account_devices(session, principal)
+    )
+    if not _verify_admitted(session, buckets, user.password_hash, current):
+        raise DomainError("REAUTHENTICATION_FAILED", "비밀번호를 확인해 주세요.", 403)
+    encoded = _refund_busy(session, buckets, lambda: hash_password(replacement))
+    now = validate_locked_session(principal, auth, devices[principal.device_id])
+    before = user.version
+    user.password_hash = encoded
+    auth.authenticated_at = now
+    auth.last_seen_at = now
+    revoked = _revoke_other_devices(session, principal, devices, now)
+    session.flush()
+    record_event(
+        session,
+        principal,
+        entity_type="user",
+        entity_id=user.id,
+        action="update",
+        before_version=before,
+        after_version=user.version,
+        changed_fields=("password_hash",),
+    )
     session.commit()
     return RevokedDevicesResponse(revoked_devices=revoked)
 
