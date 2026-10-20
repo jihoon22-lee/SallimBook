@@ -113,6 +113,7 @@ staging·production의 CORS 허용 origin 기본값은 빈 목록이며, 필요�
 ```bash
 pnpm api:generate
 pnpm typecheck
+pnpm format:check  # TS/JS 서식 검사. 고칠 때는 pnpm format
 pnpm build
 pnpm test:api
 pnpm test:database  # 일회용 *_test DB: 18745, 시험 후 이 컨테이너만 중지

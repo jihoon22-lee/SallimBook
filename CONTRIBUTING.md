@@ -22,6 +22,25 @@ DB 스키마 변경은 Alembic migration, 변환/복구 절차, 기존 데이터
 메시지는 한국어 또는 명확한 영어로 작성하고 자동 생성 파일과 수작업 파일을 구분합니다.
 실제 금융·건강정보 및 서명키는 커밋에서 영구 배제합니다. 유출 시 단순 파일 삭제로 끝내지 않고 키/토큰 폐기와 이력 대응을 수행합니다.
 
+## 서식
+
+커밋 전에 `pnpm format`과 `uv run --project services/api ruff format services/api/src services/api/tests services/api/migrations`를 실행합니다.
+CI는 `pnpm format:check`와 `ruff format --check`로 같은 범위를 검사합니다. 생성 파일 `packages/api-client/src/schema.d.ts`는 손으로 고치지 않고 `pnpm api:generate`로 다시 만듭니다.
+일괄 서식 커밋 이전에 만든 브랜치는 충돌을 고치기 전에 같은 서식부터 적용합니다.
+
+```bash
+git fetch origin
+git switch <branch>
+git checkout origin/main -- package.json pnpm-lock.yaml .prettierrc.json .prettierignore
+pnpm install --frozen-lockfile
+pnpm format
+git commit -am "chore(format): apply Prettier before rebase"
+git rebase origin/main
+```
+
+rebase 중 충돌이 남으면 양쪽이 모두 Prettier 서식이므로 내용 차이만 해결하고 `pnpm format`을 다시 실행합니다.
+로컬 `git blame`이 서식 커밋을 건너뛰게 하려면 `git config blame.ignoreRevsFile .git-blame-ignore-revs`를 설정합니다.
+
 ## 출시
 
 v1의 모든 마일스톤과 인수 기준을 통과해야 v1.0.0을 부여합니다.
