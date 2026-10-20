@@ -318,7 +318,7 @@ function FixedList() {
       <RecordedMoneyNotice />
       <CashflowError error={list.error} />
       <div className="task-toolbar">
-        <h2>이번 달 납부 목록</h2>
+        <h2>{formatMonth(month)} 납부 목록</h2>
         <div className="segmented-control" role="group" aria-label="납부 보기 방식">
           <button aria-pressed={view === "list"} onClick={() => setView("list")}>
             목록 보기

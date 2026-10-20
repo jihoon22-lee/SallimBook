@@ -230,7 +230,7 @@ function CoverageEditor({
             보장 항목 저장
           </button>
           <button type="button" onClick={cancel} disabled={command.busy}>
-            보장 편집 취소
+            입력 취소
           </button>
         </div>
       </form>

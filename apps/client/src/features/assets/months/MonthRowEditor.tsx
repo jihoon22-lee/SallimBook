@@ -360,7 +360,7 @@ export function MonthRowEditor({
             disabled={command.busy}
             onClick={close}
           >
-            입력 닫기
+            입력 취소
           </button>
         </div>
       </form>

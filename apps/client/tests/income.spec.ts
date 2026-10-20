@@ -367,3 +367,30 @@ test("invalid income amount keeps save enabled and explains the field on submit"
   await expect(amount).not.toHaveAttribute("aria-invalid", "true");
   expect(state.writes).toHaveLength(0);
 });
+test("a lost connection on the income screen offers one retry that reloads every failed part", async ({
+  page,
+}) => {
+  await mockCashflow(page);
+  let failing = true;
+  const reloaded = new Set<string>();
+  await page.route(/\/api\/v1\/(income(\/summary)?|household\/members)(\?|$)/, async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (failing) return route.abort();
+    reloaded.add(path);
+    return route.fallback();
+  });
+  await page.goto("/income");
+  const retries = page.getByRole("button", { name: /다시 (확인|불러오기)$/ });
+  // Wait for every part to fail; while one is still loading, its own retry is the only one.
+  await expect(retries).toHaveText(["수입 화면 다시 불러오기"]);
+  failing = false;
+  await retries.click();
+  await expect(page.getByRole("link", { name: "급여 · 3,000,000원", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "등록 수입 요약" })).toContainText("4,000,000원");
+  expect([...reloaded].sort()).toEqual([
+    "/api/v1/household/members",
+    "/api/v1/income",
+    "/api/v1/income/summary",
+  ]);
+  await expect(page.getByRole("button", { name: "수입 화면 다시 불러오기" })).toHaveCount(0);
+});

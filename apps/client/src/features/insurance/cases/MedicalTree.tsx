@@ -320,7 +320,7 @@ function NodeEditor({
             진료 기록 저장
           </button>
           <button type="button" onClick={cancel} disabled={command.busy}>
-            진료 편집 취소
+            입력 취소
           </button>
         </div>
       </form>

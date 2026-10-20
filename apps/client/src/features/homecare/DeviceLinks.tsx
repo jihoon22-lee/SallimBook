@@ -340,7 +340,7 @@ function LinkEditor({
             기기별 소모품 설정 저장
           </button>
           <button type="button" disabled={command.busy} onClick={cancel}>
-            설정 편집 취소
+            입력 취소
           </button>
         </div>
       </form>

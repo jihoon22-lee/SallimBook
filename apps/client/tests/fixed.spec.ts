@@ -527,3 +527,11 @@ test("actual payment accepts grouped amounts and sends digits only", async ({ pa
   await expect.poll(() => state.writes.length).toBe(1);
   expect(state.writes[0]!.body).toMatchObject({ amount_krw: "17000" });
 });
+test("the occurrence list title names the selected month", async ({ page }) => {
+  await mockCashflow(page);
+  await page.goto("/fixed-payments");
+  await page.getByLabel("확인할 월").fill("2025-01");
+  await expect(
+    page.getByRole("heading", { name: "2025년 1월 납부 목록", exact: true }),
+  ).toBeVisible();
+});

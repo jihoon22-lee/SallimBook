@@ -361,7 +361,7 @@ test("adding a medical node focuses its form and cancelling restores the add act
   const trigger = page.getByRole("button", { name: "사건 아래 진료 추가", exact: true });
   await trigger.click();
   await expect(page.getByRole("region", { name: "진료·약국 입력", exact: true })).toBeFocused();
-  await page.getByRole("button", { name: "진료 편집 취소", exact: true }).click();
+  await page.getByRole("button", { name: "입력 취소", exact: true }).click();
   await expect(trigger).toBeFocused();
   expect(state.core.writes).toHaveLength(0);
 });
@@ -415,7 +415,7 @@ test("replacement is reachable on the first mobile screen and cancelling setup r
   await expect(
     page.getByRole("region", { name: "기기별 소모품 설정 입력", exact: true }),
   ).toBeFocused();
-  await page.getByRole("button", { name: "설정 편집 취소", exact: true }).click();
+  await page.getByRole("button", { name: "입력 취소", exact: true }).click();
   await expect(edit).toBeFocused();
   expect(state.writes).toHaveLength(0);
 });

@@ -185,7 +185,7 @@ export function VoidEvent({
           label="사유와 함께 금전 기록 무효 처리"
         />
         <button type="button" onClick={cancel} disabled={command.busy}>
-          무효 검토 취소
+          무효 검토 닫기
         </button>
       </form>
     </section>
