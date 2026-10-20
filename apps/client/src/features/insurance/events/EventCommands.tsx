@@ -11,6 +11,7 @@ import { useInsuranceEventsApi } from "./api";
 import { eventNames, needsCompare } from "./model";
 import type { EventKind, EventRow } from "./model";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { formatSeoulDateTime } from "../../../shared/format";
 export const getters = {
   expense: "getMedicalExpense",
   refund: "getMedicalRefund",
@@ -55,12 +56,7 @@ export function EventCashHistory({ kind, id }: { kind: EventKind; id: string }) 
             <h3>금전 기록 버전 {row.version}</h3>
             <CashSummary cash={row} />
             <p>
-              {new Intl.DateTimeFormat("ko-KR", {
-                timeZone: "Asia/Seoul",
-                dateStyle: "medium",
-                timeStyle: "short",
-              }).format(new Date(row.updated_at))}{" "}
-              ·{" "}
+              {formatSeoulDateTime(row.updated_at)} ·{" "}
               {members.members.find((m) => m.member_id === row.updated_by_member_id)
                 ?.display_name ?? "가계 구성원"}
             </p>

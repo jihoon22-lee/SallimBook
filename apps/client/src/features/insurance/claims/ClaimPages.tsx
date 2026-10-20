@@ -8,7 +8,6 @@ import { isDateOnly, isUuid, dateLabel, todaySeoul } from "../../finance/dates";
 import { useHouseholdMembers } from "../../finance/FinanceSupport";
 import { allPages, usePagedList, useResource } from "../../finance/queries";
 import {
-  recordedLabel,
   ConflictReview,
   InsuranceError,
   InsurancePage,
@@ -25,6 +24,7 @@ import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 import { AmountField } from "../../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 import { krwFieldError } from "../../../shared/krw";
+import { formatSeoulDateTime } from "../../../shared/format";
 type Draft = {
   caseId: string;
   policyId: string;
@@ -461,7 +461,7 @@ function ClaimHistory({ id }: { id: string }) {
             <h3>청구 버전 {row.version}</h3>
             <ClaimSummary row={row} />
             <p>
-              {recordedLabel(row.changed_at)} ·{" "}
+              {formatSeoulDateTime(row.changed_at)} ·{" "}
               {members.members.find((m) => m.member_id === row.changed_by_member_id)
                 ?.display_name ?? "가계 구성원"}
             </p>

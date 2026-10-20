@@ -8,10 +8,11 @@ import { useHouseholdMembers } from "../../finance/FinanceSupport";
 import { usePagedList } from "../../finance/queries";
 import { changedFields, optional, preserveDraft } from "../model";
 import type { Schema } from "../model";
-import { InsuranceError, recordedLabel } from "../InsuranceSupport";
+import { InsuranceError } from "../InsuranceSupport";
 import { AllocationFields, AllocationSummary, allocationDraft } from "./PayoutEditor";
 import { useInsuranceEventsApi } from "./api";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
+import { formatSeoulDateTime } from "../../../shared/format";
 const keyOf = (row: { id: string; version: number }) => `${row.id}:${row.version}`;
 export function AllocationHistory({ id }: { id: string }) {
   const members = useHouseholdMembers();
@@ -40,7 +41,7 @@ export function AllocationHistory({ id }: { id: string }) {
             <h4>배분 버전 {row.version}</h4>
             <AllocationSummary row={row} />
             <p>
-              {recordedLabel(row.changed_at)} ·{" "}
+              {formatSeoulDateTime(row.changed_at)} ·{" "}
               {members.members.find((m) => m.member_id === row.changed_by_member_id)
                 ?.display_name ?? "가계 구성원"}
             </p>

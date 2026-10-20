@@ -6,6 +6,7 @@ import { isNativeAuth } from "../../platform/nativeAuth";
 import { AuthError, useMounted } from "./AuthFeedback";
 import { useAuth } from "./AuthProvider";
 import { useAuthCeremony } from "./useAuthCeremony";
+import { formatSeoulDateTime } from "../../shared/format";
 
 export function ConnectionCodePanel({ onLegacyInvitation }: { onLegacyInvitation: () => void }) {
   const { createConnectionCode, createNativeConnectionCode } = useAuth();
@@ -120,13 +121,7 @@ export function ConnectionCodePanel({ onLegacyInvitation }: { onLegacyInvitation
       {code && (
         <div className="invitation-result">
           <p role="status">
-            연결 코드를 만들었어요. 만료:{" "}
-            {new Intl.DateTimeFormat("ko-KR", {
-              timeZone: "Asia/Seoul",
-              dateStyle: "medium",
-              timeStyle: "short",
-            }).format(new Date(code.expires_at))}{" "}
-            (서울 기준)
+            연결 코드를 만들었어요. 만료: {formatSeoulDateTime(code.expires_at)} (서울 기준)
           </p>
           {revealed ? (
             <>

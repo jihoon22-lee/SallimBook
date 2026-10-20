@@ -10,17 +10,12 @@ import { usePagedList, useResource } from "../finance/queries";
 import { useHomecareApi } from "./api";
 import { etag, optional, quantity } from "./model";
 import type { Appliance, Consumable, DeviceLink, Replacement } from "./model";
-import {
-  HomecareError,
-  HomecarePage,
-  ListFeedback,
-  recordedLabel,
-  ResourceFeedback,
-} from "./HomecareSupport";
+import { HomecareError, HomecarePage, ListFeedback, ResourceFeedback } from "./HomecareSupport";
 import { DeviceStatus } from "./DeviceLinks";
 import { CancelStock, StockSummary } from "./StockPages";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { formatSeoulDateTime } from "../../shared/format";
 type Context = { link: DeviceLink; appliance: Appliance; consumable: Consumable };
 export function ReplacementEditor({ initial, saved }: { initial: Context; saved: () => void }) {
   const [dirty, setDirty] = useState(false);
@@ -284,7 +279,7 @@ function ReplacementSummary({ row, unit }: { row: Replacement; unit: string }) {
           <dd>{row.note || "미입력"}</dd>
         </div>
       </dl>
-      <p className="muted">작성 시각 {recordedLabel(row.created_at)}</p>
+      <p className="muted">작성 시각 {formatSeoulDateTime(row.created_at)}</p>
       <p>
         <Link to={`/consumables/${row.consumable_id}/stock/${row.stock_movement_id}`}>
           연결 재고 사용 원본

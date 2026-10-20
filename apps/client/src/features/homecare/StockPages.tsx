@@ -11,17 +11,12 @@ import { usePagedList, useResource } from "../finance/queries";
 import { useHomecareApi } from "./api";
 import { etag, movementInput, movementLabels, purchaseUrl } from "./model";
 import type { Consumable, Movement, MovementDraft, Replacement } from "./model";
-import {
-  HomecareError,
-  HomecarePage,
-  ListFeedback,
-  recordedLabel,
-  ResourceFeedback,
-} from "./HomecareSupport";
+import { HomecareError, HomecarePage, ListFeedback, ResourceFeedback } from "./HomecareSupport";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { AmountField } from "../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { krwFieldError } from "../../shared/krw";
+import { formatSeoulDateTime } from "../../shared/format";
 export function StockSummary({ row }: { row: Consumable }) {
   return (
     <p>
@@ -93,7 +88,7 @@ export function MovementSummary({ row, unit }: { row: Movement; unit: string }) 
         </p>
       )}
       <p className="muted">
-        작성 시각 {recordedLabel(row.created_at)} · 재고 동작은 자산·수입·지출을 자동 변경하지
+        작성 시각 {formatSeoulDateTime(row.created_at)} · 재고 동작은 자산·수입·지출을 자동 변경하지
         않아요.
       </p>
     </>

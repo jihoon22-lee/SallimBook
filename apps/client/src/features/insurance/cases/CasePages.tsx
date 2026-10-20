@@ -17,6 +17,7 @@ import { CaseMoneySummary } from "../events/EventSupport";
 import { ExpenseList, PayoutList } from "../events/EventPages";
 import { ClaimsList } from "../claims/ClaimPages";
 import { MedicalTree } from "./MedicalTree";
+import { formatSeoulDateTime } from "../../../shared/format";
 const historyKey = (row: { id: string; version: number }) => `${row.id}:${row.version}`;
 function CaseHistory({ id }: { id: string }) {
   const api = useInsuranceApi();
@@ -41,12 +42,7 @@ function CaseHistory({ id }: { id: string }) {
           <li key={historyKey(row)}>
             <h3>사건 버전 {row.version}</h3>
             <p>
-              {new Intl.DateTimeFormat("ko-KR", {
-                timeZone: "Asia/Seoul",
-                dateStyle: "medium",
-                timeStyle: "short",
-              }).format(new Date(row.changed_at))}{" "}
-              ·{" "}
+              {formatSeoulDateTime(row.changed_at)} ·{" "}
               {members.members.find((m) => m.member_id === row.changed_by_member_id)
                 ?.display_name ?? "가계 구성원"}
             </p>

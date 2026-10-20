@@ -10,6 +10,7 @@ import { usePagedList, useResource } from "../finance/queries";
 import { VaultActionLauncher } from "./CardVaultActions";
 import type { WebVaultRequest } from "./actions";
 import { useVaultOverviewApi } from "./overviewApi";
+import { formatSeoulDateTime } from "../../shared/format";
 
 const membershipLabels = { active: "접근 가능", not_enrolled: "공유 전", revoked: "접근 철회" };
 const shareLabels = {
@@ -283,13 +284,7 @@ function VaultOverview({ memberId }: { memberId: string }) {
                               ? "만료됨"
                               : shareLabels[offer.state]}
                           </p>
-                          <p>
-                            만료 시각:{" "}
-                            {new Date(offer.expires_at).toLocaleString("ko-KR", {
-                              timeZone: "Asia/Seoul",
-                            })}{" "}
-                            (서울)
-                          </p>
+                          <p>만료 시각: {formatSeoulDateTime(offer.expires_at)} (서울)</p>
                           {pending && (
                             <div className="form-actions">
                               {offer.target_member_id === memberId && (

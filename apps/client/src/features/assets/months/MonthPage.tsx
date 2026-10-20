@@ -22,6 +22,7 @@ import { MonthRowEditor } from "./MonthRowEditor";
 import type { EditingValue } from "./MonthRowEditor";
 import { carriedNote, formatKrw, monthStates, untouchedMissing, verificationStates } from "./model";
 import type { MonthRecord, MonthValue } from "./model";
+import { formatSeoulDateTime } from "../../../shared/format";
 
 function SnapshotList({
   record,
@@ -205,14 +206,7 @@ function MonthHistory({ month, refresh }: { month: string; refresh: string }) {
             </Link>
             {item.reopened_reason && <p>정정 사유: {item.reopened_reason}</p>}
             {item.confirmed_at && (
-              <p className="muted">
-                확정{" "}
-                {new Intl.DateTimeFormat("ko-KR", {
-                  timeZone: "Asia/Seoul",
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }).format(new Date(item.confirmed_at))}
-              </p>
+              <p className="muted">확정 {formatSeoulDateTime(item.confirmed_at)}</p>
             )}
           </li>
         ))}

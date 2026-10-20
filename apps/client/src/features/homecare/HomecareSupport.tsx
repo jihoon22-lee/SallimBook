@@ -229,12 +229,6 @@ export function ResourceFeedback({
     </>
   );
 }
-export const recordedLabel = (value: string) =>
-  new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 
 export function useSeoulDayRefresh(reload: () => Promise<void>) {
   useEffect(() => {

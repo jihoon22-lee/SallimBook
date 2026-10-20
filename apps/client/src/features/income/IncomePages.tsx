@@ -21,6 +21,7 @@ import type { Income, IncomeQuery } from "./model";
 import { IncomeEditor } from "./IncomeEditor";
 import { IncomeCommand } from "./IncomeCommands";
 import { RetryFailed, retriesCombined } from "../../shared/RetryFailed";
+import { formatSeoulDateTime } from "../../shared/format";
 function useIncomeSummary() {
   const api = useIncomeApi();
   const { month } = useMonth();
@@ -380,14 +381,7 @@ function IncomeHistory({ id }: { id: string }) {
               {row.date_precision === "month" ? "월합계" : dateLabel(row.occurred_on)}
             </p>
             {row.reason && <p>사유: {row.reason}</p>}
-            <p>
-              {new Intl.DateTimeFormat("ko-KR", {
-                timeZone: "Asia/Seoul",
-                dateStyle: "medium",
-                timeStyle: "short",
-              }).format(new Date(row.updated_at))}{" "}
-              · 서울
-            </p>
+            <p>{formatSeoulDateTime(row.updated_at)} · 서울</p>
           </li>
         ))}
       </ol>

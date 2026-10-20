@@ -5,12 +5,6 @@ import { ApiError, toApiError } from "../../platform/api";
 import { useMounted, SessionStatus } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import { FinanceError, useHouseholdMembers, MemberLoadError } from "../finance/FinanceSupport";
-export const recordedLabel = (value: string) =>
-  new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 export function InsurancePage({
   title,
   description,

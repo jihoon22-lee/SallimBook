@@ -8,13 +8,11 @@ import { useAuth } from "./AuthProvider";
 import type { Passkey } from "./AuthProvider";
 import { useAuthCeremony } from "./useAuthCeremony";
 import { ReturnLoginLink } from "./ReturnLoginLink";
+import { formatSeoulDate } from "../../shared/format";
 
 function dateLabel(value: string | null): string {
   if (!value) return "사용 기록 없음";
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium" }).format(date)
-    : "확인되지 않음";
+  return formatSeoulDate(value, "확인되지 않음");
 }
 
 export function PasskeyPanel() {
