@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.Response
 import okio.BufferedSink
 import org.json.JSONArray
 import org.json.JSONObject
@@ -46,8 +47,42 @@ internal fun accountHttpClient(): OkHttpClient = OkHttpClient.Builder()
         .build()
 
 /** Default HTTPS certificate/hostname checks, no redirects, no cookies, no logging/retry. */
-internal class NativeAuthHttp(private val origin: String) {
-    private val client = accountHttpClient()
+internal class NativeAuthHttp(private val origin: String, private val client: OkHttpClient = accountHttpClient()) {
+    companion object { const val REFRESH_PATH = "/api/v1/auth/native/refresh" }
+
+    /**
+     * The only refresh transport. [consume] runs right before the body reaches the sink, so a
+     * failure before that point leaves the stored token intact. The exchange is not bound to
+     * screen cancellation and the gate is not checked after the response, so a rotated token
+     * that the server already issued is always handed back (callTimeout bounds the wait).
+     */
+    fun refresh(token: String, gate: ForegroundRequest, consume: () -> Unit): NativeHttpResponse {
+        gate.checkHttp("POST", REFRESH_PATH)
+        if (AuthPolicy.apiOrigin(origin) == null) throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
+        if (!Regex("[A-Za-z0-9_-]{32,128}").matches(token)) throw AuthFailure(AuthCode.INVALID_REQUEST)
+        // The token alphabet needs no JSON escaping.
+        val requestBytes = "{\"refresh_token\":\"$token\"}".toByteArray(Charsets.UTF_8)
+        try {
+            val request = Request.Builder()
+                .url(origin + REFRESH_PATH)
+                .post(OneShotAuthBody(requestBytes) { gate.checkHttp("POST", REFRESH_PATH); consume() })
+                .header("Accept", "application/json")
+                .header("X-SallimBook-Native", "1")
+                .build()
+            return client.newCall(request).execute().use { response ->
+                val requestId = requestId(response)
+                if (response.code != 200) NativeHttpResponse(response.code, null, requestId)
+                else NativeHttpResponse(200, readStrictJson(response, 262_144), requestId)
+            }
+        } catch (failure: AuthFailure) {
+            throw failure
+        } catch (_: Exception) {
+            throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+        } finally {
+            requestBytes.fill(0)
+        }
+    }
+
     fun send(
         method: String,
         path: String,
@@ -129,37 +164,10 @@ internal class NativeAuthHttp(private val origin: String) {
             return call.execute().use { response ->
                 val status = response.code
                 if (status in 300..399) throw AuthFailure(AuthCode.ACCESS_DENIED)
-                val parsed = if (status == 204) null else {
-                    if (response.body.contentType()?.type != "application" ||
-                        response.body.contentType()?.subtype != "json") {
-                        throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
-                    }
-                    val bytes = response.body.byteStream().use { stream ->
-                        val output = ByteArrayOutputStream()
-                        val buffer = ByteArray(4096)
-                        while (true) {
-                            val count = stream.read(buffer)
-                            if (count < 0) break
-                            // Up to 200 accounts may each include a bounded nested asset note.
-                            val maximumBytes = if (metadata) 3_145_728 else 262_144
-                            if (output.size() + count > maximumBytes) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
-                            output.write(buffer, 0, count)
-                        }
-                        buffer.fill(0)
-                        output.toByteArray()
-                    }
-                    try {
-                        val tokener = JSONTokener(bytes.toString(Charsets.UTF_8))
-                        val value = tokener.nextValue()
-                        if (tokener.nextClean() != 0.toChar()) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
-                        jsonValue(value)
-                    } finally { bytes.fill(0) }
-                }
+                // Up to 200 accounts may each include a bounded nested asset note.
+                val parsed = if (status == 204) null else readJson(response, if (metadata) 3_145_728 else 262_144)
                 gate.checkHttp(method, path)
-                val requestId = response.header("X-Request-ID")?.takeIf {
-                    Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").matches(it)
-                }
-                NativeHttpResponse(status, parsed, requestId)
+                NativeHttpResponse(status, parsed, requestId(response))
             }
         } catch (failure: AuthFailure) {
             throw failure
@@ -171,6 +179,50 @@ internal class NativeAuthHttp(private val origin: String) {
             gate.releaseNetworkCancellation()
             requestBytes?.fill(0)
         }
+    }
+
+    private fun requestId(response: Response): String? = response.header("X-Request-ID")?.takeIf {
+        Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").matches(it)
+    }
+
+    /** A bounded application/json body; anything else is NETWORK_UNAVAILABLE. */
+    private fun readBody(response: Response, maximumBytes: Int): ByteArray {
+        if (response.body.contentType()?.type != "application" ||
+            response.body.contentType()?.subtype != "json") {
+            throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+        }
+        return response.body.byteStream().use { stream ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(4096)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                if (output.size() + count > maximumBytes) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+                output.write(buffer, 0, count)
+            }
+            buffer.fill(0)
+            output.toByteArray()
+        }
+    }
+
+    private fun readJson(response: Response, maximumBytes: Int): Any? {
+        val bytes = readBody(response, maximumBytes)
+        try {
+            val tokener = JSONTokener(bytes.toString(Charsets.UTF_8))
+            val value = tokener.nextValue()
+            if (tokener.nextClean() != 0.toChar()) throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+            return jsonValue(value)
+        } finally { bytes.fill(0) }
+    }
+
+    /** The refresh response uses the strict Gson decoder: one value, unique names, integer-only numbers. */
+    private fun readStrictJson(response: Response, maximumBytes: Int): Any? {
+        val bytes = readBody(response, maximumBytes)
+        try {
+            return NativeVaultJson.decode(bytes.toString(Charsets.UTF_8))
+        } catch (_: NativeVaultFailure) {
+            throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+        } finally { bytes.fill(0) }
     }
 
     internal fun jsonValue(value: Any?, depth: Int = 0): Any? {
