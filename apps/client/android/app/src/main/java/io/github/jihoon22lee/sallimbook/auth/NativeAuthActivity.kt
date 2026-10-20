@@ -50,6 +50,7 @@ class NativeAuthActivity : AppCompatActivity() {
     private var pending: ForegroundRequest? = null
     private var mode = LOGIN
     private val inputs = mutableListOf<EditText>()
+    private val secretInputs = mutableListOf<EditText>()
     private val pendingSecrets = mutableListOf<CharArray>()
     private lateinit var identity: EditText
     private lateinit var password: EditText
@@ -128,6 +129,7 @@ class NativeAuthActivity : AppCompatActivity() {
                 importantForContentCapture = View.IMPORTANT_FOR_CONTENT_CAPTURE_NO
                 minimumHeight = 48.dp()
                 inputs.add(this)
+                if (secret) secretInputs.add(this)
                 column.addView(this)
             }
         }
@@ -389,9 +391,8 @@ class NativeAuthActivity : AppCompatActivity() {
             pending?.cancel()
             pending = null
             clearSecretBuffers()
-            if (::password.isInitialized) password.text.clear()
-            if (::passwordConfirmation.isInitialized) passwordConfirmation.text.clear()
-            if (mode == INVITATION && ::identity.isInitialized) identity.text.clear()
+            // Every secret field (current, new and confirmation passwords, invitation code).
+            secretInputs.forEach { it.text.clear() }
             clearInvitationDisplay(createdInvitation)
             if (::submit.isInitialized) submit.isEnabled = true
             if (interrupted && ::status.isInitialized) status.text = "화면을 벗어나 요청을 중단했어요. 결과를 확인한 후 다시 진행해 주세요."
