@@ -398,8 +398,8 @@
       "git_sha1": "953b42329d6853cd12490f5fc0c66b5a934d3ab6"
     },
     "docs/adr/document-inspection-isolation.md": {
-      "sha256": "4f990b4b00a39b94641512523344eb25e6392e48f2ec42c6db53b7b77c4c5157",
-      "git_sha1": "9cbaacba280cc37a3e1639780bf3bc3015573532"
+      "sha256": "4914041da9555f4628489fc48e3b30ad92e4e8bffece47a9a61a80a901ee3b2f",
+      "git_sha1": "55e016bae0770278e87f91b66640419017c4d6f6"
     }
   }
 }
