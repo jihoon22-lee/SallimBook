@@ -22,6 +22,7 @@ import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 import { AmountField } from "../../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 import { krwFieldError } from "../../../shared/krw";
+import { scrollBehavior } from "../../../shared/motion";
 export type EditingValue = { revisionId: string; row: MonthValue };
 export function MonthRowEditor({
   month,
@@ -52,7 +53,7 @@ export function MonthRowEditor({
   const section = useRef<HTMLElement>(null);
   useEffect(() => {
     section.current?.focus();
-    section.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    section.current?.scrollIntoView({ block: "start", behavior: scrollBehavior() });
   }, []);
   const currentRow = latest?.values.find((row) => row.asset_id === base.row.asset_id);
   const scopeChanged = currentRow ? scopeIdentity(currentRow) !== scopeIdentity(base.row) : false;

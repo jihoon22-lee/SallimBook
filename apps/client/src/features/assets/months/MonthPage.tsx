@@ -38,7 +38,9 @@ function SnapshotList({
 }) {
   return (
     <section aria-labelledby="month-values-title">
-      <h2 id="month-values-title">이 기록에 포함된 자산·부채</h2>
+      <h2 id="month-values-title" tabIndex={-1}>
+        이 기록에 포함된 자산·부채
+      </h2>
       <p className="muted">
         이름·소유 관계·지분·금액 기준은 이 기록에 저장된 내용이에요. 현재 자산 기본정보를 자동으로
         섞지 않아요.
@@ -87,6 +89,7 @@ function SnapshotList({
                     row.verification_state !== "verified" ? "primary-button" : "secondary-button"
                   }
                   disabled={locked}
+                  data-month-row={row.asset_id}
                   onClick={() => edit(row)}
                 >
                   {row.name} 금액 확인
@@ -248,6 +251,21 @@ function MonthWorkspace({
   const [panel, setPanel] = useState<Panel | null>(null);
   const [notice, setNotice] = useState("");
   const generation = useRef(0);
+  // After the editor closes (cancel or save), focus returns to the row that opened it.
+  const returnFocusTo = useRef<string | null>(null);
+  function closeEditor() {
+    returnFocusTo.current = editor?.row.asset_id ?? null;
+    setEditor(null);
+  }
+  useEffect(() => {
+    const id = returnFocusTo.current;
+    if (editor || id === null) return;
+    const row = document.querySelector<HTMLButtonElement>(`[data-month-row="${CSS.escape(id)}"]`);
+    // A save reloads the month and briefly disables the rows; wait for that to settle.
+    if (row?.disabled && loading) return;
+    returnFocusTo.current = null;
+    (row && !row.disabled ? row : document.getElementById("month-values-title"))?.focus();
+  }, [editor, loading]);
   const reload = useCallback(async (): Promise<MonthRecord> => {
     const current = ++generation.current;
     setLoading(true);
@@ -290,7 +308,7 @@ function MonthWorkspace({
           }
         : current,
     );
-    setEditor(null);
+    closeEditor();
     setNotice("확인한 금액과 기준일을 저장했어요.");
     void reload().catch(() => undefined);
   }
@@ -422,7 +440,7 @@ function MonthWorkspace({
           members={members.members}
           reload={reload}
           saved={saved}
-          close={() => setEditor(null)}
+          close={closeEditor}
         />
       )}
       {panel?.type === "confirm" && (

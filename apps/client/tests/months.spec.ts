@@ -523,4 +523,38 @@ test("month value accepts a grouped amount and saves digits", async ({ page }) =
   await page.getByRole("button", { name: "금액 확인 저장", exact: true }).click();
   await expect(page.getByText("확인한 금액과 기준일을 저장했어요.", { exact: true })).toBeVisible();
   expect(state.writes.at(-1)?.body.input_amount_krw).toBe("1234567");
+  await expect(
+    page.getByRole("button", { name: "합성 종료 대출 금액 확인", exact: true }),
+  ).toBeFocused();
+});
+
+test("closing the month editor returns focus to the row and reduced motion scrolls instantly", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const calls: unknown[] = [];
+    Object.assign(window, { scrollCalls: calls });
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (arg?: boolean | ScrollIntoViewOptions) {
+      calls.push(arg);
+      return original.call(this, arg);
+    };
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mockMonths(page);
+  await page.goto("/assets/months/2025-02");
+  const opener = page.getByRole("button", { name: "합성 종료 대출 금액 확인", exact: true });
+  await opener.click();
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          (
+            window as unknown as { scrollCalls: (ScrollIntoViewOptions | undefined)[] }
+          ).scrollCalls.at(-1) as ScrollIntoViewOptions | undefined
+        )?.behavior,
+    ),
+  ).toBe("auto");
+  await page.getByRole("button", { name: /^입력 (닫기|취소)$/ }).click();
+  await expect(opener).toBeFocused();
 });
