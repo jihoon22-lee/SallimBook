@@ -10,8 +10,8 @@ import { CashflowError, RecordedMoneyNotice, SaveControls } from "../finance/Fin
 import { dateLabel } from "../finance/dates";
 import { IncomeFields } from "./IncomeFields";
 import { useIncomeApi } from "./api";
-import { incomeDraft, incomeInput, incomePatch, preserveIncomeChanges } from "./model";
-import type { Income, IncomeDraft, IncomeInput } from "./model";
+import { excludeSelf, incomeDraft, incomeInput, incomePatch, preserveIncomeChanges } from "./model";
+import type { DuplicateResponse, Income, IncomeDraft, IncomeInput } from "./model";
 
 export function IncomeEditor({ initial }: { initial?: Income }) {
   const api = useIncomeApi();
@@ -21,9 +21,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() => incomeDraft(month, initial));
   const [reason, setReason] = useState("");
-  const [duplicates, setDuplicates] = useState<components["schemas"]["DuplicateResponse"] | null>(
-    null,
-  );
+  const [duplicates, setDuplicates] = useState<DuplicateResponse | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [checking, setChecking] = useState(false);
   const [latest, setLatest] = useState<Income | null>(null);
@@ -49,12 +47,15 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
     setChecking(true);
     command.setError(null);
     try {
-      const result = await api.duplicates({
-        month: input.period_month,
-        member_id: input.member_id,
-        kind: input.kind,
-        date_precision: input.date_precision,
-      });
+      const result = excludeSelf(
+        await api.duplicates({
+          month: input.period_month,
+          member_id: input.member_id,
+          kind: input.kind,
+          date_precision: input.date_precision,
+        }),
+        base?.id,
+      );
       if (command.mounted.current) setDuplicates(result);
       return result;
     } catch (error) {

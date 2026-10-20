@@ -4,6 +4,13 @@ import { isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 import { parseKrw } from "../assets/months/model";
 export type Income = components["schemas"]["CashResponse"];
 export type IncomeInput = Omit<components["schemas"]["IncomeCreate"], "card_id">;
+export type DuplicateResponse = components["schemas"]["DuplicateResponse"];
+/** A correction is checked by the server with exclude_id; drop the record itself from the shown candidates too. */
+export function excludeSelf(result: DuplicateResponse, id: string | undefined): DuplicateResponse {
+  if (!id) return result;
+  const items = result.items.filter((row) => row.id !== id);
+  return { ...result, items, suspected: items.length > 0 || result.truncated };
+}
 export type IncomePatch = components["schemas"]["IncomePatch"];
 export type IncomeReturn = Omit<components["schemas"]["IncomeReturn"], "card_id" | "member_id">;
 export type IncomeConversion = Omit<components["schemas"]["IncomeConvert"], "replacements"> & {

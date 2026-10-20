@@ -1,5 +1,6 @@
 import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { mockCashflow, incomeRow } from "./support/cashflow";
 import { closedAccount, uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -246,4 +247,36 @@ test("an income can use an account through the day it closed", async ({ page }) 
     period_month: "2025-02",
     account_id: uid(33),
   });
+});
+
+async function correctToDay(page: Page) {
+  await page.goto(`/income/${uid(40)}/edit`);
+  await page.getByRole("combobox", { name: "날짜 정밀도", exact: true }).selectOption("day");
+  await page.getByLabel("실제 입금일", { exact: true }).fill("2025-02-10");
+  await page.getByLabel("정정 사유", { exact: true }).fill("합성 입금일 확인");
+  await page.getByRole("button", { name: "수입 정정 저장", exact: true }).click();
+}
+test("an income correction never lists the record itself as a duplicate", async ({ page }) => {
+  const state = await mockCashflow(page);
+  await correctToDay(page);
+  await expect(page.getByRole("heading", { name: "수입 상세", exact: true })).toBeVisible();
+  expect(state.writes).toHaveLength(1);
+  expect(state.writes[0]!.body).toMatchObject({
+    date_precision: "day",
+    occurred_on: "2025-02-10",
+    reason: "합성 입금일 확인",
+  });
+  expect(state.writes[0]!.body.duplicate_acknowledged).not.toBe(true);
+});
+test("another month total still needs duplicate review during a correction", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.incomes.push(incomeRow(44, { amount_krw: "100000" }));
+  await correctToDay(page);
+  const review = page.getByRole("region", { name: "수입 중복 검토", exact: true });
+  await expect(review.getByRole("link")).toHaveCount(1);
+  await expect(review.getByRole("link", { name: "100,000원 · 월합계", exact: true })).toBeVisible();
+  await expect(
+    page.getByText("아래 기존 기록을 확인하고 중복 여부를 선택해 주세요.", { exact: true }),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(0);
 });
