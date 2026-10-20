@@ -53,7 +53,15 @@ internal class NativeVaultKeyOperation(val cipher: Cipher, val binding: NativeVa
 }
 
 /** Encrypted native-only local storage. No HTTP, bridge, backup, export or plaintext serialization. */
-internal class NativeVaultStore internal constructor(context: Context, private val namespace: String = "vault.v1") {
+/** The local-registration operations a vault connection may apply after server answers. */
+internal interface NativeVaultLocalState {
+    fun clearAll()
+    fun reconcile(scope: NativeVaultScope)
+    fun reconcileCard(binding: NativeVaultBinding)
+    fun clearCard(scope: NativeVaultScope, cardId: String)
+}
+
+internal class NativeVaultStore internal constructor(context: Context, private val namespace: String = "vault.v1") : NativeVaultLocalState {
     companion object {
         @Volatile private var instance: NativeVaultStore? = null
         fun get(context: Context): NativeVaultStore = instance ?: synchronized(this) {
@@ -83,22 +91,22 @@ internal class NativeVaultStore internal constructor(context: Context, private v
     @Synchronized fun exists(binding: NativeVaultBinding): Boolean = file(binding).let {
         it.baseFile.exists() || File(it.baseFile.path + ".bak").exists() || File(it.baseFile.path + ".new").exists()
     }
-    @Synchronized fun reconcile(scope: NativeVaultScope) {
+    @Synchronized override fun reconcile(scope: NativeVaultScope) {
         val keep = NativeVaultBinding(scope).scopeName + "."
         removeMatching { !it.startsWith(keep) }
     }
-    @Synchronized fun reconcileCard(binding: NativeVaultBinding) {
+    @Synchronized override fun reconcileCard(binding: NativeVaultBinding) {
         if (!binding.localCode) throw NativeVaultFailure("INVALID_REQUEST")
         val cardPrefix = "${binding.scopeName}.cvc.${binding.cardName}."
         removeMatching { it.startsWith(cardPrefix) && it != binding.name }
     }
-    @Synchronized fun clearCard(scope: NativeVaultScope, cardId: String) {
+    @Synchronized override fun clearCard(scope: NativeVaultScope, cardId: String) {
         NativeVaultWire.id(cardId)
         val probe = NativeVaultBinding(scope, cardId, cardId, 1)
         val cardPrefix = "${probe.scopeName}.cvc.${probe.cardName}."
         removeMatching { it.startsWith(cardPrefix) }
     }
-    @Synchronized fun clearAll() = removeMatching { true }
+    @Synchronized override fun clearAll() = removeMatching { true }
     private fun removeMatching(predicate: (String) -> Boolean) {
         val names = mutableSetOf<String>()
         store.aliases().toList().filter { it.startsWith(prefix) }.forEach { names.add(it.removePrefix(prefix)) }
