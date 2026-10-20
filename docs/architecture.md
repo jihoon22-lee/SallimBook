@@ -34,7 +34,7 @@ apps/client/                  React + Vite + Capacitor 프로젝트
 services/api/                 FastAPI 도메인과 Alembic
 packages/api-client/           OpenAPI에서 생성한 TS client
 packages/test-fixtures/        합성 계약/계산 테스트 벡터
-plugins/sallimbook-security/   Kotlin + 타입 선언, 네이티브 보안 화면
+plugins/sallimbook-auth/       SallimBookAuth TypeScript 계약(구현은 apps/client/android의 Kotlin)
 infra/                        Compose, Caddy, 운영 템플릿
 scripts/                      검증/개발/게시 도구
 planning/                     마일스톤과 Issue 원본

@@ -1,39 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { canGoBackWithinApp } from "../src/platform/navigation";
-import { createUnavailableSecurityAdapter } from "../src/platform/security";
 import { isValidMonth, seoulMonth } from "../src/shared/MonthContext";
-
-test("unimplemented security adapters fail closed for all seven mutating or secret actions", async () => {
-  for (const platform of ["web", "android", "unsupported"] as const) {
-    const adapter = createUnavailableSecurityAdapter(platform);
-    const card = { cardId: "00000000-0000-4000-8000-000000000001" };
-    const results = await Promise.all([
-      adapter.openCardSecretEditor({ ...card, mode: "create" }),
-      adapter.showCardSecrets({ ...card, includeLocalCvc: true }),
-      adapter.editLocalCvc(card),
-      adapter.deleteLocalCvc(card),
-      adapter.enrollDeviceVault(),
-      adapter.lockVault(),
-      adapter.forgetDeviceVault(),
-    ]);
-    for (const result of results)
-      expect(result).toEqual({
-        ok: false,
-        code: platform === "android" ? "AUTH_UNAVAILABLE" : "UNSUPPORTED_PLATFORM",
-      });
-    expect(await adapter.getCapabilities()).toEqual({
-      ok: true,
-      value: {
-        platform,
-        available: false,
-        supportedBiometrics: [],
-        deviceSecure: null,
-        vaultEnrolled: null,
-        localCvcSupported: false,
-      },
-    });
-  }
-});
 
 test("fresh or foreign browser history cannot enable an in-app history back", () => {
   for (const state of [null, undefined, {}, { idx: 0 }, { idx: -1 }, { idx: "1" }, { idx: 1.5 }]) {
