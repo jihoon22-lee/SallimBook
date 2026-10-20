@@ -266,8 +266,8 @@
       "git_sha1": "e6d820e88ae172899065951290755305c5d6cf4a"
     },
     "scripts/test_document_tools.py": {
-      "sha256": "166136e8691243996d2bf2ea0e561d2a3d505748427613eb7df2965d0dec2f64",
-      "git_sha1": "73204a3a397913e9edaed236cf837f7930a56388"
+      "sha256": "4c376fce2b342b39fd3afa7eec32ed218280f4c6396813307b2b366b4684ae52",
+      "git_sha1": "3ee8330ea99693bea87ed5d29398cc5d96910274"
     },
     "docs/testing/insurance-client.md": {
       "sha256": "c2313d1a5efc2b625090b4d9aa921e82bb18db01700d57a3dfef2f4688b23563",

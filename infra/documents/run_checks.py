@@ -4,7 +4,10 @@ import hashlib
 import io
 import json
 import os
+import random
+import resource
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -17,6 +20,7 @@ from pypdf.generic import (
     TextStringObject,
 )
 from sallimbook.core.errors import DomainError
+from sallimbook.documents import _validation_worker as worker
 from sallimbook.documents.validation import (
     check_scanner_availability,
     validate_document,
@@ -25,6 +29,19 @@ from sallimbook.documents.validation import (
 SOCKET = "/run/sallimbook/clamd.sock"
 SPOOL = Path("/run/sallimbook/spool")
 FONT = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+MEASURE_CASES = (
+    "pdf-text-a4-1",
+    "pdf-text-a4-2",
+    "pdf-text-a4-4",
+    "pdf-text-a4-8",
+    "pdf-image-a4-1",
+    "pdf-image-a4-4",
+    "jpeg-photo-3072x2304",
+    "jpeg-photo-4000x3000",
+    "jpeg-photo-4608x3456",
+)
+# A4 rendered by the worker's pdftoppm at 200 dpi.
+A4_PIXELS = (1654, 2339)
 
 
 def require(condition, stage):
@@ -154,6 +171,186 @@ def metadata_pdf(metadata):
         writer.close()
 
 
+def dense_pdf(pages, kind):
+    """A4 pages filled edge to edge with synthetic text; no digit group longer than two."""
+    if kind == "text":
+        writer = PdfWriter()
+        font = writer._add_object(
+            DictionaryObject(
+                {
+                    NameObject("/Type"): NameObject("/Font"),
+                    NameObject("/Subtype"): NameObject("/Type1"),
+                    NameObject("/BaseFont"): NameObject("/Helvetica"),
+                }
+            )
+        )
+        for _page in range(pages):
+            page = writer.add_blank_page(595, 842)
+            page[NameObject("/Resources")] = DictionaryObject(
+                {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+            )
+            lines = b"".join(
+                b"(SYNTHETIC CLINIC LINE %02d CONSULTATION AND PHARMACY ITEMS) Tj 0 -12 Td "
+                % line
+                for line in range(64)
+            )
+            content = DecodedStreamObject()
+            content.set_data(b"BT /F1 9 Tf 36 800 Td " + lines + b"ET")
+            page[NameObject("/Contents")] = writer._add_object(content)
+        buffer = io.BytesIO()
+        writer.write(buffer)
+        return buffer.getvalue()
+    if kind == "image":
+        font = ImageFont.truetype(FONT, 30)
+        images = []
+        for _page in range(pages):
+            image = Image.new("L", A4_PIXELS, 255)
+            draw = ImageDraw.Draw(image)
+            for line in range(48):
+                text = (
+                    f"합성 진료비 영수증 항목 {line:02d} 진찰료 약제비 검사료 확인"
+                    if line % 2
+                    else f"SYNTHETIC CLINIC LINE {line:02d} CONSULTATION AND PHARMACY ITEMS"
+                )
+                draw.text((80, 80 + 46 * line), text, font=font, fill=0)
+            images.append(image)
+        buffer = io.BytesIO()
+        images[0].save(
+            buffer,
+            format="PDF",
+            resolution=200,
+            save_all=True,
+            append_images=images[1:],
+            creationDate=None,
+            modDate=None,
+        )
+        for image in images:
+            image.close()
+        return buffer.getvalue()
+    raise ValueError(kind)
+
+
+def photo_jpeg(width, height):
+    """A camera-sized plain JPEG: block noise around a synthetic receipt, no EXIF."""
+    rng = random.Random(width * height)
+    blocks = (width // 8, height // 8)
+    noise = bytes(128 + rng.randint(-20, 20) for _ in range(blocks[0] * blocks[1]))
+    with Image.frombytes("L", blocks, noise) as small:
+        image = small.resize((width, height), Image.Resampling.NEAREST).convert("RGB")
+    draw = ImageDraw.Draw(image)
+    left, top = width // 4, height // 8
+    draw.rectangle((left, top, width - left, height - top), fill="white")
+    font = ImageFont.truetype(FONT, max(16, height // 60))
+    step = (height - 2 * top) // 38
+    for line in range(36):
+        text = (
+            f"합성 영수증 항목 {line:02d} 진찰료 약제비"
+            if line % 2
+            else f"SYNTHETIC RECEIPT LINE {line:02d} CONSULTATION"
+        )
+        draw.text((left + step, top + step * (line + 1)), text, font=font, fill="black")
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=90)
+    image.close()
+    return buffer.getvalue()
+
+
+def _measure_input(case):
+    if case not in MEASURE_CASES:
+        raise ValueError(case)
+    kind, _, size = case.rpartition("-")
+    if case.startswith("pdf-"):
+        pages = int(size)
+        data = dense_pdf(pages, "text" if kind == "pdf-text-a4" else "image")
+        return data, "application/pdf", pages, pages * A4_PIXELS[0] * A4_PIXELS[1]
+    width, height = map(int, size.split("x"))
+    return photo_jpeg(width, height), "image/jpeg", 1, width * height
+
+
+def _executable(path):
+    return os.path.isabs(path) and os.path.isfile(path) and os.access(path, os.X_OK)
+
+
+def _timed(command, data, output_limit):
+    started = time.monotonic()
+    output = worker.bounded_process(command, data, timeout=300, output_limit=output_limit)
+    return output, round(time.monotonic() - started, 3)
+
+
+def _ocr_seconds(image, tesseract):
+    """Production OCR orientations, each timed without the production per-call limit."""
+    seconds = []
+    for angle in (0, 90, 180, 270):
+        rotated = image if angle == 0 else image.rotate(angle, expand=True)
+        try:
+            buffer = io.BytesIO()
+            rotated.save(buffer, format="PPM")
+            seconds.append(
+                _timed(worker._ocr_command(tesseract), buffer.getvalue(), worker.MAX_OCR_OUTPUT)[1]
+            )
+        finally:
+            if rotated is not image:
+                rotated.close()
+    return seconds
+
+
+def measure(case, *, tesseract="/usr/bin/tesseract", pdftoppm="/usr/bin/pdftoppm"):
+    """One synthetic case through the production worker; only fixed numeric fields leave."""
+    data, mime, pages, pixels = _measure_input(case)
+    script = Path(worker.__file__).resolve()
+    command = [
+        sys.executable,
+        "-I",
+        "-B",
+        str(script),
+        mime,
+        tesseract,
+        pdftoppm if mime == "application/pdf" else "-",
+    ]
+    started = time.monotonic()
+    try:
+        output = worker.bounded_process(
+            command, data, timeout=600, output_limit=1024, new_session=True
+        )
+        answer = json.loads(output)
+        result = "accepted" if "page_count" in answer else str(answer.get("error"))
+    except worker.ProcessFailure, ValueError:
+        result = "WORKER_FAILED"
+    seconds = round(time.monotonic() - started, 3)
+    render_seconds, ocr_seconds = [], []
+    tools = [tesseract] + ([pdftoppm] if mime == "application/pdf" else [])
+    if all(_executable(tool) for tool in tools):
+        if mime == "application/pdf":
+            for page_number in range(1, pages + 1):
+                output, elapsed = _timed(
+                    worker._render_command(pdftoppm, page_number),
+                    data,
+                    worker.MAX_PIXELS * 3 + 1024,
+                )
+                render_seconds.append(elapsed)
+                with Image.open(io.BytesIO(output), formats=["PPM"]) as image:
+                    ocr_seconds.extend(_ocr_seconds(image, tesseract))
+        else:
+            with Image.open(io.BytesIO(data), formats=["JPEG"]) as image:
+                image.load()
+                ocr_seconds.extend(_ocr_seconds(image, tesseract))
+    try:
+        peak = int(Path("/sys/fs/cgroup/memory.peak").read_text())
+    except OSError, ValueError:
+        peak = None
+    return {
+        "case": case,
+        "pages": pages,
+        "pixels": pixels,
+        "seconds": seconds,
+        "result": result,
+        "render_seconds": render_seconds,
+        "ocr_seconds": ocr_seconds,
+        "memory_peak_bytes": peak,
+        "max_rss_kib": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
+    }
+
+
 def accepted(data, mime, stage):
     result = validate_document(data, mime, scanner_socket=SOCKET)
     require(result.content_type == mime and result.size_bytes == len(data), stage)
@@ -175,6 +372,10 @@ def rejected(data, mime, expected, stage, **options):
 
 
 def main():
+    if sys.argv[1:2] == ["--measure"]:
+        check_isolation()
+        print(json.dumps(measure(sys.argv[2])))
+        return 0
     stage = "isolation"
     daemon = None
     results = []

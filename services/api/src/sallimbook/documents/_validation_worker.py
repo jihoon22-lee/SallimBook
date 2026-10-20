@@ -34,6 +34,8 @@ MAX_NODES = 100_000
 MAX_STREAM = 8 * 1024 * 1024
 MAX_DECOMPRESSED = 64 * 1024 * 1024
 MAX_OCR_OUTPUT = 2 * 1024 * 1024
+# Per render/OCR tool call.
+TOOL_SECONDS = 10
 PROCESS_ENV = {
     "PATH": "/usr/bin:/bin",
     "LANG": "C.UTF-8",
@@ -414,6 +416,10 @@ def _ocr_words(output: bytes) -> bool:
         raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
 
 
+def _ocr_command(tesseract: str) -> list[str]:
+    return [tesseract, "stdin", "stdout", "-l", "eng+kor", "--psm", "11", "--dpi", "200", "tsv"]
+
+
 def _ocr(image, tesseract: str) -> None:
     readable = False
     # Check every right-angle orientation, including low-confidence recognized words.
@@ -425,20 +431,9 @@ def _ocr(image, tesseract: str) -> None:
             rotated.save(buffer, format="PPM")
             try:
                 output = bounded_process(
-                    [
-                        tesseract,
-                        "stdin",
-                        "stdout",
-                        "-l",
-                        "eng+kor",
-                        "--psm",
-                        "11",
-                        "--dpi",
-                        "200",
-                        "tsv",
-                    ],
+                    _ocr_command(tesseract),
                     buffer.getvalue(),
-                    timeout=10,
+                    timeout=TOOL_SECONDS,
                     output_limit=MAX_OCR_OUTPUT,
                 )
             except ProcessFailure:
@@ -689,22 +684,26 @@ def _read_pdf(data: bytes):
     return reader
 
 
+def _render_command(pdftoppm: str, page_number: int) -> list[str]:
+    return [
+        pdftoppm,
+        "-f",
+        str(page_number),
+        "-l",
+        str(page_number),
+        "-r",
+        "200",
+        "-singlefile",
+        "-",
+    ]
+
+
 def _render(data: bytes, page_number: int, pdftoppm: str):
     try:
         output = bounded_process(
-            [
-                pdftoppm,
-                "-f",
-                str(page_number),
-                "-l",
-                str(page_number),
-                "-r",
-                "200",
-                "-singlefile",
-                "-",
-            ],
+            _render_command(pdftoppm, page_number),
             data,
-            timeout=10,
+            timeout=TOOL_SECONDS,
             output_limit=MAX_PIXELS * 3 + 1024,
         )
     except ProcessFailure:
