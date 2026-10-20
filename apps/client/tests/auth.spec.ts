@@ -476,7 +476,7 @@ test("native Android shows an unavailable state without JS credential requests o
 });
 test("login rate limit shows a wait message instead of a credential error", async ({ page }) => {
   const api = await mockIdentity(page);
-  for (const code of ["RATE_LIMITED"]) {
+  for (const code of ["RATE_LIMITED", "AUTH_BUSY"]) {
     api.loginFailure = { status: 429, code };
     await page.goto("/login");
     await fillLogin(page);

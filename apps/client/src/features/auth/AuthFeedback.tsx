@@ -52,6 +52,8 @@ export function authErrorMessage(error: ApiError, login = false): string {
       return "등록 상태가 변경됐어요. 초대를 만든 사람에게 확인해 주세요.";
     case "RATE_LIMITED":
       return "요청이 많아 잠시 기다려야 해요. 잠시 후 다시 시도해 주세요.";
+    case "AUTH_BUSY":
+      return "로그인 확인 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.";
     case "FORBIDDEN":
       return "이 작업을 할 권한이 없어요.";
     case "NOT_FOUND":

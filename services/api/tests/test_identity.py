@@ -3,10 +3,12 @@
 import json
 import secrets
 import stat
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from threading import Barrier, Event
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
@@ -202,8 +204,80 @@ def test_bootstrap_cli_rejects_public_directory_and_symlink_destination(tmp_path
     engine_factory.assert_not_called()
 
 
+class BlockingHasher:
+    """Synthetic stand-in that holds a work slot; never receives real credentials."""
+
+    def __init__(self):
+        self.entered = threading.Semaphore(0)
+        self.release = threading.Event()
+
+    def verify(self, encoded, password):
+        self.entered.release()
+        self.release.wait(5)
+        return True
+
+    def hash(self, password):
+        self.entered.release()
+        self.release.wait(5)
+        return "synthetic-hash"
+
+    def check_needs_rehash(self, encoded):
+        return True
+
+
+def test_password_work_allows_two_concurrent_operations_then_fails_fast(monkeypatch):
+    fake = BlockingHasher()
+    monkeypatch.setattr(service, "PASSWORD_HASHER", fake)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        running = [
+            pool.submit(service._verify_password, "synthetic", "synthetic"),
+            pool.submit(service.hash_password, "synthetic"),
+        ]
+        assert fake.entered.acquire(timeout=5) and fake.entered.acquire(timeout=5)
+        with pytest.raises(DomainError) as busy:
+            service._verify_password("synthetic", "synthetic")
+        assert (busy.value.code, busy.value.status, busy.value.safe_message) == (
+            "AUTH_BUSY",
+            429,
+            "로그인 확인 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.",
+        )
+        fake.release.set()
+        assert [f.result(timeout=5) for f in running] == [True, "synthetic-hash"]
+    assert service._verify_password("synthetic", "synthetic") is True  # slots returned
+
+
+def test_rehash_is_skipped_not_failed_when_slots_are_busy(monkeypatch):
+    monkeypatch.setattr(service, "PASSWORD_HASHER", BlockingHasher())
+    monkeypatch.setattr(service, "_password_slots", threading.BoundedSemaphore(1))
+    service._password_slots.acquire()
+    user = SimpleNamespace(password_hash="synthetic-old")
+    service._upgrade_hash(user, "synthetic")
+    assert user.password_hash == "synthetic-old"
+
+
 @pytest.mark.database
 class TestIdentityDatabase:
+    def test_busy_password_work_does_not_consume_login_attempts(
+        self, identity_app, account, db_engine, monkeypatch
+    ):
+        monkeypatch.setattr(service, "_password_slots", threading.BoundedSemaphore(1))
+        service._password_slots.acquire()
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            response = client.post(
+                "/api/v1/auth/web/login",
+                headers={"Origin": ORIGIN},
+                json={
+                    "login_name": account.login_name,
+                    "password": account.password,
+                    "device_label": "PC",
+                },
+            )
+        assert response.status_code == 429 and response.json()["error"]["code"] == "AUTH_BUSY"
+        with Session(db_engine) as session:
+            key = service.token_hash("throttle", f"login-account:{account.login_name}")
+            assert session.get(LoginThrottle, key).attempts == 0
+            assert session.scalar(select(func.count()).select_from(AuthSession)) == 0
+
     def test_successful_logins_do_not_consume_account_limit(self, identity_app, account, db_engine):
         with TestClient(identity_app, base_url="https://testserver") as client:
             for _ in range(6):

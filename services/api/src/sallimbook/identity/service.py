@@ -4,7 +4,9 @@ import hashlib
 import hmac
 import re
 import secrets
-from collections.abc import Iterable
+import threading
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -60,6 +62,9 @@ PASSWORD_HASHER = PasswordHasher(
 )
 # Unknown logins do the same expensive verification without any usable default account.
 _DUMMY_HASH = PASSWORD_HASHER.hash(secrets.token_urlsafe(32))
+# Each Argon2 call needs about 64 MiB; the single API worker runs at most two at once.
+PASSWORD_WORK_SLOTS = 2
+_password_slots = threading.BoundedSemaphore(PASSWORD_WORK_SLOTS)
 
 
 def utcnow() -> datetime:
@@ -127,11 +132,42 @@ def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: dateti
         raise DomainError("RATE_LIMITED", "잠시 후 다시 시도해 주세요.", 429)
 
 
-def _verify_password(encoded: str, password: str) -> bool:
+@contextmanager
+def _password_work() -> Iterator[None]:
+    """Hold one password work slot, failing fast instead of queueing more Argon2 memory."""
+    slots = _password_slots
+    if not slots.acquire(blocking=False):
+        raise DomainError(
+            "AUTH_BUSY", "로그인 확인 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요.", 429
+        )
     try:
-        return PASSWORD_HASHER.verify(encoded, password)
-    except InvalidHashError, VerificationError:
-        return False
+        yield
+    finally:
+        slots.release()
+
+
+def hash_password(password: str) -> str:
+    with _password_work():
+        return PASSWORD_HASHER.hash(password)
+
+
+def _verify_password(encoded: str, password: str) -> bool:
+    with _password_work():
+        try:
+            return PASSWORD_HASHER.verify(encoded, password)
+        except InvalidHashError, VerificationError:
+            return False
+
+
+def _upgrade_hash(user: User, password: str) -> None:
+    """Rehash with current parameters when a slot is free; a busy server keeps the old hash."""
+    if not PASSWORD_HASHER.check_needs_rehash(user.password_hash):
+        return
+    try:
+        user.password_hash = hash_password(password)
+    except DomainError as error:
+        if error.code != "AUTH_BUSY":
+            raise
 
 
 def _login_buckets(login_name: str, source: str) -> list[tuple[str, int]]:
@@ -165,9 +201,18 @@ def _verify_admitted(
     session: Session, buckets: list[tuple[str, int]], encoded: str, password: str
 ) -> bool:
     """Verify after admission; only failed verifications keep counting toward the limits."""
-    if not _verify_password(encoded, password):
+    keys = [key for key, _ in buckets]
+    try:
+        verified = _verify_password(encoded, password)
+    except DomainError as error:
+        if error.code == "AUTH_BUSY":
+            # Nothing was verified, so the admitted attempt is returned before refusing.
+            _refund_attempts(session, keys)
+            session.commit()
+        raise
+    if not verified:
         return False
-    _refund_attempts(session, [key for key, _ in buckets])
+    _refund_attempts(session, keys)
     return True
 
 
@@ -578,7 +623,7 @@ def _accept_invitation_locked(
     user = User(
         login_name=invitation.intended_login,
         display_name=request.display_name,
-        password_hash=PASSWORD_HASHER.hash(request.password.get_secret_value()),
+        password_hash=hash_password(request.password.get_secret_value()),
     )
     session.add(user)
     try:
@@ -633,8 +678,7 @@ def login(
     )
     if not verified or user is None or user.disabled_at is not None or member is None:
         raise _unauthenticated()
-    if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
-        user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
+    _upgrade_hash(user, request.password.get_secret_value())
     # Creating a device is backed by this actual password verification, never a client flag.
     result = issue_session(session, user, member, request.device_label, transport)
     session.commit()
@@ -679,7 +723,7 @@ def setup_household(
     user = User(
         login_name="owner",
         display_name=request.display_name,
-        password_hash=PASSWORD_HASHER.hash(request.password.get_secret_value()),
+        password_hash=hash_password(request.password.get_secret_value()),
     )
     session.add(user)
     try:
@@ -729,8 +773,7 @@ def reauthenticate(
     now = validate_locked_session(principal, auth, devices[principal.device_id])
     auth.authenticated_at = now
     auth.last_seen_at = now
-    if PASSWORD_HASHER.check_needs_rehash(user.password_hash):
-        user.password_hash = PASSWORD_HASHER.hash(request.password.get_secret_value())
+    _upgrade_hash(user, request.password.get_secret_value())
     result = member_response(user, member)
     session.commit()
     return result

@@ -239,6 +239,7 @@ internal object AuthPolicy {
             "VERSION_CONFLICT" to (409 to "다른 기기에서 수정했습니다. 다시 확인해 주세요."),
             "VALIDATION_ERROR" to (422 to "입력값을 확인해 주세요."),
             "RATE_LIMITED" to (429 to "잠시 후 다시 시도해 주세요."),
+            "AUTH_BUSY" to (429 to "로그인 확인 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요."),
             "INTERNAL_ERROR" to (500 to "요청을 처리하지 못했습니다."),
             "DATABASE_UNAVAILABLE" to (503 to "데이터 저장소를 준비하고 있습니다."),
             "SCHEMA_UNAVAILABLE" to (503 to "데이터 저장소를 준비하고 있습니다."),
