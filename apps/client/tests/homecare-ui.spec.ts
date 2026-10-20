@@ -579,3 +579,16 @@ test("home warranty card shows the soonest active expiries before the most recen
     card.getByText("이외 2개 가전의 기한은 가전 목록에서 확인해 주세요.", { exact: true }),
   ).toBeVisible();
 });
+test("replacement cancellation review explains when a cleared manual date returns", async ({
+  page,
+}) => {
+  await mockHomecare(page);
+  await page.goto(`${device}/replacements/${uid(500)}`);
+  await page.getByRole("button", { name: "교체 기록 취소 검토", exact: true }).click();
+  await expect(
+    page.getByText(
+      "이 교체 때 해제한 직접 지정일은 그 뒤 기기 설정을 바꾸지 않았다면 다시 적용해요.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+});
