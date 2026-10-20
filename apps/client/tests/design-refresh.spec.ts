@@ -226,3 +226,45 @@ test("asset error offers a visible retry while filters remain collapsed", async 
   await expect(page.getByRole("link", { name: "합성 공동 주택", exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+const luminance = (rgb: string) => {
+  const [r, g, b] = rgb
+    .match(/\d+/g)!
+    .slice(0, 3)
+    .map((v) => {
+      const c = Number(v) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+};
+const contrast = (a: string, b: string) => {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x! + 0.05) / (y! + 0.05);
+};
+for (const scheme of ["light", "dark"] as const)
+  test(`form controls and selected surfaces meet contrast minimums (${scheme})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await mockOnboarding(page);
+    await page.goto("/login");
+    const input = page.getByLabel("로그인 이름", { exact: true });
+    const [border, surface, background] = await input.evaluate((el) => {
+      const s = getComputedStyle(el);
+      const body = getComputedStyle(document.body);
+      return [s.borderTopColor, s.backgroundColor, body.backgroundColor];
+    });
+    expect(contrast(border!, surface!)).toBeGreaterThanOrEqual(3);
+    expect(contrast(border!, background!)).toBeGreaterThanOrEqual(3);
+    const [muted, selected] = await page.evaluate(() => {
+      const probe = document.createElement("p");
+      probe.className = "muted";
+      probe.style.background = "var(--selected)";
+      document.body.append(probe);
+      const s = getComputedStyle(probe);
+      const result = [s.color, s.backgroundColor];
+      probe.remove();
+      return result;
+    });
+    expect(contrast(muted!, selected!)).toBeGreaterThanOrEqual(4.5);
+  });
