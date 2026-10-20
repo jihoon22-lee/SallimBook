@@ -62,4 +62,11 @@ class NativeRefreshExchangeTest {
     @Test fun nonJsonSuccessIsAmbiguousRatherThanAnswered() {
         assertEquals(AuthCode.NETWORK_UNAVAILABLE, failure { http { sent(it); reply(it, 200, "ok", "text/plain") }.refresh(token, gate()) { } })
     }
+    @Test fun genericSendCannotCarryRefresh() {
+        // org.json is an unmocked stub in JVM tests; without the allow-list entry no POST reaches the refresh path.
+        var calls = 0
+        assertEquals(AuthCode.INVALID_REQUEST, failure { http { calls++; reply(it, 200, rotated) }
+            .send("POST", NativeAuthHttp.REFRESH_PATH, gate()) })
+        assertEquals(0, calls)
+    }
 }

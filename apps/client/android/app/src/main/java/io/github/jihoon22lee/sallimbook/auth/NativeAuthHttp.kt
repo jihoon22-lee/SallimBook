@@ -102,8 +102,7 @@ internal class NativeAuthHttp(private val origin: String, private val client: Ok
             throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
         }
         val internalAuthPath = path in setOf(
-            "/api/v1/auth/native/login", "/api/v1/auth/native/refresh",
-            "/api/v1/auth/native/logout", "/api/v1/auth/invitations/accept",
+            "/api/v1/auth/native/login", "/api/v1/auth/native/logout", "/api/v1/auth/invitations/accept",
             "/api/v1/household/invitations",
             "/api/v1/auth/native/passkeys/options", "/api/v1/auth/native/passkeys/verify",
             "/api/v1/auth/passkeys/register/options", "/api/v1/auth/passkeys/register/verify",
