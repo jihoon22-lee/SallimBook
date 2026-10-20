@@ -93,6 +93,7 @@ def usage(
         .where(
             RecurringRuleVersion.household_id == household_id,
             linked(RecurringRuleVersion),
+            RecurringRuleVersion.revoked_at.is_(None),
             or_(
                 RecurringRuleVersion.effective_until.is_(None),
                 RecurringRuleVersion.effective_until > as_of_date,
