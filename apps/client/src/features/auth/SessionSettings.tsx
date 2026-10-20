@@ -316,10 +316,15 @@ function DevicePanel() {
   const [error, setError] = useState<ApiError | null>(null);
   const [actionError, setActionError] = useState<ApiError | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
   const [revoking, setRevoking] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signedOut, setSignedOut] = useState(false);
   const signOutForm = useSensitiveForm();
+  useEffect(() => {
+    // The 연결 해제 button that opened the confirmation unmounts, so focus moves to its replacement.
+    if (confirming) confirmButton.current?.focus();
+  }, [confirming]);
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -453,7 +458,7 @@ function DevicePanel() {
                   <div className="form-actions">
                     <button
                       type="button"
-                      autoFocus
+                      ref={confirmButton}
                       disabled={revoking || loading || Boolean(error)}
                       onClick={() => void revoke(device)}
                     >
