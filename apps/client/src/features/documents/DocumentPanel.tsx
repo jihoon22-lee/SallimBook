@@ -3,7 +3,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { isNativeAuth } from "../../platform/nativeAuth";
 import { usePagedList } from "../finance/queries";
 import { useDocumentsApi } from "./api";
-import { stateLabel, targetLabels } from "./model";
+import { MAX_PDF_PAGES, stateLabel, targetLabels } from "./model";
 import type { Target } from "./model";
 import { CommandFeedback, DocumentError, useDocumentCommand } from "./DocumentSupport";
 import { DocumentDetail } from "./DocumentDetail";
@@ -39,8 +39,8 @@ function Documents({ target }: { target: Target }) {
   return (
     <>
       <p>
-        PDF·JPEG·PNG 파일을 최대 20MiB까지 첨부할 수 있어요. 카드 앞뒷면 사진과 카드 비밀정보는
-        첨부할 수 없어요.
+        PDF·JPEG·PNG 파일을 최대 20MiB까지(PDF는 최대 {MAX_PDF_PAGES}쪽) 첨부할 수 있어요. 카드
+        앞뒷면 사진과 카드 비밀정보는 첨부할 수 없어요.
       </p>
       {isNativeAuth() ? (
         <>

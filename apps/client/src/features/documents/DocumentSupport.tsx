@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, toApiError } from "../../platform/api";
 import { FinanceError } from "../finance/FinanceSupport";
 import { useMounted } from "../auth/AuthFeedback";
+import { MAX_PDF_PAGES } from "./model";
 export function DocumentError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
     DOCUMENT_STORAGE_QUOTA_EXCEEDED:
@@ -18,6 +19,7 @@ export function DocumentError({ error }: { error: ApiError | null }) {
       "이 파일은 안전하게 열 수 없어 보관하지 않았어요. 일반 PDF·JPEG·PNG 문서를 확인해 주세요.",
     DOCUMENT_IMAGE_UNSUPPORTED:
       "사진·이미지에 지원하지 않는 부가 정보(편집 정보·동영상 등)가 있어 보관하지 않았어요. JPEG로 다시 저장하거나 화면을 다시 캡처해 첨부해 주세요.",
+    DOCUMENT_TOO_COMPLEX: `쪽수나 해상도가 커서 검사 시간 안에 확인하지 못했어요. PDF는 ${MAX_PDF_PAGES}쪽 이하로 나누거나 해상도를 낮춰 다시 첨부해 주세요.`,
     DOCUMENT_UNREADABLE:
       "문서 내용을 읽기 어려워 보관하지 않았어요. 글자가 선명한 문서를 선택해 주세요.",
     DOCUMENT_SCAN_UNAVAILABLE:

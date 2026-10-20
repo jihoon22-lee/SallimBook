@@ -3,6 +3,7 @@
 import io
 import random
 import struct
+import time
 import zlib
 
 import pytest
@@ -226,7 +227,11 @@ def test_inspect_document_reaches_ocr_for_pdf_with_stream_markers():
     data = pdf_bytes(contents(MARKER_LINE, filtered=True))
     assert_rejected(
         lambda: worker.inspect_document(
-            data, "application/pdf", "/missing/tesseract", "/missing/pdftoppm"
+            data,
+            "application/pdf",
+            "/missing/tesseract",
+            "/missing/pdftoppm",
+            deadline=time.monotonic() + 30,
         ),
         "DOCUMENT_OCR_UNAVAILABLE",
     )

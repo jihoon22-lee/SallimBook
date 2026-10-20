@@ -4,6 +4,8 @@ export type DocumentLink = components["schemas"]["DocumentLinkResponse"];
 export type Target = components["schemas"]["DocumentTarget"];
 export type CreateDocument = components["schemas"]["DocumentCreate"];
 export const MAX_BYTES = 20 * 1024 * 1024;
+// Must equal the server worker's MAX_PAGES (pinned by a server unit test).
+export const MAX_PDF_PAGES = 5;
 export const targetLabels: Record<Target["kind"], string> = {
   policy: "보험",
   case: "사건",

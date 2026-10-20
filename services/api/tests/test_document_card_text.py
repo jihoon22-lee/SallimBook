@@ -72,3 +72,27 @@ def test_card_group_scan_stays_linear_on_long_digit_runs():
     for text in ("1 " * 100_000, "1234 " * 50_000, "12 " * 300_000):
         worker._card_text(text)
     assert time.monotonic() - started < 2.0
+
+
+# User decision 2026-10-20: sideways text OCRs as long digit blobs with confidence 4–22 and
+# ~10% pass Luhn by chance, while real card numbers read at 95+ in their upright orientation.
+@pytest.mark.parametrize("confidence", [0, 10, 29])
+def test_low_confidence_unbroken_digit_word_is_not_a_card_candidate(confidence):
+    assert not worker._ocr_words(tsv(["SYNTHETIC", PAN, "RECEIPT"], confidence))
+
+
+@pytest.mark.parametrize("confidence", [30, 95])
+def test_confident_unbroken_digit_word_is_card_data(confidence):
+    assert_rejected(lambda: worker._ocr_words(tsv([PAN], confidence)), "DOCUMENT_CARD_DATA")
+
+
+def test_grouped_low_confidence_card_number_is_still_card_data():
+    assert_rejected(
+        lambda: worker._ocr_words(tsv(["4123", "4567", "8901", "2349"], 5)), "DOCUMENT_CARD_DATA"
+    )
+
+
+def test_low_confidence_blob_cannot_join_neighbouring_digit_words():
+    # The ignored blob ends the digit run instead of vanishing between its neighbours.
+    words = ["4123", "4567", "2452424446244", "8901", "2349"]
+    worker._ocr_words(tsv(words, 10))

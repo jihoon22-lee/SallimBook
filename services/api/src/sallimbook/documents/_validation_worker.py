@@ -18,24 +18,35 @@ import signal
 import struct
 import subprocess
 import sys
+import threading
 import time
 import unicodedata
 import warnings
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 MAX_BYTES = 20 * 1024 * 1024
 MAX_PIXELS = 16_000_000
 MAX_DIMENSION = 8192
-MAX_PAGES = 20
+# Measured 2026-10-20 with parallel OCR: s = 9.04 s/page, floor((90 - 10) / (1.5 × 9.04)) = 5.
+# Clients pin the same value.
+MAX_PAGES = 5
+# The API waits WORKER_SECONDS = DEADLINE_SECONDS + 10 for the whole worker.
+DEADLINE_SECONDS = 80
 MAX_OBJECTS = 10_000
 MAX_DEPTH = 64
 MAX_NODES = 100_000
 MAX_STREAM = 8 * 1024 * 1024
 MAX_DECOMPRESSED = 64 * 1024 * 1024
 MAX_OCR_OUTPUT = 2 * 1024 * 1024
-# Per render/OCR tool call.
+# Per render/OCR tool call; every call is further bounded by the worker deadline.
 TOOL_SECONDS = 10
+# Unbroken 13+ digit OCR words below this confidence are not card candidates (user decision
+# 2026-10-20: sideways-text blobs score 4–22, upright card numbers 95+).
+OCR_BLOB_CONFIDENCE = 30
+# Orientations OCRed at once (user decision 2026-10-20: same coverage, about half the time).
+OCR_PARALLEL = 2
 PROCESS_ENV = {
     "PATH": "/usr/bin:/bin",
     "LANG": "C.UTF-8",
@@ -48,6 +59,10 @@ PROCESS_ENV = {
 class ProcessFailure(Exception):
     def __init__(self):
         super().__init__("DOCUMENT_PROCESS_FAILED")
+
+
+class ProcessTimeout(ProcessFailure):
+    """The process outlived its time budget; other process failures stay ProcessFailure."""
 
 
 class Rejected(Exception):
@@ -92,7 +107,7 @@ def bounded_process(
             while poll.get_map():
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise ProcessFailure
+                    raise ProcessTimeout
                 for key, event in poll.select(min(remaining, 0.25)):
                     if event & selectors.EVENT_WRITE:
                         try:
@@ -114,6 +129,8 @@ def bounded_process(
             if process.wait(timeout=max(0.001, deadline - time.monotonic())) != 0:
                 raise ProcessFailure
             return bytes(output)
+    except ProcessTimeout, subprocess.TimeoutExpired:
+        raise ProcessTimeout from None
     except OSError, ValueError, subprocess.SubprocessError, ProcessFailure:
         raise ProcessFailure from None
     finally:
@@ -143,10 +160,18 @@ def _limits() -> None:
 
 
 def _size(width: int, height: int) -> None:
-    if not 1 <= width <= MAX_DIMENSION or not 1 <= height <= MAX_DIMENSION:
+    if width < 1 or height < 1:
         raise Rejected
-    if width * height > MAX_PIXELS:
-        raise Rejected
+    # Legitimate but beyond the inspection budget: a retry cannot help, so say so.
+    if width > MAX_DIMENSION or height > MAX_DIMENSION or width * height > MAX_PIXELS:
+        raise Rejected("DOCUMENT_TOO_COMPLEX")
+
+
+def _remaining(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise Rejected("DOCUMENT_TOO_COMPLEX")
+    return remaining
 
 
 # Digit groups joined by one space or a dash (optionally spaced); dots, commas, colons and
@@ -439,6 +464,11 @@ def _png_structure(data: bytes) -> None:
     raise Rejected
 
 
+_JPEG_SOF = frozenset(
+    {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+)
+
+
 def _jpeg_structure(data: bytes) -> None:
     # Broken structure is DOCUMENT_UNSAFE; well-formed segments or trailers outside this
     # profile (XMP, MPF, comments, camera trailers after EOI) are DOCUMENT_IMAGE_UNSUPPORTED.
@@ -469,6 +499,12 @@ def _jpeg_structure(data: bytes) -> None:
         if length < 2 or position + length > len(data):
             raise Rejected
         payload = data[position + 2 : position + length]
+        if marker in _JPEG_SOF:
+            if len(payload) < 5:
+                raise Rejected
+            # SOFn payload: precision, height, width.
+            height, width = struct.unpack("!HH", payload[1:5])
+            _size(width, height)
         if 0xE0 <= marker <= 0xEF:
             prefixes = {
                 0xE0: (b"JFIF\0", b"JFXX\0"),
@@ -594,7 +630,11 @@ def _ocr_words(output: bytes) -> bool:
                 score = float(row["conf"])
                 if not math.isfinite(score) or not -1 <= score <= 100:
                     raise ValueError
-                words.append(word)
+                # Sideways text reads as long low-confidence digit blobs that pass Luhn by
+                # chance; such a blob ends the digit run instead of becoming a candidate.
+                # Grouped numbers (4-4-4-4) still count at any confidence.
+                blob = re.search(r"\d{13,}", unicodedata.normalize("NFKC", word))
+                words.append("|" if blob and score < OCR_BLOB_CONFIDENCE else word)
                 if any(char.isalnum() for char in word):
                     confidence.append(score)
         _card_text(" ".join(words))
@@ -611,28 +651,45 @@ def _ocr_command(tesseract: str) -> list[str]:
     return [tesseract, "stdin", "stdout", "-l", "eng+kor", "--psm", "11", "--dpi", "200", "tsv"]
 
 
-def _ocr(image, tesseract: str) -> None:
-    readable = False
+def _ocr(image, tesseract: str, deadline: float) -> None:
     # Check every right-angle orientation, including low-confidence recognized words.
     # OCR still cannot prove absence of all visual card data; unreadable input is refused.
-    for angle in (0, 90, 180, 270):
-        rotated = image if angle == 0 else image.rotate(angle, expand=True)
-        try:
-            buffer = io.BytesIO()
-            rotated.save(buffer, format="PPM")
+    _remaining(deadline)
+    encode = threading.Lock()
+
+    def recognize(angle: int) -> bytes:
+        # One rotation is serialized at a time so at most OCR_PARALLEL PPM copies are alive.
+        with encode:
+            rotated = image if angle == 0 else image.rotate(angle, expand=True)
             try:
-                output = bounded_process(
-                    _ocr_command(tesseract),
-                    buffer.getvalue(),
-                    timeout=TOOL_SECONDS,
-                    output_limit=MAX_OCR_OUTPUT,
-                )
-            except ProcessFailure:
-                raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
-            readable = _ocr_words(output) or readable
-        finally:
-            if rotated is not image:
-                rotated.close()
+                buffer = io.BytesIO()
+                rotated.save(buffer, format="PPM")
+                data = buffer.getvalue()
+                buffer.close()
+            finally:
+                if rotated is not image:
+                    rotated.close()
+        try:
+            return bounded_process(
+                _ocr_command(tesseract),
+                data,
+                timeout=min(TOOL_SECONDS, _remaining(deadline)),
+                output_limit=MAX_OCR_OUTPUT,
+            )
+        except ProcessTimeout:
+            raise Rejected("DOCUMENT_TOO_COMPLEX") from None
+        except ProcessFailure:
+            raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
+
+    pool = ThreadPoolExecutor(max_workers=OCR_PARALLEL)
+    try:
+        futures = [pool.submit(recognize, angle) for angle in (0, 90, 180, 270)]
+        outputs = [future.result() for future in futures]
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+    readable = False
+    for output in outputs:
+        readable = _ocr_words(output) or readable
     if not readable:
         raise Rejected("DOCUMENT_UNREADABLE")
 
@@ -867,8 +924,10 @@ def _read_pdf(data: bytes):
     for generation, object_id in references:
         visit(IndirectObject(object_id, generation, reader), inventory=True)
     pages = reader.pages
-    if not 1 <= len(pages) <= MAX_PAGES:
+    if not pages:
         raise Rejected
+    if len(pages) > MAX_PAGES:
+        raise Rejected("DOCUMENT_TOO_COMPLEX")
     for page in pages:
         # Float is used only for page geometry, never for financial data.
         width, height = float(page.mediabox.width), float(page.mediabox.height)
@@ -898,14 +957,16 @@ def _render_command(pdftoppm: str, page_number: int) -> list[str]:
     ]
 
 
-def _render(data: bytes, page_number: int, pdftoppm: str):
+def _render(data: bytes, page_number: int, pdftoppm: str, deadline: float):
     try:
         output = bounded_process(
             _render_command(pdftoppm, page_number),
             data,
-            timeout=TOOL_SECONDS,
+            timeout=min(TOOL_SECONDS, _remaining(deadline)),
             output_limit=MAX_PIXELS * 3 + 1024,
         )
+    except ProcessTimeout:
+        raise Rejected("DOCUMENT_TOO_COMPLEX") from None
     except ProcessFailure:
         raise Rejected("DOCUMENT_OCR_UNAVAILABLE") from None
     Image = _pillow()
@@ -917,7 +978,9 @@ def _render(data: bytes, page_number: int, pdftoppm: str):
         return image.convert("RGB")
 
 
-def inspect_document(data: bytes, mime: str, tesseract: str, pdftoppm: str) -> dict:
+def inspect_document(
+    data: bytes, mime: str, tesseract: str, pdftoppm: str, *, deadline: float
+) -> dict:
     if not data or len(data) > MAX_BYTES:
         raise Rejected
     if mime == "application/pdf":
@@ -926,25 +989,27 @@ def inspect_document(data: bytes, mime: str, tesseract: str, pdftoppm: str) -> d
             _ocr_setup(tesseract, pdftoppm, True)
             page_count = len(reader.pages)
             for page_number in range(1, page_count + 1):
-                with _render(data, page_number, pdftoppm) as image:
-                    _ocr(image, tesseract)
+                _remaining(deadline)
+                with _render(data, page_number, pdftoppm, deadline) as image:
+                    _ocr(image, tesseract, deadline)
         finally:
             reader.close()
     else:
         with _image(data, mime) as image:
             _ocr_setup(tesseract, pdftoppm, False)
-            _ocr(image, tesseract)
+            _ocr(image, tesseract, deadline)
         page_count = 1
     return {"content_type": mime, "page_count": page_count}
 
 
 def main() -> None:
+    deadline = time.monotonic() + DEADLINE_SECONDS
     try:
         _limits()
         if len(sys.argv) != 4 or sys.argv[1] not in {"application/pdf", "image/png", "image/jpeg"}:
             raise Rejected
         data = sys.stdin.buffer.read(MAX_BYTES + 1)
-        result = inspect_document(data, sys.argv[1], sys.argv[2], sys.argv[3])
+        result = inspect_document(data, sys.argv[1], sys.argv[2], sys.argv[3], deadline=deadline)
     except Rejected as failure:
         result = {"error": failure.code}
     except BaseException:

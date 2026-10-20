@@ -20,12 +20,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sallimbook.core.errors import DomainError
-from sallimbook.documents._validation_worker import ProcessFailure, bounded_process
+from sallimbook.documents._validation_worker import (
+    DEADLINE_SECONDS,
+    MAX_PAGES,
+    ProcessFailure,
+    ProcessTimeout,
+    bounded_process,
+)
 
 MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 ALLOWED_MIME_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png"})
 SCAN_SECONDS = 15.0
-WORKER_SECONDS = 60.0
+# The worker stops itself at DEADLINE_SECONDS; the extra ten seconds cover start-up and exit.
+WORKER_SECONDS = DEADLINE_SECONDS + 10
 MAX_SCANNER_REPLY = 1024
 _INSPECTION_SLOT = threading.BoundedSemaphore(1)
 
@@ -36,6 +43,11 @@ _ERRORS = {
         422,
         "사진·이미지에 지원하지 않는 부가 정보가 있어요. "
         "JPEG로 다시 저장하거나 앱에서 다시 선택해 주세요.",
+    ),
+    "DOCUMENT_TOO_COMPLEX": (
+        422,
+        "쪽수나 해상도가 커서 검사 시간 안에 확인하지 못했어요. "
+        "필요한 쪽만 나누거나 해상도를 낮춰 첨부해 주세요.",
     ),
     "DOCUMENT_MALWARE": (422, "보안 검사에서 허용하지 않은 파일입니다."),
     "DOCUMENT_CARD_DATA": (422, "카드번호·보안코드 또는 카드 사진은 첨부할 수 없습니다."),
@@ -205,6 +217,8 @@ def _validate_document(
             new_session=True,
         )
         result = json.loads(output)
+    except ProcessTimeout:
+        _fail("DOCUMENT_TOO_COMPLEX")
     except ProcessFailure, ValueError, TypeError, UnicodeError:
         _fail("DOCUMENT_SCAN_UNAVAILABLE")
     if not isinstance(result, dict):
@@ -215,7 +229,7 @@ def _validate_document(
         set(result) != {"content_type", "page_count"}
         or result["content_type"] != declared_mime
         or type(result["page_count"]) is not int
-        or not 1 <= result["page_count"] <= 20
+        or not 1 <= result["page_count"] <= MAX_PAGES
         or declared_mime != "application/pdf"
         and result["page_count"] != 1
     ):
