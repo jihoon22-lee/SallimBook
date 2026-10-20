@@ -282,6 +282,10 @@ export interface SallimBookAuth {
   loginUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
   /** Confirms the current account password without creating another device or session. */
   reauthenticateUI(): Promise<NativeAuthResult<{ status: "authenticated" | "cancelled" }>>;
+  /** Current/new passwords stay in native UI. Other devices are signed out on the server; JS receives status only. */
+  changePasswordUI(): Promise<NativeAuthResult<{ status: "changed" | "cancelled" }>>;
+  /** Confirms the current password in native UI and signs out every other device of this account. */
+  revokeOtherDevicesUI(): Promise<NativeAuthResult<{ status: "revoked" | "cancelled" }>>;
   /** Accepts the invitation in native UI; sign-in is a separate action. */
   acceptInvitationUI(): Promise<NativeAuthResult<{ status: "accepted" | "cancelled" }>>;
   /** Intended login and the generated invitation secret are handled/displayed only in native UI. */

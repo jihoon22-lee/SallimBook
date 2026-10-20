@@ -326,6 +326,8 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun connectHousehold(call: PluginCall) { main.post { launchForm(call, NativeOnboardingActivity.CONNECT) } }
     @PluginMethod fun createConnectionCode(call: PluginCall) { main.post { launchForm(call, NativeOnboardingActivity.CREATE_CODE) } }
     @PluginMethod fun reauthenticateUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.REAUTHENTICATE) } }
+    @PluginMethod fun changePasswordUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.CHANGE_PASSWORD) } }
+    @PluginMethod fun revokeOtherDevicesUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.SIGN_OUT_OTHERS) } }
     @PluginMethod fun acceptInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.INVITATION) } }
     @PluginMethod fun createInvitationUI(call: PluginCall) { main.post { launchForm(call, NativeAuthActivity.CREATE_INVITATION) } }
     @PluginMethod fun passkeyLoginUI(call: PluginCall) { main.post { launchForm(call, NativePasskeyActivity.LOGIN) } }
@@ -435,6 +437,8 @@ class SallimBookAuthPlugin : Plugin() {
             NativeDocumentActivity.UPLOAD -> "uploaded"
             NativeDocumentActivity.DOWNLOAD -> "downloaded"
             NativeExportActivity.MODE -> "exported"
+            NativeAuthActivity.CHANGE_PASSWORD -> "changed"
+            NativeAuthActivity.SIGN_OUT_OTHERS -> "revoked"
             else -> "accepted"
         }
         val status = result.data?.getStringExtra(NativeAuthActivity.EXTRA_STATUS)

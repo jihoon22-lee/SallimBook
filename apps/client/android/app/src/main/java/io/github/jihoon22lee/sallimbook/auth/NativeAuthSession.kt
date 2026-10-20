@@ -275,6 +275,48 @@ internal class NativeAuthSession private constructor(context: Context) {
         }
     }
 
+    fun changePassword(current: CharArray, next: CharArray, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) =
+        accountPassword("/api/v1/auth/password", current, next, gate, callback)
+
+    fun revokeOtherDevices(password: CharArray, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit) =
+        accountPassword("/api/v1/devices/revoke-others", password, null, gate, callback)
+
+    private fun accountPassword(
+        path: String, current: CharArray, next: CharArray?, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,
+    ) {
+        // Clear password arrays even when a queued operation has already been cancelled.
+        executor.execute {
+            var payload: JSONObject? = null
+            val outcome = try {
+                authorize(gate)
+                requireAvailable()
+                gate.check()
+                val token = access(gate)
+                payload = if (next == null) JSONObject().put("password", String(current))
+                    else JSONObject().put("current_password", String(current)).put("new_password", String(next))
+                current.fill('\u0000'); next?.fill('\u0000')
+                val response = http.send("POST", path, gate, body = payload, accessToken = token)
+                if (response.status == 401) {
+                    clearLocal()
+                    throw AuthFailure(AuthCode.SESSION_EXPIRED)
+                }
+                if (response.status == 422) throw AuthFailure(AuthCode.VALIDATION_ERROR)
+                if (response.status != 200) throw AuthFailure(AuthPolicy.credentialFailure(response.status))
+                AuthPolicy.revokedDevices(response.body)
+                gate.check()
+                AuthOutcome.success(mapOf("status" to if (next == null) "revoked" else "changed"))
+            } catch (failure: AuthFailure) {
+                AuthOutcome.failure(failure.code)
+            } catch (_: Exception) {
+                AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE)
+            } finally {
+                payload?.remove("password"); payload?.remove("current_password"); payload?.remove("new_password")
+                current.fill('\u0000'); next?.fill('\u0000')
+            }
+            callback(outcome)
+        }
+    }
+
     fun acceptInvitation(
         invitation: CharArray, password: CharArray, displayName: String,
         gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,

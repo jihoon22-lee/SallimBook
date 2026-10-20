@@ -135,4 +135,13 @@ class AppLockPolicyTest {
         assertFalse(policy.httpAllowed(ticket, "GET", "/api/v1/household/members"))
         policy.pause(); assertFalse(policy.unlock(ticket))
     }
+
+    @Test fun onlyUnlockedProtectedRequestsCanChangeThePasswordOrSignOutOthers() {
+        val policy = AppLockPolicy().also { it.resume(0, false) }
+        for (kind in AppRequestKind.entries.filter { it != AppRequestKind.PROTECTED }) {
+            for (path in listOf("/api/v1/auth/password", "/api/v1/devices/revoke-others")) {
+                assertFalse(policy.httpAllowed(policy.ticket(kind), "POST", path))
+            }
+        }
+    }
 }

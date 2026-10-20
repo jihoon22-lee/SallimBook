@@ -108,6 +108,7 @@ internal class NativeAuthHttp(private val origin: String, private val client: Ok
             "/api/v1/auth/passkeys/register/options", "/api/v1/auth/passkeys/register/verify",
             "/api/v1/auth/step-up/options", "/api/v1/auth/step-up/verify",
             "/api/v1/auth/native/reauthenticate",
+            "/api/v1/auth/password", "/api/v1/devices/revoke-others",
         ) && method == "POST" && ifMatch == null
         val onboarding = nativeOnboarding && !nativeAccountNumber && !nativeInsurancePolicyNumber && !nativeDocumentCreate &&
             NativeOnboardingPolicy.httpAllowed(method, path, body?.let { jsonValue(it) }, accessToken != null,
