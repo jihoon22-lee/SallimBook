@@ -22,8 +22,9 @@ test("shared fixture money, HALF_UP and calendar examples remain exact", () => {
     );
   expect(parseKrw("9007199254740993")).toBe("9007199254740993");
   expect(parseKrw("99999999999999999999")).toBe("99999999999999999999");
-  for (const amount of ["", "-1", "1.1", "1e3", "1,000", "100000000000000000000"])
+  for (const amount of ["", "-1", "1.1", "1e3", "1,00", "100000000000000000000"])
     expect(parseKrw(amount)).toBeNull();
+  expect(parseKrw("1,000")).toBe("1000");
   expect(ownedPreview("99999999999999999999", "1", "whole")).toBe("99999999999999999999");
   expect(ownedPreview("1", "0.499999999999999999", "whole")).toBe("0");
   expect(formatKrw(null)).toBe("미입력");
