@@ -488,11 +488,12 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 재고 쓰기는 `If-Match: "현재 소모품 version"`과 `Idempotency-Key`를 함께 요구한다. 교체에는 현재 `link_version`과
 `clear_next_check_override` 선택이 추가로 필요하다. 교체와 재고 감소는 같은 트랜잭션이며, 부족하면 409 `INSUFFICIENT_STOCK`이다.
 응답은 원본 실행 당시 `stock_version`, movement ID와 선택적 replacement ID의 불변 참조다. 재전송 뒤에는 현재 자원을 다시 조회한다.
-취소도 새 반대 동작을 기록하며, 당시 저장한 옛 날짜를 덮어쓰지 않고 취소되지 않은 가장 최근 교체를 다시 선택한다.
+취소도 새 반대 동작을 기록하며 취소되지 않은 가장 최근 교체를 다시 선택한다. 그 교체가 `clear_next_check_override`로 해제한 직접 지정일은 해제 직후의 연결 version이 그대로일 때만 되살리고 연결 version을 1 올린다. 응답 형태는 같으므로 최신 연결은 GET으로 다시 조회한다.
 
 `GET /api/v1/homecare/status`는 Asia/Seoul의 오늘(`as_of`) 기준으로 사용 중인 가전/소모품 연결을 반환한다.
 `replacement_due`는 날짜 미확인일 때 null, `purchase_needed`는 공용 재고가 기기별 교체 수량보다 적을 때 true이며
 `low_stock`은 별도의 재고 부족 임계와 비교한다. 자산의 선택 월은 입력으로 받지 않는다. 모든 목록은 UUID cursor와 최대 200개 limit로 나눈다.
+곧 교체는 클라이언트가 `as_of`·`next_check_on`·`replacement_due`로 계산하며 별도 응답 필드는 없다.
 첨부파일의 연결·다운로드는 SB-023의 별도 typed 문서 계약을 사용한다.
 
 가전·재고·교체 24개 계약의 웹/Android 화면 연결과 홈의 월/오늘 분리는 [가전·재고 UI 검증](testing/homecare-client.md)을 따른다.

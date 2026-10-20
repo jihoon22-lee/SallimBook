@@ -33,3 +33,25 @@ Galaxy 두 기기 시험과 홈 상단 월간 자산 변화/오늘 소모품 배
 연결 또는 취소된 재고/교체 이력이 남아 있으면 DB RESTRICT FK가 삭제를 막고 409를 반환한다.
 같은 트랜잭션의 감사 기록도 실패 시 롤백한다. 다른 가계·버전 충돌·부부 삭제·삭제와 새 연결 동시성
 7개를 추가했다. 취소 fixture의 필수 실제 날짜와 200 응답을 바로잡고 82개 전체를 다시 통과했다.
+
+## 리뷰 보완: 해제한 직접 지정일 복원 (WP07, 마이그레이션 0016)
+
+`consumable_replacements`에 `cleared_next_check_override`와 `cleared_link_version`을 추가했다. 두 열은 함께 있거나 함께 없으며(CHECK),
+INSERT 트리거는 기록한 version이 해제 직후 연결 상태(같은 version, override 없음)와 맞는지 확인한다. backfill은 없어 0016 이전 행은 NULL이다.
+교체 취소는 그 교체가 해제한 날짜를 연결 version이 해제 직후와 같을 때만 되살리고 version을 1 올린다. 해제 뒤 연결 PATCH가 있으면 현재 설정을 유지한다.
+
+```bash
+uv run --project services/api ruff check services/api/src services/api/tests services/api/migrations
+uv run --project services/api pytest services/api/tests -m 'not database' -q
+TMPDIR="$HOME/.cache/sallimbook-tmp" pnpm test:database services/api/tests/test_homecare_database.py -q
+TMPDIR="$HOME/.cache/sallimbook-tmp" pnpm test:database services/api/tests/test_exports.py -q
+TMPDIR="$HOME/.cache/sallimbook-tmp" pnpm test:database services/api/tests/test_database.py -q
+```
+
+- DB 제약 시험은 구현 전 ORM 열 없음으로, 복원 시험 2개는 복원 안 됨(override None, version 2)으로 실패를 확인한 뒤 통과했다.
+  설정 변경 뒤 유지·0016 이전 행 미복원 guard 2개는 구현 전후 모두 통과한다.
+- 실제 DB homecare **38개**, exports **17개**, database **5개** 통과. 각 실행 뒤 `alembic check`, downgrade base, upgrade head를 통과했다.
+- DB 없는 시험 **912개 통과**(10 skip). ruff check·format 통과.
+- 재전송은 멱등 결과를 그대로 돌려주어 다시 복원하지 않고, 복원 뒤 이전 version의 PATCH는 409 `VERSION_CONFLICT`다.
+  감사 기록은 해제·복원 모두 `next_check_override` 필드 이름만 남긴다.
+- **미실행:** 운영 DB 적용. 배포 때 0016 upgrade를 적용하며 기존 행은 바꾸지 않는다.
