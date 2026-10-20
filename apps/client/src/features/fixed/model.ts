@@ -80,6 +80,11 @@ export const ruleCommandMessages: Partial<Record<ApiErrorCode, string>> = {
   RULE_PERIOD_OVERLAP:
     "현재 적용 중인 시작일 뒤이면서 종료 적용일 전인 날짜를 선택해 주세요. 종료일을 연장하거나 지난 규칙을 덮어쓰지 않아요.",
 };
+/** How the detail page offers a payment: normally, only after a check when already paid, or not at all. */
+export function settlementEntry(row: Obligation): "settle" | "additional" | null {
+  if (row.schedule_state !== "active" || row.skipped || row.manually_completed) return null;
+  return row.status === "paid" ? "additional" : "settle";
+}
 export function ruleDraft(row?: RuleTerms): RuleDraft {
   return row
     ? {

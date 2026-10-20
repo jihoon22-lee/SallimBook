@@ -22,6 +22,7 @@ import {
   economicTypes,
   generationValid,
   obligationStates,
+  settlementEntry,
   withdrawalPlan,
 } from "./model";
 import type { Obligation, Rule, Settlement } from "./model";
@@ -31,6 +32,7 @@ import { ObligationCalendar } from "./ObligationCalendar";
 import {
   actionAllowed,
   actionLabels,
+  AdditionalPaymentCheck,
   ObligationActionForm,
   SettlementForm,
   VoidSettlement,
@@ -353,7 +355,7 @@ function FixedList() {
                       {row.manual_override ? " · 수동 예외" : ""}
                     </p>
                   </div>
-                  {row.schedule_state === "active" && !row.skipped && !row.manually_completed && (
+                  {settlementEntry(row) === "settle" && (
                     <Link
                       className="button-link secondary-button"
                       to={`/fixed-payments/${row.id}?task=settle`}
@@ -770,7 +772,10 @@ function ObligationDetail({ id }: { id: string }) {
   const [voiding, setVoiding] = useState<Settlement | null>(null);
   const [notice, setNotice] = useState("");
   const row = resource.data;
-  const canSettle = row?.schedule_state === "active" && !row.skipped && !row.manually_completed;
+  const entry = row ? settlementEntry(row) : null;
+  const canSettle = entry !== null;
+  // A paid occurrence shows the double-count check before the payment form.
+  const [extraConfirmed, setExtraConfirmed] = useState(false);
   const currentAction = action === "settle" && !canSettle ? "" : action;
   function close(restoreFocus = true) {
     const target = actionTrigger.current;
@@ -780,6 +785,7 @@ function ObligationDetail({ id }: { id: string }) {
       });
     setAction("");
     setVoiding(null);
+    setExtraConfirmed(false);
     if (params.has("task")) {
       const next = new URLSearchParams(params);
       next.delete("task");
@@ -824,10 +830,10 @@ function ObligationDetail({ id }: { id: string }) {
               {formatKrw(row.actual_amount_krw)}
             </p>
             <div className="primary-action-row">
-              {canSettle && (
+              {entry && (
                 <button
                   ref={actionTrigger}
-                  className="primary-button"
+                  className={entry === "settle" ? "primary-button" : "secondary-button"}
                   disabled={Boolean(currentAction || voiding)}
                   onClick={(event) => {
                     actionTrigger.current = event.currentTarget;
@@ -836,7 +842,7 @@ function ObligationDetail({ id }: { id: string }) {
                     setNotice("");
                   }}
                 >
-                  실제 납부 기록
+                  {entry === "settle" ? "실제 납부 기록" : "추가 납부 기록"}
                 </button>
               )}
               <Link to={`/fixed-payments/rules/${row.rule_id}`}>납부 규칙과 적용기간</Link>
@@ -872,7 +878,11 @@ function ObligationDetail({ id }: { id: string }) {
               label={currentAction === "settle" ? "실제 납부 입력" : "납부 회차 변경 입력"}
             >
               {currentAction === "settle" ? (
-                <SettlementForm initial={row} onSaved={saved} onBusyChange={setCommandBusy} />
+                entry === "additional" && !extraConfirmed ? (
+                  <AdditionalPaymentCheck row={row} onConfirm={() => setExtraConfirmed(true)} />
+                ) : (
+                  <SettlementForm initial={row} onSaved={saved} onBusyChange={setCommandBusy} />
+                )
               ) : (
                 <ObligationActionForm
                   initial={row}

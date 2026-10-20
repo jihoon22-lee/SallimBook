@@ -2,7 +2,7 @@ import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import fixtures from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
-import { mockCashflow, sampleCard } from "./support/cashflow";
+import { incomeRow, mockCashflow, sampleCard } from "./support/cashflow";
 import { uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
@@ -410,4 +410,58 @@ test("a card closed after the payment date can still record that payment", async
   await page.goto("/fixed-payments/rules/new");
   await page.getByRole("combobox", { name: "납부수단 구분", exact: true }).selectOption("card");
   await expect(closed).toHaveCount(0);
+});
+
+test("a paid occurrence asks before recording an additional payment", async ({ page }) => {
+  const state = await mockCashflow(page);
+  const paid = state.obligations[0]!;
+  Object.assign(paid, { status: "paid", actual_amount_krw: "33000", difference_krw: "0" });
+  // The mock recomputes status from payments, so the earlier payment has to exist too.
+  state.payments.push({
+    id: uid(280),
+    obligation_id: paid.id,
+    economic_type: paid.economic_type,
+    principal_krw: "0",
+    consumption_krw: "33000",
+    asset_transfer_krw: "0",
+    cash: incomeRow(281, {
+      kind: "fixed_payment",
+      flow: "out",
+      amount_krw: "33000",
+      occurred_on: "2025-02-10",
+      date_precision: "day",
+      member_id: null,
+    }),
+  });
+  await page.goto("/fixed-payments");
+  const paidRow = page
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("link", { name: "합성 AI 구독", exact: true }) });
+  await expect(paidRow.getByRole("link", { name: "납부 기록", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "납부 기록", exact: true })).toHaveCount(2);
+  await page.goto(`/fixed-payments/${uid(70)}?task=settle`);
+  await expect(
+    page.getByRole("heading", { name: "이미 납부를 마친 회차예요", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("실제 납부금액 (원)", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "실제 납부 기록", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "추가 납부 기록", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "추가 납부 입력 계속", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByLabel("납부 내역을 확인했고, 이 회차에 추가로 낸 금액이 있어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "추가 납부 입력 계속", exact: true }).click();
+  await page.getByLabel("실제 납부금액 (원)", { exact: true }).fill("1000");
+  await page.getByLabel("실제 납부일", { exact: true }).fill("2025-02-20");
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await expect(
+    page.getByText("실제 납부를 저장했어요. 아래 납부 내역에서 확인할 수 있어요.", { exact: true }),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(1);
+  await page.getByRole("button", { name: "추가 납부 기록", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "이미 납부를 마친 회차예요", exact: true }),
+  ).toBeVisible();
 });
