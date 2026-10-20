@@ -87,7 +87,8 @@ def existing_instrumentation():
                 "-Pandroid.testInstrumentationRunnerArguments.class="
                 "io.github.jihoon22lee.sallimbook.SecureBridgeWebViewTest,"
                 "io.github.jihoon22lee.sallimbook.NativeVaultCvcAcceptanceTest,"
-                "io.github.jihoon22lee.sallimbook.NativeRoutePolicyTest"
+                "io.github.jihoon22lee.sallimbook.NativeRoutePolicyTest,"
+                "io.github.jihoon22lee.sallimbook.NativeDocumentImageDeviceTest"
             ),
         ],
         env,

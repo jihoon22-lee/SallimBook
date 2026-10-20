@@ -65,8 +65,20 @@ internal class NativeDocumentBytes private constructor(private val bytes: ByteAr
                 return NativeDocumentBytes(buffer, count, checksum)
             } catch (failure: Throwable) { buffer.fill(0); throw failure }
         }
+        /** Takes ownership of an already encoded buffer (no copy); [close] wipes it. */
+        fun fromEncoded(bytes: ByteArray, size: Int): NativeDocumentBytes {
+            if (size !in 1..MAX_BYTES || size > bytes.size) { bytes.fill(0); throw AuthFailure(AuthCode.INVALID_REQUEST) }
+            val digest = MessageDigest.getInstance("SHA-256").apply { update(bytes, 0, size) }.digest()
+            val checksum = digest.joinToString("") { "%02x".format(it.toInt() and 255) }
+            digest.fill(0)
+            return NativeDocumentBytes(bytes, size, checksum)
+        }
     }
     @Volatile private var discarded = false
+    fun <T> useBytes(action: (ByteArray, Int) -> T): T {
+        if (discarded) throw AuthFailure(AuthCode.AUTH_CANCELLED)
+        return action(bytes, size)
+    }
     fun writeTo(output: OutputStream, check: () -> Unit) {
         var offset = 0
         while (offset < size) {
