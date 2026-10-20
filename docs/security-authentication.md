@@ -37,6 +37,25 @@ python -m sallimbook.identity.cli renew-bootstrap \
 활성 구성원 제한은 가계 행 잠금과 slot 1/2 CHECK·partial UNIQUE를 함께 사용한다.
 로그인 제한 기록은 15분 창이 만료되면 다음 인증 시도에서 최대 64개씩 정리한다.
 만료 시각 인덱스를 사용하고 정리 잠금과 카운터 잠금을 분리하며, 진행 중인 제한은 유지한다.
+로그인·재인증 제한은 **실패한 비밀번호 검증만** 센다. 시도 전에 칸을 먼저 차지해 동시 요청이 한도를 넘지 못하게
+하고, 비밀번호 검증까지 성공한 시도는 같은 창 안에서 그 칸을 돌려준다. 그래서 정상 로그인이 부부의 공용
+설치 단위 한도를 소모하지 않으며, 계정 단위 한도는 실패 5회/15분 그대로 남는다.
+Argon2id 해시·검증은 프로세스당 동시 2개까지만 실행한다. 빈 자리가 없으면 기다리지 않고 429 `AUTH_BUSY`로
+"잠시 후 다시 시도"를 안내하며 차지했던 시도 칸은 돌려준다. 합성 측정에서 동시 2개의 추가 메모리는 약 145MiB였다.
+성공 로그인 뒤 해시 비용 갱신은 빈 자리가 있을 때만 하고 실패해도 로그인은 유지한다.
+
+로그인·재인증 화면은 요청한 화면의 경로를 router state로만 받는다. 같은 앱의 `/`로 시작하는 2,048자 이하
+경로만 허용하고 `//`·`/\`·역슬래시·제어문자·다른 origin·`/login` 자신은 버린다. 검증을 통과하지 못하거나
+복귀 정보가 없으면 홈으로 간다. URL query로 복귀 주소를 받지 않으므로 외부 링크가 이동 대상을 정할 수 없다.
+
+사설 웹 응답에는 `ops/deploy.py`의 `PRIVATE_WEB_HEADERS` 하나에서 렌더링한 보안 헤더를 붙인다.
+화면·정적 파일·APK 다운로드는 `Content-Security-Policy`(`default-src 'self'`, `script-src 'self'`,
+`style-src 'self'`, `img-src 'self' data: blob:`, `object-src 'none'`, `base-uri 'none'`,
+`form-action 'self'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `Strict-Transport-Security:
+max-age=31536000`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`를 받는다.
+`/api/*`는 API가 응답별 정책을 직접 정하므로 HSTS·nosniff·Referrer-Policy만 받는다. 인라인 스크립트·style
+속성을 빌드 산출물에 넣지 않으며, 필요한 경우 정책을 넓히지 않고 외부 파일로 옮긴다.
+HTTPS 브라우저 하네스는 같은 정의를 읽어 화면에 붙이고 `securitypolicyviolation`이 없어야 통과한다.
 
 ## 1. 데이터 분류와 신뢰 경계
 

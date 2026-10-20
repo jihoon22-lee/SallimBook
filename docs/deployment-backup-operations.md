@@ -10,6 +10,9 @@ PostgreSQL/파일 저장소는 내부 네트워크에서 접근한다. 호스트
 전용 Tailscale 노드의 Serve 8443은 앱/API, Funnel 443은 검증 정적 파일만 제공한다.
 PC 절전/종료·WSL 중단 시 이용이 중단되므로 자동 복귀와 상태 점검을 운영 인수에 포함한다.
 실제 노드 FQDN·비밀은 운영 단계에 주입하며 가상 값을 운영 주소로 표시하지 않는다.
+사설 Caddy는 `ops/deploy.py`의 `PRIVATE_WEB_HEADERS`로 CSP·X-Frame-Options·HSTS·nosniff·Referrer-Policy를
+보낸다. CSP와 X-Frame-Options는 `/api/*`를 제외한 화면·정적 파일·APK 응답에만 붙인다. 설정을 바꾼 배포 뒤에는
+사설 주소에 `curl -sI`로 다섯 헤더를 확인한다([보안 헤더 규칙](security-authentication.md)).
 [승인된 격리 운영 결정](adr/private-network-and-app-identity.md)을 따른다.
 
 검토 가능한 Compose/이미지 입력, DB 역할 분리, 암호화 백업/격리 복원, 운영 승격 검사와 APK 서명 도구의 실제 명령은
