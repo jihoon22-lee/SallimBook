@@ -6,7 +6,7 @@ import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from threading import Barrier, Event
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -620,6 +620,65 @@ def seed_expired_ceremonies(session, account, credential_id, count):
 
 @pytest.mark.database
 class TestPasskeyDatabase:
+    def test_device_and_passkey_lists_are_newest_first_and_owner_scoped(
+        self, passkey_app, passkey_account, db_engine
+    ):
+        # Imported here: test_pagination -> test_accounts -> test_passkeys would be circular.
+        from test_pagination import api_pages, ids, pairs
+
+        account = passkey_account
+        spouse = another_account(db_engine, account.household_id)
+        days = [3, 1, 4, 2, 5]
+        with Session(db_engine) as session:
+            devices = [
+                RegisteredDevice(
+                    id=uuid4(),
+                    household_id=account.household_id,
+                    user_id=account.user_id,
+                    label=f"합성 기기 {n}",
+                    platform="android",
+                    status="active",
+                    last_seen_at=datetime(2026, 1, day, tzinfo=UTC),
+                    created_at=datetime(2026, 1, day, tzinfo=UTC),
+                )
+                for n, day in enumerate(days[:4])
+            ]
+            keys = [
+                AuthCredential(
+                    id=uuid4(),
+                    household_id=account.household_id,
+                    user_id=account.user_id,
+                    created_device_id=account.principal.device_id,
+                    credential_id=secrets.token_bytes(32),
+                    public_key=b"synthetic-public-key",
+                    rp_id=RP_ID,
+                    label=f"합성 패스키 {n}",
+                    sign_count=0,
+                    aaguid=UUID(int=0),
+                    transports=[],
+                    device_type="single_device",
+                    backed_up=False,
+                    created_at=datetime(2026, 1, day, tzinfo=UTC),
+                )
+                for n, day in enumerate(days)
+            ]
+            session.add_all([*devices, *keys])
+            session.commit()
+            device_ids = [str(row.id) for row in devices]
+            key_ids = [str(row.id) for row in keys]
+        login_device = str(account.principal.device_id)  # created now, so newest
+        with TestClient(passkey_app, base_url="https://testserver") as client:
+            expected = [login_device, *(device_ids[i] for i in (2, 0, 3, 1))]
+            assert ids(api_pages(client, account, "/api/v1/devices")) == pairs(expected)
+            expected = [key_ids[i] for i in (4, 2, 0, 3, 1)]
+            assert ids(api_pages(client, account, "/api/v1/auth/passkeys")) == pairs(expected)
+            other = client.get(
+                "/api/v1/devices",
+                headers=account.headers,
+                params={"cursor": str(spouse.principal.device_id)},
+            )
+            assert other.status_code == 404 and other.json()["error"]["code"] == "NOT_FOUND"
+
     @pytest.mark.parametrize(
         "invalid_state",
         [

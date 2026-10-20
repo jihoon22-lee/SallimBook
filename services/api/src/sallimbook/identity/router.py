@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 
 from sallimbook.core.authorization import require_recent_login, require_version
 from sallimbook.core.errors import DomainError
+from sallimbook.core.pagination import keyset_page
 from sallimbook.identity import service
 from sallimbook.identity.auth_models import AuthSession, HouseholdMember, RegisteredDevice, User
 from sallimbook.identity.dependencies import (
@@ -337,9 +338,16 @@ def get_devices(
         RegisteredDevice.household_id == principal.household_id,
         RegisteredDevice.user_id == principal.user_id,
     )
-    if cursor is not None:
-        query = query.where(RegisteredDevice.id < cursor)
-    rows = list(session.scalars(query.order_by(RegisteredDevice.id.desc()).limit(limit + 1)))
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=RegisteredDevice,
+        household_id=principal.household_id,
+        keys=(RegisteredDevice.created_at,),
+        cursor=cursor,
+        limit=limit,
+        cursor_where=(RegisteredDevice.user_id == principal.user_id,),
+    )
     activity = dict(
         session.execute(
             select(
@@ -349,7 +357,7 @@ def get_devices(
             .where(
                 AuthSession.household_id == principal.household_id,
                 AuthSession.user_id == principal.user_id,
-                AuthSession.device_id.in_([device.id for device in rows[:limit]]),
+                AuthSession.device_id.in_([device.id for device in rows]),
             )
             .group_by(AuthSession.device_id)
         ).all()
@@ -365,9 +373,9 @@ def get_devices(
                 version=device.version,
                 current=device.id == principal.device_id,
             )
-            for device in rows[:limit]
+            for device in rows
         ],
-        next_cursor=rows[limit - 1].id if len(rows) > limit else None,
+        next_cursor=next_cursor,
     )
     session.commit()
     return result
