@@ -375,3 +375,32 @@ test("an expense dated on an account's last day can use that account", async ({ 
   await page.getByLabel("의료비 지불 실제 날짜", { exact: true }).fill("2025-02-15");
   await expect(closed).toHaveJSProperty("disabled", false);
 });
+
+test("ended policy stays selectable for a late claim and a direct allocation with a status note", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.core.policies.push({ ...policyRow(84), product_name: "합성 종료 계약", status: "ended" });
+  await page.goto(`/insurance/claims/new?case=${uid(90)}`);
+  const policy = page.getByRole("combobox", { name: "청구 보험계약", exact: true });
+  const ended = policy.locator(`option[value="${uid(84)}"]`);
+  await expect(ended).toHaveText("합성 보험사 · 합성 종료 계약 · 계약 종료");
+  await expect(ended).toHaveJSProperty("disabled", false);
+  await policy.selectOption(uid(84));
+  await expect(
+    page.getByText(
+      "선택한 계약은 계약 종료 상태예요. 종료 전 진료에 대한 청구·보험금은 나중에도 기록할 수 있어요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByRole("checkbox", { name: /SYNTHETIC-RECEIPT-1001/ }).check();
+  await page.getByRole("button", { name: "청구 기록 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "보험 청구 상세", exact: true })).toBeVisible();
+  expect(state.claims.at(-1)!.policy_id).toBe(uid(84));
+  await page.goto(`/insurance/payouts/new?case=${uid(90)}`);
+  await expect(
+    page
+      .getByRole("combobox", { name: "배분 보험계약", exact: true })
+      .locator(`option[value="${uid(84)}"]`),
+  ).toHaveJSProperty("disabled", false);
+});

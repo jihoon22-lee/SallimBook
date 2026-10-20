@@ -218,7 +218,6 @@ export function ClaimEditor({
                 onChange={(id) => setDraft((old) => ({ ...old, caseId: id, expenses: [] }))}
               />
               <PolicySelect
-                activeOnly
                 required
                 value={draft.policyId}
                 onChange={(id) => change("policyId", id)}

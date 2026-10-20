@@ -75,7 +75,6 @@ export function AllocationFields({
       <PolicySelect
         label="배분 보험계약"
         value={value.policyId}
-        activeOnly={!value.claimId}
         onChange={(id) => onChange({ ...value, policyId: id, claimId: "" })}
       />
       <div className="form-field">
