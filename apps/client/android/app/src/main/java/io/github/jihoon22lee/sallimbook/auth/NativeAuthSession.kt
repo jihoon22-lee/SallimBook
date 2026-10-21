@@ -539,7 +539,8 @@ internal class NativeAuthSession private constructor(context: Context) {
                 else {
                     val reference = NativeDocumentPolicy.reference(created.body)
                     val documentId = reference["id"] as String
-                    val uploaded = documentHttp.upload(documentId, "\"${reference["version"]}\"", UUID.randomUUID().toString(), content, access(gate), gate)
+                    val uploaded = documentHttp.upload(documentId, "\"${reference["version"]}\"", UUID.randomUUID().toString(), content,
+                        access(gate, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS), gate)
                     if (uploaded.status != 200) documentFailure(uploaded)
                     else {
                         NativeDocumentPolicy.reference(uploaded.body, documentId)

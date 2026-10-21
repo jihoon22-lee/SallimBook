@@ -174,6 +174,12 @@ cd apps/client/android && ./gradlew --no-daemon testDebugUnitTest --tests 'io.gi
 `NativeDocumentImageDeviceTest` 계측 시험에 있으며 로컬 기기가 없어 아직 실행하지 않았다
 (push 후 클라우드 Android instrumentation job에서 실행).
 
+Android 14(API 34) 이상에서 Ultra HDR 사진은 gain map과 함께 디코딩된다. 다시 JPEG로 만들기 전에 gain map을 떼어
+SDR 기본 영상만 올린다. `ultraHdrGainmapIsNotUploaded` 계측 시험은 framework가 실제로 만든 Ultra HDR JPEG(MPF와
+EOI 뒤 보조 영상)를 정규화해 보조 영상이 남지 않음을 확인한다. 정규화 중 메모리가 부족하면 앱을 종료하지 않고 원본
+bytes 업로드로 돌아간다. 업로드는 서버 검사 후 세션을 다시 확인하므로 전송 제한(180초)+5초보다 오래 남은 access token만
+쓰고, 그보다 짧으면 먼저 갱신한다. 내보내기와 같은 규칙이다(`NativeDocumentTransferTest`).
+
 ### 실기기 확인(Galaxy 카메라 사진)
 
 합성 내용만 적은 종이를 기본 카메라로 찍어 합성 기록에 첨부한다. 사진·스크린샷은 저장소·Issue·PR에

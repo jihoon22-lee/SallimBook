@@ -2,6 +2,7 @@ package io.github.jihoon22lee.sallimbook.auth
 
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
+import android.os.Build
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
@@ -37,6 +38,9 @@ internal object NativeDocumentImage {
                 decoder.setTargetSize(width, height)
             }
             bitmap = decoded
+            // Ultra HDR photos decode with a gain map that compress() would write back as an
+            // XMP/MPF secondary image; the upload keeps the SDR base image only.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && decoded.hasGainmap()) decoded.gainmap = null
             check()
             if (!decoded.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, output)) { output.wipe(); return null }
             decoded.recycle(); bitmap = null
@@ -45,6 +49,9 @@ internal object NativeDocumentImage {
         } catch (failure: AuthFailure) {
             output.wipe(); throw failure
         } catch (_: Exception) {
+            output.wipe(); return null
+        } catch (_: OutOfMemoryError) {
+            // A large photo on a low-memory phone falls back to the original bytes, not a crash.
             output.wipe(); return null
         } finally {
             bitmap?.recycle()

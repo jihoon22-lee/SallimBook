@@ -4,13 +4,16 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Gainmap
 import android.graphics.Paint
+import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.jihoon22lee.sallimbook.auth.NativeDocumentBytes
 import io.github.jihoon22lee.sallimbook.auth.NativeDocumentImage
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -97,5 +100,24 @@ class NativeDocumentImageDeviceTest {
     @Test fun undecodableBytesReturnNull() {
         val data = "SYNTHETIC DOCUMENT FIXTURE ONLY".toByteArray()
         assertNull(NativeDocumentImage.normalizeJpeg(NativeDocumentBytes.fromEncoded(data, data.size)) {})
+    }
+    @Test fun ultraHdrGainmapIsNotUploaded() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val jpeg = source(1600, 1200, leftDark = true)
+        val base = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size).copy(Bitmap.Config.ARGB_8888, true)
+        base.gainmap = Gainmap(Bitmap.createBitmap(400, 300, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.GRAY) })
+        val input = ByteArrayOutputStream().also { base.compress(Bitmap.CompressFormat.JPEG, 92, it); base.recycle() }.toByteArray()
+        // Precondition: the framework really wrote an Ultra HDR file (secondary image after EOI).
+        val (inputMarkers, inputTrailing) = segments(input)
+        assertTrue(inputMarkers.toString(), inputTrailing > 0 && inputMarkers.any { it.startsWith("e2:MPF") })
+        val output = NativeDocumentImage.normalizeJpeg(NativeDocumentBytes.fromEncoded(input, input.size)) {}!!
+        output.useBytes { bytes, size ->
+            val (markers, trailing) = segments(bytes.copyOf(size))
+            assertEquals(0, trailing)
+            assertTrue(markers.toString(), markers.all { it in setOf("e0:JFIF", "e2:ICC_PROFILE", "ee:Adobe", "db:", "c0:", "c2:", "c4:", "dd:", "da:") })
+            val decoded = BitmapFactory.decodeByteArray(bytes, 0, size)
+            assertFalse(decoded.hasGainmap())
+            decoded.recycle()
+        }
     }
 }

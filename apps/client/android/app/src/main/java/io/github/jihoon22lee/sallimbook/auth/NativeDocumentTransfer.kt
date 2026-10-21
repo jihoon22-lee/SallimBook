@@ -44,6 +44,8 @@ internal class NativeDocumentBytes private constructor(private val bytes: ByteAr
     companion object {
         const val MAX_BYTES = 20 * 1024 * 1024
         const val TRANSFER_MILLIS = 180_000L
+        /** The server re-checks the session after inspection, so the token must outlive the transfer. */
+        const val REQUIRED_ACCESS_MILLIS = TRANSFER_MILLIS + 5_000L
         fun read(input: InputStream, expectedSize: Long?, check: () -> Unit): NativeDocumentBytes {
             if (expectedSize != null && expectedSize !in 1..MAX_BYTES.toLong()) throw AuthFailure(AuthCode.INVALID_REQUEST)
             val buffer = ByteArray((expectedSize?.toInt() ?: MAX_BYTES) + 1)
