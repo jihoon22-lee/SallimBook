@@ -94,8 +94,8 @@
       "git_sha1": "93ea643beeb2095301d443cafee3e4ce3ef1564d"
     },
     "docs/deployment-backup-operations.md": {
-      "sha256": "d390cf51ec3b36cde1188d3c9d8d96dfe5d4c9d1a98906fee327a309f64495e5",
-      "git_sha1": "11eb0a71f79499017e5043ff8ad60f60d64e27ad"
+      "sha256": "b75cd92cddb480468b2062965e4b7060111dc88bf6ebf606ff201afa4e76698a",
+      "git_sha1": "96c91eba6d70ef978618c2c012bebee5d1dcec6c"
     },
     "docs/roadmap-and-milestones.md": {
       "sha256": "95dd42215c69f32da823697ea9779b74fc22bb7ac86001c227082c5870b7b4db",
@@ -274,8 +274,8 @@
       "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
     },
     "docs/operations-runbook.md": {
-      "sha256": "e3136791e4f0f19c721f845e270f0e4cb96a06d2f9d063dbf221fbd85dc06458",
-      "git_sha1": "c2aaa1ad2b9241de4c5ece8249f55db91d545549"
+      "sha256": "d7558ca3c8ebb1746fd6523f8a7f07bf4acbffdb10eaf7c66752e34bb88a5fa0",
+      "git_sha1": "2f196751285de72fcfe771dd377ca86bc2d93db4"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
