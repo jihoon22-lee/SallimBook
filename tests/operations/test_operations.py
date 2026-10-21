@@ -809,6 +809,12 @@ class SchemaRevisionTests(unittest.TestCase):
         )
         self.assertIn(" ".join(command), runbook)
         self.assertIn("downgrade 0014_vault", runbook)
+        # The APK is in downloads/ by then, and preflight refuses to run without --sdk.
+        section = runbook.split("### 스키마가 바뀌는 업그레이드")[1].split("\n## ")[0]
+        self.assertIn("ops.preflight NEW --verify-database --sdk /DEDICATED_ANDROID_SDK", section)
+        for line in section.splitlines():
+            if "--verify-database" in line:
+                self.assertIn("--sdk", line)
 
     def test_preflight_reports_the_schema_state_from_the_new_image(self):
         for schema in ("current", "upgrade-required"):

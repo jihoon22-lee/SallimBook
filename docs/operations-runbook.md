@@ -115,7 +115,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 5. 현재 예약을 멈춘다: `systemctl --user disable --now PROJECT-startup.service PROJECT-health.timer PROJECT-cvd-refresh.timer`. backup·restore-check 타이머는 백업 유예로 이미 꺼져 있어야 한다(`systemctl --user list-timers 'PROJECT-*' --all`).
 6. **수동 백업**: 현재 설정으로 `python -m ops.automation run CURRENT.json --sha256 CURRENT_SHA256 --task backup`. 현재(이전) 앱 이미지의 백업 worker가 DB와 암호화 첨부를 일관된 시점으로 묶고 완료 기록을 현재 state에 남긴다. 실패하면 여기서 중단한다.
 7. 이전 앱을 멈춘다: `docker compose -f CURRENT/compose.json stop web api`. `CURRENT`는 현재 state의 `active-deployment.json`이 가리키는 렌더(없으면 설정의 `deployment_directory`)다. db·scanner·node는 그대로 둔다.
-8. 마이그레이션 전 확인: `uv run --project services/api python -m ops.preflight NEW --verify-database`의 결과가 `"database_schema": "upgrade-required"`여야 한다. 이 검사는 **새** API 이미지 안에서 런타임 역할로 읽기 전용 실행되며, DB의 revision이 새 이미지가 모르는 값(예: 더 새 스키마)이면 실패한다.
+8. 마이그레이션 전 확인: `JAVA_HOME=/SELECTED_JDK_21 uv run --project services/api python -m ops.preflight NEW --verify-database --sdk /DEDICATED_ANDROID_SDK`의 결과가 `"database_schema": "upgrade-required"`여야 한다. 이 검사는 **새** API 이미지 안에서 런타임 역할로 읽기 전용 실행되며, DB의 revision이 새 이미지가 모르는 값(예: 더 새 스키마)이면 실패한다. 2단계에서 `downloads/`에 APK를 넣었으므로 `--sdk`가 없으면 preflight 전체가 실패한다.
 9. 마이그레이션(새 API 이미지, UID 10001, 읽기 전용, 전용 DB 네트워크만):
 
    ```bash
@@ -137,7 +137,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
    - 0016 downgrade는 교체 기록의 새 두 열을 지운다. 점검 시간에는 새 기능 기록이 없어 잃는 값이 없다.
    - 0015 downgrade는 철회된 규칙 버전이 하나라도 있으면 거부한다. 그때는 6단계 백업을 새 DB로 복원해 전환해야 하는데 현재 도구에는 운영 DB 교체 경로가 없다. 중단하고 별도로 결정한다.
    - 0015가 정규화한 `manual_override`는 되돌리지 않는다(예외가 이미 풀린 회차의 표시만 다르며 금액·납부 기록은 같다).
-3. `ops.preflight NEW --verify-database`가 다시 `"upgrade-required"`인지 확인한다.
+3. 8단계와 같은 preflight(`--verify-database --sdk`)가 다시 `"upgrade-required"`인지 확인한다.
 4. `docker compose -f PREVIOUS/compose.json up -d --wait --remove-orphans`. `PREVIOUS`는 7단계의 `CURRENT`(이전 state의 `active-deployment.json`이 가리키는 렌더)다. 검사기를 처음 배포했다면 `docker volume rm PROJECT_inspector_socket`도 실행한다.
 5. 5단계에서 멈춘 이전 예약을 다시 켠다(`systemctl --user enable --now` 같은 세 unit). backup·restore-check 타이머는 켜지 않는다.
 
