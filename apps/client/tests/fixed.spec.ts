@@ -477,6 +477,75 @@ test("a paid occurrence asks before recording an additional payment", async ({ p
   ).toBeVisible();
 });
 
+test("a payment that conflicts with a partner's completed payment asks again before saving", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  const row = state.obligations[0]!;
+  await page.goto(`/fixed-payments/${row.id}`);
+  await page.getByRole("button", { name: "실제 납부 기록", exact: true }).click();
+  await page.getByLabel("실제 납부금액 (원)", { exact: true }).fill("33000");
+  await page.getByLabel("실제 납부일", { exact: true }).fill("2025-02-20");
+  // The partner records the full payment before this form is saved.
+  state.payments.push({
+    id: uid(280),
+    obligation_id: row.id,
+    economic_type: row.economic_type,
+    principal_krw: "0",
+    consumption_krw: "33000",
+    asset_transfer_krw: "0",
+    cash: incomeRow(281, {
+      kind: "fixed_payment",
+      flow: "out",
+      amount_krw: "33000",
+      occurred_on: "2025-02-19",
+      date_precision: "day",
+      member_id: null,
+    }),
+  });
+  Object.assign(row, {
+    status: "paid",
+    actual_amount_krw: "33000",
+    difference_krw: "0",
+    version: row.version + 1,
+  });
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await page.getByRole("button", { name: "납부 전 현재 회차 비교", exact: true }).click();
+  const proceed = page.getByRole("button", { name: "현재 납부 기준으로 계속", exact: true });
+  await expect(proceed).toBeDisabled();
+  await page
+    .getByLabel("납부 내역을 확인했고, 이 회차에 추가로 낸 금액이 있어요.", { exact: true })
+    .check();
+  await proceed.click();
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await expect(
+    page.getByText("실제 납부를 저장했어요. 아래 납부 내역에서 확인할 수 있어요.", { exact: true }),
+  ).toBeVisible();
+  expect(state.payments).toHaveLength(2);
+});
+
+test("a conflict on a still-unpaid occurrence continues without the additional check", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  state.conflict = true;
+  await page.goto(`/fixed-payments/${uid(70)}`);
+  await page.getByRole("button", { name: "실제 납부 기록", exact: true }).click();
+  await page.getByLabel("실제 납부금액 (원)", { exact: true }).fill("33000");
+  await page.getByLabel("실제 납부일", { exact: true }).fill("2025-02-20");
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await page.getByRole("button", { name: "납부 전 현재 회차 비교", exact: true }).click();
+  await expect(
+    page.getByLabel("납부 내역을 확인했고, 이 회차에 추가로 낸 금액이 있어요.", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "현재 납부 기준으로 계속", exact: true }).click();
+  await page.getByRole("button", { name: "실제 납부 저장", exact: true }).click();
+  await expect(
+    page.getByText("실제 납부를 저장했어요. 아래 납부 내역에서 확인할 수 있어요.", { exact: true }),
+  ).toBeVisible();
+  expect(state.payments).toHaveLength(1);
+});
+
 test("occurrence history names rule-driven regeneration", async ({ page }) => {
   const state = await mockCashflow(page);
   const row = state.obligations[0]!;
