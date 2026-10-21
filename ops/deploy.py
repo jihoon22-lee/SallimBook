@@ -385,6 +385,9 @@ http://:8080 {{
             "mem_limit": INSPECTOR_MEMORY,
             "memswap_limit": INSPECTOR_MEMORY,
             "pids_limit": INSPECTOR_PIDS,
+            # The worker is killed with its process group on a timeout; orphaned OCR tools
+            # must be reaped by a real init or their zombies would use up the PID limit.
+            "init": True,
             "healthcheck": {
                 "test": ["CMD", "python", "-m", "ops.health", "inspector"],
                 "interval": "10s",
