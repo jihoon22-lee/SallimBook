@@ -623,7 +623,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 val response = http.send("PATCH", "/api/v1/accounts/$accountId", gate, body = payload,
                     accessToken = access(gate), ifMatch = ifMatch, nativeAccountNumber = true)
                 if (response.status != 200) accountNumberFailure(response)
-                val safe = try { FinancePolicy.account(response.body) } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+                val safe = try { NativeResponseShape.project { FinancePolicy.account(response.body) } as Map<*, *> } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
                 if (safe["id"] != accountId) throw AuthFailure(AuthCode.ACCESS_DENIED)
                 gate.check()
                 AuthOutcome.success(mapOf("status" to if (number == null) "deleted" else "saved"))
@@ -669,7 +669,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 val response = http.send("PATCH", "/api/v1/insurance/policies/$policyId", gate, body = payload,
                     accessToken = access(gate), ifMatch = ifMatch, nativeInsurancePolicyNumber = true)
                 if (response.status != 200) accountNumberFailure(response)
-                val safe = try { InsurancePolicy.policy(response.body) } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+                val safe = try { NativeResponseShape.project { InsurancePolicy.policy(response.body) } as Map<*, *> } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
                 if (safe["id"] != policyId) throw AuthFailure(AuthCode.ACCESS_DENIED)
                 gate.check()
                 AuthOutcome.success(mapOf("status" to if (number == null) "deleted" else "saved"))

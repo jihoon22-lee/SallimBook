@@ -9,8 +9,10 @@ internal object PaymentLinksPolicy {
     private fun invalid(): Nothing = throw AuthFailure(AuthCode.INVALID_REQUEST)
     private fun obj(value: Any?, fields: Set<String>? = null): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
-        if (row.size > 24 || row.keys.any { it !is String } || fields != null && row.keys != fields) invalid()
-        return row.entries.associate { it.key as String to it.value }
+        if (row.size > 24 || row.keys.any { it !is String }) invalid()
+        val result = if (NativeResponseShape.tolerant) NativeResponseShape.identity(row) else row.entries.associate { it.key as String to it.value }
+        if (fields != null) NativeResponseShape.accept(result, result.keys, fields, fields, ::invalid)
+        return result
     }
     private fun digest(value: Any?) { if (value !is String || !Regex("[0-9a-f]{64}").matches(value)) invalid() }
     private fun date(value: Any?) {

@@ -16,6 +16,7 @@ internal object CardMetadataPolicy {
     private fun obj(value: Any?): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
         if (row.size > 30 || row.keys.any { it !is String }) invalid()
+        if (NativeResponseShape.tolerant) return NativeResponseShape.identity(row)
         return row.entries.associate { it.key as String to it.value }
     }
     private fun text(value: Any?, maximum: Int, empty: Boolean = false) {
@@ -154,7 +155,7 @@ internal object CardMetadataPolicy {
     private fun card(value: Any?): Map<String, Any?> {
         val row = obj(value)
         val extra = setOf("id", "household_id", "masked_number", "has_secret", "settlement_account_status", "status", "created_by_member_id", "updated_by_member_id", "created_at", "updated_at", "version")
-        if (row.keys != fields + extra) invalid()
+        NativeResponseShape.accept(row, row.keys, fields + extra, fields + extra, ::invalid)
         input(row.filterKeys { it in fields }, false)
         for (key in listOf("id", "household_id", "created_by_member_id", "updated_by_member_id")) FinancePolicy.id(row[key])
         timestamp(row["created_at"]); timestamp(row["updated_at"]); integer(row["version"])
@@ -175,7 +176,7 @@ internal object CardMetadataPolicy {
         if (status != if (operation == FinanceOperation.CREATE_CARD) 201 else 200) invalid()
         if (operation == FinanceOperation.LIST_CARDS) {
             val row = obj(value)
-            if (row.keys != setOf("items", "next_cursor")) invalid()
+            NativeResponseShape.accept(row, row.keys, setOf("items", "next_cursor"), setOf("items", "next_cursor"), ::invalid)
             val items = row["items"] as? List<*> ?: invalid()
             if (items.size > 200) invalid()
             items.forEach(::card)

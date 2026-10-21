@@ -79,9 +79,11 @@ class ComparisonPolicyTest {
         val r = request()
         val huge = comparison() + mapOf("total_delta_krw" to "-99999999999999999999", "common_scope_delta_krw" to "99999999999999999999", "change_percent" to "-9999999999999999999900.00")
         assertEquals(huge, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, r, 200, huge))
+        assertEquals(huge, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, r, 200, withAddedFields(huge)))
         for (reason in listOf("zero_previous_total", "negative_previous_total")) {
             val unavailable = comparison() + mapOf("change_percent" to null, "change_percent_unavailable_reason" to reason)
             assertEquals(unavailable, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, r, 200, unavailable))
+            assertEquals(unavailable, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, r, 200, withAddedFields(unavailable)))
         }
         for (change in listOf(mapOf("total_delta_krw" to 0), mapOf("change_percent" to 0.0), mapOf("change_percent" to "1e2"), mapOf("change_percent" to "1.001"),
             mapOf("change_percent" to "01.00"), mapOf("change_percent" to null), mapOf("total_delta_krw" to "100000000000000000000"),
@@ -97,6 +99,7 @@ class ComparisonPolicyTest {
                 "total_delta_krw" to null, "common_scope_delta_krw" to null, "change_percent" to null, "change_percent_unavailable_reason" to state,
                 "items" to listOf(item() + mapOf("amount_delta_krw" to null, "net_assets_effect_krw" to null)))
             assertEquals(row, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(), 200, row))
+            assertEquals(row, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(), 200, withAddedFields(row)))
             bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(), 200, row + mapOf("total_delta_krw" to "0")) }
         }
     }
@@ -113,6 +116,7 @@ class ComparisonPolicyTest {
         val row = comparison() + mapOf("item_count" to 201, "next_cursor" to id, "added_asset_ids" to ids,
             "current" to period("2026-01") + mapOf("dates" to dates() + mapOf("non_month_end_asset_ids" to ids)))
         assertEquals(row, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(query = mapOf("to" to "2026-01", "limit" to 1)), 200, row))
+        assertEquals(row, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(query = mapOf("to" to "2026-01", "limit" to 1)), 200, withAddedFields(row)))
         for (change in listOf(mapOf("items" to List(201) { item() }), mapOf("next_cursor" to other), mapOf("items" to listOf(item(), item())),
             mapOf("added_asset_ids" to listOf(id, id)), mapOf("item_count" to 0))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(), 200, comparison() + change)
@@ -133,6 +137,7 @@ class ComparisonPolicyTest {
         val response = trend("2025-10", "2026-01", points)
         val r = request(FinanceOperation.GET_ASSET_TRENDS, mapOf("from" to "2025-10", "to" to "2026-01"))
         assertEquals(response, FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, response))
+        assertEquals(response, FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, withAddedFields(response)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, response + mapOf("points" to points.dropLast(1))) }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, response + mapOf("points" to points.reversed())) }
     }
@@ -141,7 +146,7 @@ class ComparisonPolicyTest {
         for (change in listOf(mapOf("observed_amount_krw" to 0), mapOf("confirmed_amount_krw" to "1"), mapOf("state" to "draft"),
             mapOf("revision" to ref("2025-12")), mapOf("value_state" to "unconfirmed"), mapOf("as_of_date" to "2026-01-31"),
             mapOf("totals" to totals(provisional = true)), mapOf("value_state" to "missing_month", "observed_amount_krw" to null, "confirmed_amount_krw" to null),
-            mapOf("dates" to dates() + mapOf("raw" to "synthetic")))) bad(AuthCode.ACCESS_DENIED) {
+            mapOf("dates" to dates() + mapOf("raw_token" to "synthetic")))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, trend(points = listOf(point("2026-01") + change)))
         }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, trend() + mapOf("series_kind" to "asset_owned_amount")) }
@@ -149,6 +154,7 @@ class ComparisonPolicyTest {
         val asset = trend() + mapOf("filters" to filters() + mapOf("asset_id" to id), "series_kind" to "asset_owned_amount",
             "points" to listOf(point("2026-01") + mapOf("included_in_total" to false, "as_of_date" to "2026-01-30")))
         assertEquals(asset, FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, filtered, 200, asset))
+        assertEquals(asset, FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, filtered, 200, withAddedFields(asset)))
     }
     @Test fun allOneHundredTwentyPointsMustBeOrderedAndPresentWithoutExtendingTheRequestedRange() {
         val start = YearMonth.parse("2016-02")
@@ -156,6 +162,7 @@ class ComparisonPolicyTest {
         val r = request(FinanceOperation.GET_ASSET_TRENDS, mapOf("from" to "2016-02", "to" to "2026-01"))
         val response = trend("2016-02", "2026-01", points)
         assertEquals(response, FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, response))
+        assertEquals(response, FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, withAddedFields(response)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_ASSET_TRENDS, r, 200, response + mapOf("points" to points + point("2026-02"))) }
     }
     @Test fun comparisonReadsRemainLockedAndErrorsOnlyExposeKnownCodes() {
@@ -172,6 +179,7 @@ class ComparisonPolicyTest {
         val second = item() + mapOf("asset_id" to other, "before" to value("2025-12") + mapOf("asset_id" to other), "after" to value("2026-01") + mapOf("asset_id" to other))
         val row = comparison() + mapOf("item_count" to 2, "items" to listOf(second, item()))
         assertEquals(row, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(), 200, row))
+        assertEquals(row, FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(), 200, withAddedFields(row)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_ASSET_COMPARISON, request(query = mapOf("to" to "2026-01", "cursor" to other)), 200, row) }
     }
 }

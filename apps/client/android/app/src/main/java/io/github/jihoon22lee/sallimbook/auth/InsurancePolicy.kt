@@ -12,6 +12,7 @@ internal object InsurancePolicy {
     private fun obj(value: Any?): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
         if (row.size > 48 || row.keys.any { it !is String }) invalid()
+        if (NativeResponseShape.tolerant) return NativeResponseShape.identity(row)
         return row.entries.associate { it.key as String to it.value }
     }
     private fun integer(value: Any?, minimum: Long = 1, maximum: Long = 9_007_199_254_740_991L) {
@@ -42,8 +43,8 @@ internal object InsurancePolicy {
     private val signedKrw: InsuranceField = { if (it !is String || !Regex("^(0|-?[1-9][0-9]{0,19})\$").matches(it)) invalid() }
     private fun shape(value: Any?, fields: Map<String, InsuranceField>, required: Set<String> = fields.keys): Map<String, Any?> {
         val row = obj(value)
-        if (!fields.keys.containsAll(row.keys) || !row.keys.containsAll(required)) invalid()
-        row.forEach { (name, item) -> fields.getValue(name)(item) }
+        NativeResponseShape.accept(row, row.keys, fields.keys, required, ::invalid)
+        row.forEach { (name, item) -> fields[name]?.invoke(item) }
         return row
     }
     private fun tag(value: Any?): String {
@@ -216,7 +217,7 @@ internal object InsurancePolicy {
         }
         if (route.query) {
             val page = obj(value)
-            if (page.keys != setOf("items", "next_cursor")) invalid()
+            NativeResponseShape.accept(page, page.keys, setOf("items", "next_cursor"), setOf("items", "next_cursor"), ::invalid)
             val items = page["items"] as? List<*> ?: invalid()
             val params = URI(request.path).rawQuery?.split('&')?.associate { it.substringBefore('=') to it.substringAfter('=') } ?: emptyMap()
             if (items.size > (params["limit"]?.toInt() ?: 50)) invalid()

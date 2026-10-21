@@ -170,13 +170,15 @@ class AuthPolicyTest {
         val member = mapOf("user_id" to uuid, "member_id" to uuid, "household_id" to uuid,
             "display_name" to "합성 구성원", "role" to "owner")
         for (payload in listOf(
-            member + ("refresh_token" to "synthetic"), member + ("unreviewed" to "synthetic"),
+            member + ("refresh_token" to "synthetic"),
             member - "role", member + ("role" to "admin"), member + ("member_id" to "not-a-uuid"),
             member + ("display_name" to mapOf("token" to "synthetic")),
         )) {
             try { AuthPolicy.metadataBody("GET", "/api/v1/me", 200, payload); fail("Unsafe member response") }
             catch (failure: AuthFailure) { assertEquals(AuthCode.ACCESS_DENIED, failure.code) }
         }
+        // A field added by a later API version is accepted and never reaches the WebView.
+        assertEquals(member, AuthPolicy.metadataBody("GET", "/api/v1/me", 200, member + ("unreviewed" to "synthetic")))
         val device = mapOf("id" to uuid, "label" to "합성 Android", "platform" to "android",
             "status" to "active", "last_seen_at" to "2026-10-17T00:00:00Z", "version" to 1, "current" to true)
         for (row in listOf(device + ("version" to 1.5), device + ("current" to "true"),
@@ -200,9 +202,10 @@ class AuthPolicyTest {
         }
         assertEquals(2, AuthPolicy.revokedDevices(mapOf("revoked_devices" to 2)))
         assertEquals(0, AuthPolicy.revokedDevices(mapOf("revoked_devices" to 0L)))
+        assertEquals(1, AuthPolicy.revokedDevices(mapOf("revoked_devices" to 1, "device_ids" to emptyList<String>())))
         for (body in listOf<Any?>(null, emptyMap<String, Any?>(), mapOf("revoked_devices" to -1),
             mapOf("revoked_devices" to "1"), mapOf("revoked_devices" to 1.0),
-            mapOf("revoked_devices" to 1, "device_ids" to emptyList<String>()))) {
+            mapOf("revoked_devices" to 1, "refresh_token" to "synthetic"))) {
             try { AuthPolicy.revokedDevices(body); fail("Unsafe revoke count") }
             catch (failure: AuthFailure) { assertEquals(AuthCode.ACCESS_DENIED, failure.code) }
         }

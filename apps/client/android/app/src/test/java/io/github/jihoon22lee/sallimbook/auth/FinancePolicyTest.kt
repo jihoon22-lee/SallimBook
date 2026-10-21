@@ -111,6 +111,7 @@ class FinancePolicyTest {
         val request = FinancePolicy.prepare(FinanceOperation.LIST_ASSETS, emptyMap<String, Any>())
         val list = mapOf("items" to listOf(asset()), "next_cursor" to null)
         assertEquals(list, FinancePolicy.response(FinanceOperation.LIST_ASSETS, request, 200, list))
+        assertEquals(list, FinancePolicy.response(FinanceOperation.LIST_ASSETS, request, 200, withAddedFields(list)))
         invalid(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.LIST_ASSETS, request, 200, list+mapOf("items" to List(201) { asset() })) }
         invalid(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.LIST_ASSETS, request, 200, list+mapOf("token" to "synthetic")) }
     }

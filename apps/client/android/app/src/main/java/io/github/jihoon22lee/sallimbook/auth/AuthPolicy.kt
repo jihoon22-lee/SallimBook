@@ -133,7 +133,8 @@ internal object AuthPolicy {
 
     private fun record(value: Any?, fields: Set<String>): Map<*, *> {
         val record = value as? Map<*, *> ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
-        if (record.keys != fields || !safeJson(record)) throw AuthFailure(AuthCode.ACCESS_DENIED)
+        // Callers rebuild each object from these fields, so fields added by a later API version are dropped.
+        if (!record.keys.containsAll(fields) || !safeJson(record)) throw AuthFailure(AuthCode.ACCESS_DENIED)
         return record
     }
 

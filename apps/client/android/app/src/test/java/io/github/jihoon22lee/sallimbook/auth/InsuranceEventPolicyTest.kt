@@ -101,6 +101,7 @@ class InsuranceEventPolicyTest {
             }
             val status = if (op.name.startsWith("CREATE") || op.name.startsWith("CORRECT")) 201 else 200
             assertEquals(op.name, body, response(op, args, body, status))
+            assertEquals(op.name, body, response(op, args, withAddedFields(body), status))
             bad(AuthCode.ACCESS_DENIED) { response(op, args, body, 202) }
         }
     }
@@ -134,6 +135,7 @@ class InsuranceEventPolicyTest {
     @Test fun nestedCashIsReadOnlyKindBoundAndHouseholdBoundWithoutEquatingVersions() {
         val op = FinanceOperation.GET_MEDICAL_EXPENSE; val args = mapOf("resourceId" to id)
         assertEquals(expense(), response(op, args, expense()))
+        assertEquals(expense(), response(op, args, withAddedFields(expense())))
         for (change in listOf(mapOf("editable" to true), mapOf("voidable" to true), mapOf("kind" to "salary"), mapOf("flow" to "in"), mapOf("household_id" to other), mapOf("date_precision" to "month"), mapOf("period_month" to "2026-02"), mapOf("account_number" to null))) bad(AuthCode.ACCESS_DENIED) {
             response(op, args, expense() + mapOf("cash" to cash() + change))
         }
@@ -167,7 +169,8 @@ class InsuranceEventPolicyTest {
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_MEDICAL_REFUNDS, mapOf("resourceId" to id), page(refund())) }
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_INSURANCE_RETURNS, mapOf("resourceId" to id), page(returned())) }
         val op = FinanceOperation.LIST_MEDICAL_EXPENSES; val item = expense() - "lines"
-        bad(AuthCode.ACCESS_DENIED) { response(op, emptyMap(), page(expense())) }
+        // A detailed child array in a list item is dropped; list items never carry receipt lines.
+        assertEquals(page(item), response(op, emptyMap(), page(expense())))
         bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("case_id" to child)), page(item)) }
         bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("state" to "void")), page(item)) }
         bad(AuthCode.ACCESS_DENIED) { response(op, mapOf("query" to mapOf("cursor" to id)), page(item)) }
@@ -193,6 +196,7 @@ class InsuranceEventPolicyTest {
     }
     @Test fun claimMoneyMustBeExactDifference() {
         response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim())
+        assertEquals(claim(), response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), withAddedFields(claim())))
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim() + mapOf("net_received_krw" to "551")) }
     }
     @Test fun responseDefaultsAndImmutableHistoryFieldsCannotBeOmittedOrChanged() {

@@ -13,6 +13,7 @@ internal object CashflowPolicy {
     private fun obj(value: Any?): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
         if (row.size > 40 || row.keys.any { it !is String }) invalid()
+        if (NativeResponseShape.tolerant) return NativeResponseShape.identity(row)
         return row.entries.associate { it.key as String to it.value }
     }
     private fun str(value: Any?, maximum: Int, empty: Boolean = false) {
@@ -48,8 +49,8 @@ internal object CashflowPolicy {
     private fun choice(vararg options: String): FieldRule = { if (it !is String || it !in options) invalid() }
     private fun shape(value: Any?, fields: Map<String, FieldRule>, required: Set<String> = fields.keys): Map<String, Any?> {
         val row = obj(value)
-        if (!fields.keys.containsAll(row.keys) || !row.keys.containsAll(required)) invalid()
-        row.forEach { (key, item) -> fields.getValue(key)(item) }
+        NativeResponseShape.accept(row, row.keys, fields.keys, required, ::invalid)
+        row.forEach { (key, item) -> fields[key]?.invoke(item) }
         return row
     }
     private fun record(fields: Map<String, FieldRule>): FieldRule = { shape(it, fields); Unit }
