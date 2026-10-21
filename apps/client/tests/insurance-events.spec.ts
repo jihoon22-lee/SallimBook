@@ -79,6 +79,27 @@ test("T-12 through T-14 original medical payments stay 960000 after two contract
   expect(state.claims.map((c) => c.expense_ids)).toEqual([[uid(1001)], [uid(1001)]]);
   expect(state.payouts).toHaveLength(2);
 });
+test("claim retry after an unknown result reuses its key and records one claim", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.failure = "after";
+  await page.goto(`/insurance/claims/new?case=${uid(90)}&policy=${uid(80)}`);
+  await page.getByLabel("청구 접수번호 (선택)", { exact: true }).fill("합성 재시도 청구");
+  await page.getByRole("checkbox", { name: /SYNTHETIC-RECEIPT-1001/ }).check();
+  const save = page.getByRole("button", { name: "청구 기록 저장", exact: true });
+  await save.click();
+  await page
+    .getByRole("button", { name: "목록에서 등록되지 않은 것을 확인했어요", exact: true })
+    .click();
+  await save.click();
+  await expect(page.getByRole("heading", { name: "보험 청구 상세", exact: true })).toBeVisible();
+  const creates = state.writes.filter((w) => w.method === "POST" && w.path.endsWith("/claims"));
+  expect(creates).toHaveLength(2);
+  expect(creates[0]!.key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(creates[1]!.key).toBe(creates[0]!.key);
+  expect(state.claims).toHaveLength(1);
+});
 test("receipt details must exactly decompose actual payment and never add gross hospital cost", async ({
   page,
 }) => {

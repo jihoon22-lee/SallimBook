@@ -20,6 +20,7 @@ import { useInsuranceEventsApi } from "../events/api";
 import { CaseSelect, PolicySelect } from "../events/EventSupport";
 import { PayoutList } from "../events/EventPages";
 import { claimStates, needsCompare } from "../events/model";
+import { useIdempotencyKey } from "../../assets/months/useMonthCommand";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 import { AmountField } from "../../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
@@ -171,6 +172,8 @@ export function ClaimEditor({
     ),
   );
   const input = claimInput(draft);
+  // A retry of the same unsaved claim reuses its key, so the server records it once.
+  const key = useIdempotencyKey(JSON.stringify(input));
   const changes = base && input ? changedFields(claimInput(draftOf(base))!, input) : null;
   const valid =
     !!input &&
@@ -201,7 +204,7 @@ export function ClaimEditor({
               input: { ...changes, reason: reason.trim() },
               ifMatch: `"${base.version}"`,
             })
-          : api.createInsuranceClaim({ input }),
+          : api.createInsuranceClaim({ input, idempotencyKey: key }),
       !base,
     );
     if (result && command.mounted.current) {

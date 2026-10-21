@@ -62,7 +62,7 @@ class InsuranceEventPolicyTest {
     private fun commands(): List<Pair<FinanceOperation, Map<String, Any?>>> = listOf(
         FinanceOperation.MEDICAL_NODE_SUMMARY to mapOf("caseId" to other, "nodeId" to child),
         FinanceOperation.INSURANCE_CASE_SUMMARY to mapOf("caseId" to other),
-        FinanceOperation.LIST_INSURANCE_CLAIMS to emptyMap(), FinanceOperation.CREATE_INSURANCE_CLAIM to mapOf("input" to claimInput),
+        FinanceOperation.LIST_INSURANCE_CLAIMS to emptyMap(), FinanceOperation.CREATE_INSURANCE_CLAIM to create(claimInput),
         FinanceOperation.GET_INSURANCE_CLAIM to mapOf("claimId" to id), FinanceOperation.UPDATE_INSURANCE_CLAIM to mapOf("claimId" to id, "input" to reason + mapOf("expense_ids" to emptyList<String>()), "ifMatch" to tag),
         FinanceOperation.INSURANCE_CLAIM_HISTORY to mapOf("claimId" to id),
         FinanceOperation.LIST_MEDICAL_EXPENSES to emptyMap(), FinanceOperation.CREATE_MEDICAL_EXPENSE to create(expenseInput), FinanceOperation.GET_MEDICAL_EXPENSE to mapOf("resourceId" to id),
@@ -125,7 +125,7 @@ class InsuranceEventPolicyTest {
         bad { request(FinanceOperation.CREATE_INSURANCE_PAYOUT, create(payoutInput + mapOf("allocations" to emptyList<String>()))) }
     }
     @Test fun claimAndAllocationEditsRequireActualChangedFieldsAndUniqueExpenseIds() {
-        bad { request(FinanceOperation.CREATE_INSURANCE_CLAIM, mapOf("input" to claimInput + mapOf("expense_ids" to listOf(id, id)))) }
+        bad { request(FinanceOperation.CREATE_INSURANCE_CLAIM, create(claimInput + mapOf("expense_ids" to listOf(id, id)))) }
         for (input in listOf(reason, reason + mapOf("expense_ids" to null), reason + mapOf("claim_state" to null))) bad {
             request(FinanceOperation.UPDATE_INSURANCE_CLAIM, mapOf("claimId" to id, "input" to input, "ifMatch" to tag))
         }

@@ -44,7 +44,12 @@ export function useInsuranceEventsApi() {
         signal?: AbortSignal,
       ) =>
         domainApi.write(
-          (c) => c.POST("/api/v1/insurance/claims", { body: options.input, signal }),
+          (c) =>
+            c.POST("/api/v1/insurance/claims", {
+              body: options.input,
+              params: { header: { "Idempotency-Key": options.idempotencyKey } },
+              signal,
+            }),
           () => cancellableNative(signal, () => nativeFinance.createInsuranceClaim(options)),
         ),
       getInsuranceClaim: (

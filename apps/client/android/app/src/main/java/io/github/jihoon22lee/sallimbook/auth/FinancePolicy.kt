@@ -320,6 +320,15 @@ internal object FinancePolicy {
     fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? =
         NativeResponseShape.project { validatedResponse(operation, request, status, value) }
 
+    /** A 2xx reply to a write means the server already stored it. An unreadable reply is still withheld,
+     * but reported as an unknown outcome so the screen asks the user to check instead of resubmitting. */
+    fun reply(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? = try {
+        response(operation, request, status, value)
+    } catch (failure: AuthFailure) {
+        if (request.method == "GET") throw failure
+        throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
+    }
+
     private fun validatedResponse(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
         try {
             if (CashflowPolicy.supports(operation)) return CashflowPolicy.response(operation, request, status, value)

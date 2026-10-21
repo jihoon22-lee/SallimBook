@@ -21412,7 +21412,9 @@ export interface operations {
     createInsuranceClaim: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

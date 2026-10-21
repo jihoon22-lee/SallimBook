@@ -607,6 +607,7 @@ export interface SallimBookAuth {
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ClaimListResponse"]>>>;
   createInsuranceClaim(options: {
     input: components["schemas"]["ClaimCreate"];
+    idempotencyKey: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ClaimResponse"]>>>;
   getInsuranceClaim(options: {
     claimId: string;
