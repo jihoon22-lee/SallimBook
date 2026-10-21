@@ -393,3 +393,7 @@ WP03에서 `NativeDocumentImageDeviceTest` 3개(방향 적용, 메타데이터·
 기존 계측 묶음에 더했다. 기존 보안+경로 15개와 합쳐 정확히 **18개**를 요구하고, 가입 1개와 원래의
 생체인증 조건부 skip 하나만 허용하는 규칙은 그대로다. 정상 release 격리 검사의 금지 표식에도 이 클래스명을 더했다.
 
+## Ultra HDR 계측 추가 — 2026-10-21
+
+WP14에서 `NativeDocumentImageDeviceTest.ultraHdrGainmapIsNotUploaded`(API 34 이상)를 더해 기존 계측 묶음은
+정확히 **19개**를 요구한다. 가입 1개와 생체인증 조건부 skip 하나만 허용하는 규칙은 그대로다.
