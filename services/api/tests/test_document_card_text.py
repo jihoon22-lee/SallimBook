@@ -96,3 +96,62 @@ def test_low_confidence_blob_cannot_join_neighbouring_digit_words():
     # The ignored blob ends the digit run instead of vanishing between its neighbours.
     words = ["4123", "4567", "2452424446244", "8901", "2349"]
     worker._ocr_words(tsv(words, 10))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "4123 4567 89012349",
+        "41234567 89012349",
+        "412345678901 2349",
+        "4123 456789012349",
+        "4123  4567  8901  2349",
+        "4123\t4567\t8901\t2349",
+        "4123\n4567\n8901\n2349",
+        "4123 - 4567 89012349",
+        "3712 34567890120",
+        "3712345678 90120",
+        "6212 3456 7890 1234 569",
+        "6212345678901234 569",
+    ],
+)
+def test_card_grid_with_lost_or_widened_separators_is_still_card_data(text):
+    assert_rejected(lambda: worker._card_text(text), "DOCUMENT_CARD_DATA")
+
+
+def _luhn_valid(digits):
+    total = 0
+    for index, digit in enumerate(map(int, reversed(digits))):
+        value = digit * 2 if index % 2 else digit
+        total += value - 9 if value > 9 else value
+    return total % 10 == 0
+
+
+def test_date_pairs_in_any_spacing_are_not_card_data():
+    # 1,460 synthetic visit periods (start, start + 7 days) in every separator style.
+    import datetime
+
+    first = datetime.date(2026, 1, 1)
+    for offset in range(1460):
+        start = first + datetime.timedelta(days=offset)
+        end = start + datetime.timedelta(days=7)
+        for pattern in ("%Y.%m.%d", "%Y-%m-%d", "%Y%m%d", "%Y %m %d"):
+            for separator in (" ", "  ", "\t", "\n", " ~ "):
+                worker._card_text(start.strftime(pattern) + separator + end.strftime(pattern))
+
+
+def test_a_date_followed_by_an_eight_digit_number_is_not_card_data():
+    # Receipts print an approval number next to the date; the 8-8 grid must not join them.
+    number = next(
+        f"{n:08d}" for n in range(10_000_000, 10_001_000) if _luhn_valid(f"20260222{n:08d}")
+    )
+    worker._card_text(f"20260222 {number}")
+    worker._card_text(f"승인일시 20260222\t{number}")
+
+
+def test_ocr_text_with_quotes_is_scanned_word_by_word():
+    # Tesseract does not escape quotes; one opening quote must not hide the following rows.
+    words = ["SYNTHETIC", "MEDICAL", "RECEIPT", '"로고', "4123", "4567", "8901", "2349"]
+    assert_rejected(lambda: worker._ocr_words(tsv(words, 95)), "DOCUMENT_CARD_DATA")
+    rows = tsv(['"SYNTHETIC', "MEDICAL", 'RECEIPT"', "2026.02.22"], 95)
+    assert worker._ocr_words(rows)

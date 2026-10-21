@@ -11,7 +11,7 @@
 
 구조 검사·렌더링·OCR을 검사 전용 `inspector` 컨테이너로 옮긴다.
 
-- 같은 API 이미지를 쓴다. UID 10002·GID 10003, `network_mode: none`, 읽기 전용 root, capability 없음, `no-new-privileges`, PID 32개다.
+- 같은 API 이미지를 쓴다. UID 10002·GID 10003, `network_mode: none`, 읽기 전용 root, capability 없음, `no-new-privileges`, PID 32개다. 컨테이너 init(`init: true`)이 PID 1로 고아 OCR 프로세스를 회수한다.
 - 비밀·환경 파일·문서 저장소·scanner socket을 mount하지 않는다. 공유하는 것은 전용 이름 볼륨의 Unix socket 하나(0660, 그룹 10003)다. 볼륨 디렉터리는 이미지에서 10002:10003·0750으로 만든다. API는 그룹 10003을 추가로 가진다.
 - 메모리 한도는 1152MiB이고 swap은 없다. 계산: peak 800,366,592B(763.3MiB) → max(1024, ceil((1.25 × 763.3MiB + 96MiB) / 128MiB) × 128MiB) = max(1024, 9 × 128) = 1152MiB.
 - 워커는 문서마다 새 프로세스로, 기존 RLIMIT를 그대로 쓴다. 동시 검사는 1개이고 바쁘면 대기열 없이 503이다.

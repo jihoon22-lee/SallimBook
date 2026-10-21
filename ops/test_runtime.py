@@ -252,6 +252,7 @@ p.chmod(0o600); os.chown(p,10001,10001)
                     assert state["Config"]["User"] == "10002:10003"
                     assert state["HostConfig"]["NetworkMode"] == "none"
                     assert state["HostConfig"]["PidsLimit"] == 32
+                    assert state["HostConfig"]["Init"] is True
                     # Compose passes named volumes through Binds; no host path may appear.
                     assert all(not bind.startswith("/") for bind in state["HostConfig"]["Binds"] or [])
                     # The /tmp tmpfs is in HostConfig.Tmpfs, not in Mounts.
@@ -284,6 +285,26 @@ p.chmod(0o600); os.chown(p,10001,10001)
                 time.sleep(0.25)
             else:
                 raise AssertionError("Inspector server did not survive the hog")
+            # A worker killed mid-OCR orphans its tesseract/pdftoppm children to PID 1.
+            # Orphan more processes than the PID limit allows; the init must reap them.
+            orphan = (
+                "import os, time\n"
+                "if os.fork() == 0:\n"
+                "    time.sleep(0.05)\n"
+                "    os._exit(0)\n"
+                "os._exit(0)\n"
+            )
+            for _ in range(48):
+                run(command + ["exec", "-T", "inspector", "python", "-c", orphan])
+            time.sleep(1)
+            zombies = run(command + ["exec", "-T", "inspector", "python", "-c", (
+                "import os\n"
+                "print(sum(open(f'/proc/{p}/stat').read().rsplit(')', 1)[1].split()[0] == 'Z'"
+                " for p in os.listdir('/proc') if p.isdigit()))\n"
+            )]).strip()
+            assert zombies == "0", "Inspector left orphaned processes unreaped"
+            state = json.loads(run(["docker", "inspect", inspector_id]))[0]
+            assert state["State"]["Health"]["Status"] == "healthy"
             run(command + ["stop", "scanner"])
             deadline = time.monotonic() + 20
             while time.monotonic() < deadline:
@@ -331,7 +352,7 @@ p.chmod(0o600); os.chown(p,10001,10001)
                 raise AssertionError("API readiness did not recover with the inspector")
             print(
                 "PASS: image startup/migration/readiness, scanner-down unhealthy/recovery, "
-                "inspector isolation/memory containment/down-recovery, "
+                "inspector isolation/memory containment/orphan reaping/down-recovery, "
                 "production UID/mount/memory; no published ports, node, real account, or real key"
             )
         finally:

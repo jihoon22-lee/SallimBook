@@ -316,6 +316,7 @@ class DeploymentTests(unittest.TestCase):
             self.assertNotIn(key, inspector)
         self.assertEqual(inspector["mem_limit"], inspector["memswap_limit"])
         self.assertEqual(inspector["pids_limit"], 32)
+        self.assertIs(inspector["init"], True)
         self.assertEqual(
             inspector["command"],
             ["python", "-B", "-m", "sallimbook.documents.inspector", "--socket",

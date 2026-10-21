@@ -80,7 +80,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 | 확인 | 기대값 |
 |---|---|
 | `docker compose -f NEW/compose.json ps --all` | 서비스 7개 running, api·db·scanner·inspector healthy |
-| `docker inspect --format '{{.HostConfig.NetworkMode}} {{.Config.User}} {{.HostConfig.Memory}} {{.HostConfig.PidsLimit}}' <inspector 컨테이너>` | `none 10002:10003 1207959552 32` |
+| `docker inspect --format '{{.HostConfig.NetworkMode}} {{.Config.User}} {{.HostConfig.Memory}} {{.HostConfig.PidsLimit}} {{.HostConfig.Init}}' <inspector 컨테이너>` | `none 10002:10003 1207959552 32 true` |
 | 앱에서 인쇄한 합성 영수증 사진 한 장 업로드 | 성공 |
 | 다음 예약 `health` | 성공(`latest-*.json` 또는 journal) |
 
@@ -138,7 +138,7 @@ Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy �
 | `field-keyring.json` | API UID 10001 소유 0400/0600 | 기존 서버 field/document keyring, 백업 데이터와 별도 보관 |
 | `documents/` | API UID 10001 소유 0700 | 암호화 `.sbdoc` 객체; 파일은 0600 |
 
-API/scanner/inspector의 root filesystem은 읽기 전용이고 처리 임시 파일은 tmpfs다. 메모리 한도와 같은 swap 한도를 설정한다. scanner는 네트워크가 없고 Unix socket만 공유한다. 문서 구조 검사·OCR을 맡는 inspector는 UID 10002·GID 10003, 네트워크 없음, 비밀·문서 저장소·scanner socket mount 없음이며 전용 볼륨의 socket 하나만 API와 공유한다(메모리 1152MiB, PID 32). API는 그 socket을 읽기 위해 그룹 10003만 추가로 가진다. 이 설정 외에 호스트 swap/WSL 메모리 설정을 자동 수정하지 않는다. 실제 cgroup/tmpfs/스캐너 신선도·서비스 재시작 인수는 배포 전에 확인한다.
+API/scanner/inspector의 root filesystem은 읽기 전용이고 처리 임시 파일은 tmpfs다. 메모리 한도와 같은 swap 한도를 설정한다. scanner는 네트워크가 없고 Unix socket만 공유한다. 문서 구조 검사·OCR을 맡는 inspector는 UID 10002·GID 10003, 네트워크 없음, 비밀·문서 저장소·scanner socket mount 없음이며 전용 볼륨의 socket 하나만 API와 공유한다(메모리 1152MiB, PID 32, 고아 프로세스를 회수하는 컨테이너 init). API는 그 socket을 읽기 위해 그룹 10003만 추가로 가진다. 이 설정 외에 호스트 swap/WSL 메모리 설정을 자동 수정하지 않는다. 실제 cgroup/tmpfs/스캐너 신선도·서비스 재시작 인수는 배포 전에 확인한다.
 
 DB 최초 owner/migration 역할은 `sallimbook_admin`이며 API에는 전달하지 않는다. API의 `sallimbook_app`은 LOGIN만 허용하고 superuser/DB 생성/역할 생성/replication/RLS 우회/역할 상속을 주지 않는다. schema CREATE, TRUNCATE, 테이블 소유권, trigger 비활성화, Alembic version 수정 권한도 없다. 업무 테이블의 필요한 SELECT/INSERT/UPDATE/DELETE와 sequence/function 사용만 허용한다. 감사 이력 `audit_events`는 SELECT/INSERT만 허용하고 UPDATE/DELETE는 금지한다. `public` schema/database의 PUBLIC 기본 권한을 회수하고 migration admin이 만드는 후속 객체의 default privileges도 설정한다.
 
@@ -292,7 +292,7 @@ PATH=/VERIFIED_AGE_AND_POSTGRES_TOOL_DIRECTORY:$PATH \
 
 `test_deployment`는 새로 빌드한 웹 이미지와 network-none 단발 컨테이너로 Compose/Caddy 설정·이미지 버전·파일 capability 제거·umask 077에서의 cap-drop root 설정 읽기·UID 10001 설정 읽기를 검사한다. 공개 JSON/404 및 사설 APK의 GET/HEAD·내용·다운로드 header·그 외 경로/POST 거부도 확인한다. API나 실제 APK 서명 검사를 대신하지 않는다. 실제 tailnet 노드를 만들지 않는다. `test_recovery`는 공통 DB 시험 lock과 `sallimbook-dev`의 `db-test`만 사용하고 새 UUID 이름의 합성 source/restore DB를 만든다. 종료 시 자신이 만든 DB만 제거하고 test 컨테이너를 중지한다. 임시 합성 age/field key는 시험 종료 후 제거하며 실제 키를 사용하지 않는다. vault rotation fixture는 서버 metadata/상태전이를 검사하는 opaque fixture이며 클라이언트 암호학 증거가 아니다.
 
-`test_runtime`은 새 `sallimbook-ops-smoke-*` Compose 프로젝트·내부 네트워크·합성 볼륨에서 migration, 제한된 DB 역할, UID10001/scanner socket/tmpfs, 실제 한국어 OCR/ClamAV 업로드와 암호화 저장·다운로드, inspector 격리(UID·네트워크·비밀·저장소·capability·socket 권한)·메모리 소진 격리·inspector 중지 복구를 검사하고 그 프로젝트만 제거한다. 호스트 포트/노드를 만들지 않는다. `test_release`는 임시 합성 서명키로 연속 두 release를 만들고 서명/버전/변조 거부를 검사한 뒤 키·APK를 제거한다. 실제 서명키나 기기 설치는 사용하지 않는다. Docker 네트워크를 생성/제거하는 시험과 Chromium 전체 검사는 순차 실행하여 `ERR_NETWORK_CHANGED` 간섭을 피한다.
+`test_runtime`은 새 `sallimbook-ops-smoke-*` Compose 프로젝트·내부 네트워크·합성 볼륨에서 migration, 제한된 DB 역할, UID10001/scanner socket/tmpfs, 실제 한국어 OCR/ClamAV 업로드와 암호화 저장·다운로드, inspector 격리(UID·네트워크·비밀·저장소·capability·socket 권한)·메모리 소진 격리·고아 프로세스 회수·inspector 중지 복구를 검사하고 그 프로젝트만 제거한다. 호스트 포트/노드를 만들지 않는다. `test_release`는 임시 합성 서명키로 연속 두 release를 만들고 서명/버전/변조 거부를 검사한 뒤 키·APK를 제거한다. 실제 서명키나 기기 설치는 사용하지 않는다. Docker 네트워크를 생성/제거하는 시험과 Chromium 전체 검사는 순차 실행하여 `ERR_NETWORK_CHANGED` 간섭을 피한다.
 
 운영 완료에는 별도로 실제 허용/비허용 기기의 사설 접근, 외부 443의 JSON 이외 차단, DB 비노출, 실제 패스키, 이전 앱-새 API, 두 기기 데이터 보존 업데이트, WSL 재시작 복귀, 서명키/서버키/복구코드 별도 보관, 전체 도메인 fixture·G1~G6 인수, 실제 새 환경 복원 시각과 RPO/RTO 측정이 필요하다. 이 문서나 단위검사만으로 SB-036~040을 완료 처리하지 않는다.
 

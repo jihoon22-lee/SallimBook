@@ -176,6 +176,7 @@ def _remaining(deadline: float) -> float:
 
 # Digit groups joined by one space or a dash (optionally spaced); dots, commas, colons and
 # tildes end a run, so dates such as 2026.02.22 2026.03.01 never form one candidate.
+# _card_text collapses every whitespace run (tabs, repeated spaces, line breaks) first.
 _PAN_SEPARATOR = r"(?: ?[-–—] ?| )"
 _PAN_RUN = re.compile(r"(?<!\d)\d+(?:" + _PAN_SEPARATOR + r"\d+)*")
 _PAN_LAYOUTS = frozenset(
@@ -184,7 +185,28 @@ _PAN_LAYOUTS = frozenset(
     | {(4, 4, 4, 4, tail) for tail in (1, 2, 3)}
     | {(4, 6, 5), (4, 6, 4)}
 )
-_PAN_WINDOWS = (1, 3, 4, 5)
+# OCR and PDF text can lose some separators of a printed grid (4111 1111 11111111,
+# 41111111 11111111). A window whose group boundaries all fall on a printed card grid
+# is still a candidate: (boundaries allowed, boundaries required, total digits).
+_PAN_GRIDS = (
+    (frozenset({4, 8, 12}), frozenset(), frozenset({16})),
+    (frozenset({4, 8, 12, 16}), frozenset({16}), frozenset({17, 18, 19})),
+    (frozenset({4, 10}), frozenset(), frozenset({14, 15})),
+)
+_PAN_DATE = re.compile(r"(?:19|20)\d\d(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])")
+
+
+def _on_grid(lengths: tuple[int, ...]) -> bool:
+    boundaries = set()
+    total = 0
+    for length in lengths[:-1]:
+        total += length
+        boundaries.add(total)
+    total += lengths[-1]
+    return any(
+        total in totals and required <= boundaries <= allowed
+        for allowed, required, totals in _PAN_GRIDS
+    )
 
 
 def _pan_candidates(text: str):
@@ -193,10 +215,24 @@ def _pan_candidates(text: str):
         groups = re.findall(r"\d+", run[0])
         lengths = [len(group) for group in groups]
         for start in range(len(groups)):
-            for width in _PAN_WINDOWS:
-                window = tuple(lengths[start : start + width])
-                if len(window) == width and window in _PAN_LAYOUTS:
-                    yield "".join(groups[start : start + width])
+            # Every grid starts with a group of at least four digits, which also keeps
+            # this loop short on long runs of one- to three-digit groups.
+            if lengths[start] < 4:
+                continue
+            total = 0
+            for end in range(start, len(groups)):
+                total += lengths[end]
+                if total > 19:
+                    break
+                window = tuple(lengths[start : end + 1])
+                if window in _PAN_LAYOUTS:
+                    yield "".join(groups[start : end + 1])
+                elif len(window) > 1 and _on_grid(window):
+                    digits = "".join(groups[start : end + 1])
+                    # No card number starts with a 19xx/20xx date; date pairs such as
+                    # 20260222 20260301 on a receipt fit the 8-8 grid otherwise.
+                    if not _PAN_DATE.match(digits):
+                        yield digits
         # A maximal stretch of single digits (spaced-out OCR) is one candidate as a whole.
         opened = None
         for index, length in enumerate([*lengths, 0]):
@@ -217,6 +253,7 @@ def _card_text(value: str) -> None:
     )
     if len(normalized) > MAX_OCR_OUTPUT:
         raise Rejected
+    normalized = re.sub(r"\s+", " ", normalized)
     if re.search(
         r"(?i)(?<![a-z])(?:cvc|cvv|cvn|csc|cid)(?:2)?(?![a-z])|"
         r"card\s*(?:security|verification)\s*(?:code|number)|"
@@ -601,7 +638,12 @@ def _ocr_setup(tesseract: str, pdftoppm: str, pdf: bool) -> None:
 
 def _ocr_words(output: bytes) -> bool:
     try:
-        table = csv.DictReader(io.StringIO(output.decode("utf-8", errors="strict")), delimiter="\t")
+        # Tesseract writes words verbatim: a quote is text, never a CSV quoting character.
+        table = csv.DictReader(
+            io.StringIO(output.decode("utf-8", errors="strict")),
+            delimiter="\t",
+            quoting=csv.QUOTE_NONE,
+        )
         expected = [
             "level",
             "page_num",

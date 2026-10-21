@@ -136,7 +136,8 @@ def main() -> None:
     parser.add_argument("--tesseract", default="/usr/bin/tesseract")
     parser.add_argument("--pdftoppm", default="/usr/bin/pdftoppm")
     arguments = parser.parse_args()
-    # As container PID 1 the default SIGTERM action is ignored; stop promptly on docker stop.
+    # Exit promptly on docker stop. The container init (PID 1) forwards SIGTERM here and
+    # reaps orphaned worker children.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     with make_server(
         arguments.socket, tesseract=arguments.tesseract, pdftoppm=arguments.pdftoppm
