@@ -26,4 +26,10 @@ class NativeDocumentImageTest {
         assertTrue(web.contains("MAX_LONG_EDGE = ${NativeDocumentImage.MAX_LONG_EDGE};"))
         assertTrue(web.contains("JPEG_QUALITY = 0.${NativeDocumentImage.JPEG_QUALITY / 10};"))
     }
+    @Test fun outOfMemoryFallsBackToTheOriginalBytes() {
+        // ImageDecoder runs only on a device; pin that an OOM returns null (original upload) instead of crashing.
+        val source = java.io.File("src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeDocumentImage.kt").readText()
+        val handler = source.substringAfter("catch (_: OutOfMemoryError) {").substringBefore("}")
+        assertTrue(handler, handler.contains("output.wipe(); return null"))
+    }
 }

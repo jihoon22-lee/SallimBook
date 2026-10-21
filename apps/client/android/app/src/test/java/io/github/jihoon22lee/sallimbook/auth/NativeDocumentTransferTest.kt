@@ -105,4 +105,13 @@ class NativeDocumentTransferTest {
         gate.cancel()
         assertTrue(closed); assertFalse(gate.isActive())
     }
+    @Test fun uploadReservesTokenLifetimeForTheWholeTransfer() {
+        // The server re-checks the session after scanning; a token close to expiry is refreshed first.
+        assertTrue(NativeDocumentBytes.REQUIRED_ACCESS_MILLIS > NativeDocumentBytes.TRANSFER_MILLIS)
+        assertFalse(NativeAccessLifetime.usable(0, 180_000, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS))
+        assertTrue(NativeAccessLifetime.usable(0, 600_000, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS))
+        val session = java.io.File("src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeAuthSession.kt").readText()
+        val upload = session.substringAfter("documentHttp.upload(").substringBefore("if (uploaded.status")
+        assertTrue(upload, upload.contains("access(gate, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS)"))
+    }
 }
