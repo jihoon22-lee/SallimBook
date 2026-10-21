@@ -38,6 +38,9 @@ from sallimbook.insurance.event_schemas import (
 
 router = APIRouter(prefix="/api/v1/insurance", tags=["insurance-events"])
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)]
+OptionalIdempotencyKey = Annotated[
+    str | None, Header(alias="Idempotency-Key", min_length=1, max_length=128)
+]
 IfMatch = Annotated[str, Header(alias="If-Match")]
 Limit = Annotated[int, Query(ge=1, le=200)]
 HistoryCursor = Annotated[int | None, Query(ge=1)]
@@ -355,8 +358,9 @@ def create_claim(
     principal: PrincipalDependency,
     session: SessionDependency,
     response: Response,
+    idempotency_key: OptionalIdempotencyKey = None,
 ):
-    result = service.create_claim(session, principal, payload)
+    result = service.create_claim(session, principal, payload, idempotency_key)
     return _etag(response, result, f"/api/v1/insurance/claims/{result.id}")
 
 

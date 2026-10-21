@@ -651,32 +651,82 @@ def _submitted_date(payload):
         raise DomainError("INVALID_SUBMISSION_DATE", "실제 접수 날짜를 확인해 주세요.", 422)
 
 
-def create_claim(session, principal, payload):
+def create_claim(session, principal, payload, key=None):
     cash.lock_cash_household(session, principal)
     scoped_entity(session, InsuranceCase, payload.case_id, principal)
     # Claims are often filed after a policy ends; only the household boundary applies.
     scoped_entity(session, InsurancePolicy, payload.policy_id, principal)
-    _submitted_date(payload)
-    _claim_expenses(session, principal, payload.case_id, payload.expense_ids)
-    row = InsuranceClaim(
-        **_money_values(payload.model_dump(exclude={"expense_ids"})), **_actors(principal)
+
+    def execute():
+        _submitted_date(payload)
+        _claim_expenses(session, principal, payload.case_id, payload.expense_ids)
+        row = InsuranceClaim(
+            **_money_values(payload.model_dump(exclude={"expense_ids"})), **_actors(principal)
+        )
+        session.add(row)
+        session.flush()
+        session.add_all(
+            [
+                ClaimExpense(
+                    claim_id=row.id,
+                    expense_id=identifier,
+                    household_id=row.household_id,
+                    case_id=row.case_id,
+                )
+                for identifier in payload.expense_ids
+            ]
+        )
+        _remember_claim(session, principal, row, payload.expense_ids)
+        _audit(
+            session, principal, row, "insurance_claim", "create", fields=payload.model_fields_set
+        )
+        return _reference(row, "insurance_claim")
+
+    if key is None:
+        # Older clients send no key; each request then creates its own claim, as before.
+        result = execute()
+        row = session.get(InsuranceClaim, result.resource_id)
+        return _finish(session, _claim_responses(session, principal, [row], detail=True)[0])
+    body = {"body": payload.model_dump(mode="json")}
+    result = run_idempotent(session, principal, "insurance.claim.create", key, body, execute)
+    return _finish(session, _claim_at(session, principal, result))
+
+
+def _claim_at(session, principal, result):
+    """Render a keyed create as it was stored, even after a later edit changed the claim."""
+    row = scoped_entity(session, InsuranceClaim, result.resource_id, principal)
+    current = _claim_responses(session, principal, [row], detail=True)[0]
+    if row.version == result.resource_version:
+        return current
+    revision = session.scalar(
+        select(InsuranceClaimRevision).where(
+            InsuranceClaimRevision.household_id == principal.household_id,
+            InsuranceClaimRevision.claim_id == row.id,
+            InsuranceClaimRevision.version == result.resource_version,
+        )
     )
-    session.add(row)
-    session.flush()
-    session.add_all(
-        [
-            ClaimExpense(
-                claim_id=row.id,
-                expense_id=identifier,
-                household_id=row.household_id,
-                case_id=row.case_id,
-            )
-            for identifier in payload.expense_ids
-        ]
+    expense_ids = session.scalars(
+        select(ClaimRevisionExpense.expense_id)
+        .where(
+            ClaimRevisionExpense.household_id == principal.household_id,
+            ClaimRevisionExpense.claim_id == row.id,
+            ClaimRevisionExpense.claim_version == revision.version,
+        )
+        .order_by(ClaimRevisionExpense.expense_id)
+    ).all()
+    # Received and returned totals are live payout sums, not part of the claim's version.
+    return current.model_copy(
+        update={
+            **_values(revision, ClaimFields),
+            "case_id": revision.case_id,
+            "policy_id": revision.policy_id,
+            "version": revision.version,
+            "updated_by_member_id": revision.changed_by_member_id,
+            "updated_at": revision.changed_at,
+            "expense_ids": list(expense_ids),
+            "expense_count": len(expense_ids),
+        }
     )
-    _remember_claim(session, principal, row, payload.expense_ids)
-    _audit(session, principal, row, "insurance_claim", "create", fields=payload.model_fields_set)
-    return _finish(session, _claim_responses(session, principal, [row], detail=True)[0])
 
 
 def get_claim(session, principal, claim_id):

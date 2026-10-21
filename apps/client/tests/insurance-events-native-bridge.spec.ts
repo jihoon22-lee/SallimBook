@@ -168,7 +168,7 @@ test("34 insurance event commands preserve arguments and avoid web HTTP and stor
         ["medicalNodeSummary", { caseId: id, nodeId: child }],
         ["insuranceCaseSummary", { caseId: id }],
         ["listInsuranceClaims", { query: { limit: 200, cursor: null } }],
-        ["createInsuranceClaim", { input: inputs.ClaimCreate }],
+        ["createInsuranceClaim", { input: inputs.ClaimCreate, idempotencyKey: "synthetic:1" }],
         ["getInsuranceClaim", { claimId: id }],
         ["updateInsuranceClaim", { claimId: id, input: inputs.ClaimPatch, ifMatch: '"7"' }],
         ["insuranceClaimHistory", { claimId: id, query: { limit: 200, cursor: 8 } }],

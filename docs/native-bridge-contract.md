@@ -45,6 +45,7 @@ release 빌드의 번들 설정 검사는 머리말의 `validateBundledRuntimeCo
 ## 4. 오류
 
 오류 코드는 `NativeAuthErrorCode`(`definitions.ts`)다. 서버 오류는 `AuthPolicy.safeError`가 알려진 코드·같은 HTTP status만 그대로 두고 나머지는 status별 일반 코드로 바꾼다.
+서버가 2xx로 답한 쓰기(GET이 아닌 메타데이터 명령)의 응답이 검증을 통과하지 못하면 그 응답은 WebView로 넘기지 않고 `NETWORK_UNAVAILABLE`로 알린다(`FinancePolicy.reply`). 서버에는 이미 저장됐을 수 있으므로 화면은 거부(403/422)가 아니라 결과 불명으로 다루고, 생성 화면은 목록에서 등록 여부를 확인하게 한다. 읽기 응답의 검증 실패는 전처럼 `ACCESS_DENIED`다.
 
 ## 5. 인증 역할 분리
 
@@ -369,7 +370,7 @@ TS 본문/응답/조회 조건은 생성 `components`와 `operations`를 참조�
 
 금전 생성·정정·무효와 배분 연결에는 `idempotencyKey`, 기존 대상의 변경에는 `ifMatch`를
 요구한다. 환불/반환 생성의 버전은 부모 의료비/보험금 도메인 버전이다. 청구 생성에는
-두 헤더가 없고 청구 수정에는 `ifMatch`만 사용한다. 금전 명령의 `{id, version}`는 당시의
+`idempotencyKey`만 요구하고(재전송하면 처음 저장한 버전의 청구 응답), 청구 수정에는 `ifMatch`만 사용한다. 금전 명령의 `{id, version}`는 당시의
 불변 참조이며 최신 상태로 해석하지 않는다. 정정·환불·반환은 새 ID를 반환할 수 있다.
 후속 수정은 GET의 도메인 version을 사용한다. 중첩 cash의 version과 도메인 version은
 별개이며 현금 이력의 id는 부모 도메인 id와 달라도 같은 cash 원본을 계속 가리켜야 한다.

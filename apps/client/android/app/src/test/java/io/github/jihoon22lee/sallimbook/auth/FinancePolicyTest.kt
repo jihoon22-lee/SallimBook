@@ -37,6 +37,17 @@ class FinancePolicyTest {
         for (request in listOf(create, update, archive, delete)) assertTrue(FinancePolicy.metadataHttpAllowed(request.method, request.path, request.body, request.ifMatch))
     }
 
+    @Test fun committedWriteWithAnUnreadableReplyIsReportedAsUnknownNotRefused() {
+        val create = FinancePolicy.prepare(FinanceOperation.CREATE_ASSET, mapOf("input" to input()))
+        assertEquals(asset(), FinancePolicy.reply(FinanceOperation.CREATE_ASSET, create, 201, asset()))
+        // The server already stored the write, so the screen must ask the user to check, not invite a resubmit.
+        invalid(AuthCode.NETWORK_UNAVAILABLE) { FinancePolicy.reply(FinanceOperation.CREATE_ASSET, create, 201, asset() + mapOf("id" to "synthetic")) }
+        invalid(AuthCode.NETWORK_UNAVAILABLE) { FinancePolicy.reply(FinanceOperation.CREATE_ASSET, create, 201, asset() + mapOf("token" to "synthetic")) }
+        val read = FinancePolicy.prepare(FinanceOperation.GET_ASSET, mapOf("assetId" to assetId))
+        invalid(AuthCode.ACCESS_DENIED) { FinancePolicy.reply(FinanceOperation.GET_ASSET, read, 200, asset() + mapOf("id" to "synthetic")) }
+        val session = java.io.File("src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeAuthSession.kt").readText()
+        assertTrue(session.contains("FinancePolicy.reply(operation, request, response.status, response.body)"))
+    }
     @Test fun unconfirmedClosureDefaultPreservesExistingMetadataCommands() {
         val patch = FinancePolicy.prepare(FinanceOperation.UPDATE_ASSET, mapOf("assetId" to assetId,
             "input" to mapOf("note" to "합성 수정", "closure_ack" to false), "ifMatch" to "\"1\""))

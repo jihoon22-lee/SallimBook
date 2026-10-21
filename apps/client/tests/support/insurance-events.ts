@@ -468,7 +468,11 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
       return { status: 0, body: null, abort: true };
     }
     const finish = (row: { id: string; version: number }, status = 201) => {
-      const result = response({ id: row.id, version: row.version }, status);
+      // Claims are metadata and answer with the whole row; money events answer a reference.
+      const result = response(
+        collection === "claims" ? row : { id: row.id, version: row.version },
+        status,
+      );
       if (receiptKey) receipts.set(receiptKey, result);
       if (state.failure === "after") {
         state.failure = "";
@@ -485,7 +489,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
         };
         state.claims.push(row);
         rememberClaim(row);
-        return response(row, 201);
+        return finish(row);
       }
       const row = state.claims.find((c) => c.id === id);
       if (!row) return error("NOT_FOUND", 404);

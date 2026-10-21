@@ -196,9 +196,14 @@ def test_event_contract_returns_immutable_money_references_and_preserves_metadat
         for method, operation in methods.items():
             if method not in {"post", "patch"}:
                 continue
-            names = {p["name"] for p in operation.get("parameters", []) if p["in"] == "header"}
+            header = {p["name"]: p for p in operation.get("parameters", []) if p["in"] == "header"}
+            names = set(header)
             claim = "/claims" in path
-            assert ("Idempotency-Key" in names) is not claim
+            if path.endswith("/claims") and method == "post":
+                # Optional so an older client without a key still creates one claim.
+                assert header["Idempotency-Key"]["required"] is False
+            else:
+                assert ("Idempotency-Key" in names) is not claim
             if "{" in path:
                 assert "If-Match" in names
             if not claim:
@@ -615,6 +620,62 @@ class TestInsuranceEventCorrections:
                 ).status_code
                 == 404
             )
+
+    def test_claim_create_key_replays_the_original_version_once(self, app, actors, db_engine):
+        actor, _, foreign = actors
+        with TestClient(app) as client:
+            case, policy = new_case(client, actor), new_policy(client, actor)
+            body = {
+                "case_id": case["id"],
+                "policy_id": policy["id"],
+                "claim_reference": "SYN-CLAIM-1",
+                "requested_krw": "1000",
+            }
+            keyed = {**actor.headers, "Idempotency-Key": "synthetic-claim-create-1"}
+            first = client.post(BASE + "/claims", headers=keyed, json=body)
+            assert first.status_code == 201, first.text
+            claim = first.json()
+            again = client.post(BASE + "/claims", headers=keyed, json=body)
+            assert again.status_code == 201 and again.json() == claim
+            assert again.headers["etag"] == '"1"'
+            assert again.headers["location"].endswith(f"/claims/{claim['id']}")
+            changed = client.patch(
+                f"{BASE}/claims/{claim['id']}",
+                headers=headers(actor, version=1),
+                json={"requested_krw": "2000", "claim_state": "submitted", "reason": "합성 정정"},
+            )
+            assert changed.status_code == 200 and changed.json()["version"] == 2
+            # A late retry receives the claim as it was created, not the newer edit.
+            late = client.post(BASE + "/claims", headers=keyed, json=body)
+            assert late.status_code == 201 and late.json() == claim
+            assert late.headers["etag"] == '"1"'
+            conflict = client.post(
+                BASE + "/claims", headers=keyed, json={**body, "requested_krw": "999"}
+            )
+            assert conflict.status_code == 409
+            assert conflict.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+            bad_key = client.post(
+                BASE + "/claims", headers={**actor.headers, "Idempotency-Key": "bad key"}, json=body
+            )
+            assert bad_key.status_code == 400
+            hidden = new_policy(client, foreign)
+            failed_key = {**actor.headers, "Idempotency-Key": "synthetic-claim-create-2"}
+            refused = client.post(
+                BASE + "/claims", headers=failed_key, json={**body, "policy_id": hidden["id"]}
+            )
+            assert refused.status_code == 404
+            # Older clients send no key and keep their previous behaviour.
+            unkeyed = create_metadata(client, actor, "/claims", body)
+            assert unkeyed["id"] != claim["id"]
+            listed = read(client, actor, f"/claims?case_id={case['id']}")["items"]
+            assert {row["id"] for row in listed} == {claim["id"], unkeyed["id"]}
+        with Session(db_engine) as session:
+            records = session.scalars(
+                select(IdempotencyRecord).where(IdempotencyRecord.actor_id == actor.user_id)
+            ).all()
+            assert [(r.operation, r.key, r.resource_version) for r in records] == [
+                ("insurance.claim.create", "synthetic-claim-create-1", 1)
+            ]
 
     @pytest.mark.parametrize("source", ["refund", "return"])
     def test_reversal_correction_keeps_its_original_reason(self, app, actors, source):

@@ -435,7 +435,7 @@ internal class NativeAuthSession private constructor(context: Context) {
         val response = http.send(request.method, request.path, gate,
             body = request.body?.let { JSONObject(it) }, accessToken = access(gate), ifMatch = request.ifMatch, idempotencyKey = request.idempotencyKey)
         if (response.status == 401) clearLocal()
-        val safe = if (response.status in 200..299) FinancePolicy.response(operation, request, response.status, response.body)
+        val safe = if (response.status in 200..299) FinancePolicy.reply(operation, request, response.status, response.body)
             else AuthPolicy.safeError(response.status, response.body, response.requestId)
                 ?: throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE)
         AuthOutcome.success(mapOf("status" to response.status, "body" to safe))
