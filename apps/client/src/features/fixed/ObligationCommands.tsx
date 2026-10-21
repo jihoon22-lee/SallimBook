@@ -201,6 +201,8 @@ export function SettlementForm({
   const [note, setNote] = useState("");
   const [latest, setLatest] = useState<Obligation | null>(null);
   const [reviewedChangedType, setReviewedChangedType] = useState(false);
+  // A partner may have paid this occurrence meanwhile; re-ask the double-count check then.
+  const [reviewedPaid, setReviewedPaid] = useState(false);
   const [message, setMessage] = useState("");
   const attempt = useSubmitAttempt();
   const split = paymentSplit(amount, principal, interest, row.economic_type);
@@ -243,6 +245,7 @@ export function SettlementForm({
       if (command.mounted.current) {
         setLatest(current);
         setReviewedChangedType(false);
+        setReviewedPaid(false);
       }
     } catch (error) {
       command.setError(toApiError(error));
@@ -348,6 +351,22 @@ export function SettlementForm({
           <section className="review-panel">
             <h3>납부 기준 다시 확인</h3>
             <CurrentObligation row={latest} />
+            {latest.status === "paid" && (
+              <>
+                <p>
+                  이 회차에 실제 납부 {formatKrw(latest.actual_amount_krw)}이 이미 기록되어 있어요.
+                  같은 납부를 다시 기록하면 실제 납부액이 두 번 합산돼요.
+                </p>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={reviewedPaid}
+                    onChange={(event) => setReviewedPaid(event.target.checked)}
+                  />
+                  납부 내역을 확인했고, 이 회차에 추가로 낸 금액이 있어요.
+                </label>
+              </>
+            )}
             {latest.economic_type !== row.economic_type && (
               <label className="checkbox-field">
                 <input
@@ -364,6 +383,7 @@ export function SettlementForm({
                 latest.schedule_state !== "active" ||
                 latest.skipped ||
                 latest.manually_completed ||
+                (latest.status === "paid" && !reviewedPaid) ||
                 (latest.economic_type !== row.economic_type && !reviewedChangedType)
               }
               onClick={() => {
