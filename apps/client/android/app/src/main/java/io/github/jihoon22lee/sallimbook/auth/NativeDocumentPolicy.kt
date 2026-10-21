@@ -51,6 +51,7 @@ internal object NativeDocumentPolicy {
     private fun obj(value: Any?): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
         if (row.size > 24 || row.keys.any { it !is String }) invalid()
+        if (NativeResponseShape.tolerant) return NativeResponseShape.identity(row)
         return row.entries.associate { it.key as String to it.value }
     }
     private fun integer(value: Any?, min: Long = 1, max: Long = 9_007_199_254_740_991L) {
@@ -73,8 +74,8 @@ internal object NativeDocumentPolicy {
     private val mime = choice("application/pdf", "image/jpeg", "image/png")
     private fun shape(value: Any?, fields: Map<String, DocumentField>, required: Set<String> = fields.keys): Map<String, Any?> {
         val row = obj(value)
-        if (!fields.keys.containsAll(row.keys) || !row.keys.containsAll(required)) invalid()
-        row.forEach { (name, item) -> fields.getValue(name)(item) }
+        NativeResponseShape.accept(row, row.keys, fields.keys, required, ::invalid)
+        row.forEach { (name, item) -> fields[name]?.invoke(item) }
         return row
     }
     fun target(value: Any?) = shape(value, mapOf("kind" to kind, "id" to id))
@@ -205,7 +206,7 @@ internal object NativeDocumentPolicy {
             if (route.change) return reference(value, if (operation == FinanceOperation.CREATE_DOCUMENT_LINK) null else parts[4])
             if (operation == FinanceOperation.GET_DOCUMENT) return document(value).also { if (it["id"] != parts[4]) invalid() }
             val page = obj(value)
-            if (page.keys != setOf("items", "next_cursor")) invalid()
+            NativeResponseShape.accept(page, page.keys, setOf("items", "next_cursor"), setOf("items", "next_cursor"), ::invalid)
             val items = page["items"] as? List<*> ?: invalid()
             val query = uri.rawQuery?.split('&')?.associate { it.substringBefore('=') to it.substringAfter('=') } ?: emptyMap()
             if (items.size > (query["limit"]?.toInt() ?: 50)) invalid()

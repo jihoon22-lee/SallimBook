@@ -13,6 +13,7 @@ internal object InsuranceEventPolicy {
     private fun obj(value: Any?): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
         if (row.size > 48 || row.keys.any { it !is String }) invalid()
+        if (NativeResponseShape.tolerant) return NativeResponseShape.identity(row)
         return row.entries.associate { it.key as String to it.value }
     }
     private fun number(value: Any?, minimum: Long = 1, maximum: Long = 9_007_199_254_740_991L) {
@@ -33,8 +34,8 @@ internal object InsuranceEventPolicy {
     private fun nullable(rule: EventField): EventField = { if (it != null) rule(it) }
     private fun shape(value: Any?, fields: Map<String, EventField>, required: Set<String> = fields.keys): Map<String, Any?> {
         val row = obj(value)
-        if (!fields.keys.containsAll(row.keys) || !row.keys.containsAll(required)) invalid()
-        row.forEach { (name, item) -> fields.getValue(name)(item) }
+        NativeResponseShape.accept(row, row.keys, fields.keys, required, ::invalid)
+        row.forEach { (name, item) -> fields[name]?.invoke(item) }
         return row
     }
     private fun tag(value: Any?): String {
@@ -640,7 +641,7 @@ internal object InsuranceEventPolicy {
                     val kind = when (parts[4]) { "medical-expenses" -> "medical_payment"; "medical-refunds" -> "medical_refund"; "payouts" -> "insurance_receipt"; "returns" -> "insurance_return"; else -> invalid() }
                     if (items.any { it["kind"] != kind }) invalid()
                     val mutable = setOf("version", "state", "action", "reason", "updated_at", "updated_by_member_id")
-                    if (items.map { it - mutable }.toSet().size > 1) invalid()
+                    if (items.map { NativeResponseShape.known(it) - mutable }.toSet().size > 1) invalid()
                 }
             } else {
                 bound(row)

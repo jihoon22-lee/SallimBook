@@ -127,6 +127,7 @@ class FixedCostPolicyTest {
         }
         val result = mapOf("id" to paymentId, "version" to 1, "items" to listOf(mapOf("id" to obligationId, "version" to 1)))
         assertEquals(result, FinancePolicy.response(FinanceOperation.GENERATE_OBLIGATIONS, r, 201, result))
+        assertEquals(result, FinancePolicy.response(FinanceOperation.GENERATE_OBLIGATIONS, r, 201, withAddedFields(result)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GENERATE_OBLIGATIONS, r, 201, result + mapOf("items" to List(2001) { mapOf("id" to obligationId, "version" to 1) })) }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GENERATE_OBLIGATIONS, r, 201, result + mapOf("version" to 2)) }
     }
@@ -142,10 +143,14 @@ class FixedCostPolicyTest {
         val r = request(FinanceOperation.CHANGE_RECURRING_RULE, mutation("ruleId", ruleId, change()))
         val reference = mapOf("id" to ruleId, "version" to 8)
         assertEquals(reference, FinancePolicy.response(FinanceOperation.CHANGE_RECURRING_RULE, r, 200, reference))
+        assertEquals(reference, FinancePolicy.response(FinanceOperation.CHANGE_RECURRING_RULE, r, 200, withAddedFields(reference)))
         assertEquals(reference, FinancePolicy.response(FinanceOperation.CHANGE_RECURRING_RULE, r, 200, reference))
-        for (change in listOf(mapOf("id" to paymentId), mapOf("version" to 8.0), mapOf("version" to 0), mapOf("rule" to rule()), mapOf("token" to "synthetic"))) bad(AuthCode.ACCESS_DENIED) {
+        assertEquals(reference, FinancePolicy.response(FinanceOperation.CHANGE_RECURRING_RULE, r, 200, withAddedFields(reference)))
+        for (change in listOf(mapOf("id" to paymentId), mapOf("version" to 8.0), mapOf("version" to 0), mapOf("token" to "synthetic"))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.CHANGE_RECURRING_RULE, r, 200, reference + change)
         }
+        // Latest rule metadata added to the receipt is dropped instead of crossing the bridge.
+        assertEquals(reference, FinancePolicy.response(FinanceOperation.CHANGE_RECURRING_RULE, r, 200, reference + mapOf("rule" to rule())))
     }
     @Test fun historicalRuleVersionsAreNotMistakenForTheOuter200ItemPage() {
         val start = YearMonth.parse("2026-01")
@@ -154,6 +159,7 @@ class FixedCostPolicyTest {
         val row = rule() + mapOf("versions" to versions)
         val r = request(FinanceOperation.GET_RECURRING_RULE, mapOf("ruleId" to ruleId))
         assertEquals(row, FinancePolicy.response(FinanceOperation.GET_RECURRING_RULE, r, 200, row))
+        assertEquals(row, FinancePolicy.response(FinanceOperation.GET_RECURRING_RULE, r, 200, withAddedFields(row)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_RECURRING_RULE, r, 200, row + mapOf("id" to obligationId)) }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_RECURRING_RULE, r, 200, row + mapOf("versions" to listOf(version() + mapOf("ciphertext" to "synthetic")))) }
         val list = request(FinanceOperation.LIST_RECURRING_RULES, emptyMap())
@@ -162,25 +168,31 @@ class FixedCostPolicyTest {
     @Test fun obligationProjectionKeepsT11ExpectedAndActualSeparateAndBindsMonthAndHistoryIdentity() {
         val r = request(FinanceOperation.GET_OBLIGATION, mapOf("obligationId" to obligationId))
         assertEquals(obligation(), FinancePolicy.response(FinanceOperation.GET_OBLIGATION, r, 200, obligation()))
+        assertEquals(obligation(), FinancePolicy.response(FinanceOperation.GET_OBLIGATION, r, 200, withAddedFields(obligation())))
         for (expected in listOf(null, "0")) {
             val row = obligation() + mapOf("amount_mode" to "variable", "expected_amount_krw" to expected, "actual_amount_krw" to "0",
                 "difference_krw" to if (expected == null) null else "0", "consumption_krw" to "0", "status" to "unpaid")
             assertEquals(row, FinancePolicy.response(FinanceOperation.GET_OBLIGATION, r, 200, row))
+            assertEquals(row, FinancePolicy.response(FinanceOperation.GET_OBLIGATION, r, 200, withAddedFields(row)))
         }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_OBLIGATION, r, 200, obligation() + mapOf("difference_krw" to null)) }
         val list = request(FinanceOperation.LIST_OBLIGATIONS, mapOf("query" to mapOf("month" to "2026-02")))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.LIST_OBLIGATIONS, list, 200, mapOf("items" to listOf(obligation()), "next_cursor" to null)) }
         val h = request(FinanceOperation.OBLIGATION_HISTORY, mapOf("obligationId" to obligationId))
         assertEquals(mapOf("items" to listOf(history()), "next_cursor" to 7), FinancePolicy.response(FinanceOperation.OBLIGATION_HISTORY, h, 200, mapOf("items" to listOf(history()), "next_cursor" to 7)))
+        assertEquals(mapOf("items" to listOf(history()), "next_cursor" to 7), FinancePolicy.response(FinanceOperation.OBLIGATION_HISTORY, h, 200, withAddedFields(mapOf("items" to listOf(history()), "next_cursor" to 7))))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.OBLIGATION_HISTORY, h, 200, mapOf("items" to listOf(history() + mapOf("id" to ruleId)), "next_cursor" to null)) }
     }
     @Test fun settlementProjectionChecksT09LoanAndExpenseAndAssetTransferWithoutFloatRounding() {
         val r = request(FinanceOperation.SETTLE_OBLIGATION, mutation("obligationId", obligationId, payment()))
         assertEquals(settlement(), FinancePolicy.response(FinanceOperation.SETTLE_OBLIGATION, r, 201, settlement()))
+        assertEquals(settlement(), FinancePolicy.response(FinanceOperation.SETTLE_OBLIGATION, r, 201, withAddedFields(settlement())))
         val loan = settlement() + mapOf("economic_type" to "loan", "principal_krw" to "700000", "consumption_krw" to "300000", "cash" to cash("1000000"))
         assertEquals(loan, FinancePolicy.response(FinanceOperation.SETTLE_OBLIGATION, r, 201, loan))
+        assertEquals(loan, FinancePolicy.response(FinanceOperation.SETTLE_OBLIGATION, r, 201, withAddedFields(loan)))
         val transfer = settlement() + mapOf("economic_type" to "asset_transfer", "consumption_krw" to "0", "asset_transfer_krw" to "99999999999999999999", "cash" to cash("99999999999999999999"))
         assertEquals(transfer, FinancePolicy.response(FinanceOperation.SETTLE_OBLIGATION, r, 201, transfer))
+        assertEquals(transfer, FinancePolicy.response(FinanceOperation.SETTLE_OBLIGATION, r, 201, withAddedFields(transfer)))
         for (change in listOf(mapOf("consumption_krw" to "35001"), mapOf("obligation_id" to ruleId), mapOf("principal_krw" to "1"),
             mapOf("cash" to cash() + mapOf("amount_krw" to 35000)), mapOf("cash" to cash() + mapOf("kind" to "salary")),
             mapOf("cash" to cash() + mapOf("card_id" to paymentId, "account_id" to ruleId)), mapOf("cash" to cash() + mapOf("cvc" to "synthetic")))) bad(AuthCode.ACCESS_DENIED) {
@@ -191,6 +203,7 @@ class FixedCostPolicyTest {
         val r = request(FinanceOperation.VOID_FIXED_SETTLEMENT, mutation("settlementId", paymentId, mapOf("reason" to "합성 취소")))
         val result = settlement() + mapOf("cash" to cash(void = true))
         assertEquals(result, FinancePolicy.response(FinanceOperation.VOID_FIXED_SETTLEMENT, r, 200, result))
+        assertEquals(result, FinancePolicy.response(FinanceOperation.VOID_FIXED_SETTLEMENT, r, 200, withAddedFields(result)))
         for (change in listOf(mapOf("id" to cashId), mapOf("cash" to cash()), mapOf("cash" to cash(void = true) + mapOf("version" to 2.0)),
             mapOf("cash" to cash(void = true) + mapOf("date_precision" to "month", "occurred_on" to null)),
             mapOf("cash" to cash(void = true) + mapOf("period_month" to "2026-02")))) bad(AuthCode.ACCESS_DENIED) {
@@ -205,6 +218,7 @@ class FixedCostPolicyTest {
         val row = mapOf("expected_known_krw" to "33000", "unknown_expected_count" to 1, "actual_amount_krw" to "35000",
             "consumption_krw" to "35000", "principal_krw" to "0", "asset_transfer_krw" to "0", "obligation_count" to 2)
         assertEquals(row, FinancePolicy.response(FinanceOperation.FIXED_COST_SUMMARY, r, 200, row))
+        assertEquals(row, FinancePolicy.response(FinanceOperation.FIXED_COST_SUMMARY, r, 200, withAddedFields(row)))
         for (change in listOf(mapOf("actual_amount_krw" to 35000), mapOf("expected_known_krw" to null), mapOf("unknown_expected_count" to -1), mapOf("pan" to "synthetic"))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.FIXED_COST_SUMMARY, r, 200, row + change)
         }

@@ -13,8 +13,10 @@ internal object ComparisonPolicy {
     private fun invalid(): Nothing = throw AuthFailure(AuthCode.INVALID_REQUEST)
     private fun obj(value: Any?, keys: Set<String>? = null): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
-        if (row.size > 32 || row.keys.any { it !is String } || keys != null && row.keys != keys) invalid()
-        return row.entries.associate { it.key as String to it.value }
+        if (row.size > 32 || row.keys.any { it !is String }) invalid()
+        val result = if (NativeResponseShape.tolerant) NativeResponseShape.identity(row) else row.entries.associate { it.key as String to it.value }
+        if (keys != null) NativeResponseShape.accept(result, result.keys, keys, keys, ::invalid)
+        return result
     }
     private fun month(value: Any?): YearMonth {
         if (value !is String || !Regex("[0-9]{4}-(0[1-9]|1[0-2])").matches(value) || value.startsWith("0000")) invalid()
@@ -52,7 +54,7 @@ internal object ComparisonPolicy {
     }
     private fun filterValues(value: Any?, exact: Boolean): Map<String, Any?> {
         val row = obj(value, if (exact) filters else null)
-        if (!filters.containsAll(row.keys)) invalid()
+        if (!exact && !filters.containsAll(row.keys)) invalid()
         for ((name, item) in row) if (item != null) when (name) {
             "asset_id", "owner_member_id" -> FinancePolicy.id(item)
             "kind" -> choice(item, setOf("asset", "liability"))

@@ -96,6 +96,7 @@ class IncomePolicyTest {
     @Test fun cashProjectionRequiresTargetIdentityAndRejectsNestedSecrets() {
         val r = request(FinanceOperation.GET_INCOME, mapOf("recordId" to id))
         assertEquals(cash(), FinancePolicy.response(FinanceOperation.GET_INCOME, r, 200, cash()))
+        assertEquals(cash(), FinancePolicy.response(FinanceOperation.GET_INCOME, r, 200, withAddedFields(cash())))
         for (change in listOf(mapOf("id" to other), mapOf("amount_krw" to 1.0), mapOf("account_number" to "synthetic"),
             mapOf("note" to mapOf("secret" to "synthetic")), mapOf("kind" to "medical_payment"), mapOf("date_precision" to "day"))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.GET_INCOME, r, 200, cash() + change)
@@ -103,17 +104,20 @@ class IncomePolicyTest {
         val returned = cash() + mapOf("id" to other, "reverses_id" to id, "kind" to "income_return", "flow" to "out")
         val rr = request(FinanceOperation.RETURN_INCOME, mutation(input() - setOf("kind", "member_id") + mapOf("reason" to "합성")))
         assertEquals(returned, FinancePolicy.response(FinanceOperation.RETURN_INCOME, rr, 201, returned))
+        assertEquals(returned, FinancePolicy.response(FinanceOperation.RETURN_INCOME, rr, 201, withAddedFields(returned)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.RETURN_INCOME, rr, 201, returned + mapOf("reverses_id" to other)) }
     }
     @Test fun historyAndSummaryRepliesAreBoundToRequestedRecordAndMonth() {
         val history = request(FinanceOperation.INCOME_HISTORY, mapOf("recordId" to id))
         val result = mapOf("items" to listOf(cash()), "next_cursor" to 2)
         assertEquals(result, FinancePolicy.response(FinanceOperation.INCOME_HISTORY, history, 200, result))
+        assertEquals(result, FinancePolicy.response(FinanceOperation.INCOME_HISTORY, history, 200, withAddedFields(result)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.INCOME_HISTORY, history, 200, result + mapOf("items" to listOf(cash() + mapOf("id" to other)))) }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.INCOME_HISTORY, history, 200, result + mapOf("items" to List(201) { cash() })) }
         val summary = request(FinanceOperation.INCOME_SUMMARY, mapOf("query" to mapOf("month" to "2026-01")))
         val body = mapOf("period_month" to "2026-01", "totals" to totals(), "members" to listOf(mapOf("member_id" to id, "totals" to totals())))
         assertEquals(body, FinancePolicy.response(FinanceOperation.INCOME_SUMMARY, summary, 200, body))
+        assertEquals(body, FinancePolicy.response(FinanceOperation.INCOME_SUMMARY, summary, 200, withAddedFields(body)))
         for (change in listOf(mapOf("period_month" to "2026-02"), mapOf("totals" to totals() + mapOf("net_inflow_krw" to 1)),
             mapOf("members" to listOf(mapOf("member_id" to id, "totals" to totals() + mapOf("ciphertext" to "synthetic")))))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.INCOME_SUMMARY, summary, 200, body + change)
@@ -123,9 +127,11 @@ class IncomePolicyTest {
         val d = request(FinanceOperation.INCOME_DUPLICATE_CANDIDATES, mapOf("query" to mapOf("month" to "2026-01", "kind" to "salary", "member_id" to id, "date_precision" to "day")))
         val duplicates = mapOf("suspected" to true, "items" to listOf(cash()), "truncated" to false)
         assertEquals(duplicates, FinancePolicy.response(FinanceOperation.INCOME_DUPLICATE_CANDIDATES, d, 200, duplicates))
+        assertEquals(duplicates, FinancePolicy.response(FinanceOperation.INCOME_DUPLICATE_CANDIDATES, d, 200, withAddedFields(duplicates)))
         val c = request(FinanceOperation.CONVERT_INCOME_PRECISION, mapOf("input" to conversion(), "idempotencyKey" to "synthetic"))
         val converted = mapOf("id" to other, "version" to 1, "reason" to "합성", "created_at" to "2026-01-31T00:00:00Z", "sources" to listOf(cash()), "replacements" to listOf(cash()))
         assertEquals(converted, FinancePolicy.response(FinanceOperation.CONVERT_INCOME_PRECISION, c, 201, converted))
+        assertEquals(converted, FinancePolicy.response(FinanceOperation.CONVERT_INCOME_PRECISION, c, 201, withAddedFields(converted)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.CONVERT_INCOME_PRECISION, c, 201, converted + mapOf("sources" to List(101) { cash() })) }
     }
     @Test fun lockRecoveryNeverAuthorizesIncomeAndSafeErrorsKeepOnlyKnownCodes() {
@@ -143,6 +149,7 @@ class IncomePolicyTest {
         for (card in listOf(null, other)) {
             val row = cash() + mapOf("card_id" to card)
             assertEquals(row, FinancePolicy.response(FinanceOperation.GET_INCOME, get, 200, row))
+            assertEquals(row, FinancePolicy.response(FinanceOperation.GET_INCOME, get, 200, withAddedFields(row)))
         }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_INCOME, get, 200, cash() - "card_id") }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_INCOME, get, 200, cash() + mapOf("card_id" to "synthetic invalid")) }

@@ -109,6 +109,7 @@ class NativeHomecarePolicyTest {
             }
             val status = if (op.name.startsWith("CREATE")) 201 else if (op.name.startsWith("DELETE")) 204 else 200
             assertEquals(op.name, body, response(op, args, body, status))
+            if (body != null) assertEquals(op.name, body, response(op, args, withAddedFields(body), status))
             bad(AuthCode.ACCESS_DENIED) { response(op, args, body, 202) }
             bad(AuthCode.ACCESS_DENIED) { response(op, args, (body ?: emptyMap()) + mapOf("token" to "synthetic"), status) }
         }
@@ -205,7 +206,8 @@ class NativeHomecarePolicyTest {
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.CREATE_STOCK_MOVEMENT, stockArgs, reference() + mapOf("consumable_id" to householdId), 201) }
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.CREATE_STOCK_MOVEMENT, stockArgs, reference(true), 201) }
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.CREATE_CONSUMABLE_REPLACEMENT, change(replacementInput) + mapOf("linkId" to linkId), reference(), 201) }
-        bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.CREATE_STOCK_MOVEMENT, stockArgs, reference() + mapOf("stock_quantity" to 4), 201) }
+        // Latest stock added to the receipt is dropped; the receipt keeps the captured version only.
+        assertEquals(reference(), response(FinanceOperation.CREATE_STOCK_MOVEMENT, stockArgs, reference() + mapOf("stock_quantity" to 4), 201))
     }
     @Test fun nestedRecordsBindParentsAndRejectSecretFieldsInEveryResponse() {
         val movementArgs = mapOf("consumableId" to consumableId, "movementId" to movementId)

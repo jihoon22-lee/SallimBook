@@ -53,6 +53,7 @@ internal object FinancePolicy {
     private fun objectValue(value: Any?): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
         if (row.keys.any { it !is String } || row.size > 32) invalid()
+        if (NativeResponseShape.tolerant) return NativeResponseShape.identity(row)
         return row.entries.associate { it.key as String to it.value }
     }
     fun id(value: Any?): String {
@@ -280,7 +281,8 @@ internal object FinancePolicy {
 
     fun asset(value: Any?): Map<String, Any?> {
         val row = objectValue(value)
-        if (row.keys != assetFields + auditFields + setOf("status", "archived_at")) invalid()
+        val known = assetFields + auditFields + setOf("status", "archived_at")
+        NativeResponseShape.accept(row, row.keys, known, known, ::invalid)
         assetInput(row.filterKeys { it in assetFields }, false)
         audit(row)
         choice(row["status"], setOf("active", "archived"))
@@ -290,7 +292,8 @@ internal object FinancePolicy {
 
     fun account(value: Any?): Map<String, Any?> {
         val row = objectValue(value)
-        if (row.keys != accountFields + auditFields + setOf("asset_id", "asset", "masked_number", "has_number", "closed_on", "status")) invalid()
+        val known = accountFields + auditFields + setOf("asset_id", "asset", "masked_number", "has_number", "closed_on", "status")
+        NativeResponseShape.accept(row, row.keys, known, known, ::invalid)
         audit(row)
         id(row["asset_id"])
         val asset = asset(row["asset"])
@@ -305,7 +308,7 @@ internal object FinancePolicy {
         val hasNumber = row["has_number"] as? Boolean ?: invalid()
         val masked = row["masked_number"]
         if (hasNumber && (masked !is String || !Regex("\\*\\*\\*\\* [A-Za-z0-9]{4}").matches(masked)) || !hasNumber && masked != null) invalid()
-        return row + mapOf("asset" to asset)
+        return NativeResponseShape.known(row) + mapOf("asset" to asset)
     }
 
     private fun audit(row: Map<String, Any?>) {
@@ -313,7 +316,11 @@ internal object FinancePolicy {
         timestamp(row["created_at"]); timestamp(row["updated_at"]); version(row["version"])
     }
 
-    fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
+    /** Metadata responses tolerate fields added by a later API version and drop them; see NativeResponseShape. */
+    fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? =
+        NativeResponseShape.project { validatedResponse(operation, request, status, value) }
+
+    private fun validatedResponse(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
         try {
             if (CashflowPolicy.supports(operation)) return CashflowPolicy.response(operation, request, status, value)
             if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.response(operation, request, status, value)
@@ -333,7 +340,7 @@ internal object FinancePolicy {
             val account = operation in setOf(FinanceOperation.LIST_ACCOUNTS, FinanceOperation.GET_ACCOUNT, FinanceOperation.CREATE_ACCOUNT, FinanceOperation.UPDATE_ACCOUNT)
             if (operation in setOf(FinanceOperation.LIST_ASSETS, FinanceOperation.LIST_ACCOUNTS)) {
                 val row = objectValue(value)
-                if (row.keys != setOf("items", "next_cursor")) invalid()
+                NativeResponseShape.accept(row, row.keys, setOf("items", "next_cursor"), setOf("items", "next_cursor"), ::invalid)
                 val items = row["items"] as? List<*> ?: invalid()
                 if (items.size > 200) invalid()
                 return mapOf("items" to items.map { if (account) account(it) else asset(it) },

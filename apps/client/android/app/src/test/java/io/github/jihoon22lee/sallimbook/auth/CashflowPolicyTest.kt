@@ -61,6 +61,7 @@ class CashflowPolicyTest {
         assertFalse(FinancePolicy.metadataHttpAllowed("POST", carry.path, carry.body, null, carry.idempotencyKey))
         assertFalse(AuthPolicy.requestAllowed("POST", carry.path, carry.ifMatch))
         assertEquals(reference(), FinancePolicy.response(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, carry, 200, reference()))
+        assertEquals(reference(), FinancePolicy.response(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, carry, 200, withAddedFields(reference())))
         bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH, carry, 200, reference() + mapOf("revision_id" to valueId))
         }
@@ -113,6 +114,7 @@ class CashflowPolicyTest {
     @Test fun monthlyResponseProjectionPreservesExactMoneyAndRequiresMatchingMonthAndRevision() {
         val r = request(FinanceOperation.GET_ASSET_MONTH)
         assertEquals(month(), FinancePolicy.response(FinanceOperation.GET_ASSET_MONTH, r, 200, month()))
+        assertEquals(month(), FinancePolicy.response(FinanceOperation.GET_ASSET_MONTH, r, 200, withAddedFields(month())))
         for (change in listOf(mapOf("month" to "2026-02"), mapOf("token" to "synthetic"), mapOf("totals" to totals() + mapOf("assets_krw" to 1.0)),
             mapOf("totals" to totals() + mapOf("account_number" to "synthetic")), mapOf("values" to listOf(value() + mapOf("ciphertext" to "synthetic"))),
             mapOf("values" to List(201) { value() }))) bad(AuthCode.ACCESS_DENIED) {
@@ -125,6 +127,7 @@ class CashflowPolicyTest {
         val r = request(FinanceOperation.UPDATE_ASSET_MONTH_VALUE, mapOf("assetId" to id, "input" to valueInput(), "ifMatch" to version))
         val result = mapOf("value" to value(), "revision_version" to 2, "totals" to totals())
         assertEquals(result, FinancePolicy.response(FinanceOperation.UPDATE_ASSET_MONTH_VALUE, r, 200, result))
+        assertEquals(result, FinancePolicy.response(FinanceOperation.UPDATE_ASSET_MONTH_VALUE, r, 200, withAddedFields(result)))
         for (change in listOf(mapOf("id" to id), mapOf("asset_id" to valueId), mapOf("input_amount_krw" to 0))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.UPDATE_ASSET_MONTH_VALUE, r, 200, result + mapOf("value" to value() + change))
         }
@@ -133,10 +136,12 @@ class CashflowPolicyTest {
         val historyRequest = request(FinanceOperation.LIST_ASSET_MONTH_REVISIONS)
         val response = mapOf("items" to listOf(history()), "next_cursor" to 2)
         assertEquals(response, FinancePolicy.response(FinanceOperation.LIST_ASSET_MONTH_REVISIONS, historyRequest, 200, response))
+        assertEquals(response, FinancePolicy.response(FinanceOperation.LIST_ASSET_MONTH_REVISIONS, historyRequest, 200, withAddedFields(response)))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.LIST_ASSET_MONTH_REVISIONS, historyRequest, 200,
             response + mapOf("items" to listOf(history() + mapOf("month" to "2026-02")))) }
         val confirm = request(FinanceOperation.CONFIRM_ASSET_MONTH, mapOf("input" to mapOf("revision_id" to id), "ifMatch" to version, "idempotencyKey" to "synthetic"))
         assertEquals(reference(), FinancePolicy.response(FinanceOperation.CONFIRM_ASSET_MONTH, confirm, 200, reference()))
+        assertEquals(reference(), FinancePolicy.response(FinanceOperation.CONFIRM_ASSET_MONTH, confirm, 200, withAddedFields(reference())))
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.CONFIRM_ASSET_MONTH, confirm, 200, reference() + mapOf("revision_id" to valueId)) }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.CONFIRM_ASSET_MONTH, confirm, 201, reference()) }
     }

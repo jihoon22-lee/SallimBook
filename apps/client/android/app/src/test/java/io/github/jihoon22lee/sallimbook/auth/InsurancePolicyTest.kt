@@ -66,6 +66,7 @@ class InsurancePolicyTest {
             bad { request(FinanceOperation.CREATE_INSURANCE_POLICY, input(policyInput() + change)) }
         }
         assertEquals(policy(), response(FinanceOperation.GET_INSURANCE_POLICY, mapOf("policyId" to id), policy()))
+        assertEquals(policy(), response(FinanceOperation.GET_INSURANCE_POLICY, mapOf("policyId" to id), withAddedFields(policy())))
         for (change in listOf(mapOf("masked_number" to "SYNTHETIC123"), mapOf("has_number" to false), mapOf("id" to child))) bad(AuthCode.ACCESS_DENIED) {
             response(FinanceOperation.GET_INSURANCE_POLICY, mapOf("policyId" to id), policy() + change)
         }
@@ -85,6 +86,7 @@ class InsurancePolicyTest {
         response(FinanceOperation.GET_INSURANCE_CASE, mapOf("caseId" to id), detail)
         val list = mapOf("items" to listOf(detail - setOf("diagnosis_note", "diagnosis_code") + mapOf("net_burden_krw" to "0")), "next_cursor" to null)
         response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), list)
+        assertEquals(list, response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), withAddedFields(list)))
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_INSURANCE_CASES, emptyMap(), mapOf("items" to listOf(detail), "next_cursor" to null)) }
         bad { request(FinanceOperation.UPDATE_INSURANCE_CASE, mapOf("caseId" to id, "ifMatch" to tag) + input(mapOf("reason" to "합성 사유"))) }
         bad { request(FinanceOperation.CREATE_INSURANCE_CASE, input(caseInput() + mapOf("diagnosis_note" to "x".repeat(2001)))) }
@@ -130,6 +132,7 @@ class InsurancePolicyTest {
         val args = mapOf("caseId" to id)
         val page = mapOf("items" to listOf(parent, leaf), "next_cursor" to child)
         assertEquals(page, response(FinanceOperation.LIST_MEDICAL_NODES, args, page))
+        assertEquals(page, response(FinanceOperation.LIST_MEDICAL_NODES, args, withAddedFields(page)))
         response(FinanceOperation.LIST_MEDICAL_NODES, args + mapOf("query" to mapOf("cursor" to other)), mapOf("items" to listOf(leaf), "next_cursor" to null))
         for (rows in listOf(listOf(parent, parent), listOf(leaf, leaf))) bad(AuthCode.ACCESS_DENIED) {
             response(FinanceOperation.LIST_MEDICAL_NODES, args, mapOf("items" to rows, "next_cursor" to null))
@@ -183,6 +186,7 @@ class InsurancePolicyTest {
         val link = audit + mapOf("id" to child, "policy_id" to id, "rule_id" to child, "active" to true, "ended_at" to null, "rule" to rule)
         val args = mapOf("policyId" to id) + input(mapOf("rule_id" to child))
         response(FinanceOperation.CREATE_POLICY_PREMIUM_LINK, args, link, 201)
+        assertEquals(link, response(FinanceOperation.CREATE_POLICY_PREMIUM_LINK, args, withAddedFields(link), 201))
         for (badRule in listOf(rule + mapOf("id" to other), rule + mapOf("household_id" to id), rule + mapOf("versions" to listOf(version + mapOf("policy_number" to null))))) bad(AuthCode.ACCESS_DENIED) {
             response(FinanceOperation.CREATE_POLICY_PREMIUM_LINK, args, link + mapOf("rule" to badRule), 201)
         }

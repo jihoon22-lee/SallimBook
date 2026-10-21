@@ -99,8 +99,10 @@ class CardMetadataPolicyTest {
     @Test fun publicResponseRequiresMatchingLastFourMaskTargetAndClosedAccountMetadata() {
         val get = request(FinanceOperation.GET_CARD, mapOf("cardId" to id))
         assertEquals(card(), FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, card()))
+        assertEquals(card(), FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, withAddedFields(card())))
         val closed = card() + mapOf("settlement_account_status" to "closed")
         assertEquals(closed, FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, closed))
+        assertEquals(closed, FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, withAddedFields(closed)))
         for (change in listOf(mapOf("id" to accountId), mapOf("masked_number" to "**** 9999"), mapOf("masked_number" to "SYNTHETIC FULL NUMBER"),
             mapOf("last_four" to null), mapOf("settlement_account_status" to null), mapOf("settlement_account_id" to null),
             mapOf("status" to "closed"), mapOf("version" to 3.5), mapOf("note" to mapOf("secret" to "synthetic")), mapOf("cvc" to "synthetic"))) bad(AuthCode.ACCESS_DENIED) {
@@ -108,11 +110,13 @@ class CardMetadataPolicyTest {
         }
         val absent = card() + mapOf("last_four" to null, "masked_number" to null, "settlement_account_id" to null, "settlement_account_status" to null)
         assertEquals(absent, FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, absent))
+        assertEquals(absent, FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, withAddedFields(absent)))
     }
     @Test fun listAndDeletionResponsesCannotReturnUnexpectedSecretsOrOversizedCollections() {
         val list = request(FinanceOperation.LIST_CARDS, emptyMap())
         val body = mapOf("items" to listOf(card()), "next_cursor" to null)
         assertEquals(body, FinancePolicy.response(FinanceOperation.LIST_CARDS, list, 200, body))
+        assertEquals(body, FinancePolicy.response(FinanceOperation.LIST_CARDS, list, 200, withAddedFields(body)))
         for (change in listOf(mapOf("items" to List(201) { card() }), mapOf("items" to listOf(card() + mapOf("ciphertext" to "synthetic"))),
             mapOf("next_cursor" to "synthetic"), mapOf("pan" to "synthetic"))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(FinanceOperation.LIST_CARDS, list, 200, body + change)

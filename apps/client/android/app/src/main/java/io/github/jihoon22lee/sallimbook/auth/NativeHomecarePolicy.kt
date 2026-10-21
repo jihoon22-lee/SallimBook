@@ -14,6 +14,7 @@ internal object NativeHomecarePolicy {
     private fun obj(value: Any?): Map<String, Any?> {
         val row = value as? Map<*, *> ?: invalid()
         if (row.size > 48 || row.keys.any { it !is String }) invalid()
+        if (NativeResponseShape.tolerant) return NativeResponseShape.identity(row)
         return row.entries.associate { it.key as String to it.value }
     }
     private fun number(value: Any?, minimum: Long, maximum: Long): Long {
@@ -44,8 +45,8 @@ internal object NativeHomecarePolicy {
     private fun nullable(rule: HomecareField): HomecareField = { if (it != null) rule(it) }
     private fun shape(value: Any?, fields: Map<String, HomecareField>, required: Set<String> = fields.keys): Map<String, Any?> {
         val row = obj(value)
-        if (!fields.keys.containsAll(row.keys) || !row.keys.containsAll(required)) invalid()
-        row.forEach { (name, item) -> fields.getValue(name)(item) }
+        NativeResponseShape.accept(row, row.keys, fields.keys, required, ::invalid)
+        row.forEach { (name, item) -> fields[name]?.invoke(item) }
         return row
     }
     private fun tag(value: Any?): String {
@@ -295,7 +296,8 @@ internal object NativeHomecarePolicy {
             if (route.output.endsWith("ListResponse") || route.output == "HomecareStatusResponse") {
                 val page = obj(value)
                 val statusPage = route.output == "HomecareStatusResponse"
-                if (page.keys != setOf("items", "next_cursor") + if (statusPage) setOf("as_of") else emptySet()) invalid()
+                val pageKeys = setOf("items", "next_cursor") + if (statusPage) setOf("as_of") else emptySet()
+                NativeResponseShape.accept(page, page.keys, pageKeys, pageKeys, ::invalid)
                 if (statusPage) date(page["as_of"])
                 val items = page["items"] as? List<*> ?: invalid()
                 if (items.size > ((q["limit"] as? Number)?.toInt() ?: 50)) invalid()

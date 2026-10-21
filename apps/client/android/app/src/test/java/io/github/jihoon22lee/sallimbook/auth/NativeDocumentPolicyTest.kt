@@ -56,7 +56,9 @@ class NativeDocumentPolicyTest {
             val request = FinancePolicy.prepare(op, args)
             val status = if (op == FinanceOperation.CREATE_DOCUMENT_LINK) 201 else 200
             assertEquals(value, FinancePolicy.response(op, request, status, value))
-            bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request, status, value + mapOf("content" to "synthetic")) }
+            assertEquals(value, FinancePolicy.response(op, request, status, withAddedFields(value)))
+            assertEquals(value, FinancePolicy.response(op, request, status, value + mapOf("content" to "synthetic")))
+            bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request, status, value + mapOf("content_token" to "synthetic")) }
             bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request, 202, value) }
         }
     }
@@ -85,8 +87,11 @@ class NativeDocumentPolicyTest {
         val request = FinancePolicy.prepare(FinanceOperation.GET_DOCUMENT, mapOf("documentId" to id))
         for (change in listOf(mapOf("id" to link), mapOf("size_bytes" to 0), mapOf("size_bytes" to 100.0),
             mapOf("stored_at" to null), mapOf("state" to "pending"), mapOf("checksum_sha256" to "x"),
-            mapOf("storage_key" to "synthetic"), mapOf("nonce" to null), mapOf("bytes" to listOf(1, 2)), mapOf("deleted_at" to now)))
+            mapOf("nonce" to null), mapOf("ciphertext" to listOf(1, 2)), mapOf("deleted_at" to now)))
             bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_DOCUMENT, request, 200, document + change) }
+        // Added fields that are not secrets are dropped, so bytes or storage paths never reach the WebView.
+        for (change in listOf(mapOf("storage_key" to "synthetic"), mapOf("bytes" to listOf(1, 2))))
+            assertEquals(document, FinancePolicy.response(FinanceOperation.GET_DOCUMENT, request, 200, document + change))
         val linkRequest = FinancePolicy.prepare(FinanceOperation.LIST_DOCUMENT_LINKS, mapOf("documentId" to id))
         for (change in listOf(mapOf("document_id" to link), mapOf("active" to false), mapOf("target" to mapOf("kind" to "card", "id" to target))))
             bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.LIST_DOCUMENT_LINKS, linkRequest, 200, mapOf("items" to listOf(linked + change), "next_cursor" to null)) }

@@ -100,12 +100,14 @@ class PaymentLinksPolicyTest {
             "settlement_account_status" to null, "started_on" to null, "ended_on" to null, "status" to "active", "note" to null,
             "created_by_member_id" to assetId, "updated_by_member_id" to assetId, "created_at" to "2026-01-01T00:00:00Z", "updated_at" to "2026-01-01T00:00:00Z", "version" to 7)
         assertEquals(publicCard, FinancePolicy.response(FinanceOperation.GET_CARD, cardGet, 200, publicCard))
-        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_CARD, cardGet, 200, publicCard + mapOf("usage_digest" to digest)) }
+        assertEquals(publicCard, FinancePolicy.response(FinanceOperation.GET_CARD, cardGet, 200, withAddedFields(publicCard)))
+        assertEquals(publicCard, FinancePolicy.response(FinanceOperation.GET_CARD, cardGet, 200, publicCard + mapOf("usage_digest" to digest)))
     }
     @Test fun responseIdentityDateDigestAndLimitedCoverageMustMatchTheRequestedResource() {
         for (account in listOf(false, true)) {
             val r = request(account); val row = response(account)
             assertEquals(row, FinancePolicy.response(op(account), r, 200, row))
+            assertEquals(row, FinancePolicy.response(op(account), r, 200, withAddedFields(row)))
             for (change in listOf(mapOf("resource_kind" to "synthetic"), mapOf("resource_id" to ruleId), mapOf("resource_version" to 7.5), mapOf("as_of_date" to "2026-02-01"),
                 mapOf("usage_digest" to "A".repeat(64)), mapOf("requires_confirmation" to "true"), mapOf("coverage" to "all_transactions"),
                 mapOf("account_withdrawal_total_available" to true), mapOf("token" to "synthetic"))) bad(AuthCode.ACCESS_DENIED) {
@@ -119,6 +121,7 @@ class PaymentLinksPolicyTest {
         val row = response(true) + mapOf("rules" to page(listOf(rule(false))), "obligations" to page(listOf(obligation(false))),
             "cards" to mapOf("items" to emptyList<Any>(), "total_count" to 10, "next_cursor" to null))
         assertEquals(row, FinancePolicy.response(op(true), request(true), 200, row))
+        assertEquals(row, FinancePolicy.response(op(true), request(true), 200, withAddedFields(row)))
         for (badRule in listOf(rule(true) + mapOf("account_id" to ruleId), rule(true) + mapOf("card_id" to cardId),
             rule(true) + mapOf("account_id" to null), rule(true) + mapOf("payment_basis" to "card_approval_plan"))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(op(true), request(true), 200, response(true) + mapOf("rules" to page(listOf(badRule))))
@@ -129,8 +132,10 @@ class PaymentLinksPolicyTest {
         val later = "00000000-0000-4000-8000-000000000006"
         val ascending = response(true) + mapOf("rules" to page(listOf(rule(true), rule(true) + mapOf("id" to later))))
         assertEquals(ascending, FinancePolicy.response(op(true), request(true), 200, ascending))
+        assertEquals(ascending, FinancePolicy.response(op(true), request(true), 200, withAddedFields(ascending)))
         val row = response(true) + mapOf("rules" to page(listOf(rule(true))) + mapOf("total_count" to 10, "next_cursor" to ruleId))
         assertEquals(row, FinancePolicy.response(op(true), request(true, mapOf("as_of_date" to day, "limit" to 1)), 200, row))
+        assertEquals(row, FinancePolicy.response(op(true), request(true, mapOf("as_of_date" to day, "limit" to 1)), 200, withAddedFields(row)))
         for (change in listOf(mapOf("rules" to page(List(201) { rule(true) })), mapOf("rules" to page(listOf(rule(true))) + mapOf("total_count" to 0)),
             mapOf("obligations" to page(listOf(obligation(true))) + mapOf("next_cursor" to ruleId)),
             mapOf("cards" to page(listOf(card(), card()))), mapOf("cards" to page(listOf(card())) + mapOf("total_count" to -1)))) bad(AuthCode.ACCESS_DENIED) {
@@ -145,6 +150,7 @@ class PaymentLinksPolicyTest {
             val future = rule() + mapOf("amount_mode" to "variable", "expected_amount_krw" to expected, "period" to "future", "effective_from" to "2026-02-01", "effective_until" to "2026-03-01")
             val row = response() + mapOf("rules" to page(listOf(future)), "obligations" to page(listOf(obligation() + mapOf("expected_amount_krw" to expected, "actual_paid_krw" to "1", "status" to "partial"))))
             assertEquals(row, FinancePolicy.response(op(false), request(), 200, row))
+            assertEquals(row, FinancePolicy.response(op(false), request(), 200, withAddedFields(row)))
         }
         for (change in listOf(mapOf("rules" to page(listOf(rule() + mapOf("expected_amount_krw" to 33000)))),
             mapOf("rules" to page(listOf(rule() + mapOf("period" to "future")))), mapOf("rules" to page(listOf(rule() + mapOf("effective_until" to day)))),
@@ -156,6 +162,7 @@ class PaymentLinksPolicyTest {
         for ((end, active) in listOf(null to true, "2026-01-30" to false, day to true, "2026-02-01" to true)) {
             val row = response(true) + mapOf("cards" to page(listOf(card() + mapOf("ended_on" to end, "active_for_closure" to active))))
             assertEquals(row, FinancePolicy.response(op(true), request(true), 200, row))
+            assertEquals(row, FinancePolicy.response(op(true), request(true), 200, withAddedFields(row)))
         }
         for (change in listOf(mapOf("active_for_closure" to false), mapOf("last_four" to "12345"), mapOf("last_four" to "１２３４"), mapOf("pan" to "synthetic"))) bad(AuthCode.ACCESS_DENIED) {
             FinancePolicy.response(op(true), request(true), 200, response(true) + mapOf("cards" to page(listOf(card() + change))))
