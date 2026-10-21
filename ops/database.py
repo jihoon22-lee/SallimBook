@@ -1,4 +1,8 @@
-"""Dedicated PostgreSQL roles; no application schema changes or password generation."""
+"""Dedicated PostgreSQL roles and a read-only schema revision check.
+
+No application schema changes or password generation: migrations run as the reviewed
+one-off admin container in the operations runbook.
+"""
 
 import argparse
 import json
@@ -80,6 +84,50 @@ def verify_role(conn):
         "truncate": False,
         "superuser": False,
     }
+
+
+def migration_command(network, environment_file, image, *arguments):
+    """The runbook's one-off admin migration container; the rehearsal runs this argv."""
+    return [
+        "docker", "run", "--rm", "--network", network, "--read-only",
+        "--user", "10001:10001", "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges:true",
+        "--memory", "256m", "--memory-swap", "256m",
+        "--env-file", str(environment_file), "--entrypoint", "alembic",
+        image, "-c", "/opt/sallimbook/alembic.ini", *arguments,
+    ]
+
+
+def schema_state(current, head, known, required):
+    """Compare the database revision with the migrations shipped in this image."""
+    if required != head:
+        raise OperationError("Image required schema revision is not its migration head")
+    if current == head:
+        return "current"
+    if not current or current not in known:
+        # Includes a revision newer than this image, e.g. an old image on an upgraded DB.
+        raise OperationError("Database schema revision is unknown to this image")
+    return "upgrade-required"
+
+
+def image_schema(conn):
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from sallimbook.core.database import REQUIRED_SCHEMA_REVISION
+
+    root = Path(__file__).resolve().parent.parent
+    # /opt/sallimbook/alembic.ini in the image, services/api/alembic.ini in a checkout.
+    ini = next(
+        path
+        for path in (root / "alembic.ini", root / "services/api/alembic.ini")
+        if path.is_file()
+    )
+    script = ScriptDirectory.from_config(Config(str(ini)))
+    current = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+    current = current[0] if current else None
+    known = {revision.revision for revision in script.walk_revisions()}
+    state = schema_state(current, script.get_current_head(), known, REQUIRED_SCHEMA_REVISION)
+    return {"schema": state, "schema_revision": current}
 
 
 def provision(admin_service_file, application_password_file):
@@ -220,7 +268,7 @@ def verify_runtime():
         connect_timeout=5,
         options="-c default_transaction_read_only=on -c search_path=public",
     ) as conn:
-        return verify_role(conn)
+        return {**verify_role(conn), **image_schema(conn)}
 
 
 if __name__ == "__main__":

@@ -83,6 +83,32 @@ def validate_database_settings(values, password):
         raise OperationError("Dedicated database URL/password mismatch")
 
 
+def verify_database_command(network, environment_file, image):
+    """Read-only runtime-role and schema check inside the image being deployed."""
+    return [
+        "docker", "run", "--rm", "--network", network, "--read-only",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+        "--memory", "128m", "--memory-swap", "128m",
+        "--env-file", str(environment_file), "--entrypoint", "python",
+        image, "-m", "ops.database", "verify-runtime",
+    ]
+
+
+def database_report(output):
+    """The new API image's role and schema verdict; the image's migrations are the authority."""
+    try:
+        report = json.loads(output)
+    except ValueError:
+        raise OperationError("Runtime database verification output is invalid") from None
+    if (
+        not isinstance(report, dict)
+        or report.get("status") != "runtime-role-verified"
+        or report.get("schema") not in {"current", "upgrade-required"}
+    ):
+        raise OperationError("Runtime database privilege or schema verification failed")
+    return report["schema"]
+
+
 def check(config_directory, verify_database=False, sdk=None):
     directory = Path(config_directory).absolute()
     config = validate(json.loads((directory / "deployment.json").read_text()))
@@ -166,39 +192,14 @@ def check(config_directory, verify_database=False, sdk=None):
         ):
             raise OperationError("Unexpected database network identity")
         result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "--network",
-                network,
-                "--read-only",
-                "--cap-drop",
-                "ALL",
-                "--security-opt",
-                "no-new-privileges:true",
-                "--memory",
-                "128m",
-                "--memory-swap",
-                "128m",
-                "--env-file",
-                str(environment_file),
-                "--entrypoint",
-                "python",
-                config["api_image"],
-                "-m",
-                "ops.database",
-                "verify-runtime",
-            ],
+            verify_database_command(network, environment_file, config["api_image"]),
             check=False,
             capture_output=True,
             timeout=30,
         )
-        if (
-            result.returncode
-            or json.loads(result.stdout).get("status") != "runtime-role-verified"
-        ):
+        if result.returncode:
             raise OperationError("Runtime database privilege verification failed")
+        database_schema = database_report(result.stdout)
     return {
         "status": "configuration-checked",
         "source_commit": config["source_commit"],
@@ -209,6 +210,8 @@ def check(config_directory, verify_database=False, sdk=None):
         "database_role_check": "passed"
         if verify_database
         else "required-before-api-start",
+        # "upgrade-required" before the runbook's migration step, "current" before start.
+        "database_schema": database_schema if verify_database else "not-checked",
         "operator_deployment_acceptance": "pending",
     }
 

@@ -61,7 +61,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 ### 문서 검사기 배포와 되돌리기
 
-문서 검사기(inspector)를 처음 배포하거나 되돌릴 때는 **자동화의 운영 코드(`operator_source_commit`)와 배포 고정값(`deployment_directory`·`deployment_sha256`)을 함께 바꾸고 함께 되돌린다.** 서비스 집합이 6개에서 7개로 바뀌므로 둘 중 하나만 바꾸면 매시간 `health`와 매일 `cvd-refresh`가 `SERVICE_SET`으로 실패한다. 마이그레이션은 없다.
+문서 검사기(inspector)를 처음 배포하거나 되돌릴 때는 **자동화의 운영 코드(`operator_source_commit`)와 배포 고정값(`deployment_directory`·`deployment_sha256`)을 함께 바꾸고 함께 되돌린다.** 서비스 집합이 6개에서 7개로 바뀌므로 둘 중 하나만 바꾸면 매시간 `health`와 매일 `cvd-refresh`가 `SERVICE_SET`으로 실패한다. 검사기 변경 자체에는 마이그레이션이 없다. 함께 배포하는 릴리스의 스키마가 바뀌면(새 이미지의 `REQUIRED_SCHEMA_REVISION`이 운영 DB와 다르면) 아래 [스키마가 바뀌는 업그레이드](#스키마가-바뀌는-업그레이드--점검-시간-절차) 절차를 따른다.
 
 배포 전 확인:
 
@@ -73,7 +73,9 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 1. 위 절차로 새 이미지와 렌더 디렉터리를 만들고 `docker compose -f NEW/compose.json config --quiet`와 `uv run --project services/api python -m ops.preflight NEW`를 통과시킨 뒤 배포한다.
 2. 검사기 변경이 포함된 병합 커밋으로 깨끗한 새 운영 checkout을 만들고, 그 SHA·새 렌더·새 state 디렉터리로 새 자동화 설정 JSON을 만든다. 기존 설정·checkout·state는 고치지 않고 보존한다(되돌리기용).
-3. `python -m ops.automation validate NEW.json --sha256 NEW_SHA256` → `python -m ops.schedule render NEW.json --sha256 NEW_SHA256 --output NEW_SCHEDULE` → `python -m ops.schedule validate NEW_SCHEDULE` → 기존 unit 파일 정리(별도 운영 절차, `install`은 덮어쓰지 않는다) → `python -m ops.schedule install NEW_SCHEDULE` → `python -m ops.schedule activate NEW_SCHEDULE` 순서로 실행하고, 새 설정으로 `--task health`를 수동 실행해 성공하는지 확인한다.
+3. `python -m ops.automation validate NEW.json --sha256 NEW_SHA256` → `python -m ops.schedule render NEW.json --sha256 NEW_SHA256 --output NEW_SCHEDULE` → `python -m ops.schedule validate NEW_SCHEDULE` → 기존 unit 파일과 health의 디스크 검사 drop-in(`PROJECT-health.service.d/`) 정리(별도 운영 절차, `install`은 같은 이름의 파일·drop-in이 있으면 거부하고 `activate`는 drop-in이 붙은 unit을 거부한다) → `python -m ops.schedule install NEW_SCHEDULE` → `python -m ops.schedule activate NEW_SCHEDULE` 순서로 실행한다.
+4. `activate`는 9개 unit을 모두 켠다. 백업 유예(2026-10-18 결정, [v1 완료 계획](v1-completion-plan.md))를 유지하려면 바로 `systemctl --user disable --now PROJECT-backup.timer PROJECT-restore-check.timer`를 실행한다. 그다음 health의 `ExecStartPre` 디스크 검사 drop-in을 새 설정 경로·해시로 다시 설치하고 `systemctl --user daemon-reload`를 실행한다.
+5. 새 설정으로 `--task health`를 수동 실행한다. 백업 유예 중에는 서비스·scanner 검사를 통과한 뒤 `BACKUP_MISSING`(새 state에는 백업 기록이 없다) 또는 `BACKUP_STALE`로 끝나는 것이 정상이다. 그 앞의 `SERVICE_SET`·`SCANNER_STALE` 등으로 실패하면 정상이 아니다. 디스크 여유는 drop-in 검사가 매회 확인한다.
 
 배포 후 확인표:
 
@@ -82,15 +84,70 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 | `docker compose -f NEW/compose.json ps --all` | 서비스 7개 running, api·db·scanner·inspector healthy |
 | `docker inspect --format '{{.HostConfig.NetworkMode}} {{.Config.User}} {{.HostConfig.Memory}} {{.HostConfig.PidsLimit}} {{.HostConfig.Init}}' <inspector 컨테이너>` | `none 10002:10003 1207959552 32 true` |
 | 앱에서 인쇄한 합성 영수증 사진 한 장 업로드 | 성공 |
-| 다음 예약 `health` | 성공(`latest-*.json` 또는 journal) |
+| 다음 예약 `health` | 백업 유예 중에는 `BACKUP_MISSING`/`BACKUP_STALE`(서비스·scanner 통과 뒤), 백업을 재개했다면 성공(`latest-*.json` 또는 journal) |
 
 되돌리기(필요할 때만):
 
 1. 새 예약을 멈춘다(위의 `systemctl --user disable --now` 명령).
-2. `docker compose -f PREVIOUS/compose.json up -d --wait --remove-orphans`로 이전 렌더에 되돌린다. 같은 프로젝트 이름이므로 inspector 컨테이너는 orphan으로 제거되고, 이전 API 이미지는 로컬 워커로 동작한다.
+2. `docker compose -f PREVIOUS/compose.json up -d --wait --remove-orphans`로 이전 렌더에 되돌린다. `PREVIOUS`는 **이전 state 디렉터리의 `active-deployment.json`이 가리키는 렌더**다. 파일이 없을 때만 이전 설정의 `deployment_directory`를 쓴다. 매일 `cvd-refresh`가 새 렌더를 승격하므로 처음 렌더의 ClamAV DB는 7일이 지나면 clamd가 시작을 거부해 scanner·api·web이 뜨지 않는다. 같은 프로젝트 이름이므로 inspector 컨테이너는 orphan으로 제거되고, 이전 API 이미지는 로컬 워커로 동작한다. 스키마를 올린 뒤라면 먼저 아래 절차의 DB 되돌리기를 끝낸다.
 3. 남은 볼륨을 지운다: `docker volume rm PROJECT_inspector_socket`(`PROJECT`는 manifest의 `project`). 다시 배포할 때 새 볼륨이 이미지 디렉터리의 소유권(10002:10003, 0750)을 받는다.
-4. 새 unit 파일을 정리하고(별도 운영 절차) 이전 schedule 디렉터리로 `ops.schedule install`·`activate`를 실행한 뒤, 이전 설정으로 `--task health`가 성공하는지 확인한다.
+4. 새 unit 파일과 drop-in을 정리하고(별도 운영 절차) 이전 schedule 디렉터리로 `ops.schedule install`·`activate`를 실행한다. 위 배포 4단계처럼 backup·restore-check 타이머를 다시 끄고 디스크 검사 drop-in을 이전 설정으로 다시 설치한 뒤, 이전 설정으로 `--task health`를 실행해 위 5단계와 같은 결과인지 확인한다.
 5. 되돌린 경우 문서 검사 격리가 다시 해제된 상태로 기록하고 원인을 조사한다.
+
+### 스키마가 바뀌는 업그레이드 — 점검 시간 절차
+
+새 API 이미지의 `REQUIRED_SCHEMA_REVISION`(`services/api/src/sallimbook/core/database.py`)이 운영 DB와 다를 때 사용한다. 예: 0.1.6(165d46b, `0014_vault`) → `0016_replacement_override`. API는 시작할 때 마이그레이션하지 않는다. 스키마가 다르면 `/api/v1/ready`가 503이라 api가 healthy가 되지 못하고, web은 api를 기다리므로 사설 사이트가 멈춘다. 아래 명령은 운영자가 실행한다.
+
+**순서 원칙: 서버 먼저 → 확인 → 두 폰 즉시 업데이트.** 그 사이에는 확인 외에 두 폰의 앱과 웹을 쓰지 않는다.
+- 0.1.6까지의 APK는 응답에 필드가 추가되면 거부한다. 서버만 올라간 동안 이전 APK의 보험 사건 목록·사건 선택·청구 상세가 실패한다.
+- APK를 먼저 설치하지 않는다. 새 APK와 이전 서버도 같은 이유로 서로 거부하고, APK는 데이터(Keystore·보관함 등록) 손실 없이 내릴 수 없다.
+- 서버가 추가한 응답 필드를 허용·제거하는 APK부터는 이 제약이 다음 릴리스에서 사라진다([브리지 계약 §2](native-bridge-contract.md#응답-호환-서버가-추가한-응답-필드)). 응답 필드를 **제거**하거나 의미를 바꾸는 변경에는 여전히 이 절차가 필요하다.
+
+준비(점검 시간 전):
+
+1. 위 절차로 새 이미지·렌더를 만들고 `docker compose -f NEW/compose.json config --quiet`와 `ops.preflight NEW`를 통과시킨다.
+2. release APK를 서명하고(versionCode 증가, 같은 인증서) 새 렌더의 `downloads/`에 넣은 뒤 `--sdk` preflight를 통과시킨다(§7).
+3. `free -m`의 가용 메모리를 확인한다(검사기를 처음 배포하면 1152MiB 추가).
+4. 마이그레이션용 admin env 파일을 운영자 소유 0600으로 만든다. 한 줄 `SALLIMBOOK_DATABASE_URL=postgresql+psycopg://sallimbook_admin:…@db:5432/sallimbook_prod`만 둔다. 비밀번호는 `db-admin-password`의 값이다. 일반 API 컨테이너에는 주입하지 않으며 되돌리기 창이 끝나면(아래 11단계 뒤) 지운다.
+
+점검 시간:
+
+5. 현재 예약을 멈춘다: `systemctl --user disable --now PROJECT-startup.service PROJECT-health.timer PROJECT-cvd-refresh.timer`. backup·restore-check 타이머는 백업 유예로 이미 꺼져 있어야 한다(`systemctl --user list-timers 'PROJECT-*' --all`).
+6. **수동 백업**: 현재 설정으로 `python -m ops.automation run CURRENT.json --sha256 CURRENT_SHA256 --task backup`. 현재(이전) 앱 이미지의 백업 worker가 DB와 암호화 첨부를 일관된 시점으로 묶고 완료 기록을 현재 state에 남긴다. 실패하면 여기서 중단한다.
+7. 이전 앱을 멈춘다: `docker compose -f CURRENT/compose.json stop web api`. `CURRENT`는 현재 state의 `active-deployment.json`이 가리키는 렌더(없으면 설정의 `deployment_directory`)다. db·scanner·node는 그대로 둔다.
+8. 마이그레이션 전 확인: `uv run --project services/api python -m ops.preflight NEW --verify-database`의 결과가 `"database_schema": "upgrade-required"`여야 한다. 이 검사는 **새** API 이미지 안에서 런타임 역할로 읽기 전용 실행되며, DB의 revision이 새 이미지가 모르는 값(예: 더 새 스키마)이면 실패한다.
+9. 마이그레이션(새 API 이미지, UID 10001, 읽기 전용, 전용 DB 네트워크만):
+
+   ```bash
+   docker run --rm --network PROJECT_database --read-only --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges:true --memory 256m --memory-swap 256m --env-file /PRIVATE_CONFIG/migration.env --entrypoint alembic NEW_API_IMAGE -c /opt/sallimbook/alembic.ini upgrade head
+   ```
+
+10. 같은 preflight를 다시 실행해 `"database_schema": "current"`를 확인한 뒤 `docker compose -f NEW/compose.json up -d --wait --remove-orphans`로 기동한다. 위 배포 후 확인표(서비스 7개, 검사기 `docker inspect`)와 보안 header를 확인하고, **PC 웹에서** 합성 영수증을 한 장 올린다. 이 시점의 폰은 아직 이전 APK다.
+11. **두 폰을 즉시 업데이트한다**(`/downloads/SallimBook.apk` 또는 `adb install -r`). 새 APK에서 보험 사건 목록·청구 상세와 합성 영수증 사진 업로드를 확인한다.
+
+이후:
+
+12. 위 배포 2~5단계로 자동화를 전환한다(새 운영 checkout·state, backup·restore-check 타이머 다시 끄기, 디스크 검사 drop-in 재설치, `BACKUP_MISSING`/`BACKUP_STALE`가 정상).
+13. 앱의 고정 납부 화면 "예정 회차 생성"을 **오늘부터** 이전에 생성해 둔 가장 먼 달까지 다시 실행한다(요청당 366일, 규칙 100개 이내). 0015는 예외가 풀린 회차의 `manual_override`를 실제 예외 여부로 정규화한다. 재생성은 그중 오늘 이후의 납부 기록 없는 회차를 현재 규칙으로 다시 맞춘다. 오늘 이전 회차는 다시 계산하지 않는다.
+
+**되돌리기 — 11단계(폰 업데이트) 전까지만.** 그 뒤에는 되돌리지 않고 앞으로 고친다.
+
+1. `docker compose -f NEW/compose.json stop web api inspector scanner`
+2. DB를 **새** 이미지의 스크립트로 내린다(이전 이미지에는 0015/0016 스크립트가 없다). 위 9단계 명령의 `upgrade head`를 `downgrade 0014_vault`(이전 릴리스의 revision)로 바꿔 실행한다.
+   - 0016 downgrade는 교체 기록의 새 두 열을 지운다. 점검 시간에는 새 기능 기록이 없어 잃는 값이 없다.
+   - 0015 downgrade는 철회된 규칙 버전이 하나라도 있으면 거부한다. 그때는 6단계 백업을 새 DB로 복원해 전환해야 하는데 현재 도구에는 운영 DB 교체 경로가 없다. 중단하고 별도로 결정한다.
+   - 0015가 정규화한 `manual_override`는 되돌리지 않는다(예외가 이미 풀린 회차의 표시만 다르며 금액·납부 기록은 같다).
+3. `ops.preflight NEW --verify-database`가 다시 `"upgrade-required"`인지 확인한다.
+4. `docker compose -f PREVIOUS/compose.json up -d --wait --remove-orphans`. `PREVIOUS`는 7단계의 `CURRENT`(이전 state의 `active-deployment.json`이 가리키는 렌더)다. 검사기를 처음 배포했다면 `docker volume rm PROJECT_inspector_socket`도 실행한다.
+5. 5단계에서 멈춘 이전 예약을 다시 켠다(`systemctl --user enable --now` 같은 세 unit). backup·restore-check 타이머는 켜지 않는다.
+
+리허설: `python3 -m ops.test_upgrade --old-image OLD_API_IMAGE --new-image NEW_API_IMAGE`는 새 `sallimbook-ops-smoke-*` Compose 프로젝트(호스트 포트·노드·실제 키 없음)에서 위 순서를 실제로 수행하고 그 프로젝트만 지운다.
+- 이전 릴리스: 자신의 `deploy.py` 렌더·마이그레이션·역할 준비, HTTP API로 합성 데이터(건너뛴/해제한 회차, 교체 기록) 입력, 자신의 `ops.backup create`로 완료 receipt까지 확인.
+- 새 이미지: preflight와 같은 schema 검사(`upgrade-required`) → 9단계의 명령 그대로 마이그레이션 → `current` → 기동·health.
+- 되돌리기: `downgrade 0014_vault` → 전체 public 테이블의 행 수와 내용 해시(새 열 제외)가 업그레이드 전과 같음 → 이전 릴리스 healthy.
+- 다시 업그레이드 → 회차 재생성으로 해제한 회차의 `manual_override=false`를 확인.
+
+자동화(systemd)·web/node·실제 백업 복원(`ops.test_recovery`)·실제 APK 업데이트는 이 리허설에 포함하지 않는다. 2026-10-21에 165d46b 이미지 → 이 절차를 추가한 커밋의 이미지로 통과했다(커밋과 출력은 해당 PR 기록).
 
 ## 3. 전용 네트워크와 비밀 주입
 
@@ -285,6 +342,7 @@ APK가 없으면 결과는 not-present이며 다운로드를 승인한 것이 �
 python3 -m unittest discover -s tests/operations -v
 python3 -m ops.test_deployment --web-image LOCALLY_BUILT_WEB_IMAGE
 python3 -m ops.test_runtime --image LOCALLY_BUILT_API_IMAGE
+python3 -m ops.test_upgrade --old-image PREVIOUS_RELEASE_API_IMAGE --new-image LOCALLY_BUILT_API_IMAGE
 JAVA_HOME=/SELECTED_JDK_21 python3 -m ops.test_release --sdk /DEDICATED_ANDROID_SDK
 PATH=/VERIFIED_AGE_AND_POSTGRES_TOOL_DIRECTORY:$PATH \
   uv run --project services/api python -m ops.test_recovery

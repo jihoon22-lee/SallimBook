@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from ops import backup, build_context, deploy, health, preflight, recovery, release
+from ops import backup, build_context, database, deploy, health, preflight, recovery, release
 
 
 def config():
@@ -777,6 +777,52 @@ class ReleaseTests(unittest.TestCase):
                 Path("/none"),
                 2,
             )
+
+
+class SchemaRevisionTests(unittest.TestCase):
+    known = {"0014_vault", "0015_rule_revocation", "0016_replacement_override"}
+
+    def state(self, current, head="0016_replacement_override", required=None):
+        return database.schema_state(current, head, self.known, required or head)
+
+    def test_database_at_the_image_head_is_current(self):
+        self.assertEqual(self.state("0016_replacement_override"), "current")
+
+    def test_known_older_revision_needs_the_reviewed_migration(self):
+        self.assertEqual(self.state("0014_vault"), "upgrade-required")
+
+    def test_unknown_or_newer_revision_is_refused(self):
+        # An old image started on an upgraded DB sees a revision it does not know.
+        for current in ("0017_future", None, ""):
+            with self.assertRaises(backup.OperationError):
+                self.state(current)
+
+    def test_image_whose_required_revision_is_not_its_head_is_refused(self):
+        with self.assertRaises(backup.OperationError):
+            self.state("0016_replacement_override", required="0015_rule_revocation")
+
+    def test_runbook_migration_command_is_the_rehearsed_argv(self):
+        runbook = (Path(__file__).resolve().parents[2] / "docs/operations-runbook.md").read_text()
+        command = database.migration_command(
+            "PROJECT_database", "/PRIVATE_CONFIG/migration.env", "NEW_API_IMAGE",
+            "upgrade", "head",
+        )
+        self.assertIn(" ".join(command), runbook)
+        self.assertIn("downgrade 0014_vault", runbook)
+
+    def test_preflight_reports_the_schema_state_from_the_new_image(self):
+        for schema in ("current", "upgrade-required"):
+            output = json.dumps({"status": "runtime-role-verified", "schema": schema,
+                                 "schema_revision": "0014_vault"})
+            self.assertEqual(preflight.database_report(output), schema)
+        for output in (
+            json.dumps({"status": "runtime-role-verified"}),
+            json.dumps({"status": "runtime-role-verified", "schema": "unknown"}),
+            json.dumps({"status": "failed", "schema": "current"}),
+            "not json",
+        ):
+            with self.assertRaises(backup.OperationError):
+                preflight.database_report(output)
 
 
 if __name__ == "__main__":
