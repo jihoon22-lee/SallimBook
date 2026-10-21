@@ -185,13 +185,12 @@ _PAN_LAYOUTS = frozenset(
     | {(4, 4, 4, 4, tail) for tail in (1, 2, 3)}
     | {(4, 6, 5), (4, 6, 4)}
 )
-# OCR and PDF text can lose some separators of a printed grid (4111 1111 11111111,
-# 41111111 11111111). A window whose group boundaries all fall on a printed card grid
-# is still a candidate: (boundaries allowed, boundaries required, total digits).
+# OCR and PDF text can lose any separators of a printed grid (4111 1111 11111111,
+# 41111111 11111111, 6212 3456 7890 1234569). A window whose group boundaries all fall on
+# a printed card grid is still a candidate: (boundaries allowed, total digits).
 _PAN_GRIDS = (
-    (frozenset({4, 8, 12}), frozenset(), frozenset({16})),
-    (frozenset({4, 8, 12, 16}), frozenset({16}), frozenset({17, 18, 19})),
-    (frozenset({4, 10}), frozenset(), frozenset({14, 15})),
+    (frozenset({4, 8, 12, 16}), frozenset({16, 17, 18, 19})),
+    (frozenset({4, 10}), frozenset({14, 15})),
 )
 _PAN_DATE = re.compile(r"(?:19|20)\d\d(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])")
 
@@ -203,10 +202,7 @@ def _on_grid(lengths: tuple[int, ...]) -> bool:
         total += length
         boundaries.add(total)
     total += lengths[-1]
-    return any(
-        total in totals and required <= boundaries <= allowed
-        for allowed, required, totals in _PAN_GRIDS
-    )
+    return any(total in totals and boundaries <= allowed for allowed, totals in _PAN_GRIDS)
 
 
 def _pan_candidates(text: str):

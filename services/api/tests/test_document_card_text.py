@@ -113,10 +113,22 @@ def test_low_confidence_blob_cannot_join_neighbouring_digit_words():
         "3712345678 90120",
         "6212 3456 7890 1234 569",
         "6212345678901234 569",
+        # 17–19 digit numbers whose last separator was lost (4-4-4-5/6/7).
+        "6212 3456 7890 12347",
+        "6212 3456 7890 123457",
+        "6212 3456 7890 1234569",
+        "62123456 78901234569",
+        "6212 3456 789012347",
     ],
 )
 def test_card_grid_with_lost_or_widened_separators_is_still_card_data(text):
     assert_rejected(lambda: worker._card_text(text), "DOCUMENT_CARD_DATA")
+
+
+def test_a_long_grid_that_starts_with_a_date_is_not_card_data():
+    # 20260222123456785 passes Luhn; the date guard also covers 17–19 digit grids.
+    worker._card_text("2026 0222 1234 56785")
+    worker._card_text("20260222 123456785")
 
 
 def _luhn_valid(digits):
