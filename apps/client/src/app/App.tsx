@@ -28,6 +28,7 @@ import { InvitationAcceptPage } from "../features/auth/InvitationAcceptPage";
 import { OnboardingPage } from "../features/auth/OnboardingPage";
 import { SignedOutWelcome } from "../features/auth/OnboardingEntry";
 import { LoginPage } from "../features/auth/LoginPage";
+import { SessionExpiredDialog } from "../features/auth/SessionExpiredDialog";
 import { SessionSettings } from "../features/auth/SessionSettings";
 import { CardListPage, CardNewPage, CardDetailPage } from "../features/cards/CardPages";
 import { IncomeListPage, IncomeNewPage, IncomeDetailPage } from "../features/income/IncomePages";
@@ -933,6 +934,7 @@ function ShellFrame() {
         </div>
       </div>
       <Navigation active={current?.group} />
+      <SessionExpiredDialog />
     </div>
   );
 }

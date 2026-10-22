@@ -527,6 +527,8 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .leave-dialog { max-width: min(28rem, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--foreground); }
 .leave-dialog::backdrop { background: rgb(0 0 0 / 40%); }
 .leave-dialog h2 { margin-top: 0; }
+.session-dialog { width: min(30rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.session-dialog .card { padding: 0; border: 0; box-shadow: none; background: transparent; }
 
 /* Task layouts: a clear next action, readable forms, and records before optional detail. */
 .finance-list > .card + .card { margin-top: 0; }

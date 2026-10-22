@@ -49,8 +49,17 @@ export type AuthState =
   | { status: "error"; error: ApiError }
   | { status: "native-unavailable" };
 
+/**
+ * A write answered 401 while a form is open. The screen stays mounted so typed input is not
+ * lost: "prompt" shows the sign-in dialog, "dismissed" keeps the form until the person leaves.
+ */
+export type SessionExpiry = "prompt" | "dismissed" | null;
+
 interface AuthContextValue {
   state: AuthState;
+  expiry: SessionExpiry;
+  dismissExpiry(): void;
+  endExpiry(): void;
   domainApi: AuthenticatedApi;
   reloadSession(): Promise<void>;
   login(input: LoginInput): Promise<void>;
@@ -81,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>(() => ({
     status: isNativeAuthUnavailable() ? "native-unavailable" : "loading",
   }));
+  const [expiry, setExpiry] = useState<SessionExpiry>(null);
   const csrf = useRef<string | null>(null);
   const member = useRef<Member | null>(null);
   const generation = useRef(0);
@@ -98,7 +108,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     generation.current += 1;
     csrf.current = null;
     member.current = null;
-    if (mounted.current) setState({ status: "signed-out" });
+    if (mounted.current) {
+      setExpiry(null);
+      setState({ status: "signed-out" });
+    }
+  }, []);
+
+  /** Drop the session but keep the screen mounted, so the form keeps what was typed. */
+  const expireInPlace = useCallback(() => {
+    generation.current += 1;
+    csrf.current = null;
+    member.current = null;
+    if (mounted.current) setExpiry("prompt");
   }, []);
 
   const clearForAppLock = useCallback(() => {
@@ -144,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const requestGeneration = ++generation.current;
     csrf.current = null;
     member.current = null;
+    setExpiry(null);
     setState({ status: "loading" });
     const promise = (async () => {
       try {
@@ -229,8 +251,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearForAppLock, reloadSession]);
 
   const authenticatedRequest = useCallback(
-    async <T,>(request: (requestGeneration: number) => Promise<T>): Promise<T> => {
-      if (!member.current) throw new ApiError(401, "UNAUTHENTICATED");
+    async <T,>(
+      request: (requestGeneration: number) => Promise<T>,
+      keepScreen = false,
+    ): Promise<T> => {
+      if (!member.current) {
+        // A save after the dialog was closed asks to sign in again instead of failing silently.
+        if (keepScreen && mounted.current) setExpiry((old) => (old ? "prompt" : old));
+        throw new ApiError(401, "UNAUTHENTICATED");
+      }
       const requestGeneration = generation.current;
       try {
         const data = await request(requestGeneration);
@@ -243,16 +272,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           failure.status === 401 &&
           failure.code !== "PASSKEY_VERIFICATION_FAILED" &&
           generation.current === requestGeneration
-        )
-          clearSession();
+        ) {
+          if (keepScreen) expireInPlace();
+          else clearSession();
+        }
         throw failure;
       }
     },
-    [clearSession, clearForAppLock, ensureCurrent],
+    [clearSession, expireInPlace, clearForAppLock, ensureCurrent],
   );
 
   const mutation = useCallback(
-    <T,>(request: (token: string) => Promise<T>): Promise<T> =>
+    <T,>(request: (token: string) => Promise<T>, keepScreen = false): Promise<T> =>
       authenticatedRequest(async (requestGeneration) => {
         requireWebAuth();
         const token = csrf.current ?? (await renewCsrf(requestGeneration));
@@ -270,7 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ensureCurrent(requestGeneration);
           return request(refreshed);
         }
-      }),
+      }, keepScreen),
     [authenticatedRequest, ensureCurrent, renewCsrf],
   );
 
@@ -297,6 +328,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ensureCurrent(requestGeneration);
       csrf.current = data.csrf_token;
       member.current = data.member;
+      setExpiry(null);
       setState({ status: "authenticated", member: data.member });
     },
     [ensureCurrent, mutation],
@@ -749,6 +781,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         web: ((client: WriteClient) => Promise<ApiResult<T>>) | undefined,
         native?: () => Promise<T>,
         proof?: ScopeProof,
+        options?: { clearOnExpiry?: boolean },
       ) => {
         if (isNativeAuth())
           return authenticatedRequest(() => {
@@ -773,17 +806,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             web({ POST: client.POST, PATCH: client.PATCH, PUT: client.PUT, DELETE: client.DELETE }),
           );
         };
+        // A plain save keeps its screen when the session has ended; step-up operations do not.
         return proof
           ? scopedOperation(proof.purpose, proof.targetId, proof.signal, action)
-          : mutation((token) => action(token));
+          : mutation((token) => action(token), !options?.clearOnExpiry);
       },
     }),
     [authenticatedRequest, mutation, scopedOperation],
   );
 
+  const dismissExpiry = useCallback(() => setExpiry((old) => (old ? "dismissed" : old)), []);
+
   const value = useMemo(
     () => ({
       state,
+      expiry,
+      dismissExpiry,
+      endExpiry: clearSession,
       domainApi,
       reloadSession,
       getSetupStatus,
@@ -808,6 +847,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }),
     [
       state,
+      expiry,
+      dismissExpiry,
+      clearSession,
       domainApi,
       reloadSession,
       getSetupStatus,
