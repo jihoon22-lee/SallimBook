@@ -196,6 +196,15 @@ def _link_date(payload: CashInput) -> date:
     return payload.occurred_on or month_start(payload.period_month)
 
 
+def _before_start(occurred_on: date | None, month: date, started_on: date | None) -> bool:
+    """Whether a record precedes a method's first day; a month total compares by month."""
+    if started_on is None:
+        return False
+    if occurred_on is not None:
+        return occurred_on < started_on
+    return month < started_on.replace(day=1)
+
+
 def _validate_links(
     session: Session,
     principal: Principal,
@@ -204,9 +213,19 @@ def _validate_links(
     previous: CashRecord | None = None,
 ) -> None:
     _validate_actual_date(payload)
-    # A closed account or card still takes records dated through its end, and a correction
-    # keeps the link of the fact it replaces.
+    # A closed account or card still takes records dated through its end, and none takes a
+    # record dated before its start. A correction keeps the link of the fact it replaces.
     on = _link_date(payload)
+    month = month_start(payload.period_month)
+
+    def too_early(started_on: date | None, kept: bool) -> bool:
+        # A correction may keep a date that already preceded the start; it cannot move there.
+        return _before_start(payload.occurred_on, month, started_on) and not (
+            kept
+            and previous is not None
+            and _before_start(previous.occurred_on, previous.period_month, started_on)
+        )
+
     # Match existing asset/account writers: Asset -> Account -> Member. IDs cannot be retargeted.
     if payload.account_id is not None:
         account = scoped_entity(session, FinancialAccount, payload.account_id, principal)
@@ -214,10 +233,9 @@ def _validate_links(
         account = scoped_entity(
             session, FinancialAccount, payload.account_id, principal, for_update=True
         )
-        if (
-            (previous is None or previous.account_id != account.id)
-            and asset.ended_on is not None
-            and asset.ended_on < on
+        relinked = previous is None or previous.account_id != account.id
+        if (relinked and asset.ended_on is not None and asset.ended_on < on) or too_early(
+            account.opened_on, kept=not relinked
         ):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 입금 계좌를 선택해 주세요.", 422)
     if payload.member_id is not None:
@@ -228,10 +246,9 @@ def _validate_links(
             raise DomainError("MEMBER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
     if payload.card_id is not None:
         card = scoped_entity(session, Card, payload.card_id, principal, for_update=True)
-        if (
-            (previous is None or previous.card_id != card.id)
-            and card.ended_on is not None
-            and card.ended_on < on
+        relinked = previous is None or previous.card_id != card.id
+        if (relinked and card.ended_on is not None and card.ended_on < on) or too_early(
+            card.started_on, kept=not relinked
         ):
             raise DomainError("CARD_UNAVAILABLE", "사용 중인 결제 카드를 선택해 주세요.", 422)
 
