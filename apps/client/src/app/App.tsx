@@ -795,6 +795,8 @@ function ShellFrame() {
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(location.pathname);
   const current = matchRoutes(screens, location)?.at(-1)?.route;
+  const screen = current?.path;
+  const previousScreen = useRef(screen);
   const parent = current?.parent.to ?? "/";
   const title = current?.title ?? "페이지를 찾을 수 없어요";
   const authPage = location.pathname === "/login" || location.pathname.startsWith("/onboarding");
@@ -812,14 +814,17 @@ function ShellFrame() {
   useEffect(() => {
     document.title = location.pathname === "/" ? "SallimBook · 살림북" : `${title} · SallimBook`;
     const active = document.activeElement;
+    const lost = !active || active === document.body;
     // A POP keeps its restored scroll and only recovers focus the old screen took with it.
-    if (
-      previousPath.current !== location.pathname &&
-      (navigationType !== "POP" || !active || active === document.body)
-    )
+    // A replace within the same screen (stepping the month) keeps the control the person used.
+    const stays =
+      navigationType === "POP" ||
+      (navigationType === "REPLACE" && previousScreen.current === screen);
+    if (previousPath.current !== location.pathname && (!stays || lost))
       mainRef.current?.focus({ preventScroll: true });
     previousPath.current = location.pathname;
-  }, [location.pathname, navigationType, title]);
+    previousScreen.current = screen;
+  }, [location.pathname, navigationType, title, screen]);
   useHistoryScroll(location, navigationType);
 
   useEffect(

@@ -67,6 +67,21 @@ p { margin-block: .65rem; }
 .month-control label { display: inline-flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--muted); font-weight: 600; }
 .month-picker input { min-width: 0; max-width: 100%; min-height: 48px; padding: 6px; border: 0; border-radius: 7px; background: transparent; color: var(--foreground); font-weight: 650; }
 .month-picker > .muted { padding-left: 2px; font-size: .75rem; }
+.month-field { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; max-width: 100%; }
+.form-field .month-field { display: grid; gap: .45rem; }
+.month-field-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.month-field .month-field-row input { flex: 1 1 9rem; width: auto; min-width: 0; }
+.month-step { min-width: 48px; min-height: 48px; padding: 8px 10px; gap: 4px; font-size: .8125rem; white-space: nowrap; }
+.month-step[aria-disabled="true"] { opacity: .5; cursor: not-allowed; box-shadow: none; }
+@media (max-width: 480px) {
+  .month-picker .month-field > label { flex-basis: 100%; }
+  .month-field-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .month-field-row > .month-today { grid-column: 1 / -1; }
+  .month-step-text { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .month-step:has(.month-step-text) { font-size: 1.125rem; }
+  /* The field already shows the month; keep the Seoul note for screen readers and save a row. */
+  .dashboard-heading .month-picker > .muted { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .card { min-width: 0; padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card + .card, main > section + section, main > .card + .card { margin-top: 18px; }
 .card h2 { font-size: 1.125rem; font-weight: 720; margin: 0 0 12px; }

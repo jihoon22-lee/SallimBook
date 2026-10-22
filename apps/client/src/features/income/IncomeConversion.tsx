@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { toApiError } from "../../platform/api";
 import { useMonth, isValidMonth } from "../../shared/MonthContext";
+import { MonthField } from "../../shared/MonthField";
 import { useIdempotencyKey, useMonthCommand } from "../assets/months/useMonthCommand";
 import { formatKrw } from "../assets/months/model";
 import { allPages } from "../finance/queries";
@@ -152,14 +153,11 @@ function ConversionWorkspace() {
           <legend>원본 선택</legend>
           <div className="form-grid">
             <div className="form-field">
-              <label>
-                전환 귀속월
-                <input
-                  type="month"
-                  value={period}
-                  onChange={(event) => scopeChange(() => setPeriod(event.target.value))}
-                />
-              </label>
+              <MonthField
+                label="전환 귀속월"
+                value={period}
+                onChange={(next) => scopeChange(() => setPeriod(next))}
+              />
             </div>
             <div className="form-field">
               <label>
