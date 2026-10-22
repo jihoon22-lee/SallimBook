@@ -22,7 +22,6 @@ ROOT = Path(__file__).resolve().parents[1]
 TASKS = {
     "backup",
     "health",
-    "disk-check",
     "restore-check",
     "cvd-refresh",
     "cvd-prune",
@@ -37,8 +36,6 @@ BACKUP_OVERHEAD_BUDGET = 900
 LIMITS = {
     "backup": BACKUP_WORKER_TIMEOUT + BACKUP_OVERHEAD_BUDGET,
     "health": 300,
-    # Runs as ExecStartPre of the health service, inside its start timeout.
-    "disk-check": 180,
     "restore-check": 7200,
     "cvd-refresh": 3600,
     "startup": 600,
@@ -393,7 +390,7 @@ def run(config_path, expected_sha256, task, *, runner=None, arguments=None):
             binding = deployment_binding(config)
             runtime = Runtime(config, binding, runner, journal)
             pending = unfinished_runs(config, exclude=journal.run_id)
-            if pending and task not in {"startup", "recover", "health", "disk-check"}:
+            if pending and task not in {"startup", "recover", "health"}:
                 raise AutomationError("RECOVERY_REQUIRED")
             if task in {"startup", "recover"}:
                 runtime.recover(pending)

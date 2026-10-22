@@ -2,7 +2,6 @@
 
 import json
 import shutil
-import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -70,7 +69,7 @@ class ScheduleTests(unittest.TestCase):
     def test_install_only_new_files_and_reload(self):
         result = schedule.install(self.directory, runner=self.runner)
         self.assertEqual(result["status"], "installed-inactive")
-        self.assertEqual(len(list(self.destination.iterdir())), 10)
+        self.assertEqual(len(list(self.destination.iterdir())), 9)
         self.assertEqual(
             [call for call in self.calls if call[0] == "/usr/bin/systemctl"],
             [["/usr/bin/systemctl", "--user", "daemon-reload"]],
@@ -185,134 +184,50 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(len(schedule.activate(fresh, runner=self.runner)["units"]), 5)
         self.assertTrue((fresh / "activation.json").exists())
 
-    @property
-    def dropin_name(self):
-        return self.config["project"] + "-health.service.d/10-disk-check.conf"
-
-    def test_render_includes_the_versioned_disk_check_dropin(self):
-        path = self.directory / self.dropin_name
-        text = path.read_text()
-        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
-        self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode), 0o700)
-        self.assertIn(f"template v{schedule.DISK_CHECK_TEMPLATE_VERSION}", text.splitlines()[0])
-        self.assertEqual(text.splitlines()[1], "[Service]")
-        pre = [line for line in text.splitlines() if line.startswith("ExecStartPre=")]
-        self.assertEqual(
-            pre,
-            [
-                "ExecStartPre="
-                + self.config["python_executable"]
-                + " -m ops.automation run "
-                + str(self.configuration)
-                + " --sha256 "
-                + self.sha
-                + " --task disk-check"
-            ],
-        )
-        self.assertNotIn("/bin/sh", text)
-        record = automation.read_json(self.directory / "schedule.json")
-        self.assertEqual(record["files"][self.dropin_name], backup.digest(path))
-        self.assertEqual(len(record["files"]), 10)
-        # The pre-step shares the health service's start timeout.
-        health = (self.directory / (self.config["project"] + "-health.service")).read_text()
-        timeout = automation.LIMITS["health"] + automation.LIMITS["disk-check"]
-        self.assertIn(f"TimeoutStartSec={timeout}\n", health)
-        task = pre[0].rsplit(" ", 1)[1]
-        self.assertIn(task, automation.TASKS)
-
-    def test_validate_covers_the_dropin(self):
-        schedule.validate(self.directory, runner=self.runner)
-        verified = next(call for call in self.calls if call[:3] == [
-            "/usr/bin/systemd-analyze", "--user", "verify"
-        ])
-        self.assertEqual(len(verified), 12)  # only unit files are named; systemd finds the .d dir
-        self.assertFalse(any(arg.endswith(".conf") for arg in verified))
-        path = self.directory / self.dropin_name
-        original = path.read_text()
-        path.write_text(original + "ExecStartPre=/bin/false\n")
-        with self.assertRaisesRegex(automation.AutomationError, "SCHEDULE_CHANGED"):
-            schedule.validate(self.directory, runner=self.runner)
-        path.write_text(original)
-        extra = private(path.parent / "99-extra.conf", "[Service]\nExecStartPre=/bin/false\n")
-        with self.assertRaisesRegex(automation.AutomationError, "SCHEDULE_FILES"):
-            schedule.validate(self.directory, runner=self.runner)
-        extra.unlink()
-        (self.directory / "stray.d").mkdir(mode=0o700)
-        with self.assertRaisesRegex(automation.AutomationError, "SCHEDULE_FILES"):
-            schedule.validate(self.directory, runner=self.runner)
-
-    def test_install_and_activate_accept_only_the_rendered_dropin(self):
-        schedule.install(self.directory, runner=self.runner)
-        installed = self.destination / self.dropin_name
-        self.assertEqual(installed.read_text(), (self.directory / self.dropin_name).read_text())
-        self.assertEqual(stat.S_IMODE(installed.stat().st_mode), 0o600)
-        self.assertEqual(stat.S_IMODE(installed.parent.stat().st_mode), 0o700)
-        result = schedule.activate(self.directory, runner=self.runner)
-        self.assertEqual(len(result["units"]), 5)
-        self.assertTrue((self.directory / "activation.json").exists())
-
-    def test_activate_refuses_any_other_dropin(self):
+    def test_rendered_schedule_has_no_pre_step_and_no_dropin(self):
+        # `Restart=on-failure` also applies to ExecStartPre, and RestartPreventExitStatus covers
+        # only the main process, so a pre-step failing on DISK_SPACE_LOW would retry every
+        # minute. The disk check is the first step of the health task instead.
         project = self.config["project"]
-        show = ["--user", "show", "--property=DropInPaths"]
-        original = self.runner.run.side_effect
-        for reason in ("changed", "extra file", "other unit", "other path", "not loaded"):
-            with self.subTest(reason=reason):
-                case = self.root / reason.replace(" ", "-")
-                case.mkdir(mode=0o700)
-                self.destination = case / "units"
-                schedule.unit_directory.return_value = self.destination
-                rendered = case / "schedule"
-                schedule.render(self.configuration, self.sha, rendered)
-                schedule.install(rendered, runner=self.runner)
-                dropin = self.destination / self.dropin_name
-                if reason == "changed":
-                    dropin.write_text(dropin.read_text() + "ExecStartPre=/bin/false\n")
-                elif reason == "extra file":
-                    private(dropin.parent / "99-extra.conf", "[Service]\n")
-                elif reason == "other unit":
-                    other = self.destination / (project + "-backup.service.d")
-                    other.mkdir(mode=0o700)
-                    private(other / "10-disk-check.conf", dropin.read_text())
-                elif reason == "other path":
-                    # A vendor or runtime override that systemd also loads.
-                    self.runner.run.side_effect = lambda args, mine=dropin, **kwargs: (
-                        f"{mine} /etc/systemd/user/{args[-1]}.d/50.conf\n"
-                        if args[1:4] == show
-                        else original(args, **kwargs)
-                    )
-                else:
-                    self.runner.run.side_effect = lambda args, **kwargs: (
-                        "\n" if args[1:4] == show else original(args, **kwargs)
-                    )
-                self.calls.clear()
-                with self.assertRaisesRegex(
-                    automation.AutomationError, "INSTALLED_UNIT_(CHANGED|OVERRIDE)"
-                ):
-                    schedule.activate(rendered, runner=self.runner)
-                self.runner.run.side_effect = original
-                self.assertFalse(any("enable" in call for call in self.calls))
-                self.assertFalse((rendered / "activation.json").exists())
+        self.assertEqual(sorted(path.name for path in self.directory.glob("*.d")), [])
+        self.assertEqual(sorted(path.name for path in self.directory.glob("**/*.conf")), [])
+        for path in self.directory.glob("*.service"):
+            self.assertNotIn("ExecStartPre", path.read_text())
+        health = (self.directory / (project + "-health.service")).read_text()
+        self.assertIn("RestartPreventExitStatus=1", health)
+        self.assertIn(f"TimeoutStartSec={automation.LIMITS['health']}\n", health)
+        record = automation.read_json(self.directory / "schedule.json")
+        self.assertEqual(len(record["files"]), 9)
 
-    def test_handmade_dropin_blocks_install_and_is_preserved(self):
+    def test_activate_still_refuses_a_foreign_dropin(self):
+        project = self.config["project"]
+        schedule.install(self.directory, runner=self.runner)
+        folder = self.destination / (project + "-health.service.d")
+        folder.mkdir(mode=0o700)
+        private(folder / "backup-pause-disk-check.conf", "[Service]\nExecStartPre=/bin/true\n")
+        with self.assertRaisesRegex(automation.AutomationError, "INSTALLED_UNIT_CHANGED"):
+            schedule.activate(self.directory, runner=self.runner)
+        shutil.rmtree(folder)
+        # A drop-in systemd loads from a path this tool never wrote.
+        original = self.runner.run.side_effect
+        self.runner.run.side_effect = lambda args, **kwargs: (
+            f"/etc/systemd/user/{args[-1]}.d/50.conf\n"
+            if args[1:4] == ["--user", "show", "--property=DropInPaths"]
+            else original(args, **kwargs)
+        )
+        self.calls.clear()
+        with self.assertRaisesRegex(automation.AutomationError, "INSTALLED_UNIT_OVERRIDE"):
+            schedule.activate(self.directory, runner=self.runner)
+        self.assertFalse(any("enable" in call for call in self.calls))
+        self.assertFalse((self.directory / "activation.json").exists())
+
+    def test_handmade_health_dropin_blocks_install_and_is_preserved(self):
         existing = self.destination / (self.config["project"] + "-health.service.d")
         existing.mkdir(parents=True)
-        handmade = private(existing / "10-hand-made.conf", "[Service]\nExecStartPre=/bin/true\n")
+        handmade = private(
+            existing / "backup-pause-disk-check.conf", "[Service]\nExecStartPre=/bin/true\n"
+        )
         with self.assertRaisesRegex(automation.AutomationError, "UNIT_ALREADY_EXISTS"):
             schedule.install(self.directory, runner=self.runner)
         self.assertEqual(handmade.read_text(), "[Service]\nExecStartPre=/bin/true\n")
-        self.assertEqual(
-            [path.name for path in self.destination.iterdir()], [existing.name]
-        )
-
-    def test_failed_install_removes_the_new_dropin_and_its_directory(self):
-        original = self.runner.run.side_effect
-
-        def failing(args, **kwargs):
-            if args[-1] == "daemon-reload":
-                raise automation.AutomationError("COMMAND_FAILED")
-            return original(args, **kwargs)
-
-        self.runner.run.side_effect = failing
-        with self.assertRaises(automation.AutomationError):
-            schedule.install(self.directory, runner=self.runner)
-        self.assertEqual(list(self.destination.iterdir()), [])
+        self.assertEqual([path.name for path in self.destination.iterdir()], [existing.name])

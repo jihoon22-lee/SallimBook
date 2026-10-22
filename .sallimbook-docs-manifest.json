@@ -274,8 +274,8 @@
       "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
     },
     "docs/operations-runbook.md": {
-      "sha256": "8b817dff5451754da00679619df42c21ce533a70f5305516e11c50ad966ce661",
-      "git_sha1": "7a120d0cd60a0e3d90a6ab520abda35d46c6270a"
+      "sha256": "7e7f5e73afbc00e557ed65b66c59ae628dce8969cc61bad148300e05c8f61724",
+      "git_sha1": "320d0b3bf198f5557ad2f66885923ac5e8d66d66"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
@@ -374,8 +374,8 @@
       "git_sha1": "10b7d5a3395629224b144f837cfb318b43f0b388"
     },
     "docs/testing/operations-automation.md": {
-      "sha256": "b353e11deec71fff0c1eb4c30d9434625ceaed726be9e572e9658788e688ba4b",
-      "git_sha1": "23f44dd4c21d3dd86f8722953d8f4f3f864bee60"
+      "sha256": "005a80a081401c0b8b4991873e39336b3ce41d44350059a4e9d5c68acb376bf6",
+      "git_sha1": "002e65b2bda74c9cf8ab183f3a1a7d0a47b0af8a"
     },
     "docs/testing/design-refresh.md": {
       "sha256": "a5128aaaa9f0a4c50f42932b431576abad96711042d15ef0807d45d7e0aa0433",

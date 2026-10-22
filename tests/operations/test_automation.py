@@ -514,20 +514,24 @@ class RuntimeBoundaries(unittest.TestCase):
         )
         mocks["latest_backup"].assert_called_once()
 
-    def test_disk_check_is_a_task_that_pending_recovery_does_not_block(self):
-        self.assertIn("disk-check", auto.TASKS)
-        self.assertIn("disk-check", auto.LIMITS)
-        auto.Journal(self.config, "restore-check", "d" * 64)
+    def test_disk_check_is_part_of_health_not_a_task_of_its_own(self):
+        self.assertNotIn("disk-check", auto.TASKS)
+        self.assertNotIn("disk-check", auto.LIMITS)
+
+    def test_low_disk_space_exits_with_the_status_the_schedule_does_not_retry(self):
+        # Rendered services use RestartPreventExitStatus=1; only a held lock exits with 75.
+        failure = auto.AutomationError("DISK_SPACE_LOW")
         with (
-            patch.object(auto, "load_config", return_value=self.config),
-            patch.object(auto, "verify_operator_source"),
-            patch.object(auto, "deployment_binding", return_value={}),
-            patch.object(runtime, "Runtime") as mocked,
+            patch.object(auto, "run", side_effect=failure),
+            patch("sys.argv", ["ops.automation", "run", "c.json", "--sha256", "d" * 64,
+                               "--task", "health"]),
+            patch("sys.stdout", new_callable=io.StringIO) as output,
         ):
-            mocked.return_value.disk_check.return_value = {"state_disk_free_bytes": 1}
-            result = auto.run(self.root / "config", "d" * 64, "disk-check", runner=MagicMock())
-        mocked.return_value.disk_check.assert_called_once_with()
-        self.assertEqual(result["status"], "completed")
+            code = auto.main()
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            json.loads(output.getvalue()), {"status": "failed", "code": "DISK_SPACE_LOW"}
+        )
 
     def make_runtime(self):
         journal = auto.Journal(self.config, "cvd-refresh", "d" * 64)
