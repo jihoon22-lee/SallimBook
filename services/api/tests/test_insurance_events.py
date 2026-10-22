@@ -1,6 +1,7 @@
 """Synthetic actual-source, allocation, correction and household boundary regressions."""
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from threading import Barrier
 from uuid import UUID, uuid4
@@ -9,16 +10,27 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, text, update
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
-from test_income import CATALOG, close_account, headers, income_payload, make_account
+from test_income import (
+    CATALOG,
+    close_account,
+    headers,
+    income_payload,
+    make_account,
+    set_opened_on,
+)
 from test_insurance_core import case_payload, policy_payload
 from test_pagination import api_pages, ids, pairs
 from test_recurring import generate, obligation_for, post_rule, settle
 
+from sallimbook.accounts import service as accounts
+from sallimbook.accounts.schemas import AccountCreate
 from sallimbook.assets import month_service
 from sallimbook.assets.month_schemas import MonthDraft, MonthValueUpdate
+from sallimbook.cards import service as card_service
+from sallimbook.cards.schemas import CardCreate
 from sallimbook.cashflow import service as cash
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision
 from sallimbook.cashflow.recurring_router import router as recurring_router
@@ -678,6 +690,54 @@ class TestInsuranceEventCorrections:
             ]
 
     @pytest.mark.parametrize("source", ["refund", "return"])
+    def test_return_dated_before_original_is_rejected(self, app, actors, source):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            if source == "refund":
+                parent = new_expense(client, actor, case, new_node(client, actor, case))
+                create_path, collection = (
+                    f"/medical-expenses/{parent['id']}/refunds",
+                    "/medical-refunds",
+                )
+                extra = {}
+            else:
+                parent = new_payout(client, actor, [allocation(case["id"])])
+                create_path, collection = f"/payouts/{parent['id']}/returns", "/returns"
+                extra = {"original_allocation_id": parent["allocations"][0]["id"]}
+            # The original is dated 2026-01-31.
+            early = client.post(
+                BASE + create_path,
+                headers=headers(actor, version=1),
+                json=actual("30", occurred_on="2026-01-30", reason="합성 이른 반환", **extra),
+            )
+            assert early.status_code == 422, early.text
+            assert early.json()["error"]["code"] == "INVALID_REVERSAL"
+            assert early.json()["error"]["message"] == "반환일은 원본 날짜보다 빠를 수 없어요."
+            first = money(
+                client,
+                actor,
+                create_path,
+                actual("30", reason="합성 당일 반환", **extra),
+                version=1,
+            )
+            # A correction is held to the same rule.
+            corrected = client.post(
+                BASE + f"{collection}/{first['id']}/correct",
+                headers=headers(actor, version=1),
+                json=actual("30", occurred_on="2026-01-30", reason="합성 날짜 정정", **extra),
+            )
+            assert corrected.status_code == 422, corrected.text
+            assert corrected.json()["error"]["code"] == "INVALID_REVERSAL"
+            money(
+                client,
+                actor,
+                f"{collection}/{first['id']}/correct",
+                actual("30", occurred_on="2026-01-31", reason="합성 날짜 확인", **extra),
+                version=1,
+            )
+
+    @pytest.mark.parametrize("source", ["refund", "return"])
     def test_reversal_correction_keeps_its_original_reason(self, app, actors, source):
         actor = actors[0]
         with TestClient(app) as client:
@@ -764,6 +824,200 @@ class TestInsuranceEventCorrections:
                 assert late.status_code == 422
                 assert late.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
                 money(client, actor, collection, body | {"occurred_on": "2026-01-25"})
+
+    def test_record_dated_before_card_or_account_start_is_rejected(self, app, actors, db_engine):
+        actor = actors[0]
+        with Session(db_engine) as session:
+            account = accounts.create_account(
+                session,
+                actor.principal,
+                AccountCreate(
+                    institution_name="합성 시작 기관",
+                    account_type="checking",
+                    opened_on="2026-01-15",
+                    asset={
+                        "name": "합성 시작 자산",
+                        "kind": "asset",
+                        "category": "financial",
+                        "ownership_kind": "joint",
+                        "amount_basis": "owned",
+                        "started_on": "2025-01-01",
+                    },
+                ),
+                None,
+            )
+            card = card_service.create_card(
+                session,
+                actor.principal,
+                CardCreate(
+                    owner_member_id=actor.member_id,
+                    issuer_name="합성 카드사",
+                    product_name="합성 시작 카드",
+                    card_type="credit",
+                    started_on="2026-01-20",
+                ),
+            )
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            node = new_node(client, actor, case)
+
+            def create(link, day):
+                return client.post(
+                    BASE + "/medical-expenses",
+                    headers=headers(actor),
+                    json=expense_payload(case["id"], node["id"])
+                    | actual("100", occurred_on=day, **link),
+                )
+
+            for link, start, code in (
+                ({"account_id": str(account.id)}, "2026-01-15", "ACCOUNT_UNAVAILABLE"),
+                ({"card_id": str(card.id)}, "2026-01-20", "CARD_UNAVAILABLE"),
+            ):
+                day = date.fromisoformat(start)
+                early = create(link, (day - timedelta(days=1)).isoformat())
+                assert early.status_code == 422, early.text
+                assert early.json()["error"]["code"] == code
+                created = create(link, start)
+                assert created.status_code == 201, created.text
+                # A correction cannot move a record in front of the start either.
+                moved = client.post(
+                    BASE + f"/medical-expenses/{created.json()['id']}/correct",
+                    headers=headers(actor, version=1),
+                    json=expense_payload(case["id"], node["id"])
+                    | actual(
+                        "100",
+                        occurred_on=(day - timedelta(days=1)).isoformat(),
+                        reason="합성 날짜 정정",
+                        **link,
+                    ),
+                )
+                assert moved.status_code == 422, moved.text
+                assert moved.json()["error"]["code"] == code
+
+    def test_correcting_a_record_that_already_precedes_the_start_keeps_its_standing(
+        self, app, actors, db_engine
+    ):
+        actor = actors[0]
+        account = make_account(db_engine, actor)
+        linked = {"account_id": str(account.id)}
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            node = new_node(client, actor, case)
+
+            def spend(day):
+                return money(
+                    client,
+                    actor,
+                    "/medical-expenses",
+                    expense_payload(case["id"], node["id"])
+                    | actual("100", occurred_on=day, **linked),
+                )
+
+            old, new = spend("2026-01-10"), spend("2026-02-10")
+            # Opening dates were never checked before, so the old expense predates the start.
+            set_opened_on(db_engine, account, "2026-02-01")
+
+            def correct(record, day, amount="90"):
+                return client.post(
+                    BASE + f"/medical-expenses/{record['id']}/correct",
+                    headers=headers(actor, version=record["version"]),
+                    json=expense_payload(case["id"], node["id"])
+                    | actual(amount, occurred_on=day, reason="합성 정정", **linked),
+                )
+
+            # Staying linked, the old record may be corrected and keep a date before the start.
+            same_day = correct(old, "2026-01-10")
+            assert same_day.status_code == 201, same_day.text
+            earlier = correct(same_day.json(), "2026-01-05", "80")
+            assert earlier.status_code == 201, earlier.text
+            # A record dated on or after the start cannot be moved in front of it.
+            moved = correct(new, "2026-01-31")
+            assert moved.status_code == 422, moved.text
+            assert moved.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            assert correct(new, "2026-02-01").status_code == 201
+
+    def test_insurance_child_lists_have_stable_order(self, app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            node = new_node(client, actor, case)
+            # Receipt lines come back in the order they were entered.
+            labels = [f"합성 항목 {n}" for n in (4, 1, 5, 2, 6, 3)]
+            expense = new_expense(
+                client,
+                actor,
+                case,
+                node,
+                "60",
+                lines=[{"label": label, "amount_krw": "10"} for label in labels],
+            )
+            assert [line["label"] for line in expense["lines"]] == labels
+            assert [
+                line["label"]
+                for line in read(client, actor, f"/medical-expenses/{expense['id']}")["lines"]
+            ] == labels
+            # Payout allocations follow their creation time, then their id.
+            cases = [new_case(client, actor) for _ in range(3)]
+            payout = new_payout(
+                client, actor, [allocation(c["id"], str(10 * (n + 1))) for n, c in enumerate(cases)]
+            )
+            by_case = {row["case_id"]: row["id"] for row in payout["allocations"]}
+            expected = [by_case[cases[n]["id"]] for n in (2, 0, 1)]
+            with Session(db_engine) as session:
+                # The isolated test schema may lift the immutability trigger to backdate rows.
+                session.execute(
+                    text(
+                        "ALTER TABLE payout_allocations "
+                        "DISABLE TRIGGER payout_allocations_source_immutable"
+                    )
+                )
+                for rank, allocation_id in enumerate(expected):
+                    session.execute(
+                        update(PayoutAllocation)
+                        .where(PayoutAllocation.id == UUID(allocation_id))
+                        .values(created_at=datetime(2026, 1, 1 + rank, tzinfo=UTC))
+                    )
+                session.commit()
+            listed = read(client, actor, f"/payouts/{payout['id']}")["allocations"]
+            assert [row["id"] for row in listed] == expected
+            # Claim evidence is listed by expense id, whatever order the claim cited them in.
+            policy = new_policy(client, actor)
+            cited = [new_expense(client, actor, case, node)["id"] for _ in range(3)]
+            claim = create_metadata(
+                client,
+                actor,
+                "/claims",
+                {
+                    "case_id": case["id"],
+                    "policy_id": policy["id"],
+                    "expense_ids": list(reversed(sorted(cited))),
+                },
+            )
+            assert claim["expense_ids"] == sorted(cited)
+            assert read(client, actor, f"/claims/{claim['id']}")["expense_ids"] == sorted(cited)
+
+    def test_future_claim_date_is_rejected(self, app, actors, monkeypatch):
+        actor = actors[0]
+        # 00:30 on 2026-02-01 in Seoul is still 2026-01-31 in UTC: the claim date is judged
+        # on the Seoul day, and a frozen clock cannot straddle midnight mid-test.
+        monkeypatch.setattr(service, "utcnow", lambda: datetime(2026, 1, 31, 15, 30, tzinfo=UTC))
+        today, tomorrow = "2026-02-01", "2026-02-02"
+        with TestClient(app) as client:
+            case, policy = new_case(client, actor), new_policy(client, actor)
+            body = {"case_id": case["id"], "policy_id": policy["id"]}
+            future = client.post(
+                BASE + "/claims", headers=headers(actor), json=body | {"submitted_on": tomorrow}
+            )
+            assert future.status_code == 422, future.text
+            assert future.json()["error"]["code"] == "INVALID_SUBMISSION_DATE"
+            claim = create_metadata(client, actor, "/claims", body | {"submitted_on": today})
+            moved = client.patch(
+                BASE + f"/claims/{claim['id']}",
+                headers=headers(actor, version=1),
+                json={"submitted_on": tomorrow, "reason": "합성 날짜 정정"},
+            )
+            assert moved.status_code == 422, moved.text
+            assert moved.json()["error"]["code"] == "INVALID_SUBMISSION_DATE"
 
     def test_claim_evidence_must_be_explicitly_unlinked_before_expense_void(
         self, app, actors, db_engine

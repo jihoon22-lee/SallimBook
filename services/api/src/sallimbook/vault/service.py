@@ -87,6 +87,8 @@ class _Context:
 
 def _lock(session, principal):
     # Every vault read and write holds the same identity barriers through commit.
+    # Step-up order: session -> devices -> household/domain rows -> credential -> grant
+    # (the credential and grant are locked later, by context.management).
     auth, devices = identity.lock_session_devices(session, principal)
     lock_asset_scope(session, principal)
     member = scoped_entity(session, HouseholdMember, principal.member_id, principal)

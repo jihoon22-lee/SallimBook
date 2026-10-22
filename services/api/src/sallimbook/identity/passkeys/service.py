@@ -702,6 +702,8 @@ def _validated_step_up(
 ) -> tuple[StepUpGrant, datetime]:
     """Validate without consuming: Device -> Credential -> Grant.
 
+    Every step-up operation takes session -> devices -> household/domain rows -> credential ->
+    grant, so two devices of one user cannot wait on each other's household and credential.
     Operations must acquire their complete device barrier BEFORE other resource locks.
     In particular device DELETE locks source+target together in sorted order beforehand.
     Reacquiring its already-held source row here is harmless; direct callers acquire their

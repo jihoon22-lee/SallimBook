@@ -575,6 +575,7 @@ def create_partner_invitation(
     if step_up_token is None:
         require_recent_login(principal, now=now)
     require_owner(principal)
+    # Step-up order: session -> devices -> household -> credential -> grant (consume_step_up).
     auth, devices = lock_session_devices(session, principal)
     session.execute(
         select(Household).where(Household.id == principal.household_id).with_for_update()

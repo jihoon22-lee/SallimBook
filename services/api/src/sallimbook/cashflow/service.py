@@ -1,5 +1,6 @@
 """Manual income and shared cash facts, serialized without changing any snapshot."""
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from operator import attrgetter
 from uuid import UUID
@@ -67,6 +68,9 @@ _VALUES = (
     "created_at",
     "updated_at",
 )
+
+
+REQUEST_ONLY_FIELDS = frozenset({"duplicate_acknowledged", "reason"})
 
 
 def lock_cash_household(session: Session, principal: Principal) -> None:
@@ -193,17 +197,41 @@ def _link_date(payload: CashInput) -> date:
     return payload.occurred_on or month_start(payload.period_month)
 
 
+def _before_start(occurred_on: date | None, month: date, started_on: date | None) -> bool:
+    """Whether a record precedes a method's first day; a month total compares by month."""
+    if started_on is None:
+        return False
+    if occurred_on is not None:
+        return occurred_on < started_on
+    return month < started_on.replace(day=1)
+
+
 def _validate_links(
     session: Session,
     principal: Principal,
     payload: CashInput,
     *,
     previous: CashRecord | None = None,
+    replaces: Sequence[CashRecord] = (),
 ) -> None:
     _validate_actual_date(payload)
-    # A closed account or card still takes records dated through its end, and a correction
-    # keeps the link of the fact it replaces.
+    # A closed account or card still takes records dated through its end, and none takes a
+    # record dated before its start. A correction keeps the link of the fact it replaces.
     on = _link_date(payload)
+    month = month_start(payload.period_month)
+    # Facts this record stands in for: the corrected one, or the sources of a precision
+    # conversion in the same month. Only the start-date check looks at them for conversions.
+    stands_in_for = [previous] if previous is not None else []
+    stands_in_for += [row for row in replaces if row.period_month == month]
+
+    def too_early(started_on: date | None, linked) -> bool:
+        # A record that already preceded the start may stay before it while it keeps the same
+        # link; a record on or after the start cannot move to before it.
+        return _before_start(payload.occurred_on, month, started_on) and not any(
+            linked(row) and _before_start(row.occurred_on, row.period_month, started_on)
+            for row in stands_in_for
+        )
+
     # Match existing asset/account writers: Asset -> Account -> Member. IDs cannot be retargeted.
     if payload.account_id is not None:
         account = scoped_entity(session, FinancialAccount, payload.account_id, principal)
@@ -211,10 +239,9 @@ def _validate_links(
         account = scoped_entity(
             session, FinancialAccount, payload.account_id, principal, for_update=True
         )
-        if (
-            (previous is None or previous.account_id != account.id)
-            and asset.ended_on is not None
-            and asset.ended_on < on
+        relinked = previous is None or previous.account_id != account.id
+        if (relinked and asset.ended_on is not None and asset.ended_on < on) or too_early(
+            account.opened_on, lambda row: row.account_id == account.id
         ):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 입금 계좌를 선택해 주세요.", 422)
     if payload.member_id is not None:
@@ -225,10 +252,9 @@ def _validate_links(
             raise DomainError("MEMBER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
     if payload.card_id is not None:
         card = scoped_entity(session, Card, payload.card_id, principal, for_update=True)
-        if (
-            (previous is None or previous.card_id != card.id)
-            and card.ended_on is not None
-            and card.ended_on < on
+        relinked = previous is None or previous.card_id != card.id
+        if (relinked and card.ended_on is not None and card.ended_on < on) or too_early(
+            card.started_on, lambda row: row.card_id == card.id
         ):
             raise DomainError("CARD_UNAVAILABLE", "사용 중인 결제 카드를 선택해 주세요.", 422)
 
@@ -254,6 +280,13 @@ def _no_returns(session: Session, principal: Principal, row: CashRecord) -> None
         )
 
 
+def _dated_before(payload: CashInput, original: CashRecord) -> bool:
+    """Whether a reversal precedes its original: by day when both have one, else by month."""
+    if payload.occurred_on is not None and original.occurred_on is not None:
+        return payload.occurred_on < original.occurred_on
+    return month_start(payload.period_month) < original.period_month
+
+
 def prepare_cash_record(
     session: Session,
     principal: Principal,
@@ -264,10 +297,13 @@ def prepare_cash_record(
     reason: str | None = None,
     conversion_id: UUID | None = None,
     previous: CashRecord | None = None,
+    replaces: Sequence[CashRecord] = (),
 ) -> CashRecord:
     """Flush-only cash fact + typed version + metadata audit, with household validation.
 
     previous is the voided fact this record corrects; its own links stay usable.
+    replaces are the voided sources of a precision conversion; a source that already preceded
+    its account's or card's start lets a replacement in the same month stay before it.
 
     No generic HTTP endpoint exposes non-income kinds. Subtype callers must create exactly
     one subtype referencing this ID (unique household-scoped FK) in this same transaction,
@@ -287,10 +323,12 @@ def prepare_cash_record(
             raise DomainError("INVALID_REVERSAL", "반환할 원본을 확인해 주세요.", 409)
         if original.member_id != payload.member_id:
             raise DomainError("INVALID_REVERSAL", "반환과 원본의 구성원을 확인해 주세요.", 422)
+        if _dated_before(payload, original):
+            raise DomainError("INVALID_REVERSAL", "반환일은 원본 날짜보다 빠를 수 없어요.", 422)
         returned = sum(int(row.amount_krw) for row in _active_returns(session, principal, original))
         if returned + int(payload.amount_krw) > int(original.amount_krw):
             raise DomainError("RETURN_EXCEEDS_ORIGINAL", "반환 합계가 원본 금액을 초과합니다.", 409)
-    _validate_links(session, principal, payload, previous=previous)
+    _validate_links(session, principal, payload, previous=previous, replaces=replaces)
     values = payload.model_dump(include=set(CashInput.model_fields))
     values["amount_krw"] = decimal_krw(payload.amount_krw)
     values["period_month"] = month_start(payload.period_month)
@@ -312,7 +350,8 @@ def prepare_cash_record(
         action="convert_result" if conversion_id else "create",
         reason=reason,
         conversion_id=conversion_id,
-        changed_fields=payload.model_fields_set,
+        # Request flags are not columns; only fields that describe the stored fact are audited.
+        changed_fields=payload.model_fields_set - REQUEST_ONLY_FIELDS,
     )
     return row
 
@@ -404,7 +443,7 @@ def create_income(session: Session, principal: Principal, payload: IncomeCreate,
 
 def correct_income(session, principal, record_id, payload: IncomePatch, if_match, key):
     lock_cash_household(session, principal)
-    supplied = payload.model_dump(exclude_unset=True, exclude={"reason", "duplicate_acknowledged"})
+    supplied = payload.model_dump(exclude_unset=True, exclude=REQUEST_ONLY_FIELDS)
 
     def execute():
         row = _income_record(session, principal, record_id, lock=True)
@@ -608,6 +647,7 @@ def convert_income(session, principal, payload: IncomeConvert, key):
                 kind=item.kind,
                 reason=payload.reason,
                 conversion_id=conversion.id,
+                replaces=sources,
             )
         record_event(
             session,
