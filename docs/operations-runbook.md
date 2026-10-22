@@ -91,7 +91,17 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 1. 새 예약을 멈춘다(위의 `systemctl --user disable --now` 명령).
 2. `docker compose -f PREVIOUS/compose.json up -d --wait --remove-orphans`로 이전 렌더에 되돌린다. `PREVIOUS`는 **이전 state 디렉터리의 `active-deployment.json`이 가리키는 렌더**다. 파일이 없을 때만 이전 설정의 `deployment_directory`를 쓴다. 매일 `cvd-refresh`가 새 렌더를 승격하므로 처음 렌더의 ClamAV DB는 7일이 지나면 clamd가 시작을 거부해 scanner·api·web이 뜨지 않는다. 같은 프로젝트 이름이므로 inspector 컨테이너는 orphan으로 제거되고, 이전 API 이미지는 로컬 워커로 동작한다. 스키마를 올린 뒤라면 먼저 아래 절차의 DB 되돌리기를 끝낸다.
 3. 남은 볼륨을 지운다: `docker volume rm PROJECT_inspector_socket`(`PROJECT`는 manifest의 `project`). 다시 배포할 때 새 볼륨이 이미지 디렉터리의 소유권(10002:10003, 0750)을 받는다.
-4. 새 unit 파일과 drop-in을 정리하고(별도 운영 절차) 이전 schedule 디렉터리로 `ops.schedule install`·`activate`를 실행한다. 위 배포 4단계처럼 backup·restore-check 타이머를 다시 끄고 디스크 검사 drop-in을 이전 설정으로 다시 설치한 뒤, 이전 설정으로 `--task health`를 실행해 위 5단계와 같은 결과인지 확인한다.
+4. 새 unit 파일과 drop-in을 정리한다(별도 운영 절차. 같은 이름의 파일·drop-in이 있으면 `install`이 거부한다). 이전 schedule 디렉터리는 다시 쓰지 않는다. 이미 `install`·`activate`한 기록(`installation.json`·`activation.json`)이 있어 `install`이 `SCHEDULE_ALREADY_INSTALLED`로 거부하고, `render`도 존재하는 출력 디렉터리를 거부한다. **이전 운영 checkout**(이전 설정의 `operator_source_commit`, 청결한 상태)으로 이동해 존재하지 않는 새 경로 `ROLLBACK_SCHEDULE`에 다시 렌더한 뒤 같은 디렉터리로 검증·설치·활성화한다. 렌더는 현재 checkout의 경로와 HEAD를 unit에 고정하므로 다른 checkout에서 실행하면 `validate`가 `OPERATOR_SOURCE_CHANGED`로 실패한다.
+
+   ```bash
+   python -m ops.automation validate OLD.json --sha256 OLD_SHA256
+   python -m ops.schedule render OLD.json --sha256 OLD_SHA256 --output ROLLBACK_SCHEDULE
+   python -m ops.schedule validate ROLLBACK_SCHEDULE
+   python -m ops.schedule install ROLLBACK_SCHEDULE
+   python -m ops.schedule activate ROLLBACK_SCHEDULE
+   ```
+
+   그다음 위 배포 4단계처럼 `activate`가 켠 backup·restore-check 타이머를 다시 끄고 디스크 검사 drop-in을 이전 설정으로 다시 설치한 뒤, 이전 설정으로 `--task health`를 실행해 위 5단계와 같은 결과인지 확인한다.
 5. 되돌린 경우 문서 검사 격리가 다시 해제된 상태로 기록하고 원인을 조사한다.
 
 ### 스키마가 바뀌는 업그레이드 — 점검 시간 절차

@@ -159,3 +159,20 @@ class ScheduleTests(unittest.TestCase):
         private(path, value)
         with self.assertRaisesRegex(automation.AutomationError, "SCHEDULE_FILES"):
             schedule.validate(self.directory, runner=self.runner)
+
+    def test_rollback_renders_a_fresh_directory_from_the_same_configuration(self):
+        schedule.install(self.directory, runner=self.runner)
+        schedule.activate(self.directory, runner=self.runner)
+        # The operator removes the switched units first; the used directory stays refused.
+        for path in self.destination.iterdir():
+            path.unlink()
+        with self.assertRaisesRegex(automation.AutomationError, "SCHEDULE_ALREADY_INSTALLED"):
+            schedule.install(self.directory, runner=self.runner)
+        with self.assertRaises(FileExistsError):
+            schedule.render(self.configuration, self.sha, self.directory)
+        fresh = self.root / "rollback-schedule"
+        schedule.render(self.configuration, self.sha, fresh)
+        schedule.validate(fresh, runner=self.runner)
+        self.assertEqual(schedule.install(fresh, runner=self.runner)["units"], 9)
+        self.assertEqual(len(schedule.activate(fresh, runner=self.runner)["units"]), 5)
+        self.assertTrue((fresh / "activation.json").exists())
