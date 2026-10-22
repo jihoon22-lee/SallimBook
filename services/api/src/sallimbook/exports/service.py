@@ -36,13 +36,15 @@ def _authorize(session, principal, token, budget):
     session.execute(text("SET LOCAL statement_timeout = '30000ms'"))
     session.execute(text("SET LOCAL lock_timeout = '5000ms'"))
     auth, devices = identity.lock_session_devices(session, principal)
-    # Credential/grant locks precede household/domain locks in both phases.
+    # Step-up paths share one lock order in both phases, as vault and invitation do:
+    # session -> devices -> household/domain rows -> credential -> grant. Taking the credential
+    # first would deadlock with a vault or invitation step-up of the same user's other device.
+    lock_asset_scope(session, principal)
     grant = (
         check_step_up(session, principal, token, StepUpPurpose.DATA_EXPORT, principal.household_id)
         if token is not None
         else None
     )
-    lock_asset_scope(session, principal)
     member = scoped_entity(session, HouseholdMember, principal.member_id, principal)
     if member.status != "active" or member.user_id != principal.user_id:
         raise DomainError("UNAUTHENTICATED", "로그인이 필요합니다.", 401)
