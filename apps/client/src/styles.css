@@ -529,6 +529,9 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .leave-dialog h2 { margin-top: 0; }
 .session-dialog { width: min(30rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
 .session-dialog .card { padding: 0; border: 0; box-shadow: none; background: transparent; }
+.route-error { max-width: 32rem; margin: 12vh auto 0; padding: 24px; }
+.route-error:focus { outline: none; }
+.route-error h1 { margin-top: 0; }
 
 /* Task layouts: a clear next action, readable forms, and records before optional detail. */
 .finance-list > .card + .card { margin-top: 0; }
