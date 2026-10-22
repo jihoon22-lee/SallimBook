@@ -20,6 +20,10 @@ from ops.automation import (
 )
 from ops.backup import digest, private_directory, private_file, publish_json
 
+# The health service's pre-step. Bump when the rendered drop-in changes so a schedule
+# rendered from another template version never validates as this one.
+DISK_CHECK_TEMPLATE_VERSION = 1
+
 CALENDARS = {
     "backup": "*-*-* 03:15:00 Asia/Seoul",
     "health": "*-*-* *:15:00 Asia/Seoul",
@@ -62,7 +66,8 @@ def units(config, configuration, sha256):
             + " --task "
             + task
             + "\nTimeoutStartSec="
-            + str(LIMITS[task])
+            # ExecStartPre shares the service's start timeout.
+            + str(LIMITS[task] + (LIMITS["disk-check"] if task == "health" else 0))
             + "\nTimeoutStopSec=15\n"
             + "KillMode=control-group\nStandardOutput=journal\nStandardError=journal\n"
             + (
@@ -92,6 +97,29 @@ def units(config, configuration, sha256):
     return result
 
 
+def dropins(config, configuration, sha256):
+    """Drop-ins keyed by path relative to the unit directory; never named as units.
+
+    The disk check is a pre-step of the hourly health service, so it also fails the
+    service when the health task itself cannot start.
+    """
+    configuration = canonical_path(str(configuration))
+    return {
+        config["project"]
+        + "-health.service.d/10-disk-check.conf": (
+            "# SallimBook disk-check drop-in, template v"
+            + str(DISK_CHECK_TEMPLATE_VERSION)
+            + "; rendered by ops.schedule, do not edit\n[Service]\nExecStartPre="
+            + config["python_executable"]
+            + " -m ops.automation run "
+            + str(configuration)
+            + " --sha256 "
+            + sha256
+            + " --task disk-check\n"
+        )
+    }
+
+
 def render(configuration, sha256, output):
     configuration = private_file(configuration)
     config = load_config(configuration, sha256)
@@ -99,8 +127,10 @@ def render(configuration, sha256, output):
     output = Path(output)
     output.mkdir(mode=0o700, exist_ok=False)
     content = units(config, configuration, sha256)
-    for name, value in content.items():
+    extras = dropins(config, configuration, sha256)
+    for name, value in {**content, **extras}.items():
         path = output / name
+        path.parent.mkdir(mode=0o700, exist_ok=True)
         with path.open("x") as stream:
             stream.write(value)
         path.chmod(0o600)
@@ -112,10 +142,10 @@ def render(configuration, sha256, output):
             "operator_source_commit": config["operator_source_commit"],
             "configuration": str(configuration),
             "configuration_sha256": sha256,
-            "files": {name: digest(output / name) for name in content},
+            "files": {name: digest(output / name) for name in (*content, *extras)},
         },
     )
-    return {"status": "schedule-rendered", "units": len(content)}
+    return {"status": "schedule-rendered", "units": len(content), "dropins": len(extras)}
 
 
 def validate(directory, *, runner=None):
@@ -141,18 +171,26 @@ def validate(directory, *, runner=None):
     ):
         raise AutomationError("SCHEDULE_IDENTITY")
     expected = units(config, record["configuration"], record["configuration_sha256"])
-    allowed = set(expected) | {
+    extras = dropins(config, record["configuration"], record["configuration_sha256"])
+    folders = {Path(name).parent.name for name in extras}
+    allowed = set(expected) | folders | {
         "schedule.json",
         "installation.json",
         "activation.json",
         "activation-failed.json",
     }
     if (
-        set(record["files"]) != set(expected)
+        set(record["files"]) != {*expected, *extras}
         or set(path.name for path in directory.iterdir()) - allowed
     ):
         raise AutomationError("SCHEDULE_FILES")
-    for name, value in expected.items():
+    for folder in folders:
+        listing = {
+            folder + "/" + path.name for path in private_directory(directory / folder).iterdir()
+        }
+        if listing != {name for name in extras if name.startswith(folder + "/")}:
+            raise AutomationError("SCHEDULE_FILES")
+    for name, value in {**expected, **extras}.items():
         path = private_file(directory / name)
         if path.read_text() != value or digest(path) != record["files"][name]:
             raise AutomationError("SCHEDULE_CHANGED")
@@ -198,16 +236,22 @@ def install(directory, *, runner=None):
     destination = unit_directory()
     if any(path.is_symlink() for path in (destination, *destination.parents)):
         raise AutomationError("UNIT_DIRECTORY_SYMLINK")
+    # A unit's `.d` directory counts as a collision, so no drop-in directory exists yet.
     check_collisions(expected, runner)
+    extras = dropins(config, record["configuration"], record["configuration_sha256"])
     destination.mkdir(parents=True, exist_ok=True, mode=0o700)
-    created = []
+    created, folders, written = [], [], {}
     try:
-        for name, value in expected.items():
+        for name, value in {**expected, **extras}.items():
             path = destination / name
+            if name in extras and not path.parent.exists():
+                path.parent.mkdir(mode=0o700)
+                folders.append(path.parent)
             with path.open("x") as stream:
                 stream.write(value)
             path.chmod(0o600)
             created.append(path)
+            written[path] = value
         runner.run(["/usr/bin/systemctl", "--user", "daemon-reload"], timeout=30)
         publish_json(
             receipt,
@@ -223,10 +267,13 @@ def install(directory, *, runner=None):
     except Exception:
         # Only the newly created byte-identical files belong to this attempt.
         for path in created:
-            if not path.is_symlink() and path.read_text() == expected[path.name]:
+            if not path.is_symlink() and path.read_text() == written[path]:
                 path.unlink()
+        for folder in folders:
+            if not any(folder.iterdir()):
+                folder.rmdir()
         raise
-    return {"status": "installed-inactive", "units": len(created)}
+    return {"status": "installed-inactive", "units": len(expected), "dropins": len(extras)}
 
 
 def activate(directory, *, runner=None):
@@ -245,16 +292,33 @@ def activate(directory, *, runner=None):
         raise AutomationError("INSTALLATION_CHANGED")
     if (directory / "activation.json").exists():
         raise AutomationError("SCHEDULE_ALREADY_ACTIVATED")
+    extras = dropins(config, record["configuration"], record["configuration_sha256"])
     for name, value in expected.items():
         path = private_file(destination / name)
-        if path.read_text() != value or (destination / (name + ".d")).exists():
+        if path.read_text() != value:
             raise AutomationError("INSTALLED_UNIT_CHANGED")
-        # Catch a vendor/runtime drop-in added between install and activation.
-        dropins = runner.run(
+        # Only this tool's own rendered drop-ins, byte-identical, may sit next to a unit.
+        wanted = {
+            destination / drop: text
+            for drop, text in extras.items()
+            if drop.startswith(name + ".d/")
+        }
+        folder = destination / (name + ".d")
+        if folder.is_symlink() or (folder.exists() and not wanted):
+            raise AutomationError("INSTALLED_UNIT_CHANGED")
+        if wanted:
+            private_directory(folder)
+            if set(folder.iterdir()) != set(wanted) or any(
+                private_file(drop).read_text() != text for drop, text in wanted.items()
+            ):
+                raise AutomationError("INSTALLED_UNIT_CHANGED")
+        # Catch a vendor/runtime drop-in added between install and activation, and a
+        # rendered drop-in systemd has not loaded.
+        loaded = runner.run(
             ["/usr/bin/systemctl", "--user", "show", "--property=DropInPaths", "--value", name],
             timeout=15,
-        ).strip()
-        if dropins:
+        ).split()
+        if set(loaded) != {str(drop) for drop in wanted} or len(loaded) != len(wanted):
             raise AutomationError("INSTALLED_UNIT_OVERRIDE")
     active = [config["project"] + "-startup.service"] + [
         config["project"] + "-" + task + ".timer" for task in CALENDARS

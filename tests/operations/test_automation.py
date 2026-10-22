@@ -223,6 +223,22 @@ class Boundaries(unittest.TestCase):
             {"status": "backup-result-absent"},
         )
 
+    def test_backup_storage_reports_free_space_without_any_receipt(self):
+        empty = self.root / "empty-backups"
+        empty.mkdir(mode=0o700)
+        with patch.object(worker.shutil, "disk_usage", return_value=MagicMock(free=7)) as usage:
+            self.assertEqual(
+                worker.backup_storage(empty),
+                {"status": "backup-storage-checked", "disk_free_bytes": 7},
+            )
+        usage.assert_called_once_with(empty)
+        self.assertEqual(list(empty.iterdir()), [])
+        loose = self.root / "loose"
+        loose.mkdir(mode=0o755)
+        loose.chmod(0o755)
+        with self.assertRaises(backup.OperationError):
+            worker.backup_storage(loose)
+
     def test_operator_bundle_checks_both_actual_helpers(self):
         files = {}
         for name in ("automation_worker.py", "restore_check.py"):
@@ -358,42 +374,117 @@ class RestoreIntegrity(unittest.TestCase):
 class RuntimeBoundaries(unittest.TestCase):
     setUp = Boundaries.setUp
 
-    def test_health_checks_build_and_daemon_filesystems(self):
+    GIB = 1024**3
+
+    def health_item(self, *, state_free, build_free, docker_free, backup_free, backup=None):
         item = self.make_runtime()
-        receipt = {"completed_at": datetime.now(UTC).isoformat()}
-        for state_free, build_free, docker_free in (
-            (2 * 1024**3, 2 * 1024**3, 2 * 1024**3),
-            (2 * 1024**3, 0, 2 * 1024**3),
-            (2 * 1024**3, 2 * 1024**3, 0),
-        ):
-            with (
-                self.subTest(build_free=build_free, docker_free=docker_free),
-                patch.object(item, "services", return_value={}),
-                patch.object(item, "scanner", return_value={"fresh": True}),
-                patch.object(item, "latest_backup", return_value=receipt),
+        fresh = datetime.now(UTC).isoformat()
+        answers = {
+            "storage": {"disk_free_bytes": docker_free},
+            "backup-storage": {"disk_free_bytes": backup_free},
+            "backup-stat": {"disk_free_bytes": backup_free},
+        }
+        stack = ExitStack()
+        mocks = {
+            "services": stack.enter_context(patch.object(item, "services", return_value={})),
+            "scanner": stack.enter_context(
+                patch.object(item, "scanner", return_value={"fresh": True})
+            ),
+            "latest_backup": stack.enter_context(
                 patch.object(
                     item,
-                    "worker",
-                    side_effect=[
-                        {"disk_free_bytes": 2 * 1024**3},
-                        {"disk_free_bytes": docker_free},
-                    ],
-                ) as worker_call,
-                patch.object(
-                    runtime.shutil,
-                    "disk_usage",
-                    side_effect=[MagicMock(free=state_free), MagicMock(free=build_free)],
-                ),
-            ):
-                if min(build_free, docker_free) == 0:
+                    "latest_backup",
+                    **(
+                        {"side_effect": backup}
+                        if isinstance(backup, Exception)
+                        else {"return_value": backup or {"completed_at": fresh}}
+                    ),
+                )
+            ),
+            "worker": stack.enter_context(
+                patch.object(item, "worker", side_effect=lambda action, **_: answers[action])
+            ),
+        }
+        stack.enter_context(
+            patch.object(
+                runtime.shutil,
+                "disk_usage",
+                side_effect=[MagicMock(free=state_free), MagicMock(free=build_free)],
+            )
+        )
+        self.addCleanup(stack.close)
+        return item, mocks
+
+    def test_health_checks_state_build_daemon_and_backup_filesystems(self):
+        for free in (
+            (2 * self.GIB, 2 * self.GIB, 2 * self.GIB, 2 * self.GIB),
+            (0, 2 * self.GIB, 2 * self.GIB, 2 * self.GIB),
+            (2 * self.GIB, 0, 2 * self.GIB, 2 * self.GIB),
+            (2 * self.GIB, 2 * self.GIB, 0, 2 * self.GIB),
+            (2 * self.GIB, 2 * self.GIB, 2 * self.GIB, 0),
+        ):
+            state, build, docker, backups = free
+            with self.subTest(free=free):
+                item, mocks = self.health_item(
+                    state_free=state, build_free=build, docker_free=docker, backup_free=backups
+                )
+                if min(free) == 0:
                     with self.assertRaisesRegex(auto.AutomationError, "DISK_SPACE_LOW"):
                         item.health()
+                    mocks["latest_backup"].assert_not_called()
                 else:
                     result = item.health()
-                    self.assertEqual(result["build_disk_free_bytes"], build_free)
-                    self.assertEqual(result["docker_disk_free_bytes"], docker_free)
-                self.assertEqual(worker_call.call_args.args, ("storage",))
-                self.assertEqual(worker_call.call_args.kwargs, {"timeout": 60})
+                    self.assertEqual(result["state_disk_free_bytes"], state)
+                    self.assertEqual(result["build_disk_free_bytes"], build)
+                    self.assertEqual(result["docker_disk_free_bytes"], docker)
+                    self.assertEqual(result["backup_disk_free_bytes"], backups)
+                self.assertEqual(
+                    [call.args[0] for call in mocks["worker"].call_args_list][:2],
+                    ["storage", "backup-storage"],
+                )
+                for call in mocks["worker"].call_args_list[:2]:
+                    self.assertEqual(call.kwargs["timeout"], 60)
+
+    def test_disk_check_runs_before_backups_and_services_while_backups_are_paused(self):
+        missing = auto.AutomationError("BACKUP_MISSING")
+        enough = 2 * self.GIB
+        # Low disk is reported even though no backup exists and nothing else was looked at.
+        item, mocks = self.health_item(
+            state_free=enough, build_free=0, docker_free=enough, backup_free=enough, backup=missing
+        )
+        with self.assertRaisesRegex(auto.AutomationError, "DISK_SPACE_LOW"):
+            item.health()
+        mocks["services"].assert_not_called()
+        mocks["latest_backup"].assert_not_called()
+        # With enough disk the paused-backup state is still reported, after the disk check.
+        item, mocks = self.health_item(
+            state_free=enough,
+            build_free=enough,
+            docker_free=enough,
+            backup_free=enough,
+            backup=missing,
+        )
+        with self.assertRaisesRegex(auto.AutomationError, "BACKUP_MISSING"):
+            item.health()
+        self.assertEqual(
+            [call.args[0] for call in mocks["worker"].call_args_list], ["storage", "backup-storage"]
+        )
+        mocks["latest_backup"].assert_called_once()
+
+    def test_disk_check_is_a_task_that_pending_recovery_does_not_block(self):
+        self.assertIn("disk-check", auto.TASKS)
+        self.assertIn("disk-check", auto.LIMITS)
+        auto.Journal(self.config, "restore-check", "d" * 64)
+        with (
+            patch.object(auto, "load_config", return_value=self.config),
+            patch.object(auto, "verify_operator_source"),
+            patch.object(auto, "deployment_binding", return_value={}),
+            patch.object(runtime, "Runtime") as mocked,
+        ):
+            mocked.return_value.disk_check.return_value = {"state_disk_free_bytes": 1}
+            result = auto.run(self.root / "config", "d" * 64, "disk-check", runner=MagicMock())
+        mocked.return_value.disk_check.assert_called_once_with()
+        self.assertEqual(result["status"], "completed")
 
     def make_runtime(self):
         journal = auto.Journal(self.config, "cvd-refresh", "d" * 64)

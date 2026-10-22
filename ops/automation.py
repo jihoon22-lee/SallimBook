@@ -19,13 +19,15 @@ from ops.deploy import render
 from ops.deploy import validate as validate_deployment
 
 ROOT = Path(__file__).resolve().parents[1]
-TASKS = {"backup", "health", "restore-check", "cvd-refresh", "startup", "recover"}
+TASKS = {"backup", "health", "disk-check", "restore-check", "cvd-refresh", "startup", "recover"}
 BACKUP_WORKER_TIMEOUT = 1800
 # Source checks, network/image checks, helper extraction, ack and failed-worker cleanup.
 BACKUP_OVERHEAD_BUDGET = 900
 LIMITS = {
     "backup": BACKUP_WORKER_TIMEOUT + BACKUP_OVERHEAD_BUDGET,
     "health": 300,
+    # Runs as ExecStartPre of the health service, inside its start timeout.
+    "disk-check": 180,
     "restore-check": 7200,
     "cvd-refresh": 3600,
     "startup": 600,
@@ -380,7 +382,7 @@ def run(config_path, expected_sha256, task, *, runner=None):
             binding = deployment_binding(config)
             runtime = Runtime(config, binding, runner, journal)
             pending = unfinished_runs(config, exclude=journal.run_id)
-            if pending and task not in {"startup", "recover", "health"}:
+            if pending and task not in {"startup", "recover", "health", "disk-check"}:
                 raise AutomationError("RECOVERY_REQUIRED")
             if task in {"startup", "recover"}:
                 runtime.recover(pending)

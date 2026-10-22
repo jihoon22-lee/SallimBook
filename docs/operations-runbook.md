@@ -73,9 +73,9 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 1. 위 절차로 새 이미지와 렌더 디렉터리를 만들고 `docker compose -f NEW/compose.json config --quiet`와 `uv run --project services/api python -m ops.preflight NEW`를 통과시킨 뒤 배포한다.
 2. 검사기 변경이 포함된 병합 커밋으로 깨끗한 새 운영 checkout을 만들고, 그 SHA·새 렌더·새 state 디렉터리로 새 자동화 설정 JSON을 만든다. 기존 설정·checkout·state는 고치지 않고 보존한다(되돌리기용).
-3. `python -m ops.automation validate NEW.json --sha256 NEW_SHA256` → `python -m ops.schedule render NEW.json --sha256 NEW_SHA256 --output NEW_SCHEDULE` → `python -m ops.schedule validate NEW_SCHEDULE` → 기존 unit 파일과 health의 디스크 검사 drop-in(`PROJECT-health.service.d/`) 정리(별도 운영 절차, `install`은 같은 이름의 파일·drop-in이 있으면 거부하고 `activate`는 drop-in이 붙은 unit을 거부한다) → `python -m ops.schedule install NEW_SCHEDULE` → `python -m ops.schedule activate NEW_SCHEDULE` 순서로 실행한다.
-4. `activate`는 9개 unit을 모두 켠다. 백업 유예(2026-10-18 결정, [v1 완료 계획](v1-completion-plan.md))를 유지하려면 바로 `systemctl --user disable --now PROJECT-backup.timer PROJECT-restore-check.timer`를 실행한다. 그다음 health의 `ExecStartPre` 디스크 검사 drop-in을 새 설정 경로·해시로 다시 설치하고 `systemctl --user daemon-reload`를 실행한다.
-5. 새 설정으로 `--task health`를 수동 실행한다. 백업 유예 중에는 서비스·scanner 검사를 통과한 뒤 `BACKUP_MISSING`(새 state에는 백업 기록이 없다) 또는 `BACKUP_STALE`로 끝나는 것이 정상이다. 그 앞의 `SERVICE_SET`·`SCANNER_STALE` 등으로 실패하면 정상이 아니다. 디스크 여유는 drop-in 검사가 매회 확인한다.
+3. `python -m ops.automation validate NEW.json --sha256 NEW_SHA256` → `python -m ops.schedule render NEW.json --sha256 NEW_SHA256 --output NEW_SCHEDULE` → `python -m ops.schedule validate NEW_SCHEDULE` → 기존 unit 파일과 수동으로 만든 health 디스크 검사 drop-in(`PROJECT-health.service.d/`) 정리(별도 운영 절차, `install`은 같은 이름의 파일·drop-in이 있으면 거부한다) → `python -m ops.schedule install NEW_SCHEDULE` → `python -m ops.schedule activate NEW_SCHEDULE` 순서로 실행한다.
+4. `activate`는 9개 unit을 모두 켠다. 백업 유예(2026-10-18 결정, [v1 완료 계획](v1-completion-plan.md))를 유지하려면 바로 `systemctl --user disable --now PROJECT-backup.timer PROJECT-restore-check.timer`를 실행한다. health의 디스크 검사 `ExecStartPre` drop-in은 따로 설치하지 않는다. `render`가 새 설정 경로·해시로 `PROJECT-health.service.d/10-disk-check.conf`(템플릿 버전 주석 포함)를 만들고 `validate`가 검사하며 `install`이 unit과 함께 설치한다. `activate`는 이 파일이 렌더 그대로이고 systemd가 로드한 drop-in이 정확히 이것뿐일 때만 진행하고, 다른 drop-in이 붙은 unit은 거부한다.
+5. 새 설정으로 `--task health`를 수동 실행한다. 백업 유예 중에는 서비스·scanner 검사를 통과한 뒤 `BACKUP_MISSING`(새 state에는 백업 기록이 없다) 또는 `BACKUP_STALE`로 끝나는 것이 정상이다. 그 앞의 `SERVICE_SET`·`SCANNER_STALE` 등으로 실패하면 정상이 아니다. 상태·빌드·Docker·백업 저장소의 디스크 여유는 health가 가장 먼저 확인하고(백업 기록이 없어도 `DISK_SPACE_LOW`가 `BACKUP_MISSING`보다 먼저 나온다) 같은 검사가 health 서비스의 `ExecStartPre`(`--task disk-check`)로 한 번 더 실행된다.
 
 배포 후 확인표:
 
@@ -101,7 +101,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
    python -m ops.schedule activate ROLLBACK_SCHEDULE
    ```
 
-   그다음 위 배포 4단계처럼 `activate`가 켠 backup·restore-check 타이머를 다시 끄고 디스크 검사 drop-in을 이전 설정으로 다시 설치한 뒤, 이전 설정으로 `--task health`를 실행해 위 5단계와 같은 결과인지 확인한다.
+   그다음 위 배포 4단계처럼 `activate`가 켠 backup·restore-check 타이머를 다시 끈다. 이전 운영 checkout이 디스크 검사 drop-in 렌더를 포함하면(이 절차를 추가한 커밋 이후) `install`이 함께 설치하므로 따로 할 일이 없다. 포함하지 않는 이전 checkout이면 그 `activate`는 drop-in이 붙은 unit을 거부하므로 **`activate`가 끝난 뒤에** 수동 drop-in을 이전 설정 경로·해시로 다시 설치하고 `systemctl --user daemon-reload`를 실행한다. 끝으로 이전 설정으로 `--task health`를 실행해 위 5단계와 같은 결과인지 확인한다.
 5. 되돌린 경우 문서 검사 격리가 다시 해제된 상태로 기록하고 원인을 조사한다.
 
 ### 스키마가 바뀌는 업그레이드 — 점검 시간 절차
@@ -137,7 +137,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 이후:
 
-12. 위 배포 2~5단계로 자동화를 전환한다(새 운영 checkout·state, backup·restore-check 타이머 다시 끄기, 디스크 검사 drop-in 재설치, `BACKUP_MISSING`/`BACKUP_STALE`가 정상).
+12. 위 배포 2~5단계로 자동화를 전환한다(새 운영 checkout·state, backup·restore-check 타이머 다시 끄기, 렌더된 디스크 검사 drop-in은 `install`이 설치, `BACKUP_MISSING`/`BACKUP_STALE`가 정상).
 13. 앱의 고정 납부 화면 "예정 회차 생성"을 **오늘부터** 이전에 생성해 둔 가장 먼 달까지 다시 실행한다(요청당 366일, 규칙 100개 이내). 0015는 예외가 풀린 회차의 `manual_override`를 실제 예외 여부로 정규화한다. 재생성은 그중 오늘 이후의 납부 기록 없는 회차를 현재 규칙으로 다시 맞춘다. 오늘 이전 회차는 다시 계산하지 않는다.
 
 **되돌리기 — 11단계(폰 업데이트) 전까지만.** 그 뒤에는 되돌리지 않고 앞으로 고친다.

@@ -167,6 +167,15 @@ def check_backup(job, directory=Path("/srv/backups")):
     }
 
 
+def backup_storage(directory=Path("/srv/backups")):
+    """Free space of the backup filesystem; usable while no backup exists yet."""
+    directory = backup.private_directory(directory)
+    return {
+        "status": "backup-storage-checked",
+        "disk_free_bytes": shutil.disk_usage(directory).free,
+    }
+
+
 def acknowledge_backup(job, directory=Path("/srv/backups")):
     directory = backup.private_directory(directory)
     marker = directory / (".automation-" + job["run_id"] + ".json")
@@ -277,6 +286,8 @@ def run(job):
         # The image root is backed by the daemon image filesystem, even when
         # Docker Desktop keeps that filesystem outside the host mount namespace.
         return {"status": "storage-checked", "disk_free_bytes": shutil.disk_usage("/").free}
+    if action == "backup-storage":
+        return backup_storage()
     if action == "image-check":
         return verify_candidate_deployment(job)
     if action == "backup":
