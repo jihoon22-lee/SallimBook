@@ -10,6 +10,7 @@ import type { Document, DocumentLink, Target } from "./model";
 import { CommandFeedback, DocumentError, useDocumentCommand } from "./DocumentSupport";
 import { WebUpload } from "./WebUpload";
 import { formatSeoulDateTime } from "../../shared/format";
+import { useTaskPanelRelease } from "../../shared/TaskLayout";
 export function DocumentMetadata({ row }: { row: Document }) {
   return (
     <dl className="metadata-grid">
@@ -106,6 +107,7 @@ export function DocumentDetail({
     ),
   );
   const command = useDocumentCommand();
+  const release = useTaskPanelRelease();
   const operation = useRef<PendingCommand | null>(null);
   const [pendingLabel, setPendingLabel] = useState("");
   const [reason, setReason] = useState("");
@@ -136,6 +138,7 @@ export function DocumentDetail({
       return true;
     });
     if (result) {
+      release();
       operation.current = null;
       setPendingLabel("");
       setReason("");

@@ -13,6 +13,7 @@ import { AllocationFields, AllocationSummary, allocationDraft } from "./PayoutEd
 import { useInsuranceEventsApi } from "./api";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 import { formatSeoulDateTime } from "../../../shared/format";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 const keyOf = (row: { id: string; version: number }) => `${row.id}:${row.version}`;
 export function AllocationHistory({ id }: { id: string }) {
   const members = useHouseholdMembers();
@@ -73,6 +74,8 @@ export function AllocationLink({
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Schema["AllocationResponse"] | null>(null);
   const [message, setMessage] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const attempt = useSubmitAttempt();
   const changes = changedFields(
     { policy_id: base.policy_id ?? null, claim_id: base.claim_id ?? null },
@@ -99,7 +102,10 @@ export function AllocationLink({
         signal,
       ),
     );
-    if (result.ok && command.mounted.current) saved();
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      saved();
+    }
   }
   async function compare() {
     try {
@@ -113,7 +119,13 @@ export function AllocationLink({
     <section className="review-panel">
       <h3>같은 입금의 청구 연결 정정</h3>
       <p>사건·금액·급부유형은 유지하며 계약·청구 연결만 바꿔요. 새 보험금 입금을 만들지 않아요.</p>
-      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setMessage("");
+          setDirty(true);
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <AllocationFields
           value={draft}
           onChange={setDraft}

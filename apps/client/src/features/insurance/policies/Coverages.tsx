@@ -16,6 +16,7 @@ import {
 import { AmountField } from "../../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 import { krwFieldError } from "../../../shared/krw";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 type Draft = {
   name: string;
   benefit: Coverage["benefit_type"];
@@ -74,6 +75,8 @@ function CoverageEditor({
   const [draft, setDraft] = useState(() => draftOf(initial));
   const [latest, setLatest] = useState<Coverage | null>(null);
   const [message, setMessage] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const attempt = useSubmitAttempt();
   const input = inputOf(draft);
   const changes = base ? changedFields(inputOf(draftOf(base)), input) : null;
@@ -106,7 +109,10 @@ function CoverageEditor({
           : api.createCoverage(policyId, input),
       !base,
     );
-    if (result && command.mounted.current) saved();
+    if (result && command.mounted.current) {
+      guard.release();
+      saved();
+    }
   }
   async function compare() {
     try {
@@ -130,7 +136,13 @@ function CoverageEditor({
   return (
     <section className="review-panel">
       <h3>{initial ? "보장 항목 수정" : "보장 항목 등록"}</h3>
-      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setMessage("");
+          setDirty(true);
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy}>
           <legend>보장 내용</legend>
           <div className="form-grid">
