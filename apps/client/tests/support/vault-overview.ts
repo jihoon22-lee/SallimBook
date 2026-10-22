@@ -64,6 +64,7 @@ export async function mockVaultOverview(page: Page, native = false) {
     actionFailure: "",
     actionStatus: "completed",
     delay: 0,
+    cardDelay: 0,
     calls: [] as { method: string; args: Record<string, any> }[],
     http: [] as string[],
     reads: [] as string[],
@@ -124,8 +125,10 @@ export async function mockVaultOverview(page: Page, native = false) {
       if (method === "listVaultShares") return metadata(listShares(args.query?.cursor));
       if (method === "getVaultRotation") return metadata(state.rotation);
       if (method === "listCards") return metadata({ items: cashflow.cards, next_cursor: null });
-      if (method === "getCard")
+      if (method === "getCard") {
+        if (state.cardDelay) await new Promise((resolve) => setTimeout(resolve, state.cardDelay));
         return metadata(cashflow.cards.find((item) => item.id === args.cardId));
+      }
       return { ok: false, code: "INVALID_REQUEST" };
     },
   );

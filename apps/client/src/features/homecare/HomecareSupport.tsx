@@ -208,14 +208,22 @@ export function ListFeedback({
     </>
   );
 }
+/** `keepsData`: a reload keeps the last data on screen, so only a first read shows the spinner. */
 export function ResourceFeedback({
   resource,
+  keepsData = false,
 }: {
-  resource: { loading: boolean; error: ApiError | null; reload: () => Promise<void> };
+  resource: {
+    loading: boolean;
+    error: ApiError | null;
+    reload: () => Promise<void>;
+    data?: unknown;
+  };
+  keepsData?: boolean;
 }) {
   return (
     <>
-      {resource.loading && (
+      {resource.loading && !(keepsData && resource.data) && (
         <p className="loading-state" role="status">
           현재 기록을 확인하고 있어요.
         </p>

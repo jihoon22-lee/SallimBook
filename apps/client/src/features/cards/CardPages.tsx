@@ -315,17 +315,17 @@ function CardDetail({ id, edit }: { id: string; edit: boolean }) {
       if (mounted.current) setBusy(false);
     }
   }
+  // A reload keeps the card on screen: only a first read, with nothing to show yet, is a spinner.
   return (
-    <>
+    <div aria-busy={resource.loading}>
       <CashflowError error={resource.error} />
       {resource.error && <button onClick={() => void resource.reload()}>카드 다시 확인</button>}
-      {resource.loading && (
+      {resource.loading && !card && (
         <p className="loading-state" role="status">
           현재 카드 정보를 불러오고 있어요.
         </p>
       )}
       {card &&
-        !resource.loading &&
         !resource.error &&
         (edit ? (
           <CardEditor initial={card} />
@@ -461,7 +461,7 @@ function CardDetail({ id, edit }: { id: string; edit: boolean }) {
             )}
           </>
         ))}
-    </>
+    </div>
   );
 }
 export function CardListPage() {

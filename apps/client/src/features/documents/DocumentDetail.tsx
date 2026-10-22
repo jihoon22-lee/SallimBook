@@ -229,16 +229,16 @@ export function DocumentDetail({
     }
   }
   return (
-    <section className="review-panel" aria-label="문서 상세">
+    <section className="review-panel" aria-label="문서 상세" aria-busy={resource.loading}>
       <h3>문서 상세</h3>
       <DocumentError error={resource.error} />
-      {resource.loading && (
+      {resource.loading && !row && (
         <p className="loading-state" role="status">
           문서를 확인하고 있어요.
         </p>
       )}
       {resource.error && <button onClick={() => void resource.reload()}>문서 다시 확인</button>}
-      {row && !resource.error && !resource.loading && (
+      {row && !resource.error && (
         <>
           <DocumentMetadata row={row} />
           {notice && <p role="status">{notice}</p>}
