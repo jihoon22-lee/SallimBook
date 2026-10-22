@@ -9,12 +9,25 @@ import { ComparisonError } from "./ComparisonFeedback";
 import { chartCoordinates, monthsBefore, revisionKey, trendValueStates } from "./model";
 import type { Comparison, ComparisonFilters, Trend } from "./model";
 
+/** About six month labels along the axis: always the first and last, never crowded together. */
+function labelledRows<T extends { index: number }>(rows: T[]): T[] {
+  const step = Math.max(1, Math.ceil(rows.length / 6));
+  const last = rows.length - 1;
+  const picked = rows.filter((row) => row.index % step === 0);
+  if (last % step === 0) return picked;
+  const kept = picked.filter((row) => last - row.index >= Math.ceil(step * 0.75));
+  return [...kept, rows[last]!];
+}
+
 export function TrendChart({ data }: { data: Trend }) {
   const id = useId();
   const graph = useMemo(() => chartCoordinates(data.points), [data.points]);
   const [active, setActive] = useState(data.points.length - 1);
   const index = Math.min(Math.max(active, 0), data.points.length - 1);
   const selected = data.points[index];
+  const monthLabels = graph ? labelledRows(graph.rows) : [];
+  // Targets are as wide as the spacing allows (48 units, about 24px on a phone), never overlapping.
+  const hit = graph ? Math.min(24, Math.max(8, 544 / Math.max(graph.rows.length - 1, 1) / 2)) : 0;
   return (
     <>
       <p className="muted">
@@ -23,7 +36,7 @@ export function TrendChart({ data }: { data: Trend }) {
       {graph ? (
         <svg
           className="asset-trend-chart"
-          viewBox="0 0 640 230"
+          viewBox="0 0 640 250"
           role="img"
           aria-labelledby={`${id}-title ${id}-desc`}
         >
@@ -40,7 +53,18 @@ export function TrendChart({ data }: { data: Trend }) {
           <text x="48" y="15" className="chart-label">
             최고 {formatKrw(graph.maximum)}
           </text>
-          <text x="48" y="215" className="chart-label">
+          {monthLabels.map((row) => (
+            <text
+              key={row.index}
+              x={row.x}
+              y="204"
+              textAnchor="middle"
+              className="chart-label chart-month"
+            >
+              {row.point.month.replace("-", ".")}
+            </text>
+          ))}
+          <text x="48" y="244" className="chart-label">
             최저 {formatKrw(graph.minimum)}
           </text>
           {graph.segments
@@ -57,25 +81,33 @@ export function TrendChart({ data }: { data: Trend }) {
             row.y === null ? (
               <line key={row.index} x1={row.x} x2={row.x} y1="180" y2="190" className="chart-gap" />
             ) : (
-              <circle
-                key={row.index}
-                cx={row.x}
-                cy={row.y}
-                r={row.index === index ? 7 : 5}
-                className="chart-point"
-                tabIndex={0}
-                role="button"
-                aria-label={`${formatMonth(row.point.month)} ${formatKrw(row.point.confirmed_amount_krw)}`}
-                onFocus={() => setActive(row.index)}
-                onMouseEnter={() => setActive(row.index)}
-                onClick={() => setActive(row.index)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setActive(row.index);
-                  }
-                }}
-              />
+              <g key={row.index}>
+                <circle
+                  cx={row.x}
+                  cy={row.y}
+                  r={hit}
+                  className="chart-point"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${formatMonth(row.point.month)} ${formatKrw(row.point.confirmed_amount_krw)}`}
+                  onFocus={() => setActive(row.index)}
+                  onMouseEnter={() => setActive(row.index)}
+                  onClick={() => setActive(row.index)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setActive(row.index);
+                    }
+                  }}
+                />
+                <circle
+                  cx={row.x}
+                  cy={row.y}
+                  r={row.index === index ? 7 : 5}
+                  className="chart-dot"
+                  aria-hidden="true"
+                />
+              </g>
             ),
           )}
         </svg>

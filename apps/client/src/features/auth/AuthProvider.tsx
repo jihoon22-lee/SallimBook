@@ -776,6 +776,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           if (!web) throw new ApiError(0, "REQUEST_FAILED");
           return requestApi(() => web({ GET: apiClient.GET }));
+        }).catch((failure: unknown) => {
+          // Mark it so a screen can say "could not load" rather than word it like a failed save.
+          const error = toApiError(failure);
+          throw error.read ? error : new ApiError(error.status, error.code, true);
         }),
       write: <T,>(
         web: ((client: WriteClient) => Promise<ApiResult<T>>) | undefined,

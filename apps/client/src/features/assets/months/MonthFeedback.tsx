@@ -1,6 +1,7 @@
 import { useId } from "react";
 import type { ApiError } from "../../../platform/api";
 import { FinanceError } from "../../finance/FinanceSupport";
+import { readFailedMessage } from "../../auth/AuthFeedback";
 import type { MonthRecord } from "./model";
 import { formatKrw, monthStates } from "./model";
 import { formatSeoulDateTime } from "../../../shared/format";
@@ -46,9 +47,14 @@ export function MonthError({ error }: { error: ApiError | null }) {
     REQUEST_FAILED:
       "요청 결과를 확인하지 못했어요. 자동으로 다시 저장하지 않아요. 현재 기록을 확인한 뒤 진행해 주세요.",
   };
-  return messages[error.code] ? (
+  // The wording for a lost save would be wrong for a read that failed to load.
+  const message =
+    error.read && (error.code === "NETWORK_UNAVAILABLE" || error.code === "REQUEST_FAILED")
+      ? readFailedMessage
+      : messages[error.code];
+  return message ? (
     <div className="auth-message" role="alert">
-      <p>{messages[error.code]}</p>
+      <p>{message}</p>
     </div>
   ) : (
     <FinanceError error={error} />

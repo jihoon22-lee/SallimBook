@@ -17,6 +17,7 @@ export function MisregistrationDelete({
   remove,
   done,
   cancel,
+  reload,
   children,
 }: {
   id: string;
@@ -27,6 +28,8 @@ export function MisregistrationDelete({
   remove: () => Promise<unknown>;
   done: () => void;
   cancel: () => void;
+  /** Loads the item again after another edit changed it. */
+  reload: () => void;
   children: ReactNode;
 }) {
   const mounted = useMounted();
@@ -73,6 +76,11 @@ export function MisregistrationDelete({
         >
           {actionLabel}
         </button>
+        {error?.code === "VERSION_CONFLICT" && (
+          <button type="button" disabled={busy} onClick={reload}>
+            다시 불러오기
+          </button>
+        )}
         <button type="button" disabled={busy} onClick={cancel}>
           삭제 취소
         </button>

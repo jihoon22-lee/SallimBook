@@ -278,6 +278,7 @@ footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
 .chart-axis { stroke: #9baca5; stroke-width: 1; }
 .chart-gap { stroke: #9baca5; stroke-width: 2; stroke-dasharray: 2 2; }
 .chart-label { fill: currentColor; font-size: 12px; }
+.chart-month { font-size: 14px; }
 .chart-inspector { border-top: 1px solid var(--border); padding-top: 1rem; }
 @media (max-width: 640px) { .comparison-observations { grid-template-columns: 1fr; } }
 
@@ -391,8 +392,9 @@ footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
 .date-warning h3 { font-size: .875rem; }
 .month-row-editor, .month-action-panel { border-color: var(--accent); }
 .chart-line { stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; }
-.chart-point { fill: var(--accent); stroke: var(--surface); stroke-width: 2; cursor: pointer; }
-.chart-point:focus { outline: none; stroke: var(--focus); stroke-width: 4; }
+.chart-point { fill: transparent; stroke: transparent; cursor: pointer; }
+.chart-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; pointer-events: none; }
+.chart-point:focus { outline: none; stroke: var(--focus); stroke-width: 3; }
 .unverified-chip { color: var(--warning); background: var(--warning-soft); }
 .auth-layout { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); }
 .auth-story { display: none; }
