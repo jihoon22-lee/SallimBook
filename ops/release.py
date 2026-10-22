@@ -8,6 +8,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -29,6 +30,21 @@ DEBUG_PROOF_MARKERS = (
 )
 
 
+PROC = Path("/proc")
+# Time for the killed build processes to disappear before they count as left running.
+SESSION_SETTLE_SECONDS = 5
+# The pinned SDK packages whose files take part in aligning, signing and inspecting.
+SIGNING_TOOL_DIRECTORIES = ("build-tools/36.0.0", "cmdline-tools/15859902")
+
+
+class ReleaseAbort(OperationError):
+    """A refusal with a fixed code that is safe to show; the message stays private."""
+
+    def __init__(self, code, message):
+        self.code = code
+        super().__init__(message)
+
+
 def run(command, **kwargs):
     result = subprocess.run(command, capture_output=True, check=False, **kwargs)
     if result.returncode:
@@ -40,11 +56,49 @@ def run(command, **kwargs):
     return result.stdout.decode().strip()
 
 
+def session_members(session, proc=None):
+    """Running processes whose session id is `session`, read from /proc/*/stat."""
+    members = []
+    for entry in (proc or PROC).iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            # "pid (comm) state ppid pgrp session ..."; comm may contain spaces and ")".
+            fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
+        except (OSError, IndexError):
+            continue  # exited while scanning
+        if fields[3] == str(session) and fields[0] != "Z":
+            members.append(int(entry.name))
+    return members
+
+
+def stop_session(session):
+    """Kill the build's process group, then prove nothing of its session still runs."""
+    try:
+        os.killpg(session, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic() + SESSION_SETTLE_SECONDS
+    while members := session_members(session):
+        if time.monotonic() >= deadline:
+            for pid in members:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            raise ReleaseAbort(
+                "BUILD_PROCESS_LEFT_RUNNING",
+                "A process started by the build is still running after the build exited",
+            )
+        time.sleep(0.05)
+
+
 def run_build(command, *, cwd, env):
     """Run one build command in its own session; nothing it started may outlive it.
 
     A daemon or background script left behind could read the signing files once the
-    signing step starts, because it runs as the same user.
+    signing step starts, because it runs as the same user. A process that leaves the
+    session (setsid, double fork) is outside what this can see; see the runbook.
     """
     process = subprocess.Popen(
         command,
@@ -58,10 +112,7 @@ def run_build(command, *, cwd, env):
     try:
         status = process.wait()
     finally:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        stop_session(process.pid)
     if status:
         # Build output may contain local paths or secrets; never echo it.
         raise OperationError(
@@ -69,11 +120,46 @@ def run_build(command, *, cwd, env):
         )
 
 
+def fingerprint(*roots):
+    """Mode and SHA-256 of every file under the roots; links by target. Any change differs."""
+    result = {}
+    for root in roots:
+        for directory, names, files in os.walk(root, followlinks=False):
+            for name in (*names, *files):
+                path = Path(directory) / name
+                info = path.lstat()
+                mode = format(info.st_mode & 0o7777, "o")
+                if path.is_symlink():
+                    result[str(path)] = f"link:{mode}:{os.readlink(path)}"
+                elif path.is_file():
+                    result[str(path)] = f"file:{mode}:{digest(path)}"
+                else:
+                    result[str(path)] = f"dir:{mode}"
+    return result
+
+
+def signing_fingerprints(sdk, jdk):
+    """Everything the align/sign/inspect commands execute or load: SDK tools and the JDK."""
+    return fingerprint(*(Path(sdk) / name for name in SIGNING_TOOL_DIRECTORIES), jdk)
+
+
+def signing_jdk(java_home):
+    jdk = Path(java_home).resolve(strict=True)
+    if not (jdk / "bin/java").is_file() or not (jdk / "lib/modules").is_file():
+        raise OperationError("Set JAVA_HOME to the selected JDK 21")
+    return jdk
+
+
+def signing_environment(jdk):
+    """Only the verified JDK and system tools; no inherited JAVA_TOOL_OPTIONS or CLASSPATH."""
+    return {"JAVA_HOME": str(jdk), "PATH": str(jdk / "bin") + ":/usr/bin:/bin", "LANG": "C.UTF-8"}
+
+
 def tools(sdk):
     sdk = Path(sdk)
-    build = sdk / "build-tools/36.0.0"
+    build = sdk / SIGNING_TOOL_DIRECTORIES[0]
     # Same immutable Google package selected by scripts/setup_android_sdk.py.
-    analyzer = sdk / "cmdline-tools/15859902/bin/apkanalyzer"
+    analyzer = sdk / SIGNING_TOOL_DIRECTORIES[1] / "bin/apkanalyzer"
     paths = {
         "apksigner": build / "apksigner",
         "zipalign": build / "zipalign",
@@ -84,12 +170,12 @@ def tools(sdk):
     return paths
 
 
-def inspect_apk(apk, config, sdk, *, signed):
+def inspect_apk(apk, config, sdk, *, signed, env=None):
     config = validate(config)
     binaries = tools(sdk)
 
     def analyze(*args):
-        return run([str(binaries["apkanalyzer"]), *args, str(apk)])
+        return run([str(binaries["apkanalyzer"]), *args, str(apk)], env=env)
 
     if analyze("manifest", "application-id") != APP_ID:
         raise OperationError("Release application ID mismatch")
@@ -144,7 +230,8 @@ def inspect_apk(apk, config, sdk, *, signed):
                 "--verbose",
                 "--print-certs",
                 str(apk),
-            ]
+            ],
+            env=env,
         )
         fingerprints = re.findall(
             r"Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-fA-F]+)", report
@@ -152,7 +239,7 @@ def inspect_apk(apk, config, sdk, *, signed):
         wanted = config["certificate_sha256"].replace(":", "").lower()
         if fingerprints != [wanted]:
             raise OperationError("APK signing certificate mismatch")
-        run([str(binaries["zipalign"]), "-c", "-P", "16", "-v", "4", str(apk)])
+        run([str(binaries["zipalign"]), "-c", "-P", "16", "-v", "4", str(apk)], env=env)
     return {
         "application_id": APP_ID,
         "version_code": config["version_code"],
@@ -248,15 +335,51 @@ def build_snapshot(
     env = {**build_environment(), "ANDROID_HOME": str(Path(sdk).absolute())}
     if not env.get("JAVA_HOME"):
         raise OperationError("Set JAVA_HOME to the selected JDK 21")
-    # Step 1 has no access to signing material and every process it started has exited
-    # before step 2 begins.
-    unsigned = build_unsigned(config, sdk, checkout, env)
-    return sign_release(
-        config, sdk, unsigned, keystore, store_password_file, key_password_file, alias, output, env
-    )
+    jdk = signing_jdk(env["JAVA_HOME"])
+    # Third-party build code runs as this user and could rewrite the tools that later
+    # see the signing key. Pin them now and compare right before they are used.
+    pinned = signing_fingerprints(sdk, jdk)
+    output = Path(output)
+    with tempfile.TemporaryDirectory(
+        prefix=".sallimbook-release-", dir=output.parent
+    ) as temporary:
+        # Step 1 has no access to signing material and every process it started has
+        # exited (or the release aborted) before step 2 begins.
+        unsigned = build_unsigned(config, checkout, env)
+        # Immediately take a private copy; only the copy is inspected and signed.
+        candidate = Path(temporary) / "unsigned.apk"
+        copy_private(unsigned, candidate)
+        if signing_fingerprints(sdk, jdk) != pinned:
+            raise ReleaseAbort(
+                "SIGNING_TOOLS_CHANGED",
+                "A signing tool or the JDK changed while the build ran",
+            )
+        return sign_release(
+            config,
+            sdk,
+            candidate,
+            keystore,
+            store_password_file,
+            key_password_file,
+            alias,
+            output,
+            signing_environment(jdk),
+        )
 
 
-def build_unsigned(config, sdk, checkout, env):
+def copy_private(source, destination):
+    source = Path(source)
+    if source.is_symlink() or not source.is_file():
+        raise OperationError("The build did not produce a regular unsigned APK")
+    with source.open("rb") as stream:
+        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as target:
+            shutil.copyfileobj(stream, target)
+            target.flush()
+            os.fsync(target.fileno())
+
+
+def build_unsigned(config, checkout, env):
     checkout = Path(checkout)
     # Dependency install scripts are skipped; the lockfile records none that are needed
     # (see build_context.INSTALL_SCRIPT_PACKAGES). Only the project's own scripts run.
@@ -286,12 +409,10 @@ def build_unsigned(config, sdk, checkout, env):
         cwd=checkout / "apps/client/android",
         env=env,
     )
-    apk = (
+    return (
         checkout
         / "apps/client/android/app/build/outputs/apk/release/app-release-unsigned.apk"
     )
-    inspect_apk(apk, config, sdk, signed=False)
-    return apk
 
 
 def sign_release(
@@ -306,37 +427,35 @@ def sign_release(
     env,
 ):
     binaries = tools(sdk)
-    output = Path(output)
-    with tempfile.TemporaryDirectory(
-        prefix=".sallimbook-release-", dir=output.parent
-    ) as temporary:
-        aligned = Path(temporary) / "aligned.apk"
-        signed = Path(temporary) / "signed.apk"
-        run([str(binaries["zipalign"]), "-P", "16", "-v", "4", str(apk), str(aligned)])
-        run(
-            [
-                str(binaries["apksigner"]),
-                "sign",
-                "--ks",
-                str(Path(keystore).absolute()),
-                "--ks-key-alias",
-                alias,
-                "--ks-pass",
-                "file:" + str(Path(store_password_file).absolute()),
-                "--key-pass",
-                "file:" + str(Path(key_password_file).absolute()),
-                "--out",
-                str(signed),
-                str(aligned),
-            ],
-            env=env,
-        )
-        result = inspect_apk(signed, config, sdk, signed=True)
-        with output.open("xb") as stream, signed.open("rb") as source:
-            os.chmod(output, 0o600)
-            shutil.copyfileobj(source, stream)
-            stream.flush()
-            os.fsync(stream.fileno())
+    apk = Path(apk)
+    inspect_apk(apk, config, sdk, signed=False, env=env)
+    aligned = apk.parent / "aligned.apk"
+    signed = apk.parent / "signed.apk"
+    run([str(binaries["zipalign"]), "-P", "16", "-v", "4", str(apk), str(aligned)], env=env)
+    run(
+        [
+            str(binaries["apksigner"]),
+            "sign",
+            "--ks",
+            str(Path(keystore).absolute()),
+            "--ks-key-alias",
+            alias,
+            "--ks-pass",
+            "file:" + str(Path(store_password_file).absolute()),
+            "--key-pass",
+            "file:" + str(Path(key_password_file).absolute()),
+            "--out",
+            str(signed),
+            str(aligned),
+        ],
+        env=env,
+    )
+    result = inspect_apk(signed, config, sdk, signed=True, env=env)
+    with output.open("xb") as stream, signed.open("rb") as source:
+        os.chmod(output, 0o600)
+        shutil.copyfileobj(source, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
     with output.with_suffix(".receipt.json").open("x") as stream:
         os.chmod(stream.name, 0o600)
         json.dump(result, stream, sort_keys=True)
@@ -362,6 +481,10 @@ def main():
     args["config"] = json.loads(args.pop("manifest").read_text())
     try:
         result = build(**args)
+    except ReleaseAbort as abort:
+        raise SystemExit(
+            f"Release preparation failed ({abort.code}). Nothing installed or published."
+        ) from None
     except Exception:
         raise SystemExit(
             "Release preparation failed. Nothing installed or published."
