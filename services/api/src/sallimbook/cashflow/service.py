@@ -69,6 +69,9 @@ _VALUES = (
 )
 
 
+REQUEST_ONLY_FIELDS = frozenset({"duplicate_acknowledged", "reason"})
+
+
 def lock_cash_household(session: Session, principal: Principal) -> None:
     """Shared mutation order: household -> idempotency/source rows -> account validation.
 
@@ -312,7 +315,8 @@ def prepare_cash_record(
         action="convert_result" if conversion_id else "create",
         reason=reason,
         conversion_id=conversion_id,
-        changed_fields=payload.model_fields_set,
+        # Request flags are not columns; only fields that describe the stored fact are audited.
+        changed_fields=payload.model_fields_set - REQUEST_ONLY_FIELDS,
     )
     return row
 
@@ -404,7 +408,7 @@ def create_income(session: Session, principal: Principal, payload: IncomeCreate,
 
 def correct_income(session, principal, record_id, payload: IncomePatch, if_match, key):
     lock_cash_household(session, principal)
-    supplied = payload.model_dump(exclude_unset=True, exclude={"reason", "duplicate_acknowledged"})
+    supplied = payload.model_dump(exclude_unset=True, exclude=REQUEST_ONLY_FIELDS)
 
     def execute():
         row = _income_record(session, principal, record_id, lock=True)

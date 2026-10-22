@@ -20,6 +20,12 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from sallimbook.core.authorization import Principal
 from sallimbook.core.database import Base
+from sallimbook.exports.catalog import (
+    PRIVATE_COLUMNS,
+    PRIVATE_TABLES,
+    PUBLIC_COLUMNS,
+    SPECIAL_COLUMNS,
+)
 
 
 class AuditEvent(Base):
@@ -119,6 +125,58 @@ AuditAction = Literal[
 ENTITY_TYPES = frozenset(get_args(AuditEntityType))
 ACTIONS = frozenset(get_args(AuditAction))
 
+# One vocabulary for both directions: writes may record only these names and reads accept only
+# these names, so a recorded event can never make the audit list or the export unreadable.
+KNOWN_FIELDS = (
+    frozenset(
+        field
+        for mapping in (PUBLIC_COLUMNS, PRIVATE_COLUMNS, PRIVATE_TABLES)
+        for fields in mapping.values()
+        for field in fields
+    )
+    | frozenset(
+        field
+        for groups in SPECIAL_COLUMNS.values()
+        for fields in groups.values()
+        for field in fields
+    )
+    | {
+        "scope",
+        "sources",
+        "replacements",
+        "asset",
+        "closure_ack",
+        "closed_on",
+        "target",
+        "contains_no_card_data",
+        "lines",
+        "expense_ids",
+        "cash",
+        "copy_previous",
+        "acknowledge_scope_change",
+        "acknowledge_non_month_end_dates",
+        "clear_next_check_override",
+        "effective_on",
+        "payment_basis",
+        "usage_digest",
+        "links",
+        "member_wrapping",
+        "recovery_wrapping",
+        "wrappings",
+        "key_check",
+        "cards",
+        "secret_envelope",
+        "formats",
+        "selected_documents",
+        "account_number",
+        "policy_number",
+        "values",
+        "settlements",
+        "allocations",
+        "expenses",
+    }
+)
+
 
 def append_event(
     session: Session,
@@ -137,6 +195,8 @@ def append_event(
     fields = sorted(set(changed_fields))
     if len(fields) > 64 or any(not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", key) for key in fields):
         raise ValueError("Audit field names must be schema identifiers")
+    if any(key not in KNOWN_FIELDS for key in fields):
+        raise ValueError("Audit field names must be registered")
     if request_id is not None and not re.fullmatch(r"[a-zA-Z0-9._-]{1,128}", request_id):
         raise ValueError("Audit request identifier is invalid")
     if entity_type not in ENTITY_TYPES or action not in ACTIONS:
