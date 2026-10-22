@@ -334,12 +334,12 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 카드 | GET/POST /cards, GET/PATCH/DELETE /cards/{id} | metadata only, 영향 확인 |
 | 보관함 | GET /vault/status, GET /vault/wrappings/me | 암호문과 키 파라미터만 |
 | 보관함 | GET/PUT /cards/{id}/secret-envelope | PAN/expiry 암호문만, CVC schema 없음 |
-| 키 관리 | POST /vault/enroll-member, /vault/rotate, /vault/recovery-wrap | 계정 step-up, 원자적 버전 전환 |
+| 키 관리 | POST /vault/initialize, /vault/recover, /vault/rotations(+ `/{id}/prepare`, `/finalize`, `/abort`); GET /vault/recovery-wrap; GET/POST /vault/shares, POST /vault/shares/{offer_id}/accept·cancel; POST /vault/members/{member_id}/revoke | 계정 step-up, 원자적 버전 전환 |
 | 계약 | GET/POST /insurance/policies, GET/PATCH /insurance/policies/{id} | 보험료는 연결 규칙 참조 |
 | 사건 | GET/POST /insurance/cases, GET/PATCH /insurance/cases/{id} | 치료·정산 상태 분리 |
-| 진료 노드 | POST /insurance/cases/{id}/nodes, PATCH/DELETE /insurance/nodes/{id} | 트리 순환·동일 사건 검사 |
-| 의료비 | POST /insurance/cases/{id}/expenses, POST /insurance/expenses/{id}/refunds | 실제 지불 원본 1건 |
-| 청구 | POST /insurance/cases/{id}/claims, PATCH /insurance/claims/{id} | 비용 N개 연결 |
+| 진료 노드 | GET/POST /insurance/cases/{id}/nodes, GET/PATCH/DELETE /insurance/cases/{id}/nodes/{node_id} | 트리 순환·동일 사건 검사 |
+| 의료비 | GET/POST /insurance/medical-expenses, POST /insurance/medical-expenses/{id}/refunds | 실제 지불 원본 1건 |
+| 청구 | GET/POST /insurance/claims, PATCH /insurance/claims/{id} | 사건·계약은 본문, 비용 N개 연결 |
 | 지급 | POST /insurance/payouts, POST /insurance/payouts/{id}/returns | 현금 원본+배분; 청구ID 선택 |
 | 정산 | GET /insurance/cases/{id}/summary | 비용/환불/실수령/반환/부담 |
 | 가전 | GET/POST /appliances, GET/PATCH /appliances/{id} | 제품·호환 소모품 |
@@ -490,7 +490,7 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 
 실제 보험금은 cash 원본 하나와 사건별 배분 여러 개를 같은 트랜잭션으로 저장한다. 배분 합계는 원본 수령액과 정확히 같아야 한다. 청구 없이 직접 수령을 등록할 수 있으며 나중에 청구를 연결해도 새 입금이 생기지 않는다. 기존 청구에는 계약 종료 뒤 늦게 받은 보험금도 기록할 수 있다. 사건·배분 금액·보장 성격을 잘못 입력했다면 원본 지급의 무효와 대체 지급 생성을 원자적으로 수행한다. 배분 PATCH는 계약·청구 연결만 바꾸며 typed 이력을 남긴다.
 
-환불과 반환은 원본을 참조하는 별도 실제 금전 기록이다. 환불·반환을 정정하면 금액·날짜·결제 연결만 바뀌고 처음 기록한 사유는 그대로 남는다. 요청의 `reason`은 정정 사유로 현금 이력에 기록된다. 사유 자체가 틀렸다면 무효 후 새로 기록한다. 환불은 원래 의료비 한도, 보험금 반환은 원래 배분 한도를 초과할 수 없다. 활성 환불/반환이 남아 있으면 원본 정정/무효를 거부한다. 정정/무효 이력은 삭제하지 않는다. 사건 순부담은 음수가 될 수 있으며 실손·정액·기타 실제 수령을 구분한다. 노드별 집계에 사건 보험금을 임의 배분하지 않는다.
+환불과 반환은 원본을 참조하는 별도 실제 금전 기록이다. 환불·반환을 정정하면 금액·날짜·결제 연결·메모가 바뀌고(보험금 반환은 같은 지급 안에서 반환 대상 배분도 바꿀 수 있다) 처음 기록한 사유는 그대로 남는다. 정정본도 원본 날짜보다 앞설 수 없고, 한도는 정정되는 기록의 이전 금액을 제외하고 다시 계산한다. 요청의 `reason`은 정정 사유로 현금 이력에 기록된다. 사유 자체가 틀렸다면 무효 후 새로 기록한다. 환불은 원래 의료비 한도, 보험금 반환은 원래 배분 한도를 초과할 수 없다. 활성 환불/반환이 남아 있으면 원본 정정/무효를 거부한다. 정정/무효 이력은 삭제하지 않는다. 사건 순부담은 음수가 될 수 있으며 실손·정액·기타 실제 수령을 구분한다. 노드별 집계에 사건 보험금을 임의 배분하지 않는다.
 
 금전 생성·정정·무효·환불·반환·배분 연결 변경은 Idempotency-Key를 요구한다. 기존 대상에 적용하는 명령은 If-Match도 요구하며 환불/반환 생성에는 부모 의료비/지급의 버전을 사용한다. 결과는 변경 당시 `{id, version}` 참조이고 재전송해도 변하지 않는다. 최신 상태와 가능한 후속 동작은 GET으로 다시 조회한다. 청구 메타데이터 수정은 If-Match와 사유를 요구한다. 청구 생성(`POST /claims`)은 선택적 Idempotency-Key를 받는다. 키를 보내면 같은 키·같은 내용의 재전송은 새 청구를 만들지 않고 처음 저장한 버전의 청구 응답(같은 ETag·Location)을 돌려준다. 그 사이 청구가 수정됐어도 생성 당시 버전으로 응답하고, 수령·반환 합계만 현재 값이다. 같은 키에 다른 내용은 409 `IDEMPOTENCY_CONFLICT`다. 키가 없는 이전 클라이언트는 전처럼 요청마다 청구를 만든다. 웹과 Android는 같은 미저장 청구의 재시도에 같은 키를 보낸다. 소득 화면은 실제 보험금 원본을 읽기 전용으로 투영하며 계좌 잔액이나 자산 스냅샷을 자동 변경하지 않는다.
 
