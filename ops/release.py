@@ -340,13 +340,14 @@ def build_snapshot(
     # see the signing key. Pin them now and compare right before they are used.
     pinned = signing_fingerprints(sdk, jdk)
     output = Path(output)
+    # Step 1 has no access to signing material and every process it started has exited
+    # (or the release aborted) before anything below exists.
+    unsigned = build_unsigned(config, checkout, env)
+    # The private directory is created only now, so build code never saw it. The unsigned
+    # APK is copied into it at once; only the copy is inspected and signed.
     with tempfile.TemporaryDirectory(
         prefix=".sallimbook-release-", dir=output.parent
     ) as temporary:
-        # Step 1 has no access to signing material and every process it started has
-        # exited (or the release aborted) before step 2 begins.
-        unsigned = build_unsigned(config, checkout, env)
-        # Immediately take a private copy; only the copy is inspected and signed.
         candidate = Path(temporary) / "unsigned.apk"
         copy_private(unsigned, candidate)
         if signing_fingerprints(sdk, jdk) != pinned:

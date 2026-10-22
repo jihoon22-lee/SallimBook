@@ -223,21 +223,29 @@ class Boundaries(unittest.TestCase):
             {"status": "backup-result-absent"},
         )
 
-    def test_backup_storage_reports_free_space_without_any_receipt(self):
-        empty = self.root / "empty-backups"
-        empty.mkdir(mode=0o700)
-        with patch.object(worker.shutil, "disk_usage", return_value=MagicMock(free=7)) as usage:
+    def test_data_storage_reports_backup_and_attachment_space_without_any_receipt(self):
+        backups, documents = self.root / "empty-backups", self.root / "documents-volume"
+        for directory in (backups, documents):
+            directory.mkdir(mode=0o700)
+        sizes = {str(backups): 7, str(documents): 9}
+        with patch.object(
+            worker.shutil, "disk_usage", side_effect=lambda path: MagicMock(free=sizes[str(path)])
+        ):
             self.assertEqual(
-                worker.backup_storage(empty),
-                {"status": "backup-storage-checked", "disk_free_bytes": 7},
+                worker.data_storage(backups, documents),
+                {
+                    "status": "data-storage-checked",
+                    "disk_free_bytes": 7,
+                    "documents_disk_free_bytes": 9,
+                },
             )
-        usage.assert_called_once_with(empty)
-        self.assertEqual(list(empty.iterdir()), [])
+        self.assertEqual(list(backups.iterdir()) + list(documents.iterdir()), [])
         loose = self.root / "loose"
         loose.mkdir(mode=0o755)
         loose.chmod(0o755)
-        with self.assertRaises(backup.OperationError):
-            worker.backup_storage(loose)
+        for arguments in ((loose, documents), (backups, loose)):
+            with self.assertRaises(backup.OperationError):
+                worker.data_storage(*arguments)
 
     def test_operator_bundle_checks_both_actual_helpers(self):
         files = {}
@@ -376,12 +384,24 @@ class RuntimeBoundaries(unittest.TestCase):
 
     GIB = 1024**3
 
-    def health_item(self, *, state_free, build_free, docker_free, backup_free, backup=None):
+    def health_item(
+        self,
+        *,
+        state_free,
+        build_free,
+        docker_free,
+        backup_free,
+        documents_free=2 * 1024**3,
+        backup=None,
+    ):
         item = self.make_runtime()
         fresh = datetime.now(UTC).isoformat()
         answers = {
             "storage": {"disk_free_bytes": docker_free},
-            "backup-storage": {"disk_free_bytes": backup_free},
+            "data-storage": {
+                "disk_free_bytes": backup_free,
+                "documents_disk_free_bytes": documents_free,
+            },
             "backup-stat": {"disk_free_bytes": backup_free},
         }
         stack = ExitStack()
@@ -415,20 +435,27 @@ class RuntimeBoundaries(unittest.TestCase):
         self.addCleanup(stack.close)
         return item, mocks
 
-    def test_health_checks_state_build_daemon_and_backup_filesystems(self):
+    def test_health_checks_state_build_daemon_backup_and_attachment_filesystems(self):
+        gib = self.GIB
         for free in (
-            (2 * self.GIB, 2 * self.GIB, 2 * self.GIB, 2 * self.GIB),
-            (0, 2 * self.GIB, 2 * self.GIB, 2 * self.GIB),
-            (2 * self.GIB, 0, 2 * self.GIB, 2 * self.GIB),
-            (2 * self.GIB, 2 * self.GIB, 0, 2 * self.GIB),
-            (2 * self.GIB, 2 * self.GIB, 2 * self.GIB, 0),
+            (2 * gib, 2 * gib, 2 * gib, 2 * gib, 2 * gib),
+            (0, 2 * gib, 2 * gib, 2 * gib, 2 * gib),
+            (2 * gib, 0, 2 * gib, 2 * gib, 2 * gib),
+            (2 * gib, 2 * gib, 0, 2 * gib, 2 * gib),
+            (2 * gib, 2 * gib, 2 * gib, 0, 2 * gib),
+            (2 * gib, 2 * gib, 2 * gib, 2 * gib, 0),
+            (2 * gib, 2 * gib, 2 * gib, 2 * gib, gib - 1),
         ):
-            state, build, docker, backups = free
+            state, build, docker, backups, documents = free
             with self.subTest(free=free):
                 item, mocks = self.health_item(
-                    state_free=state, build_free=build, docker_free=docker, backup_free=backups
+                    state_free=state,
+                    build_free=build,
+                    docker_free=docker,
+                    backup_free=backups,
+                    documents_free=documents,
                 )
-                if min(free) == 0:
+                if min(free) < gib:
                     with self.assertRaisesRegex(auto.AutomationError, "DISK_SPACE_LOW"):
                         item.health()
                     mocks["latest_backup"].assert_not_called()
@@ -438,12 +465,28 @@ class RuntimeBoundaries(unittest.TestCase):
                     self.assertEqual(result["build_disk_free_bytes"], build)
                     self.assertEqual(result["docker_disk_free_bytes"], docker)
                     self.assertEqual(result["backup_disk_free_bytes"], backups)
-                self.assertEqual(
-                    [call.args[0] for call in mocks["worker"].call_args_list][:2],
-                    ["storage", "backup-storage"],
-                )
-                for call in mocks["worker"].call_args_list[:2]:
+                    self.assertEqual(result["documents_disk_free_bytes"], documents)
+                calls = mocks["worker"].call_args_list
+                self.assertEqual([call.args[0] for call in calls][:2], ["storage", "data-storage"])
+                for call in calls[:2]:
                     self.assertEqual(call.kwargs["timeout"], 60)
+
+    def test_attachment_storage_is_mounted_read_only_next_to_the_backup_storage(self):
+        item, mocks = self.health_item(
+            state_free=2 * self.GIB,
+            build_free=2 * self.GIB,
+            docker_free=2 * self.GIB,
+            backup_free=2 * self.GIB,
+        )
+        item.health()
+        groups = mocks["worker"].call_args_list[1].kwargs["mounts"]
+        mounts = [arg for group in groups for arg in group]
+        runtime = item.manifest["runtime_directory"]
+        backups = item.config["backup_directory"]
+        documents = f"type=bind,source={runtime}/documents,target=/srv/documents,readonly"
+        self.assertIn(documents, mounts)
+        self.assertIn(f"type=bind,source={backups},target=/srv/backups,readonly", mounts)
+        self.assertFalse(any(not isinstance(arg, str) for arg in mounts))
 
     def test_disk_check_runs_before_backups_and_services_while_backups_are_paused(self):
         missing = auto.AutomationError("BACKUP_MISSING")
@@ -467,7 +510,7 @@ class RuntimeBoundaries(unittest.TestCase):
         with self.assertRaisesRegex(auto.AutomationError, "BACKUP_MISSING"):
             item.health()
         self.assertEqual(
-            [call.args[0] for call in mocks["worker"].call_args_list], ["storage", "backup-storage"]
+            [call.args[0] for call in mocks["worker"].call_args_list], ["storage", "data-storage"]
         )
         mocks["latest_backup"].assert_called_once()
 

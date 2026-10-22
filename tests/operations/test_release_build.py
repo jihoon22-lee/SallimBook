@@ -4,7 +4,6 @@ No real key, SDK or package install: every subprocess is replaced or synthetic.
 """
 
 import os
-import re
 import tempfile
 import time
 import unittest
@@ -65,20 +64,6 @@ class BuildEnvironment(unittest.TestCase):
         self.assertTrue(set(SECRETS).isdisjoint(environment))
         with patch.dict(os.environ, {"PATH": "/synthetic/bin"}, clear=True):
             self.assertEqual(build_context.build_environment(), {"PATH": "/synthetic/bin"})
-
-    def test_lockfile_has_no_dependency_that_needs_an_install_script(self):
-        # `pnpm install --ignore-scripts` skips every dependency lifecycle script. A package
-        # that needs one must be listed here and run explicitly by the build, not silently
-        # dropped. pnpm records such packages (preinstall/install/postinstall/binding.gyp).
-        lock = (ROOT / "pnpm-lock.yaml").read_text()
-        needing, current = set(), None
-        for line in lock.splitlines():
-            entry = re.fullmatch(r"  '?([^\s'][^']*?)'?:", line)
-            if entry:
-                current = entry.group(1)
-            elif line.strip() == "requiresBuild: true" and current:
-                needing.add(current)
-        self.assertEqual(needing, set(build_context.INSTALL_SCRIPT_PACKAGES))
 
     def test_stage_snapshot_installs_without_scripts_in_the_allowlisted_environment(self):
         calls = []
@@ -341,6 +326,24 @@ class ReleaseSteps(unittest.TestCase):
         self.assertEqual(self.unsigned.read_bytes(), b"swapped")
         self.assertEqual(seen[candidate][1], b"synthetic unsigned")
 
+    def test_private_directory_is_created_only_after_the_build_has_exited(self):
+        seen = []
+
+        def look():
+            # Build code runs as this user; a directory it can see could be pre-populated.
+            seen.append(sorted(p.name for p in self.output.parent.glob(".sallimbook-release-*")))
+
+        self.during_build = look
+        self.build()
+        self.assertEqual(seen, [[]])
+        # And it is gone again when the release finishes or aborts.
+        self.assertEqual(list(self.output.parent.glob(".sallimbook-release-*")), [])
+        self.setUp()
+        self.during_build = lambda: self.tool_files["java"].write_bytes(b"patched")
+        with self.assertRaises(release.ReleaseAbort):
+            self.build()
+        self.assertEqual(list(self.output.parent.glob(".sallimbook-release-*")), [])
+
     def test_build_requires_the_selected_jdk(self):
         with patch.dict(os.environ, {"PATH": "/synthetic/bin"}, clear=True):
             with self.assertRaisesRegex(backup.OperationError, "JAVA_HOME"):
@@ -407,6 +410,32 @@ class BuildProcesses(unittest.TestCase):
                 release.run_build(["sh", "-c", "true"], cwd="/", env={"PATH": "/usr/bin:/bin"})
         self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
         kill.assert_called_once_with(4242, release.signal.SIGKILL)
+
+    def test_a_leftover_process_found_in_a_mocked_proc_aborts_the_release(self):
+        class Finished:
+            pid = 4242
+
+            def wait(self):
+                return 0
+
+        with tempfile.TemporaryDirectory() as temporary:
+            proc = Path(temporary)
+            (proc / "4243").mkdir()
+            (proc / "4243/stat").write_text("4243 (daemon) S 1 4243 4242 0 -1 4194560 1\n")
+            (proc / "4300").mkdir()
+            (proc / "4300/stat").write_text("4300 (unrelated) S 1 4300 4300 0 -1 4194560 1\n")
+            with (
+                patch.object(release.subprocess, "Popen", return_value=Finished()),
+                patch.object(release, "PROC", proc),
+                patch.object(release, "SESSION_SETTLE_SECONDS", 0.2),
+                patch.object(release.os, "killpg") as killpg,
+                patch.object(release.os, "kill") as kill,
+            ):
+                with self.assertRaises(release.ReleaseAbort) as caught:
+                    release.run_build(["gradle"], cwd="/", env={})
+        self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
+        killpg.assert_called_once_with(4242, release.signal.SIGKILL)
+        kill.assert_called_once_with(4243, release.signal.SIGKILL)
 
     def test_the_release_command_names_only_the_fixed_abort_code(self):
         import json

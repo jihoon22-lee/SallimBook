@@ -98,7 +98,8 @@ BUILD_ENVIRONMENT_KEYS = (
     "XDG_DATA_HOME",
 )
 # Dependencies whose install script the build must run explicitly because installs use
-# --ignore-scripts. The lockfile currently records none (tests/operations checks this).
+# --ignore-scripts. None is needed today; CI scans the installed tree for such packages
+# (scripts/check_install_scripts.py) and fails when this list and the tree differ.
 INSTALL_SCRIPT_PACKAGES = ()
 PNPM_INSTALL = ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"]
 

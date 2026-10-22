@@ -67,6 +67,13 @@ class OperationsChecks(unittest.TestCase):
             "ruff check --config services/api/pyproject.toml ops tests/operations", lint
         )
 
+    def test_install_script_scan_runs_on_the_installed_tree(self):
+        text = job(CI, "types-contract")
+        self.assertLess(
+            text.index("pnpm install --frozen-lockfile"),
+            text.index("scripts/check_install_scripts.py"),
+        )
+
     def test_operations_images_are_built_but_never_pushed(self):
         text = job(CI, "ops-images")
         self.assertIn("python -m ops.build_context", text)

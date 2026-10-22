@@ -121,6 +121,9 @@ jobs:
           python-version: "3.14.7"
           enable-cache: false
       - run: pnpm install --frozen-lockfile
+      # The release and image builds install with --ignore-scripts; fail when a dependency
+      # appears that has an install script nobody runs explicitly.
+      - run: uv run --no-project python scripts/check_install_scripts.py
       - run: pnpm format:check
       - run: pnpm lint
       - run: uv sync --project services/api --frozen

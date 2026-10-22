@@ -423,16 +423,22 @@ class Runtime:
         free = shutil.disk_usage(self.config["state_directory"]).free
         build_free = shutil.disk_usage(self.config["build_directory"]).free
         docker_free = self.worker("storage", timeout=60)["disk_free_bytes"]
-        backup_free = self.worker("backup-storage", mounts=[self.backup_mount()], timeout=60)[
-            "disk_free_bytes"
-        ]
-        if min(free, build_free, docker_free, backup_free) < 1024**3:
+        documents = Path(self.manifest["runtime_directory"]) / "documents"
+        volumes = self.worker(
+            "data-storage",
+            mounts=[self.backup_mount(), self.mount(documents, "/srv/documents")],
+            timeout=60,
+        )
+        backup_free = volumes["disk_free_bytes"]
+        documents_free = volumes["documents_disk_free_bytes"]
+        if min(free, build_free, docker_free, backup_free, documents_free) < 1024**3:
             raise AutomationError("DISK_SPACE_LOW")
         return {
             "state_disk_free_bytes": free,
             "build_disk_free_bytes": build_free,
             "docker_disk_free_bytes": docker_free,
             "backup_disk_free_bytes": backup_free,
+            "documents_disk_free_bytes": documents_free,
         }
 
     def health(self):
