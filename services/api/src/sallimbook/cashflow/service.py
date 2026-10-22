@@ -1,5 +1,6 @@
 """Manual income and shared cash facts, serialized without changing any snapshot."""
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from operator import attrgetter
 from uuid import UUID
@@ -211,19 +212,24 @@ def _validate_links(
     payload: CashInput,
     *,
     previous: CashRecord | None = None,
+    replaces: Sequence[CashRecord] = (),
 ) -> None:
     _validate_actual_date(payload)
     # A closed account or card still takes records dated through its end, and none takes a
     # record dated before its start. A correction keeps the link of the fact it replaces.
     on = _link_date(payload)
     month = month_start(payload.period_month)
+    # Facts this record stands in for: the corrected one, or the sources of a precision
+    # conversion in the same month. Only the start-date check looks at them for conversions.
+    stands_in_for = [previous] if previous is not None else []
+    stands_in_for += [row for row in replaces if row.period_month == month]
 
-    def too_early(started_on: date | None, kept: bool) -> bool:
-        # A correction may keep a date that already preceded the start; it cannot move there.
-        return _before_start(payload.occurred_on, month, started_on) and not (
-            kept
-            and previous is not None
-            and _before_start(previous.occurred_on, previous.period_month, started_on)
+    def too_early(started_on: date | None, linked) -> bool:
+        # A record that already preceded the start may stay before it while it keeps the same
+        # link; a record on or after the start cannot move to before it.
+        return _before_start(payload.occurred_on, month, started_on) and not any(
+            linked(row) and _before_start(row.occurred_on, row.period_month, started_on)
+            for row in stands_in_for
         )
 
     # Match existing asset/account writers: Asset -> Account -> Member. IDs cannot be retargeted.
@@ -235,7 +241,7 @@ def _validate_links(
         )
         relinked = previous is None or previous.account_id != account.id
         if (relinked and asset.ended_on is not None and asset.ended_on < on) or too_early(
-            account.opened_on, kept=not relinked
+            account.opened_on, lambda row: row.account_id == account.id
         ):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 입금 계좌를 선택해 주세요.", 422)
     if payload.member_id is not None:
@@ -248,7 +254,7 @@ def _validate_links(
         card = scoped_entity(session, Card, payload.card_id, principal, for_update=True)
         relinked = previous is None or previous.card_id != card.id
         if (relinked and card.ended_on is not None and card.ended_on < on) or too_early(
-            card.started_on, kept=not relinked
+            card.started_on, lambda row: row.card_id == card.id
         ):
             raise DomainError("CARD_UNAVAILABLE", "사용 중인 결제 카드를 선택해 주세요.", 422)
 
@@ -291,10 +297,13 @@ def prepare_cash_record(
     reason: str | None = None,
     conversion_id: UUID | None = None,
     previous: CashRecord | None = None,
+    replaces: Sequence[CashRecord] = (),
 ) -> CashRecord:
     """Flush-only cash fact + typed version + metadata audit, with household validation.
 
     previous is the voided fact this record corrects; its own links stay usable.
+    replaces are the voided sources of a precision conversion; a source that already preceded
+    its account's or card's start lets a replacement in the same month stay before it.
 
     No generic HTTP endpoint exposes non-income kinds. Subtype callers must create exactly
     one subtype referencing this ID (unique household-scoped FK) in this same transaction,
@@ -319,7 +328,7 @@ def prepare_cash_record(
         returned = sum(int(row.amount_krw) for row in _active_returns(session, principal, original))
         if returned + int(payload.amount_krw) > int(original.amount_krw):
             raise DomainError("RETURN_EXCEEDS_ORIGINAL", "반환 합계가 원본 금액을 초과합니다.", 409)
-    _validate_links(session, principal, payload, previous=previous)
+    _validate_links(session, principal, payload, previous=previous, replaces=replaces)
     values = payload.model_dump(include=set(CashInput.model_fields))
     values["amount_krw"] = decimal_krw(payload.amount_krw)
     values["period_month"] = month_start(payload.period_month)
@@ -638,6 +647,7 @@ def convert_income(session, principal, payload: IncomeConvert, key):
                 kind=item.kind,
                 reason=payload.reason,
                 conversion_id=conversion.id,
+                replaces=sources,
             )
         record_event(
             session,

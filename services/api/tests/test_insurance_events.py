@@ -13,7 +13,14 @@ from pydantic import ValidationError
 from sqlalchemy import event, func, select, text, update
 from sqlalchemy.orm import Session
 from test_accounts import make_actor
-from test_income import CATALOG, close_account, headers, income_payload, make_account
+from test_income import (
+    CATALOG,
+    close_account,
+    headers,
+    income_payload,
+    make_account,
+    set_opened_on,
+)
 from test_insurance_core import case_payload, policy_payload
 from test_pagination import api_pages, ids, pairs
 from test_recurring import generate, obligation_for, post_rule, settle
@@ -32,7 +39,7 @@ from sallimbook.config import Settings
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.core.idempotency import IdempotencyRecord
-from sallimbook.core.types import MAX_KRW, SEOUL
+from sallimbook.core.types import MAX_KRW
 from sallimbook.insurance import calculations as calc
 from sallimbook.insurance import event_service as service
 from sallimbook.insurance.event_models import (
@@ -887,6 +894,48 @@ class TestInsuranceEventCorrections:
                 assert moved.status_code == 422, moved.text
                 assert moved.json()["error"]["code"] == code
 
+    def test_correcting_a_record_that_already_precedes_the_start_keeps_its_standing(
+        self, app, actors, db_engine
+    ):
+        actor = actors[0]
+        account = make_account(db_engine, actor)
+        linked = {"account_id": str(account.id)}
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            node = new_node(client, actor, case)
+
+            def spend(day):
+                return money(
+                    client,
+                    actor,
+                    "/medical-expenses",
+                    expense_payload(case["id"], node["id"])
+                    | actual("100", occurred_on=day, **linked),
+                )
+
+            old, new = spend("2026-01-10"), spend("2026-02-10")
+            # Opening dates were never checked before, so the old expense predates the start.
+            set_opened_on(db_engine, account, "2026-02-01")
+
+            def correct(record, day, amount="90"):
+                return client.post(
+                    BASE + f"/medical-expenses/{record['id']}/correct",
+                    headers=headers(actor, version=record["version"]),
+                    json=expense_payload(case["id"], node["id"])
+                    | actual(amount, occurred_on=day, reason="합성 정정", **linked),
+                )
+
+            # Staying linked, the old record may be corrected and keep a date before the start.
+            same_day = correct(old, "2026-01-10")
+            assert same_day.status_code == 201, same_day.text
+            earlier = correct(same_day.json(), "2026-01-05", "80")
+            assert earlier.status_code == 201, earlier.text
+            # A record dated on or after the start cannot be moved in front of it.
+            moved = correct(new, "2026-01-31")
+            assert moved.status_code == 422, moved.text
+            assert moved.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            assert correct(new, "2026-02-01").status_code == 201
+
     def test_insurance_child_lists_have_stable_order(self, app, actors, db_engine):
         actor = actors[0]
         with TestClient(app) as client:
@@ -929,8 +978,8 @@ class TestInsuranceEventCorrections:
                         .values(created_at=datetime(2026, 1, 1 + rank, tzinfo=UTC))
                     )
                 session.commit()
-            for path in (f"/payouts/{payout['id']}",):
-                assert [row["id"] for row in read(client, actor, path)["allocations"]] == expected
+            listed = read(client, actor, f"/payouts/{payout['id']}")["allocations"]
+            assert [row["id"] for row in listed] == expected
             # Claim evidence is listed by expense id, whatever order the claim cited them in.
             policy = new_policy(client, actor)
             cited = [new_expense(client, actor, case, node)["id"] for _ in range(3)]
@@ -947,10 +996,12 @@ class TestInsuranceEventCorrections:
             assert claim["expense_ids"] == sorted(cited)
             assert read(client, actor, f"/claims/{claim['id']}")["expense_ids"] == sorted(cited)
 
-    def test_future_claim_date_is_rejected(self, app, actors):
+    def test_future_claim_date_is_rejected(self, app, actors, monkeypatch):
         actor = actors[0]
-        tomorrow = (datetime.now(UTC).astimezone(SEOUL).date() + timedelta(days=1)).isoformat()
-        today = datetime.now(UTC).astimezone(SEOUL).date().isoformat()
+        # 00:30 on 2026-02-01 in Seoul is still 2026-01-31 in UTC: the claim date is judged
+        # on the Seoul day, and a frozen clock cannot straddle midnight mid-test.
+        monkeypatch.setattr(service, "utcnow", lambda: datetime(2026, 1, 31, 15, 30, tzinfo=UTC))
+        today, tomorrow = "2026-02-01", "2026-02-02"
         with TestClient(app) as client:
             case, policy = new_case(client, actor), new_policy(client, actor)
             body = {"case_id": case["id"], "policy_id": policy["id"]}

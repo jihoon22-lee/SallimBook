@@ -2,7 +2,7 @@
 
 import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from threading import Barrier
@@ -19,6 +19,7 @@ from test_accounts import make_actor
 from test_pagination import api_pages, ids, pairs
 
 from sallimbook.accounts import service as accounts
+from sallimbook.accounts.models import FinancialAccount
 from sallimbook.accounts.schemas import AccountCreate
 from sallimbook.assets import month_service
 from sallimbook.assets import service as asset_service
@@ -211,7 +212,7 @@ def income_app(db_engine):
     return app
 
 
-def make_account(engine, actor):
+def make_account(engine, actor, *, opened_on=None):
     with Session(engine) as session:
         return accounts.create_account(
             session,
@@ -219,6 +220,7 @@ def make_account(engine, actor):
             AccountCreate(
                 institution_name="합성 입금 기관",
                 account_type="checking",
+                opened_on=opened_on,
                 asset={
                     "name": "합성 입금 자산",
                     "kind": "asset",
@@ -230,6 +232,17 @@ def make_account(engine, actor):
             ),
             None,
         )
+
+
+def set_opened_on(engine, account, opened_on):
+    """Date an account's opening after records exist, as accounts predating the check were."""
+    with Session(engine) as session:
+        session.execute(
+            update(FinancialAccount)
+            .where(FinancialAccount.id == account.id)
+            .values(opened_on=date.fromisoformat(opened_on))
+        )
+        session.commit()
 
 
 def close_account(engine, actor, account, ended_on):
@@ -307,6 +320,137 @@ class TestIncomeDatabase:
             )
             assert moved.status_code == 422
             assert moved.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+
+    def test_month_total_income_start_date_check(self, income_app, income_actors, db_engine):
+        actor = income_actors[0]
+        account = make_account(db_engine, actor, opened_on="2025-02-15")
+        with TestClient(income_app) as client:
+
+            def create(**fields):
+                body = income_payload(
+                    actor, account_id=str(account.id), duplicate_acknowledged=True
+                )
+                return client.post("/api/v1/income", json=body | fields, headers=headers(actor))
+
+            # A month total compares by month: the whole month before the start is rejected,
+            # the month holding the start day is accepted.
+            early = create(period_month="2025-01")
+            assert early.status_code == 422, early.text
+            assert early.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            assert create(period_month="2025-02").status_code == 201
+            assert create(period_month="2025-03").status_code == 201
+            # A dated entry compares by day, and the accrual month does not change that.
+            day_early = create(
+                period_month="2025-02", date_precision="day", occurred_on="2025-02-14"
+            )
+            assert day_early.status_code == 422, day_early.text
+            assert day_early.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            late = create(period_month="2025-01", date_precision="day", occurred_on="2025-02-15")
+            assert late.status_code == 201, late.text
+
+    def test_correcting_income_that_already_precedes_the_start_keeps_its_standing(
+        self, income_app, income_actors, db_engine
+    ):
+        actor = income_actors[0]
+        account = make_account(db_engine, actor)
+        with TestClient(income_app) as client:
+            legacy = post_income(
+                client,
+                actor,
+                account_id=str(account.id),
+                period_month="2025-01",
+                date_precision="day",
+                occurred_on="2025-01-10",
+            ).json()
+            fresh = post_income(
+                client,
+                actor,
+                account_id=str(account.id),
+                kind="bonus",
+                period_month="2025-03",
+                date_precision="day",
+                occurred_on="2025-03-10",
+            ).json()
+            set_opened_on(db_engine, account, "2025-02-15")
+
+            def correct(record, **fields):
+                return client.patch(
+                    f"/api/v1/income/{record['id']}",
+                    headers=headers(actor, version=record["version"]),
+                    json={"reason": "합성 정정"} | fields,
+                )
+
+            # Opening dates were never checked before, so the old record is still correctable.
+            amount = correct(legacy, amount_krw="3100000")
+            assert amount.status_code == 200, amount.text
+            moved = correct(amount.json(), occurred_on="2025-01-05")
+            assert moved.status_code == 200, moved.text
+            # A record dated on or after the start cannot be moved in front of it.
+            rejected = correct(fresh, occurred_on="2025-02-14")
+            assert rejected.status_code == 422, rejected.text
+            assert rejected.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            assert correct(fresh, occurred_on="2025-02-15").status_code == 200
+
+    def test_legacy_pre_start_income_converts_precision(self, income_app, income_actors, db_engine):
+        actor = income_actors[0]
+        legacy_account = make_account(db_engine, actor)
+        fresh_account = make_account(db_engine, actor, opened_on="2025-02-15")
+        other_account = make_account(db_engine, actor, opened_on="2025-02-15")
+        with TestClient(income_app) as client:
+            legacy = post_income(
+                client,
+                actor,
+                amount_krw="1000",
+                account_id=str(legacy_account.id),
+                period_month="2025-01",
+            ).json()
+            fresh = post_income(
+                client,
+                actor,
+                amount_krw="1000",
+                account_id=str(fresh_account.id),
+                period_month="2025-02",
+                kind="bonus",
+            ).json()
+            set_opened_on(db_engine, legacy_account, "2025-02-15")
+
+            def convert(source, month, account, days, kind="salary"):
+                return client.post(
+                    "/api/v1/income/convert",
+                    headers=headers(actor),
+                    json={
+                        "sources": [{"id": source["id"], "version": source["version"]}],
+                        "reason": "합성 일별 전환",
+                        "replacements": [
+                            income_payload(
+                                actor,
+                                kind=kind,
+                                amount_krw="500",
+                                period_month=month,
+                                date_precision="day",
+                                occurred_on=day,
+                                account_id=str(account.id),
+                            )
+                            for day in days
+                        ],
+                    },
+                )
+
+            # A replacement moved to another account is held to that account's start.
+            relinked = convert(legacy, "2025-01", other_account, ["2025-01-10", "2025-01-20"])
+            assert relinked.status_code == 422, relinked.text
+            assert relinked.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            # A source on or after the start cannot be converted to dates in front of it.
+            moved = convert(fresh, "2025-02", fresh_account, ["2025-02-10", "2025-02-20"], "bonus")
+            assert moved.status_code == 422, moved.text
+            assert moved.json()["error"]["code"] == "ACCOUNT_UNAVAILABLE"
+            # A source that already preceded the start converts; conversion keeps its month.
+            converted = convert(legacy, "2025-01", legacy_account, ["2025-01-10", "2025-01-20"])
+            assert converted.status_code == 201, converted.text
+            assert len(converted.json()["replacements"]) == 2
+            # The rejected conversion left the other source intact and convertible.
+            fine = convert(fresh, "2025-02", fresh_account, ["2025-02-15", "2025-02-20"], "bonus")
+            assert fine.status_code == 201, fine.text
 
     def test_t08_income_never_mutates_real_monthly_snapshot(
         self, income_app, income_actors, db_engine
