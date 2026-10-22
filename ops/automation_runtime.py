@@ -688,6 +688,11 @@ class Runtime:
                 self.journal.phase("needs-recovery", reason="candidate-scanner-cleanup")
                 raise AutomationError("RESOURCE_CLEANUP_FAILED") from None
 
+    def cvd_prune(self, keep, previous_states=(), dry_run=False):
+        from ops.cvd_retention import Retention
+
+        return Retention(self).prune(keep, previous_states, dry_run)
+
     def cvd_refresh(self):
         self.preflight()
         self.services(require_healthy=False)

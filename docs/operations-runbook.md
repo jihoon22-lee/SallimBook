@@ -159,6 +159,19 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 자동화(systemd)·web/node·실제 백업 복원(`ops.test_recovery`)·실제 APK 업데이트는 이 리허설에 포함하지 않는다. 2026-10-21에 165d46b 이미지 → 이 절차를 추가한 커밋의 이미지로 통과했다(커밋과 출력은 해당 PR 기록).
 
+### 롤백 창이 끝난 뒤 — 이전 운영 설정의 CVD 세대 정리
+
+운영 설정을 새 운영 checkout·state로 전환하면 이전 설정이 만든 ClamAV DB 세대(`BUILD_DIRECTORY/<run id>/`와 `sallimbook-ops-api:cvd-…` 이미지)는 새 설정의 `cvd-refresh` 정리가 지우지 않는다. 그 세대의 영수증은 다른 운영 commit·앱 commit으로 봉인되었고 완료 기록은 이전 state 디렉터리에만 있기 때문이다. 이 세대도 6개 상한(`CVD_GENERATION_LIMIT`)에 계속 포함되므로 **롤백이 더 필요 없어진 뒤에** 정리한다. 롤백 가능한 동안에는 실행하지 않는다. 롤백 대상 세대를 지울 수 있다.
+
+1. 남길 세대의 run id를 정한다. 새 state의 `active-deployment.json`의 `source_run`(활성 세대)이 하나다. 이전 설정으로 되돌릴 가능성이 남아 있으면 이전 state의 `active-deployment.json`의 `source_run`(롤백 대상 세대)도 남긴다. 현재 배포·직전 배포·기준선 세대는 이 목록과 무관하게 항상 보호된다.
+2. 새 운영 checkout에서 먼저 `--dry-run`으로 확인하고, `would_remove_generations`가 기대와 같으면 `--dry-run`을 빼고 같은 명령을 실행한다.
+
+   ```bash
+   python -m ops.cvd_retention prune NEW.json --sha256 NEW_SHA256 --keep ACTIVE_RUN_ID --keep ROLLBACK_RUN_ID --previous-state OLD_STATE_DIRECTORY --dry-run
+   ```
+
+`--keep`은 한 번 이상 필요하고 현재 build 디렉터리에 없는 id는 `CVD_KEEP_UNKNOWN`으로 거부한다. 매일 정리와 같은 제거 절차를 쓰므로 세대마다 영수증·파일 해시·완료 journal(이전 state는 `--previous-state`로 지정)·정확한 이미지 태그와 라벨·사용 중인 컨테이너 없음·다른 저장 manifest의 참조 없음을 모두 확인하고, 통과한 세대의 정확한 태그만 `docker image rm --no-prune`으로 지운 뒤 기록된 트리를 지운다. 하나라도 통과하지 못하면 그 세대는 그대로 두고 `skipped_generations`에 나온다(운영자가 따로 판단). 복구가 필요한 중단 기록이 있으면 `RECOVERY_REQUIRED`로 시작하지 않는다. 결과는 state의 `latest-cvd-prune.json`에 남는다.
+
 ## 3. 전용 네트워크와 비밀 주입
 
 생성 Compose는 프로젝트별 네트워크·볼륨만 사용한다. `ports`, `container_name`, `network_mode: host`, `/dev/net/tun`, `NET_ADMIN`, Docker socket을 사용하지 않는다. PostgreSQL은 내부 DB 네트워크, API는 내부 app/DB 네트워크에만 연결한다. API는 하나의 worker로 실행하여 현재 프로세스별 업로드·내보내기 한도와 맞춘다.
