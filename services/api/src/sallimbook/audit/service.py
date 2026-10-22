@@ -12,66 +12,14 @@ from sqlalchemy import and_, or_, select
 
 from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.audit.schemas import AuditEventResponse, AuditListResponse
-from sallimbook.core.audit import ACTIONS, ENTITY_TYPES, AuditEvent
+from sallimbook.core.audit import ACTIONS, ENTITY_TYPES, KNOWN_FIELDS, AuditEvent
 from sallimbook.core.errors import DomainError
-from sallimbook.exports.catalog import (
-    PRIVATE_COLUMNS,
-    PRIVATE_TABLES,
-    PUBLIC_COLUMNS,
-    SPECIAL_COLUMNS,
-)
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 
-KNOWN_FIELDS = (
-    frozenset(
-        field
-        for mapping in (PUBLIC_COLUMNS, PRIVATE_COLUMNS, PRIVATE_TABLES)
-        for fields in mapping.values()
-        for field in fields
-    )
-    | frozenset(
-        field
-        for groups in SPECIAL_COLUMNS.values()
-        for fields in groups.values()
-        for field in fields
-    )
-    | {
-        "scope",
-        "sources",
-        "replacements",
-        "asset",
-        "closure_ack",
-        "closed_on",
-        "target",
-        "contains_no_card_data",
-        "lines",
-        "expense_ids",
-        "cash",
-        "copy_previous",
-        "acknowledge_scope_change",
-        "acknowledge_non_month_end_dates",
-        "clear_next_check_override",
-        "effective_on",
-        "payment_basis",
-        "usage_digest",
-        "links",
-        "member_wrapping",
-        "recovery_wrapping",
-        "wrappings",
-        "key_check",
-        "cards",
-        "secret_envelope",
-        "formats",
-        "selected_documents",
-        "account_number",
-        "policy_number",
-        "values",
-        "settlements",
-        "allocations",
-        "expenses",
-    }
-)
+# Written before the fix: income entries recorded the request flag as a changed field. The
+# name is not a column, so it is dropped on read; every other unregistered name still fails.
+LEGACY_FIELDS = frozenset({"duplicate_acknowledged"})
 AUDIT_COLUMNS = (
     "id",
     "actor_member_id",
@@ -114,15 +62,16 @@ def projection(household_id):
 def safe_row(row):
     values = dict(row)
     diff = values.pop("safe_diff")
+    changed = diff.get("changed_fields") if isinstance(diff, dict) else None
     # Fail closed on historical corruption instead of reflecting arbitrary JSON or strings.
     if (
         not isinstance(diff, dict)
         or set(diff) != {"changed_fields"}
-        or not isinstance(diff["changed_fields"], list)
-        or len(diff["changed_fields"]) > 64
+        or not isinstance(changed, list)
+        or len(changed) > 64
         or any(
-            not isinstance(field, str) or field not in KNOWN_FIELDS
-            for field in diff["changed_fields"]
+            not isinstance(field, str) or (field not in KNOWN_FIELDS and field not in LEGACY_FIELDS)
+            for field in changed
         )
         or values["entity_type"] not in ENTITY_TYPES
         or values["action"] not in ACTIONS
@@ -132,7 +81,7 @@ def safe_row(row):
         )
     ):
         raise DomainError("AUDIT_METADATA_INVALID", "감사 기록 형식을 확인해 주세요.", 503)
-    values["changed_fields"] = sorted(set(diff["changed_fields"]))
+    values["changed_fields"] = sorted(set(changed) - LEGACY_FIELDS)
     return values
 
 
