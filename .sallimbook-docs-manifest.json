@@ -90,8 +90,8 @@
       "git_sha1": "4b9d6f91a74d1efef01967749a02f08be25b0951"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "5740d6e3c5a063cb9da9dc5b35980a10d05abc2a5b84088b815635ef622ff64b",
-      "git_sha1": "93ea643beeb2095301d443cafee3e4ce3ef1564d"
+      "sha256": "9f40cc49f2ecbe1f2b092432dc2e8b3c99780872e09f4b92297489727ffa8122",
+      "git_sha1": "3cb19903a83720def78d222036ce17b5668a3ec0"
     },
     "docs/deployment-backup-operations.md": {
       "sha256": "b75cd92cddb480468b2062965e4b7060111dc88bf6ebf606ff201afa4e76698a",
@@ -382,8 +382,8 @@
       "git_sha1": "ca5a0f50d029e9a600739c3703e78f64cc225c4d"
     },
     "docs/testing/android-ci.md": {
-      "sha256": "4eacf7873b13f956c07be8044ee0c06e2d7f55351d1a73df7e79129a3f74e6ce",
-      "git_sha1": "6d7a7e934c270e2611d4297835e674d63d70c736"
+      "sha256": "489b1ee965945476528cdf80d46c57341b25787e3c0fd2618c2ad3b2e965d0d9",
+      "git_sha1": "8e2f6470746ad56d9d3901d764b1d3e70916dbc5"
     },
     "docs/testing/android-cloud-results.md": {
       "sha256": "738ccc2a9de11a8e12ba124392aa7211329af489b3501448a4bed581e0fdb602",

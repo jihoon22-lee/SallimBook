@@ -231,7 +231,9 @@ wget -S -O /tmp/body --header='Host: synthetic.example.ts.net' \\
     http://127.0.0.1:8080/api/probe 2>/tmp/headers
 grep -qi '^ *X-Content-Type-Options: nosniff' /tmp/headers
 grep -qi '^ *Strict-Transport-Security: ' /tmp/headers
-if grep -qi -e '^ *Content-Security-Policy: ' -e '^ *X-Frame-Options: ' /tmp/headers; then exit 1; fi
+if grep -qi -e '^ *Content-Security-Policy: ' -e '^ *X-Frame-Options: ' /tmp/headers; then
+    exit 1
+fi
 """
         command(isolated + [
             "--read-only", "--tmpfs",

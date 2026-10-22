@@ -289,13 +289,15 @@ def main(old_image, new_image):
             "put('/run/secrets/db-admin-password', os.environ['OPS_ADMIN_DB_PASSWORD'], 0)\n"
             "put('/run/operator/app-db-password', os.environ['OPS_DB_PASSWORD'])\n"
             "for name, user, key in (('admin-service.conf','sallimbook_admin',"
-            "'OPS_ADMIN_DB_PASSWORD'), ('backup-service.conf','sallimbook_app','OPS_DB_PASSWORD')):\n"
+            "'OPS_ADMIN_DB_PASSWORD'), "
+            "('backup-service.conf','sallimbook_app','OPS_DB_PASSWORD')):\n"
             " put('/run/operator/'+name, '[sallimbook]\\nhost=db\\nport=5432\\nuser='+user+"
             "'\\nsslmode=disable\\ndbname='+os.environ['OPS_DATABASE']+'\\npassword='"
             "+os.environ[key]+'\\n')\n"
             "put('/run/operator/deployment.json', os.environ['OPS_DEPLOYMENT'])\n"
         )
-        init_env.write_text(init_env.read_text() + "OPS_DEPLOYMENT=" + json.dumps(old_config) + "\n")
+        deployment_line = "OPS_DEPLOYMENT=" + json.dumps(old_config) + "\n"
+        init_env.write_text(init_env.read_text() + deployment_line)
 
         def services(rendered, image_id, names):
             result = {name: rendered["services"][name] for name in ("db", *names)}

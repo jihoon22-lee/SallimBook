@@ -58,6 +58,16 @@ Temurin의 정확한 패치 릴리스는 [공식 릴리스](https://github.com/a
 [공식 구현](https://github.com/actions/setup-java/blob/b843ebf9b913146b38da2eaa7aeddf76074ae1ad/src/distributions/temurin/installer.ts)을
 확인했다. artifact action도 [공식 7.0.2 릴리스](https://github.com/actions/upload-artifact/releases/tag/v7.0.2)에 연결한다.
 
+`sdkmanager`는 `platforms;android-36`처럼 패키지 경로만 받고 revision을 지정하는 문법이 없어 그 채널의 최신 stable만
+설치한다. 그래서 `platforms;android-36`을 설치 명령에서 revision으로 고정할 수 없고, 아래의 사전 metadata 대조와 설치 후
+`package.xml` 대조가 고정을 대신한다(검토한 revision 2가 아니면 실패). 이 대조는 이 workflow에만 있으며 일반 CI의
+Android 컴파일 job은 compileSdk 36의 현재 stable 플랫폼을 쓴다.
+
+이 workflow는 `sallimbook-android-instrumentation` 한 그룹에서 차례로 실행되며 실행 중인 job을 새 요청이 취소하지 않는다.
+GitHub은 그룹마다 대기 중인 실행을 하나만 보관하므로 실행 중 하나와 대기 하나가 있을 때 세 번째 요청이 오면 대기하던
+실행은 취소된다. 취소된 pull request는 Actions 탭에서 다시 실행한다. 일반 CI는 pull request 번호별 그룹에서 새 commit이
+이전 실행을 취소하지만 `main` push는 commit마다 별도 그룹이라 취소되거나 대체되지 않는다.
+
 SDK는 runner의 기존 SDK를 재사용하지 않고 `RUNNER_TEMP` 안에 새로 설치한다. 설치 전에 Google 공식
 [SDK metadata](https://dl.google.com/android/repository/repository2-3.xml)와
 [Google APIs image metadata](https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-3.xml)의
@@ -89,12 +99,14 @@ workflow의 `always()` 정리는 이 일회용 VM의 `db-test` 컨테이너와 �
 
 - 부팅 완료, 실제 API 36/x86_64, KVM 가속, 시험 명령 성공.
 - AVD/ADB 종료와 추가 정리 step 성공, unsigned release의 시험 marker 격리 검사 성공.
-- `existing.xml` 12건과 `onboarding.xml` 1건, 중복 testcase 없음, failure/error 없음.
+- `existing.xml`과 `onboarding.xml`이 정해진 건수와 정확히 같고, 중복 testcase 없음, failure/error 없음. 건수의 단일 출처는
+  `scripts/android_cloud_results.py`의 `EXPECTED_INSTRUMENTATION`이다. 시험 실행기와 workflow의 증거 step이 모두 이 표를 읽으므로
+  네이티브 시험을 더하거나 뺄 때 이 표만 고친다. 아래 날짜별 기록의 건수는 그 시점의 값이다.
 - 생체 인증 미등록 AVD에서 `ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization`
   한 건의 skip만 별도로 허용한다. 다른 skip, 온보딩 skip, 누락된 XML/시험은 실패다.
 
-13건 모두 통과하면 `PASS`, 알려진 생체 한계가 있으면 `PARTIAL_DEVICE`이며 예를 들어
-`tests=13, passed=12, skipped=1`로 표시한다. 이를 13개 통과나 실제 생체 인증 인수 완료로 바꾸지 않는다.
+모든 건이 통과하면 `PASS`, 알려진 생체 한계가 있으면 `PARTIAL_DEVICE`이며 skip 한 건은 통과로 세지 않고
+`tests=N, passed=N-1, skipped=1`처럼 표시한다. 이를 N개 통과나 실제 생체 인증 인수 완료로 바꾸지 않는다.
 시험 실패는 timeout 증가나 skip 추가로 숨기지 않는다. 하드웨어 Keystore·생체 등록/무효화·화면 보안·
 두 Galaxy 기기·정식 업데이트 인수는 별도로 남는다.
 
