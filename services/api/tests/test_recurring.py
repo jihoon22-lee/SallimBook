@@ -438,8 +438,8 @@ class TestRecurringDatabase:
                 == 1
             )
 
-    @pytest.mark.parametrize("handled", ["settle", "skip"])
-    def test_revocation_refused_when_pending_occurrence_was_handled(
+    @pytest.mark.parametrize("handled", ["settle", "skip", "reschedule"])
+    def test_revocation_refused_when_pending_occurrence_was_rescheduled(
         self, recurring_app, actors, db_engine, handled
     ):
         actor = actors[0]
@@ -459,6 +459,14 @@ class TestRecurringDatabase:
             april = obligation_for(client, actor, "2026-04")
             if handled == "settle":
                 settle(client, actor, april, amount="10")
+            elif handled == "reschedule":
+                moved = client.patch(
+                    f"/api/v1/obligations/{april['id']}",
+                    headers=headers(actor, version=april["version"]),
+                    json={"scheduled_date": "2026-04-29", "reason": "합성 은행 이연"},
+                )
+                assert moved.status_code == 200, moved.text
+                assert obligation_for(client, actor, "2026-04")["scheduled_date"] == "2026-04-29"
             else:
                 skipped = client.post(
                     f"/api/v1/obligations/{april['id']}/skip",

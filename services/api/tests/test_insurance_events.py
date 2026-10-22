@@ -32,7 +32,7 @@ from sallimbook.config import Settings
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.core.idempotency import IdempotencyRecord
-from sallimbook.core.types import MAX_KRW
+from sallimbook.core.types import MAX_KRW, SEOUL
 from sallimbook.insurance import calculations as calc
 from sallimbook.insurance import event_service as service
 from sallimbook.insurance.event_models import (
@@ -946,6 +946,27 @@ class TestInsuranceEventCorrections:
             )
             assert claim["expense_ids"] == sorted(cited)
             assert read(client, actor, f"/claims/{claim['id']}")["expense_ids"] == sorted(cited)
+
+    def test_future_claim_date_is_rejected(self, app, actors):
+        actor = actors[0]
+        tomorrow = (datetime.now(UTC).astimezone(SEOUL).date() + timedelta(days=1)).isoformat()
+        today = datetime.now(UTC).astimezone(SEOUL).date().isoformat()
+        with TestClient(app) as client:
+            case, policy = new_case(client, actor), new_policy(client, actor)
+            body = {"case_id": case["id"], "policy_id": policy["id"]}
+            future = client.post(
+                BASE + "/claims", headers=headers(actor), json=body | {"submitted_on": tomorrow}
+            )
+            assert future.status_code == 422, future.text
+            assert future.json()["error"]["code"] == "INVALID_SUBMISSION_DATE"
+            claim = create_metadata(client, actor, "/claims", body | {"submitted_on": today})
+            moved = client.patch(
+                BASE + f"/claims/{claim['id']}",
+                headers=headers(actor, version=1),
+                json={"submitted_on": tomorrow, "reason": "합성 날짜 정정"},
+            )
+            assert moved.status_code == 422, moved.text
+            assert moved.json()["error"]["code"] == "INVALID_SUBMISSION_DATE"
 
     def test_claim_evidence_must_be_explicitly_unlinked_before_expense_void(
         self, app, actors, db_engine
