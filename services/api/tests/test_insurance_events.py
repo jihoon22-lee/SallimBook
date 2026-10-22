@@ -678,6 +678,54 @@ class TestInsuranceEventCorrections:
             ]
 
     @pytest.mark.parametrize("source", ["refund", "return"])
+    def test_return_dated_before_original_is_rejected(self, app, actors, source):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            if source == "refund":
+                parent = new_expense(client, actor, case, new_node(client, actor, case))
+                create_path, collection = (
+                    f"/medical-expenses/{parent['id']}/refunds",
+                    "/medical-refunds",
+                )
+                extra = {}
+            else:
+                parent = new_payout(client, actor, [allocation(case["id"])])
+                create_path, collection = f"/payouts/{parent['id']}/returns", "/returns"
+                extra = {"original_allocation_id": parent["allocations"][0]["id"]}
+            # The original is dated 2026-01-31.
+            early = client.post(
+                BASE + create_path,
+                headers=headers(actor, version=1),
+                json=actual("30", occurred_on="2026-01-30", reason="합성 이른 반환", **extra),
+            )
+            assert early.status_code == 422, early.text
+            assert early.json()["error"]["code"] == "INVALID_REVERSAL"
+            assert early.json()["error"]["message"] == "반환일은 원본 날짜보다 빠를 수 없어요."
+            first = money(
+                client,
+                actor,
+                create_path,
+                actual("30", reason="합성 당일 반환", **extra),
+                version=1,
+            )
+            # A correction is held to the same rule.
+            corrected = client.post(
+                BASE + f"{collection}/{first['id']}/correct",
+                headers=headers(actor, version=1),
+                json=actual("30", occurred_on="2026-01-30", reason="합성 날짜 정정", **extra),
+            )
+            assert corrected.status_code == 422, corrected.text
+            assert corrected.json()["error"]["code"] == "INVALID_REVERSAL"
+            money(
+                client,
+                actor,
+                f"{collection}/{first['id']}/correct",
+                actual("30", occurred_on="2026-01-31", reason="합성 날짜 확인", **extra),
+                version=1,
+            )
+
+    @pytest.mark.parametrize("source", ["refund", "return"])
     def test_reversal_correction_keeps_its_original_reason(self, app, actors, source):
         actor = actors[0]
         with TestClient(app) as client:

@@ -822,6 +822,70 @@ class TestIncomeDatabase:
                 == 201
             )
 
+    def test_return_dated_before_original_is_rejected(self, income_app, income_actors):
+        actor = income_actors[0]
+        with TestClient(income_app) as client:
+            original = post_income(
+                client,
+                actor,
+                amount_krw="1000",
+                period_month="2025-02",
+                date_precision="day",
+                occurred_on="2025-02-20",
+            ).json()
+            path = f"/api/v1/income/{original['id']}/returns"
+
+            def send(month, day=None, amount="100"):
+                return client.post(
+                    path,
+                    headers=headers(actor, version=1),
+                    json={
+                        "amount_krw": amount,
+                        "period_month": month,
+                        "date_precision": "day" if day else "month",
+                        "reason": "합성 반환",
+                        **({"occurred_on": day} if day else {}),
+                    },
+                )
+
+            for early in (send("2025-02", "2025-02-19"), send("2025-01", "2025-01-31")):
+                assert early.status_code == 422, early.text
+                assert early.json()["error"]["code"] == "INVALID_REVERSAL"
+                assert early.json()["error"]["message"] == "반환일은 원본 날짜보다 빠를 수 없어요."
+            # A month total compares by month against a dated original.
+            assert send("2025-01").status_code == 422
+            assert send("2025-02", "2025-02-20").status_code == 201
+            assert send("2025-02").status_code == 201
+
+    def test_month_precision_return_compares_months(self, income_app, income_actors):
+        actor = income_actors[0]
+        with TestClient(income_app) as client:
+            original = post_income(
+                client, actor, amount_krw="1000", period_month="2025-02", date_precision="month"
+            ).json()
+            assert original["occurred_on"] is None
+            path = f"/api/v1/income/{original['id']}/returns"
+
+            def send(month, day=None):
+                return client.post(
+                    path,
+                    headers=headers(actor, version=1),
+                    json={
+                        "amount_krw": "100",
+                        "period_month": month,
+                        "date_precision": "day" if day else "month",
+                        "reason": "합성 반환",
+                        **({"occurred_on": day} if day else {}),
+                    },
+                )
+
+            for early in (send("2025-01"), send("2025-01", "2025-01-31")):
+                assert early.status_code == 422, early.text
+                assert early.json()["error"]["code"] == "INVALID_REVERSAL"
+            assert send("2025-02").status_code == 201
+            assert send("2025-02", "2025-02-01").status_code == 201
+            assert send("2025-03").status_code == 201
+
     def test_concurrent_returns_cannot_exceed_original(self, income_app, income_actors, db_engine):
         actor, partner, _ = income_actors
         with TestClient(income_app) as client:

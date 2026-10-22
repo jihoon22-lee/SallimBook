@@ -257,6 +257,13 @@ def _no_returns(session: Session, principal: Principal, row: CashRecord) -> None
         )
 
 
+def _dated_before(payload: CashInput, original: CashRecord) -> bool:
+    """Whether a reversal precedes its original: by day when both have one, else by month."""
+    if payload.occurred_on is not None and original.occurred_on is not None:
+        return payload.occurred_on < original.occurred_on
+    return month_start(payload.period_month) < original.period_month
+
+
 def prepare_cash_record(
     session: Session,
     principal: Principal,
@@ -290,6 +297,8 @@ def prepare_cash_record(
             raise DomainError("INVALID_REVERSAL", "반환할 원본을 확인해 주세요.", 409)
         if original.member_id != payload.member_id:
             raise DomainError("INVALID_REVERSAL", "반환과 원본의 구성원을 확인해 주세요.", 422)
+        if _dated_before(payload, original):
+            raise DomainError("INVALID_REVERSAL", "반환일은 원본 날짜보다 빠를 수 없어요.", 422)
         returned = sum(int(row.amount_krw) for row in _active_returns(session, principal, original))
         if returned + int(payload.amount_krw) > int(original.amount_krw):
             raise DomainError("RETURN_EXCEEDS_ORIGINAL", "반환 합계가 원본 금액을 초과합니다.", 409)
