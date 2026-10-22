@@ -439,7 +439,7 @@ class TestRecurringDatabase:
             )
 
     @pytest.mark.parametrize("handled", ["settle", "skip", "reschedule"])
-    def test_revocation_refused_when_pending_occurrence_was_rescheduled(
+    def test_revocation_refused_when_pending_occurrence_was_settled_skipped_or_rescheduled(
         self, recurring_app, actors, db_engine, handled
     ):
         actor = actors[0]
