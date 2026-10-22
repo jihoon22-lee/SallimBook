@@ -5,13 +5,14 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
 
 from ops.backup import OperationError, digest, private_directory, private_file
-from ops.build_context import build_environment, source_snapshot
+from ops.build_context import PNPM_INSTALL, build_environment, source_snapshot
 from ops.deploy import APP_ID, validate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +38,35 @@ def run(command, **kwargs):
             "Release tool failed; inspect locally without publishing sensitive output"
         )
     return result.stdout.decode().strip()
+
+
+def run_build(command, *, cwd, env):
+    """Run one build command in its own session; nothing it started may outlive it.
+
+    A daemon or background script left behind could read the signing files once the
+    signing step starts, because it runs as the same user.
+    """
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        status = process.wait()
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    if status:
+        # Build output may contain local paths or secrets; never echo it.
+        raise OperationError(
+            "Release tool failed; inspect locally without publishing sensitive output"
+        )
 
 
 def tools(sdk):
@@ -214,12 +244,24 @@ def build_snapshot(
     output,
     checkout,
 ):
-    binaries = tools(sdk)
+    tools(sdk)  # Fail before a long build when the SDK is incomplete.
     env = {**build_environment(), "ANDROID_HOME": str(Path(sdk).absolute())}
     if not env.get("JAVA_HOME"):
         raise OperationError("Set JAVA_HOME to the selected JDK 21")
-    run(["pnpm", "install", "--frozen-lockfile"], cwd=checkout, env=env)
-    run(["pnpm", "android:sync"], cwd=checkout, env=env)
+    # Step 1 has no access to signing material and every process it started has exited
+    # before step 2 begins.
+    unsigned = build_unsigned(config, sdk, checkout, env)
+    return sign_release(
+        config, sdk, unsigned, keystore, store_password_file, key_password_file, alias, output, env
+    )
+
+
+def build_unsigned(config, sdk, checkout, env):
+    checkout = Path(checkout)
+    # Dependency install scripts are skipped; the lockfile records none that are needed
+    # (see build_context.INSTALL_SCRIPT_PACKAGES). Only the project's own scripts run.
+    run_build(PNPM_INSTALL, cwd=checkout, env=env)
+    run_build(["pnpm", "android:sync"], cwd=checkout, env=env)
     properties = {
         "sallimbookApiOrigin": "https://" + config["fqdn"] + ":8443",
         "sallimbookPasskeyRpId": config["fqdn"],
@@ -229,7 +271,7 @@ def build_snapshot(
     }
     # These properties are public application identity; no signing password is
     # passed to Gradle, environment variables, command arguments, or a build cache.
-    run(
+    run_build(
         [
             "./gradlew",
             "--no-daemon",
@@ -249,6 +291,22 @@ def build_snapshot(
         / "apps/client/android/app/build/outputs/apk/release/app-release-unsigned.apk"
     )
     inspect_apk(apk, config, sdk, signed=False)
+    return apk
+
+
+def sign_release(
+    config,
+    sdk,
+    apk,
+    keystore,
+    store_password_file,
+    key_password_file,
+    alias,
+    output,
+    env,
+):
+    binaries = tools(sdk)
+    output = Path(output)
     with tempfile.TemporaryDirectory(
         prefix=".sallimbook-release-", dir=output.parent
     ) as temporary:
@@ -270,7 +328,8 @@ def build_snapshot(
                 "--out",
                 str(signed),
                 str(aligned),
-            ]
+            ],
+            env=env,
         )
         result = inspect_apk(signed, config, sdk, signed=True)
         with output.open("xb") as stream, signed.open("rb") as source:

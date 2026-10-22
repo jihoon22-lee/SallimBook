@@ -81,12 +81,30 @@ def source_snapshot(commit, parent):
             proc.wait()
 
 
+# Exact allowlist for every build subprocess. Nothing else is inherited, so a package
+# script or build plugin cannot read tokens, agent sockets, proxy/NODE_OPTIONS or
+# JAVA_TOOL_OPTIONS overrides, or an operator's VITE_* values (Vite bundles those).
+BUILD_ENVIRONMENT_KEYS = (
+    "PATH",
+    "HOME",
+    "JAVA_HOME",
+    "ANDROID_HOME",
+    "GRADLE_USER_HOME",
+    "LANG",
+    # Where pnpm finds its content-addressed store.
+    "PNPM_HOME",
+    "npm_config_store_dir",
+    "NPM_CONFIG_STORE_DIR",
+    "XDG_DATA_HOME",
+)
+# Dependencies whose install script the build must run explicitly because installs use
+# --ignore-scripts. The lockfile currently records none (tests/operations checks this).
+INSTALL_SCRIPT_PACKAGES = ()
+PNPM_INSTALL = ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"]
+
+
 def build_environment():
-    # Vite intentionally exposes VITE_* to bundled JS. Only committed build inputs
-    # may select those values; do not inherit an operator's unrelated environment.
-    return {
-        key: value for key, value in os.environ.items() if not key.startswith("VITE_")
-    }
+    return {key: os.environ[key] for key in BUILD_ENVIRONMENT_KEYS if key in os.environ}
 
 
 def stage(output, commit):
@@ -162,12 +180,7 @@ def stage_snapshot(output, commit, checkout):
     api, web = output / "api", output / "web"
     lock_hash = stage_api_snapshot(api, commit, checkout)
     web.mkdir()
-    subprocess.run(
-        ["pnpm", "install", "--frozen-lockfile"],
-        cwd=checkout,
-        env=build_environment(),
-        check=True,
-    )
+    subprocess.run(PNPM_INSTALL, cwd=checkout, env=build_environment(), check=True)
     subprocess.run(["pnpm", "build"], cwd=checkout, env=build_environment(), check=True)
     shutil.copytree(checkout / "apps/client/dist", web / "dist")
     write_image_source(web, checkout / "ops/Dockerfile.web", commit, "web")
