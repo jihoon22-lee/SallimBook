@@ -59,6 +59,25 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("@page not path /api/*", caddyfile)
         self.assertIn("header @page Content-Security-Policy", caddyfile)
 
+    def test_wrong_host_is_rejected_by_the_first_handle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "rendered"
+            deploy.write_config(config(), output)
+            caddyfile = (output / "private.Caddyfile").read_text()
+        # A top-level respond is ordered after every handle, so the catch-all handle
+        # would answer first. The 421 must be a handle written before all others.
+        self.assertNotIn("respond @wrong_host", caddyfile)
+        self.assertIn("@wrong_host not host synthetic.example.ts.net", caddyfile)
+        handles = re.findall(r"^    handle( \S+)? \{$", caddyfile, re.MULTILINE)
+        self.assertEqual(handles[0].strip(), "@wrong_host")
+        self.assertIn("    handle @wrong_host {\n        respond 421\n    }\n", caddyfile)
+        self.assertLess(
+            caddyfile.index("handle @wrong_host"), caddyfile.index("handle @apk"), caddyfile
+        )
+        self.assertLess(
+            caddyfile.index("handle @wrong_host"), caddyfile.index("handle /api/*"), caddyfile
+        )
+
     def test_self_setup_is_an_explicit_manifest_opt_in(self):
         original = config()
         disabled = deploy.render(original)

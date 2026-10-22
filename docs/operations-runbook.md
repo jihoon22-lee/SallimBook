@@ -156,6 +156,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy 두 프로세스가 이 노드의 network namespace를 공유하고 각각 loopback 8080/8081만 수신한다. Tailscale Serve가 지원하는 loopback HTTP upstream과 일치한다.
 
 - 사설 HTTPS `https://FQDN:8443`: 웹/API와 `GET/HEAD /downloads/SallimBook.apk`만 허용하는 APK 다운로드. RP ID는 포트 없는 FQDN이다.
+- 사설 Caddy는 요청의 `Host`(포트 제외)가 manifest의 FQDN과 다르면 웹 루트·APK·API 어디에도 가지 않고 421을 응답한다. 이 규칙은 첫 `handle` 블록이며, 최상위 `respond`는 뒤따르는 catch-all `handle`에 가려져 동작하지 않는다. Tailscale Serve는 들어온 `Host`를 그대로 전달하므로(1.104.1 소스에서 확인) 정상 요청은 영향이 없다. 이 규칙이 처음 켜지는 배포에서는 첫 요청(웹 첫 화면 또는 앱 로그인)이 421이 아닌지 바로 확인하고, 421이면 이전 렌더로 되돌린다.
 - 공개 HTTPS `https://FQDN:443`: `/.well-known/assetlinks.json`의 GET/HEAD만 제공한다. 다른 경로는 404다. 공개 Caddy에는 API upstream, DB·첨부·비밀 mount가 없다. 사설·공개 Caddy는 같은 source-bound 웹 이미지를 사용하되 공개 설정은 DAL 경로만 제공한다. 이 이미지는 고정된 Caddy base의 불필요한 cap_net_bind_service 파일 capability를 빌드 시 제거한다. 8080/8081 고포트만 사용하므로 런타임 UID 10001·cap_drop ALL·no-new-privileges는 그대로 유지한다.
 - TLS는 전용 노드의 Serve/Funnel에서 종료한다. Caddy는 같은 격리 namespace의 HTTP proxy다. 이전 문서의 “Caddy만 외부 HTTPS” 설명은 이 배치에서는 적용되지 않는다.
 - 외부에서 들어온 `Forwarded`/`X-Forwarded-For`는 API에 전달하지 않고, API의 proxy header 해석도 끈다. 내부 HTTP가 인증 쿠키를 비보안 쿠키로 바꾸지 않는다.
