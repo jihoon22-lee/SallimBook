@@ -39,6 +39,17 @@ internal class NativeDocumentFlow(private val clock: () -> Long) {
     fun cancel() { phase = Phase.CANCELLED }
 }
 
+/**
+ * The create POST and the content PUT share one lease taken before the create, so a refresh
+ * failure cannot leave a pending record behind. It covers the create deadline and the transfer.
+ */
+internal object NativeDocumentUploadLease {
+    /** The 15s create deadline plus scheduling margin. */
+    const val CREATE_MILLIS = 20_000L
+    const val REQUIRED_MILLIS = CREATE_MILLIS + NativeDocumentBytes.REQUIRED_ACCESS_MILLIS
+    fun <T> run(lease: (Long) -> String, send: (String) -> T): T = send(lease(REQUIRED_MILLIS))
+}
+
 /** A single bounded native buffer, never a JSON value, Intent extra, or disk cache. */
 internal class NativeDocumentBytes private constructor(private val bytes: ByteArray, val size: Int, val checksum: String) : Closeable {
     companion object {

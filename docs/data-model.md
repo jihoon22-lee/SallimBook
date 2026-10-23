@@ -300,7 +300,8 @@ trigger는 identity/version 갱신을 보호하고, 삭제 시 모든 참조를 
 
 `0013_documents`의 `document_storage_reservations`는 파일 쓰기 전에 별도 commit하는
 가계·문서 복합 FK의 저장 용량 예약이다. API 트랜잭션 rollback 뒤에도 암호문 크기/개수는 유지된다.
-파일이 실제 제거된 뒤에만 released_at을 한 번 기록한다. 식별자/크기 변경과 예약 삭제는 금지하며
+파일이 실제 제거된 뒤에만 released_at을 한 번 기록한다. 가계 한도는 삭제한 문서의 예약을 세지 않고,
+전체 한도는 해제 전의 모든 예약을 센다. 식별자/크기 변경과 예약 삭제는 금지하며
 현재 ready 문서는 해제되지 않은 동일 문서·크기의 예약을 반드시 참조한다.
 
 
@@ -323,3 +324,9 @@ BEFORE guard는 가계 잠금과 수명주기/동결을 검사하고 deferred tr
 `scheduled_obligations.manual_override`는 `skipped OR manually_completed OR scheduled_date <> nominal_date`와
 같도록 정규화하고 CHECK로 고정한다. 이력 행은 당시 값을 보존한다. 철회 행이 있으면 downgrade는
 55000으로 실패하며 조용히 데이터를 지우지 않는다.
+
+`0017_rule_delete`는 오등록 규칙 삭제를 위해 불변 트리거에 좁은 예외 하나를 둔다. 같은 트랜잭션에서
+`set_config('sallimbook.deleting_rule', <규칙 id>, true)`로 지정한 규칙의 행만 DELETE할 수 있다: 그 규칙의
+버전, 그 규칙 회차의 생성 항목, `create`·`regenerate` 이력, 규칙 단위 생성 기록. UPDATE와 다른 규칙의 행,
+건너뛰기 등 처리 이력은 그대로 55000으로 거부한다. `fixed_settlements`는 예외 없는 원래 트리거를 유지하므로
+납부가 있는 회차는 FK로도 지울 수 없다. downgrade는 0015의 트리거 함수를 복원한다.

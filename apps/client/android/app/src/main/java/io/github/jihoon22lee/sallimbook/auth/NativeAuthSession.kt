@@ -533,19 +533,20 @@ internal class NativeAuthSession private constructor(context: Context) {
                 val create = NativeDocumentPolicy.create(mapOf("original_name" to name, "mime_type" to mime,
                     "size_bytes" to content.size, "checksum_sha256" to content.checksum, "target" to target,
                     "contains_no_card_data" to confirmed), UUID.randomUUID().toString())
-                val created = http.send(create.method, create.path, gate, body = JSONObject(create.body!!), accessToken = access(gate),
-                    idempotencyKey = create.idempotencyKey, nativeDocumentCreate = true)
-                if (created.status != 201) documentFailure(created)
-                else {
-                    val reference = NativeDocumentPolicy.reference(created.body)
-                    val documentId = reference["id"] as String
-                    val uploaded = documentHttp.upload(documentId, "\"${reference["version"]}\"", UUID.randomUUID().toString(), content,
-                        access(gate, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS), gate)
-                    if (uploaded.status != 200) documentFailure(uploaded)
+                NativeDocumentUploadLease.run({ access(gate, it) }) { token ->
+                    val created = http.send(create.method, create.path, gate, body = JSONObject(create.body!!), accessToken = token,
+                        idempotencyKey = create.idempotencyKey, nativeDocumentCreate = true)
+                    if (created.status != 201) documentFailure(created)
                     else {
-                        NativeDocumentPolicy.reference(uploaded.body, documentId)
-                        gate.check()
-                        AuthOutcome.success(mapOf("status" to "uploaded"))
+                        val reference = NativeDocumentPolicy.reference(created.body)
+                        val documentId = reference["id"] as String
+                        val uploaded = documentHttp.upload(documentId, "\"${reference["version"]}\"", UUID.randomUUID().toString(), content, token, gate)
+                        if (uploaded.status != 200) documentFailure(uploaded)
+                        else {
+                            NativeDocumentPolicy.reference(uploaded.body, documentId)
+                            gate.check()
+                            AuthOutcome.success(mapOf("status" to "uploaded"))
+                        }
                     }
                 }
             } catch (failure: AuthFailure) { AuthOutcome.failure(failure.code) }

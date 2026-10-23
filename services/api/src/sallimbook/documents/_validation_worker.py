@@ -38,6 +38,9 @@ MAX_OBJECTS = 10_000
 MAX_DEPTH = 64
 MAX_NODES = 100_000
 MAX_STREAM = 8 * 1024 * 1024
+# A lossless A4 200 dpi RGB scan decodes to 11.6 MB; an image may decode to an RGB image at the
+# pixel cap, and every other stream stays at MAX_STREAM.
+MAX_IMAGE_STREAM = MAX_PIXELS * 3
 MAX_DECOMPRESSED = 64 * 1024 * 1024
 MAX_OCR_OUTPUT = 2 * 1024 * 1024
 # Per render/OCR tool call; every call is further bounded by the worker deadline.
@@ -240,6 +243,64 @@ def _pan_candidates(text: str):
             opened = None
 
 
+# Receipts print masked card numbers and the bare labels of card fields; neither is card data.
+# A security code or an expiry date is, so a label counts when the first number after it is
+# such a value, and a masked number only with an expiry date right after it. The gap before
+# a value holds no digits or masking characters, so "CVC *** 1234원" is not a code. A full
+# date (2026.10.31) or a date with a time (10/17 14:22) is not an expiry.
+_VALUE_GAP = r"[^\d*•●#]{0,24}"
+_EXPIRY_DATE = (
+    r"(?<!\d)(?<!\d[./-])(?<!\d [./-])(?<!\d[./-] )(?<!\d [./-] )"
+    r"(?:(?:0[1-9]|1[0-2]) ?[./-] ?(?:20\d\d|\d\d)|20\d\d ?[./-] ?(?:0[1-9]|1[0-2]))"
+    r"(?!\d)(?! ?[./-] ?\d)(?! ?\d{1,2}:\d\d)"
+)
+_SECURITY_CODE = re.compile(
+    r"(?i)(?:(?<![a-z])(?:cvc|cvv|cvn|csc|cid)2?(?![a-z])|"
+    r"card ?(?:security|verification) ?(?:code|number|value)|security ?code|"
+    r"카드 ?(?:보안|인증) ?(?:코드|번호)|보안 ?(?:코드|번호))"
+    + _VALUE_GAP
+    + r"(?<!\d)\d{3,4}(?!\d)"
+)
+# Printed only on cards, so the label alone counts: OCR often garbles the date beside it.
+_CARD_ONLY_LABEL = re.compile(
+    r"(?i)(?<![a-z])(?:valid ?(?:thru|through)|good ?thru|month ?/ ?year)(?![a-z])"
+)
+# Policies, warranties, coupons and food print the same expiry labels, so these count only
+# right after a card word or within 40 characters of a card number.
+_EXPIRY = re.compile(
+    r"(?i)(?:(?<![a-z])exp(?:iry|iration|ires)?(?![a-z])|유효 ?기간|만료)"
+    + _VALUE_GAP
+    + _EXPIRY_DATE
+)
+_CARD_WORD = re.compile(r"(?i)(?:카드|(?<![a-z])(?:card|credit|debit))[ :./·-]{0,2}$")
+_CARD_CONTEXT = 40
+_MASK = re.compile(r"(?i)[*x•●#]")
+_NUMBER = r"(?i)(?<![\d*x•●#])((?:[\d*x•●#]{4}[ -]?){3}[\d*x•●#]{1,7}|[\d*x•●#]{13,19})"
+_CARD_NUMBER = re.compile(_NUMBER + r"(?![\d*x•●#])")
+_MASKED_NUMBER_DATE = re.compile(_NUMBER + r"[^\d*x•●#]{0,3}" + _EXPIRY_DATE)
+# A full grid that fails Luhn is still a card when OCR misread one digit of it.
+_FULL_GRID = re.compile(r"\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}")
+
+
+def _card_number(found: str) -> bool:
+    return bool(_MASK.search(found) or _FULL_GRID.fullmatch(found))
+
+
+def _card_expiry(text: str) -> bool:
+    for found in _EXPIRY.finditer(text):
+        start, end = found.span()
+        if _CARD_WORD.search(text[max(0, start - 10) : start]) or any(
+            _card_number(number[1])
+            for window in (
+                text[max(0, start - _CARD_CONTEXT) : start],
+                text[end : end + _CARD_CONTEXT],
+            )
+            for number in _CARD_NUMBER.finditer(window)
+        ):
+            return True
+    return False
+
+
 def _card_text(value: str) -> None:
     # NFKC makes full-width digits and punctuation equivalent. Do not log candidates.
     normalized = "".join(
@@ -250,12 +311,11 @@ def _card_text(value: str) -> None:
     if len(normalized) > MAX_OCR_OUTPUT:
         raise Rejected
     normalized = re.sub(r"\s+", " ", normalized)
-    if re.search(
-        r"(?i)(?<![a-z])(?:cvc|cvv|cvn|csc|cid)(?:2)?(?![a-z])|"
-        r"card\s*(?:security|verification)\s*(?:code|number)|"
-        r"security\s*code|카드\s*(?:보안|인증)\s*(?:코드|번호)|"
-        r"보안\s*(?:코드|번호)|카드\s*번호|card\s*(?:number|no\b)|valid\s*(?:thru|through)",
-        normalized,
+    if (
+        _SECURITY_CODE.search(normalized)
+        or _CARD_ONLY_LABEL.search(normalized)
+        or _card_expiry(normalized)
+        or any(_card_number(found[1]) for found in _MASKED_NUMBER_DATE.finditer(normalized))
     ):
         raise Rejected("DOCUMENT_CARD_DATA")
     for candidate in _pan_candidates(normalized):
@@ -803,7 +863,7 @@ def _pdf(data: bytes):
 
     try:
         with apply_configuration(
-            maximum_declared_stream_length=MAX_STREAM,
+            maximum_declared_stream_length=MAX_BYTES,
             array_based_stream_maximum_output_length=MAX_STREAM,
             array_maximum_element_count=MAX_OBJECTS,
             dictionary_maximum_element_count=MAX_OBJECTS,
@@ -811,7 +871,7 @@ def _pdf(data: bytes):
             jbig2dec_binary=None,
             lzw_maximum_output_length=MAX_STREAM,
             run_length_maximum_output_length=MAX_STREAM,
-            zlib_maximum_output_length=MAX_STREAM,
+            zlib_maximum_output_length=MAX_IMAGE_STREAM,
             zlib_maximum_recovery_input_length=0,
             brotli_maximum_output_length=MAX_STREAM,
             flate_maximum_columns=MAX_DIMENSION,
@@ -921,11 +981,13 @@ def _read_pdf(data: bytes):
                     or any(item not in _FILTERS for item in filters)
                 ):
                     raise Rejected
-                if value.get("/Subtype") == "/Image":
+                image = value.get("/Subtype") == "/Image"
+                if image:
                     _size(int(value.get("/Width", 0)), int(value.get("/Height", 0)))
                 decoded = value.get_data()
                 decompressed += len(decoded)
-                if len(decoded) > MAX_STREAM or decompressed > MAX_DECOMPRESSED:
+                limit = MAX_IMAGE_STREAM if image else MAX_STREAM
+                if len(decoded) > limit or decompressed > MAX_DECOMPRESSED:
                     raise Rejected
             for key, child in value.items():
                 if not isinstance(key, NameObject) or len(str(key)) > 256:

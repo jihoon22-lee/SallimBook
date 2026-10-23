@@ -459,7 +459,7 @@ class TestAccountsDatabase:
                         settlement_account_id=UUID(settled["id"]),
                     ),
                 )
-            # The account row deletes, but the month value FK blocks the asset row.
+            # A blank row in an open month goes with a mistaken account; a card keeps it.
             with Session(db_engine) as session:
                 month_service.create_draft(
                     session,
@@ -468,24 +468,29 @@ class TestAccountsDatabase:
                     MonthDraft(copy_previous=False),
                     uuid4().hex,
                 )
-            for account in (settled, recorded):
-                refused = delete(account)
-                assert (refused.status_code, refused.json()["error"]["code"]) == (
-                    409,
-                    "ACCOUNT_IN_USE",
-                )
-                assert (
-                    client.get(
-                        f"/api/v1/accounts/{account['id']}", headers=account_actor.headers
-                    ).status_code
-                    == 200
-                )
+            refused = delete(settled)
+            assert (refused.status_code, refused.json()["error"]["code"]) == (
+                409,
+                "ACCOUNT_IN_USE",
+            )
+            assert (
+                client.get(
+                    f"/api/v1/accounts/{settled['id']}", headers=account_actor.headers
+                ).status_code
+                == 200
+            )
+            assert delete(recorded).status_code == 204
         with Session(db_engine) as session:
-            assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 2
-            assert session.scalar(select(func.count()).select_from(Asset)) == 2
+            assert session.scalar(select(func.count()).select_from(FinancialAccount)) == 1
+            assert session.scalar(select(func.count()).select_from(Asset)) == 1
             deleted = session.scalars(select(AuditEvent).where(AuditEvent.action == "delete")).all()
             assert sorted((e.entity_type, str(e.entity_id)) for e in deleted) == sorted(
-                [("financial_account", plain["id"]), ("asset", plain["asset_id"])]
+                [
+                    ("financial_account", plain["id"]),
+                    ("asset", plain["asset_id"]),
+                    ("financial_account", recorded["id"]),
+                    ("asset", recorded["asset_id"]),
+                ]
             )
 
     def test_nested_asset_future_end_creates_neither_account_nor_asset(

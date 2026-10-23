@@ -274,16 +274,42 @@ def test_upload_mime_body_limit_and_missing_headers(document_app, actors):
         assert client.put(path, content=CONTENT, headers=first.headers).status_code == 400
 
 
-def test_failed_inspection_never_stores_or_changes_pending(document_app, actors, monkeypatch):
+@pytest.mark.parametrize(
+    "code", ["DOCUMENT_MALWARE", "DOCUMENT_CARD_DATA", "DOCUMENT_TOO_COMPLEX", "DOCUMENT_UNSAFE"]
+)
+def test_rejected_content_removes_the_pending_document(document_app, actors, monkeypatch, code):
+    # The pending row is bound to the rejected bytes, so it could only expire in the list.
     def reject(*args, **kwargs):
-        raise DomainError("DOCUMENT_MALWARE", "합성 거부", 422)
+        raise DomainError(code, "합성 거부", 422)
 
     monkeypatch.setattr(service, "validate_document", reject)
+    first, partner, _ = actors
+    with TestClient(document_app) as client:
+        row = pending(client, first)
+        result = upload(client, first, row)
+        assert result.status_code == 422 and result.json()["error"]["code"] == code
+        rejected = detail(client, partner, row)
+        assert rejected["state"] == "deleted" and rejected["active_link_count"] == 0
+        listed = client.get("/api/v1/documents", headers=partner.headers).json()["items"]
+        assert row["id"] not in {item["id"] for item in listed}
+        retry = upload(client, first, row, version=rejected["version"])
+        assert retry.json()["error"]["code"] == "DOCUMENT_UNAVAILABLE"
+    assert not document_app.state.settings.document_storage_directory.exists()
+
+
+@pytest.mark.parametrize("code", ["DOCUMENT_SCAN_UNAVAILABLE", "DOCUMENT_OCR_UNAVAILABLE"])
+def test_unavailable_inspection_keeps_the_pending_document(document_app, actors, monkeypatch, code):
+    def unavailable(*args, **kwargs):
+        raise DomainError(code, "합성 점검", 503)
+
+    monkeypatch.setattr(service, "validate_document", unavailable)
     with TestClient(document_app) as client:
         row = pending(client, actors[0])
-        assert upload(client, actors[0], row).status_code == 422
+        assert upload(client, actors[0], row).status_code == 503
+        assert detail(client, actors[0], row) | {"version": 1} == detail(client, actors[0], row)
         assert detail(client, actors[0], row)["state"] == "pending"
-    assert not document_app.state.settings.document_storage_directory.exists()
+        monkeypatch.setattr(service, "validate_document", lambda *args, **kwargs: None)
+        assert upload(client, actors[0], row).status_code == 200
 
 
 @pytest.mark.parametrize("first_result", ["success", "invalid", "cancelled"])
@@ -914,7 +940,7 @@ def test_failed_document_commit_keeps_orphan_charge_until_physical_cleanup(
         assert upload(client, actor, second).status_code == 200
 
 
-def test_deleted_and_unlinked_documents_keep_charge_until_durable_cleanup(document_app, actors):
+def test_unlinked_documents_keep_charge_and_deleting_releases_it(document_app, actors):
     settings = document_app.state.settings
     settings.document_household_quota_count = 1
     actor = actors[0]
@@ -934,6 +960,7 @@ def test_deleted_and_unlinked_documents_keep_charge_until_durable_cleanup(docume
         )
         other = pending(client, actor)
         future = datetime.now(UTC) + timedelta(hours=25)
+        # An unlinked document can still be attached again, so it keeps its charge.
         with Session(document_app.state.engine) as session:
             assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 0
         assert upload(client, actor, other).status_code == 413
@@ -946,14 +973,62 @@ def test_deleted_and_unlinked_documents_keep_charge_until_durable_cleanup(docume
             ).status_code
             == 200
         )
-        assert upload(client, actor, other).status_code == 413
+        # Deleting frees the household's quota at once; the file itself waits for cleanup.
+        assert upload(client, actor, other).status_code == 200
         with Session(document_app.state.engine) as session:
-            assert cleanup_files(session, settings, apply=True)["removed"] == 0
-            assert cleanup_files(session, settings, now=future)["eligible"] == 1
-        assert upload(client, actor, other).status_code == 413  # dry run never releases quota
+            charged = session.scalars(
+                select(DocumentStorageReservation).where(
+                    DocumentStorageReservation.document_id == UUID(row["id"])
+                )
+            ).one()
+            assert charged.released_at is None
         with Session(document_app.state.engine) as session:
             assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 1
-        assert upload(client, actor, other).status_code == 200
+            reservations = list(session.scalars(select(DocumentStorageReservation)))
+            assert sorted(r.released_at is None for r in reservations) == [False, True]
+
+
+def test_deleted_files_still_count_toward_the_global_quota_until_cleanup(document_app, actors):
+    settings = document_app.state.settings
+    settings.document_global_quota_count = 2
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        first, second, third = (pending(client, actor) for _ in range(3))
+        assert upload(client, actor, first).status_code == 200
+        assert upload(client, actor, second).status_code == 200
+        deleted = client.post(
+            f"/api/v1/documents/{first['id']}/delete",
+            json={"reason": "합성 정리"},
+            headers=headers(actor, version=detail(client, actor, first)["version"]),
+        )
+        assert deleted.status_code == 200, deleted.text
+        # Deleting and uploading again cannot grow the disk past the global bound.
+        assert upload(client, actor, third).status_code == 413
+        with Session(document_app.state.engine) as session:
+            future = datetime.now(UTC) + timedelta(hours=25)
+            assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 1
+        assert upload(client, actor, third).status_code == 200
+
+
+def test_deleting_documents_releases_upload_quota(document_app, actors):
+    document_app.state.settings.document_household_quota_count = 2
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        first, second, third = (pending(client, actor) for _ in range(3))
+        assert upload(client, actor, first).status_code == 200
+        assert upload(client, actor, second).status_code == 200
+        refused = upload(client, actor, third)
+        assert refused.status_code == 413
+        assert refused.json()["error"]["message"] == (
+            "첨부파일 저장 한도에 도달했어요. 필요 없는 첨부파일을 삭제한 뒤 다시 시도해 주세요."
+        )
+        deleted = client.post(
+            f"/api/v1/documents/{first['id']}/delete",
+            json={"reason": "합성 정리"},
+            headers=headers(actor, version=detail(client, actor, first)["version"]),
+        )
+        assert deleted.status_code == 200, deleted.text
+        assert upload(client, actor, third).status_code == 200
 
 
 def test_low_disk_space_rejects_before_reservation_or_write(document_app, actors, monkeypatch):

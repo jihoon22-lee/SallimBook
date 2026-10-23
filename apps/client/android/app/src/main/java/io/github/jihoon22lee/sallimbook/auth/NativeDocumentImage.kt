@@ -25,7 +25,19 @@ internal object NativeDocumentImage {
         fun wipe() { buf.fill(0); reset() }
     }
 
-    /** Null when the bytes cannot be decoded or encoded; the caller then uploads the original. */
+    /** The upload's error code when a JPEG cannot be normalized; the original is never sent. */
+    const val FAILURE_CODE = "DOCUMENT_IMAGE_NORMALIZATION"
+
+    /**
+     * The bytes to upload, taking ownership of [content]: a JPEG only as its normalized copy,
+     * since the screen promises location and camera data are removed; null when that failed.
+     */
+    fun uploadContent(mime: String, content: NativeDocumentBytes, normalize: (NativeDocumentBytes) -> NativeDocumentBytes?): NativeDocumentBytes? {
+        if (mime != "image/jpeg") return content
+        try { return normalize(content) } finally { content.close() }
+    }
+
+    /** Null when the bytes cannot be decoded or encoded; the caller then refuses the upload. */
     fun normalizeJpeg(content: NativeDocumentBytes, check: () -> Unit): NativeDocumentBytes? {
         var bitmap: Bitmap? = null
         val output = WipeableOutput()
@@ -51,7 +63,7 @@ internal object NativeDocumentImage {
         } catch (_: Exception) {
             output.wipe(); return null
         } catch (_: OutOfMemoryError) {
-            // A large photo on a low-memory phone falls back to the original bytes, not a crash.
+            // A large photo on a low-memory phone refuses the upload instead of crashing.
             output.wipe(); return null
         } finally {
             bitmap?.recycle()

@@ -207,6 +207,106 @@ def confirm(client, actor, month, *, key=None, **acknowledgments):
 
 @pytest.mark.database
 class TestAssetMonthsDatabase:
+    def test_delete_removes_untouched_blank_rows_in_open_months(
+        self, months_app, account_actor, db_engine
+    ):
+        actor = account_actor
+        with TestClient(months_app) as client:
+            account = create_account(client, actor, account_number=None)
+            asset = add_asset(client, actor, name="합성 오등록 자산")
+            kept = add_asset(client, actor, name="합성 유지 자산")
+            draft(client, actor, "2026-01", copy=False)
+            draft(client, actor, "2026-02", copy=False)
+            before = read_month(client, actor, "2026-01")
+            assert len(before["values"]) == 3
+            removed = client.delete(
+                f"/api/v1/accounts/{account['id']}",
+                headers={**actor.headers, "If-Match": f'"{account["version"]}"'},
+            )
+            assert removed.status_code == 204, removed.text
+            removed = client.delete(
+                f"/api/v1/assets/{asset['id']}",
+                headers={**actor.headers, "If-Match": f'"{asset["version"]}"'},
+            )
+            assert removed.status_code == 204, removed.text
+            for month in ("2026-01", "2026-02"):
+                current = read_month(client, actor, month)
+                assert [row["asset_id"] for row in current["values"]] == [kept["id"]]
+            # The open month changed, so a spouse holding the older month version must reload.
+            assert read_month(client, actor, "2026-01")["version"] > before["version"]
+        with Session(db_engine) as session:
+            deleted = {
+                (event.entity_type, str(event.entity_id))
+                for event in session.scalars(
+                    select(AuditEvent).where(AuditEvent.action == "delete")
+                )
+            }
+            assert {
+                ("financial_account", account["id"]),
+                ("asset", account["asset_id"]),
+                ("asset", asset["id"]),
+            } <= deleted
+            assert session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.entity_type == "asset_month", AuditEvent.action == "sync_scope")
+            )
+
+    def test_delete_is_refused_when_a_row_has_a_value_or_month_is_confirmed(
+        self, months_app, account_actor
+    ):
+        actor = account_actor
+        with TestClient(months_app) as client:
+            valued = create_account(client, actor, account_number=None)
+            excluded = add_asset(client, actor, name="합성 제외 자산", inclusion_status="excluded")
+            draft(client, actor, "2026-01", copy=False)
+            observe(client, actor, "2026-01", valued["asset_id"], "1000", "2026-01-31")
+            confirmed = confirm(client, actor, "2026-01")
+            assert confirmed.status_code == 200, confirmed.text
+            draft(client, actor, "2026-02", copy=False)
+            # The excluded row is blank, but the confirmed January keeps it as history.
+            refused = client.delete(
+                f"/api/v1/assets/{excluded['id']}",
+                headers={**actor.headers, "If-Match": f'"{excluded["version"]}"'},
+            )
+            assert (refused.status_code, refused.json()["error"]["code"]) == (409, "ASSET_IN_USE")
+            entered = create_account(
+                client, actor, account_number=None, asset=asset_payload(name="합성 입력 계좌")
+            )
+            draft(client, actor, "2026-03", copy=False)
+            observe(client, actor, "2026-03", entered["asset_id"], "500", "2026-03-31")
+            refused = client.delete(
+                f"/api/v1/accounts/{entered['id']}",
+                headers={**actor.headers, "If-Match": f'"{entered["version"]}"'},
+            )
+            assert (refused.status_code, refused.json()["error"]["code"]) == (409, "ACCOUNT_IN_USE")
+            # Nothing was removed from the open months by the refused requests.
+            assert len(read_month(client, actor, "2026-02")["values"]) == 2
+            assert len(read_month(client, actor, "2026-03")["values"]) == 3
+
+    def test_account_delete_checks_linked_asset_version(self, months_app, account_actor):
+        actor = account_actor
+        with TestClient(months_app) as client:
+            account = create_account(client, actor, account_number=None)
+            renamed = client.patch(
+                f"/api/v1/assets/{account['asset_id']}",
+                json={"name": "합성 배우자 수정"},
+                headers={**actor.headers, "If-Match": f'"{account["asset"]["version"]}"'},
+            )
+            assert renamed.status_code == 200, renamed.text
+            stale = client.delete(
+                f"/api/v1/accounts/{account['id']}",
+                headers={**actor.headers, "If-Match": f'"{account["version"]}"'},
+            )
+            assert (stale.status_code, stale.json()["error"]["code"]) == (409, "VERSION_CONFLICT")
+            current = client.get(f"/api/v1/accounts/{account['id']}", headers=actor.headers)
+            assert current.json()["asset"]["name"] == "합성 배우자 수정"
+            removed = client.delete(
+                f"/api/v1/accounts/{account['id']}",
+                headers={**actor.headers, "If-Match": f'"{current.json()["version"]}"'},
+            )
+            assert removed.status_code == 204, removed.text
+
     def test_month_values_list_assets_before_liabilities_by_name_across_pages(
         self, months_app, account_actor
     ):

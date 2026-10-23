@@ -266,14 +266,15 @@ class NativeDocumentActivity : AppCompatActivity() {
                     finally { request.releaseCancellation(owner) }
                 }
                 request.check()
-                if (selection.mime == "image/jpeg") {
+                if (selection.mime == "image/jpeg")
                     main.post { status.text = "사진 방향을 맞추고 크기를 줄여 첨부하고 있어요. 보안 검사까지 기다려 주세요." }
-                    NativeDocumentImage.normalizeJpeg(content!!) { request.check() }?.let { normalized ->
-                        content?.close()
-                        content = normalized
-                    }
+                val original = content!!
+                content = null
+                content = NativeDocumentImage.uploadContent(selection.mime, original) { NativeDocumentImage.normalizeJpeg(it) { request.check() } }
+                val owned = content ?: run {
+                    main.post { failure(AuthCode.INVALID_REQUEST, NativeDocumentImage.FAILURE_CODE) }
+                    return@execute
                 }
-                val owned = content!!
                 auth.uploadDocument(selection.name, selection.mime, mapOf("kind" to targetKind, "id" to targetId), true, owned, request) { outcome ->
                     main.post { complete(outcome, "uploaded") }
                 }

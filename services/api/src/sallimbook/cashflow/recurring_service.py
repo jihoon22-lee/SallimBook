@@ -3,10 +3,11 @@
 import calendar
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select, text
 
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
+from sallimbook.assets.month_models import AssetMonthRecord, AssetMonthRevision
 from sallimbook.cashflow import service as cash
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision
 from sallimbook.cashflow.recurring_models import (
@@ -43,6 +44,7 @@ from sallimbook.core.idempotency import IdempotentResult, run_idempotent
 from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, decimal_krw, krw_string, month_start
 from sallimbook.identity.service import utcnow
+from sallimbook.insurance.models import PolicyPremiumLink
 
 _SNAPSHOT = tuple(
     name
@@ -397,6 +399,125 @@ def end_rule(session, principal, rule_id, payload, if_match, key):
     )
 
 
+def _rule_in_use(session, principal, rule, obligations):
+    """A payment, a confirmed month or a handled occurrence keeps the rule; it can only end."""
+    ids = [row.id for row in obligations]
+    months = {
+        month_start(day.strftime("%Y-%m"))
+        for row in obligations
+        for day in (row.nominal_date, row.scheduled_date)
+    }
+    checks = [
+        select(PolicyPremiumLink.id).where(
+            PolicyPremiumLink.household_id == principal.household_id,
+            PolicyPremiumLink.rule_id == rule.id,
+        )
+    ]
+    if ids:
+        checks += [
+            # Active and voided payments alike: a voided one is still ledger history.
+            select(FixedSettlement.id).where(
+                FixedSettlement.household_id == principal.household_id,
+                FixedSettlement.obligation_id.in_(ids),
+            ),
+            select(ObligationRevision.obligation_id).where(
+                ObligationRevision.household_id == principal.household_id,
+                ObligationRevision.obligation_id.in_(ids),
+                ObligationRevision.action.not_in(("create", "regenerate")),
+            ),
+            select(AssetMonthRecord.id)
+            .join(
+                AssetMonthRevision,
+                (AssetMonthRevision.month_id == AssetMonthRecord.id)
+                & (AssetMonthRevision.household_id == AssetMonthRecord.household_id),
+            )
+            .where(
+                AssetMonthRecord.household_id == principal.household_id,
+                AssetMonthRecord.period_month.in_(months),
+                AssetMonthRevision.state == "confirmed",
+            ),
+        ]
+    return any(session.scalar(check.limit(1)) is not None for check in checks)
+
+
+def delete_rule(session, principal, rule_id, if_match, key):
+    cash.lock_cash_household(session, principal)
+
+    def execute():
+        row = scoped_entity(session, RecurringRule, rule_id, principal, for_update=True)
+        require_version(row, if_match)
+        obligations = list(
+            session.scalars(
+                select(ScheduledObligation)
+                .where(
+                    ScheduledObligation.household_id == principal.household_id,
+                    ScheduledObligation.rule_id == row.id,
+                )
+                .order_by(ScheduledObligation.id)
+                .with_for_update()
+            )
+        )
+        if _rule_in_use(session, principal, row, obligations):
+            raise DomainError(
+                "RULE_IN_USE",
+                "보험료로 연결됐거나 납부 기록·확정된 월이 있는 규칙은 종료만 할 수 있어요.",
+                409,
+            )
+        record_event(
+            session,
+            principal,
+            entity_type="recurring_rule",
+            entity_id=row.id,
+            action="delete",
+            before_version=row.version,
+            after_version=None,
+        )
+        ids = [item.id for item in obligations]
+        household = principal.household_id
+        # The history triggers let this transaction delete this rule's generated rows only.
+        session.execute(
+            text("SELECT set_config('sallimbook.deleting_rule', :rule, true)"),
+            {"rule": str(row.id)},
+        )
+        for statement in (
+            delete(ObligationGenerationItem).where(
+                ObligationGenerationItem.household_id == household,
+                ObligationGenerationItem.obligation_id.in_(ids),
+            ),
+            delete(ObligationRevision).where(
+                ObligationRevision.household_id == household,
+                ObligationRevision.obligation_id.in_(ids),
+            ),
+            delete(ScheduledObligation).where(
+                ScheduledObligation.household_id == household, ScheduledObligation.id.in_(ids)
+            ),
+            delete(ObligationGeneration).where(
+                ObligationGeneration.household_id == household,
+                ObligationGeneration.rule_id == row.id,
+            ),
+            delete(RecurringRuleVersion).where(
+                RecurringRuleVersion.household_id == household,
+                RecurringRuleVersion.rule_id == row.id,
+            ),
+        ):
+            session.execute(statement.execution_options(synchronize_session=False))
+        version = row.version
+        session.delete(row)
+        session.flush()
+        session.execute(text("SELECT set_config('sallimbook.deleting_rule', '', true)"))
+        return IdempotentResult(rule_id, "recurring_rule", version, 204)
+
+    run_idempotent(
+        session,
+        principal,
+        "recurring.delete",
+        key,
+        {"id": str(rule_id), "if_match": if_match},
+        execute,
+    )
+    session.commit()
+
+
 def get_rule(session, principal, rule_id):
     cash.lock_cash_household(session, principal)
     response = _rule_response(
@@ -478,6 +599,18 @@ def _touch(session, principal, row, action, reason=None):
     row.version += 1
     row.updated_at = datetime.now(UTC)
     _remember(session, principal, row, action, reason=reason, before=before)
+
+
+def _follow_rule(session, principal, row):
+    """Once its last exception is cleared, an occurrence takes what its rule now generates.
+
+    Generation leaves exceptions alone, so a rule ended or changed meanwhile only reaches the
+    occurrence here. The same refresh applies: paid and past occurrences stay as they are.
+    """
+    if row.manual_override:
+        return
+    rule = scoped_entity(session, RecurringRule, row.rule_id, principal, for_update=True)
+    _generate_rows(session, principal, row.nominal_date, row.nominal_date, [rule])
 
 
 def _active_settlements_by_obligation(session, principal, obligation_ids):
@@ -780,6 +913,8 @@ def obligation_action(session, principal, obligation_id, payload, if_match, key,
         else:
             raise ValueError("Unknown obligation action")
         _touch(session, principal, row, action, payload.reason)
+        if action in ("unskip", "reschedule", "reopen"):
+            _follow_rule(session, principal, row)
         return IdempotentResult(row.id, "obligation", row.version, 200)
 
     return _reference_finish(
@@ -926,8 +1061,11 @@ def void_settlement(session, principal, settlement_id, payload, if_match, key):
             reason=payload.reason,
             if_match=if_match,
         )
-        row.manually_completed = False
+        # A completion stands on a recorded payment: it stays while another payment remains.
+        if not _active_settlements(session, principal, row.id):
+            row.manually_completed = False
         _touch(session, principal, row, "void_settlement", payload.reason)
+        _follow_rule(session, principal, row)
         _audit(
             session,
             principal,

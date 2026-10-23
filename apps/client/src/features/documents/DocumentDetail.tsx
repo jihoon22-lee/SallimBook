@@ -114,6 +114,7 @@ export function DocumentDetail({
   const [deleteAck, setDeleteAck] = useState(false);
   const [saveAck, setSaveAck] = useState(false);
   const [notice, setNotice] = useState("");
+  const [refusal, setRefusal] = useState<ApiError | null>(null);
   const [comparison, setComparison] = useState<{ row: Document; links: DocumentLink[] } | null>(
     null,
   );
@@ -244,6 +245,7 @@ export function DocumentDetail({
       {row && !resource.error && (
         <>
           <DocumentMetadata row={row} />
+          {refusal && row.state === "deleted" && <DocumentError error={refusal} />}
           {notice && <p role="status">{notice}</p>}
           <CommandFeedback command={command} />
           {row.state === "ready" && row.active_link_count > 0 && (
@@ -272,6 +274,10 @@ export function DocumentDetail({
               target={target}
               pending={row}
               saved={() => void reload()}
+              refused={(error) => {
+                setRefusal(error);
+                void reload();
+              }}
             />
           )}
           {row.state === "pending" && isNativeAuth() && (
