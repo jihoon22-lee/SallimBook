@@ -172,7 +172,9 @@ test("a passkey sign-in in the expired-session dialog keeps the person signed in
   await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "수입 상세", exact: true })).toBeVisible();
   expect(state.writes).toHaveLength(1);
-  await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toHaveCount(
+    0,
+  );
   await expect(dialog).toHaveCount(0);
 });
 
