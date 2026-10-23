@@ -19,7 +19,7 @@ export function usePrivateVaultApi() {
     };
     const write: typeof domainApi.write = (web) => {
       requireWebAuth();
-      return domainApi.write(web);
+      return domainApi.write(web, undefined, undefined, { clearOnExpiry: true });
     };
     return {
       reauthenticate: (password: string, signal: AbortSignal) =>

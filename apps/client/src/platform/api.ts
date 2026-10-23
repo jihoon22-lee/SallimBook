@@ -215,12 +215,15 @@ export type ApiErrorCode = (typeof knownCodes)[number];
 export class ApiError extends Error {
   readonly status: number;
   readonly code: ApiErrorCode;
+  /** True when the failed request only read data, so the wording says it could not load. */
+  readonly read: boolean;
 
-  constructor(status: number, code: ApiErrorCode) {
+  constructor(status: number, code: ApiErrorCode, read = false) {
     super(code);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.read = read;
   }
 }
 

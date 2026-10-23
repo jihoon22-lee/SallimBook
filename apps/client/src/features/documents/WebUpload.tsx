@@ -6,6 +6,7 @@ import { MAX_BYTES, checksum, etag, expired, fileProblem, sameContent, stateLabe
 import type { CreateDocument, Document, Target } from "./model";
 import { CommandFeedback, useDocumentCommand } from "./DocumentSupport";
 import { MAX_LONG_EDGE, normalizeJpeg } from "./normalize";
+import { useTaskPanelRelease } from "../../shared/TaskLayout";
 type Attempt = {
   bytes: ArrayBuffer;
   input: CreateDocument;
@@ -26,6 +27,7 @@ export function WebUpload({
   saved: (id: string) => void;
 }) {
   const command = useDocumentCommand();
+  const release = useTaskPanelRelease();
   const input = useRef<HTMLInputElement>(null);
   const file = useRef<File | null>(null);
   const attempt = useRef<Attempt | null>(null);
@@ -135,6 +137,7 @@ export function WebUpload({
       setChosen("");
       setAck(false);
       setStarted(false);
+      release();
       saved(result);
     }
   }
@@ -220,6 +223,7 @@ export function WebUpload({
                 type="button"
                 onClick={() => {
                   clear();
+                  release();
                   saved(latest.id);
                 }}
               >

@@ -1,4 +1,4 @@
-import { TaskNotice, TaskPanel } from "../../shared/TaskLayout";
+import { TaskNotice, TaskPanel, useTaskPanelRelease } from "../../shared/TaskLayout";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
@@ -40,6 +40,7 @@ import {
 } from "./ObligationCommands";
 import type { ObligationAction } from "./ObligationCommands";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 export function FixedSummaryPanel({ refresh = 0 }: { refresh?: number }) {
   const api = useFixedApi();
   const { month } = useMonth();
@@ -98,6 +99,7 @@ export function FixedSummaryPanel({ refresh = 0 }: { refresh?: number }) {
 function GenerateForm({ month, onSaved }: { month: string; onSaved: () => void }) {
   const api = useFixedApi();
   const command = useMonthCommand();
+  const release = useTaskPanelRelease();
   const [start, setStart] = useState(`${month}-01`);
   const [end, setEnd] = useState(monthEnd(month));
   const [rule, setRule] = useState("");
@@ -123,6 +125,7 @@ function GenerateForm({ month, onSaved }: { month: string; onSaved: () => void }
     }
     const result = await command.run((signal) => api.generate(payload, key, signal));
     if (result.ok && command.mounted.current) {
+      release();
       setDone(true);
       setSequence((value) => value + 1);
       onSaved();
@@ -470,6 +473,8 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
   const [latest, setLatest] = useState<Rule | null>(null);
   const [ack, setAck] = useState(false);
   const [message, setMessage] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const attempt = useSubmitAttempt();
   const key = useIdempotencyKey(JSON.stringify([row.id, row.version, date, reason.trim()]));
   const plan = withdrawalPlan(row, date);
@@ -493,7 +498,10 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
     const result = await command.run((signal) =>
       api.endRule(row.id, { effective_on: date, reason: reason.trim() }, row.version, key, signal),
     );
-    if (result.ok && command.mounted.current) onSaved();
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      onSaved();
+    }
   }
   async function compare() {
     try {
@@ -513,7 +521,13 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
           ? ` 현재 종료 적용일 ${dateLabel(row.ended_on)}보다 앞당기는 것만 가능해요.`
           : ""}
       </p>
-      <form onInput={() => setMessage("")} onSubmit={(event) => void submit(event)}>
+      <form
+        onInput={() => {
+          setMessage("");
+          setDirty(true);
+        }}
+        onSubmit={(event) => void submit(event)}
+      >
         <fieldset disabled={command.busy}>
           <legend>종료 내용</legend>
           <div className="form-field">

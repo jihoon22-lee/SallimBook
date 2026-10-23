@@ -14,7 +14,8 @@
 | --- | --- | --- | --- |
 | `startup` | 사용자 manager의 `default.target` | 실제 배포 preflight, 전용 Compose 시작, 7개 서비스(문서 검사기 포함) 및 스캐너 확인 | 10분 |
 | `backup` | 매일 03:15 | 일관된 암호화 백업, 실제 archive SHA-256, 별도 운영 장부 기록 | 45분(백업 worker 30분 + 준비·ack·실패 정리 여유 15분) |
-| `health` | 매시간 15분 | 서비스 상태, 실제 스캐너 응답/신선도, 백업 존재·26시간 이내, 운영 장부/백업/build/daemon 이미지 저장소 여유 1GiB 이상 | 5분 |
+| `health` | 매시간 15분 | 먼저 운영 장부/백업/첨부/build/daemon 이미지 저장소 여유 1GiB 이상(백업 기록이 없어도 확인), 그다음 서비스 상태, 실제 스캐너 응답/신선도, 백업 존재·26시간 이내 | 5분 |
+| `cvd-prune` | 수동만(`python -m ops.cvd_retention prune`) | 롤백 창이 끝난 뒤 이전 운영 설정의 CVD 세대를 정리한다. 남길 run id를 `--keep`으로 명시하고 이전 state의 완료 기록으로 검증한 세대만 제거한다 | 예약 없음 |
 | `restore-check` | 매월 1일 04:30 | 격리 DB의 스키마·테이블 수·첨부 해시·필드 암호문 인증 | 2시간 |
 | `cvd-refresh` | 매일 05:00 | 서명 DB가 4일 이상이면 원래 앱 소스로 API 이미지만 재빌드 후 검사·승격 | 1시간 |
 | `recover` | 명시적 실행 | 중단 기록과 실제 소유 리소스 대조, 필요한 복귀/장부 기록 | 10분 |
@@ -95,7 +96,9 @@ python -m ops.schedule activate /PRIVATE/schedule-v001
 `validate`는 파일 hash, exact unit 내용, 운영 소스 및 `systemd-analyze --user verify`를 검사한다.
 `install`은 사용자 unit 검색 경로의 기존 같은 이름 파일/drop-in/활성 링크가 있으면 거부한다. 새 9개
 파일만 배타적으로 생성하고 `daemon-reload`한다. 서비스나 타이머를 시작하지 않는다. `activate`는 설치
-파일이 그대로인지 다시 확인하고 전용 startup 1개와 timer 4개만 `enable --now`한다. 부분 실패 시 이번에
+파일이 그대로인지 다시 확인하고, unit에 drop-in 디렉터리가 있거나 systemd가 drop-in을 로드했으면(`DropInPaths`)
+거부한 뒤 전용 startup 1개와 timer 4개만 `enable --now`한다. 이 도구는 drop-in을 렌더하지 않는다. 디스크 검사는 health의
+첫 단계라서 예전의 수동 `PROJECT-health.service.d/`는 전환 전에 지워야 한다([런북](../operations-runbook.md)). 부분 실패 시 이번에
 시도한 전용 unit만 disable/stop하며 한 unit의 정리가 실패해도 나머지 모두 정리를 시도한다.
 `activation-failed.json`에 각 정리 결과와 남은 unit을 기록한다. 원인을 해결한 뒤 명시적 `activate`를
 재시도할 수 있다. Compose 데이터·볼륨·이미지를 삭제하지 않는다.

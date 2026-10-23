@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ApiError, toApiError } from "../../../platform/api";
 import { formatMonth, isValidMonth, useMonth } from "../../../shared/MonthContext";
+import { MonthField } from "../../../shared/MonthField";
 import { SessionStatus } from "../../auth/AuthFeedback";
 import { useAuth } from "../../auth/AuthProvider";
 import {
@@ -234,12 +235,13 @@ function ComparisonWorkspace() {
       });
     return () => controller.abort();
   }, [api, query, valid, retry]);
-  function filter(name: string, value: string) {
+  // Month changes replace the entry, so stepping or typing never stacks history entries.
+  function filter(name: string, value: string, replace = false) {
     const next = new URLSearchParams(pending.current);
     if (value) next.set(name, value);
     else next.delete(name);
     pending.current = next;
-    setParams(next);
+    setParams(next, replace ? { replace: true } : undefined);
   }
   return (
     <>
@@ -247,30 +249,19 @@ function ComparisonWorkspace() {
         <h2 id="comparison-filter-title">비교할 월과 대상</h2>
         <div className="filter-grid">
           <div className="form-field">
-            <label htmlFor="comparison-to">확인할 월</label>
-            <input
-              id="comparison-to"
-              type="month"
-              min="0001-01"
-              max="9999-12"
+            <MonthField
+              label="확인할 월"
               value={to}
-              onChange={(event) => {
-                if (isValidMonth(event.target.value)) filter("to", event.target.value);
-              }}
+              onChange={(next) => filter("to", next, true)}
             />
           </div>
           <div className="form-field">
-            <label htmlFor="comparison-from">비교할 이전 월</label>
-            <input
-              id="comparison-from"
-              type="month"
-              min="0001-01"
-              max={previousMonth(to) ?? undefined}
+            <MonthField
+              label="비교할 이전 월"
               value={from ?? ""}
+              max={previousMonth(to) ?? undefined}
               disabled={to === "0001-01"}
-              onChange={(event) => {
-                if (isValidMonth(event.target.value)) filter("from", event.target.value);
-              }}
+              onChange={(next) => filter("from", next, true)}
             />
           </div>
           <div className="form-field">

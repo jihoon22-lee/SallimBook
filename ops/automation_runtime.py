@@ -418,31 +418,46 @@ class Runtime:
             "scanner", mounts=[self.mount(volume, "/run/scanner", volume=True)], timeout=60
         )
 
+    def disk_check(self):
+        """Free space of every filesystem the operator relies on; needs no backup."""
+        free = shutil.disk_usage(self.config["state_directory"]).free
+        build_free = shutil.disk_usage(self.config["build_directory"]).free
+        docker_free = self.worker("storage", timeout=60)["disk_free_bytes"]
+        documents = Path(self.manifest["runtime_directory"]) / "documents"
+        volumes = self.worker(
+            "data-storage",
+            mounts=[self.backup_mount(), self.mount(documents, "/srv/documents")],
+            timeout=60,
+        )
+        backup_free = volumes["disk_free_bytes"]
+        documents_free = volumes["documents_disk_free_bytes"]
+        if min(free, build_free, docker_free, backup_free, documents_free) < 1024**3:
+            raise AutomationError("DISK_SPACE_LOW")
+        return {
+            "state_disk_free_bytes": free,
+            "build_disk_free_bytes": build_free,
+            "docker_disk_free_bytes": docker_free,
+            "backup_disk_free_bytes": backup_free,
+            "documents_disk_free_bytes": documents_free,
+        }
+
     def health(self):
+        # First, so a paused or failing backup, scanner or service cannot hide it.
+        disk = self.disk_check()
         services = self.services()
         scanner = self.scanner()
         if not scanner.get("fresh"):
             raise AutomationError("SCANNER_STALE")
         backup = self.latest_backup()
         age = (datetime.now(UTC) - datetime.fromisoformat(backup["completed_at"])).total_seconds()
-        storage = self.worker(
-            "backup-stat", backup=backup, mounts=[self.backup_mount()], timeout=60
-        )
+        self.worker("backup-stat", backup=backup, mounts=[self.backup_mount()], timeout=60)
         if age < -300 or age > 26 * 3600:
             raise AutomationError("BACKUP_STALE")
-        free = shutil.disk_usage(self.config["state_directory"]).free
-        build_free = shutil.disk_usage(self.config["build_directory"]).free
-        docker_free = self.worker("storage", timeout=60)["disk_free_bytes"]
-        if min(free, build_free, docker_free, storage["disk_free_bytes"]) < 1024**3:
-            raise AutomationError("DISK_SPACE_LOW")
         return {
             "services": services,
             "scanner": scanner,
             "backup_age_seconds": int(age),
-            "state_disk_free_bytes": free,
-            "build_disk_free_bytes": build_free,
-            "docker_disk_free_bytes": docker_free,
-            "backup_disk_free_bytes": storage["disk_free_bytes"],
+            **disk,
             "backup_hash_rechecked": False,
         }
 
@@ -678,6 +693,11 @@ class Runtime:
             except Exception:
                 self.journal.phase("needs-recovery", reason="candidate-scanner-cleanup")
                 raise AutomationError("RESOURCE_CLEANUP_FAILED") from None
+
+    def cvd_prune(self, keep, previous_states=(), dry_run=False):
+        from ops.cvd_retention import Retention
+
+        return Retention(self).prune(keep, previous_states, dry_run)
 
     def cvd_refresh(self):
         self.preflight()

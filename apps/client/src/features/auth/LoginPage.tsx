@@ -19,11 +19,22 @@ import {
 import { useAuth } from "./AuthProvider";
 import { safeReturnPath } from "./returnPath";
 
-function LoginForm() {
+/**
+ * `onSignedIn` replaces the redirect when the form sits in a dialog over the screen being edited;
+ * `expired` means the session ended, so the full sign-in applies instead of the re-check.
+ */
+export function LoginForm({
+  onSignedIn,
+  expired = false,
+}: {
+  onSignedIn?: () => void;
+  expired?: boolean;
+}) {
   const { state, login, loginPasskey } = useAuth();
   const ceremony = useAuthCeremony();
   const navigate = useNavigate();
   const returnTo = safeReturnPath(useLocation().state?.from) ?? "/";
+  const recheck = state.status === "authenticated" && !expired;
   const formRef = useSensitiveForm();
   const mounted = useMounted();
   const [busy, setBusy] = useState(false);
@@ -55,7 +66,10 @@ function LoginForm() {
     setBusy(true);
     try {
       await login(input);
-      if (mounted.current) navigate(returnTo, { replace: true });
+      if (mounted.current) {
+        if (onSignedIn) onSignedIn();
+        else navigate(returnTo, { replace: true });
+      }
     } catch (failure) {
       if (mounted.current) setError(toApiError(failure));
     } finally {
@@ -76,7 +90,10 @@ function LoginForm() {
     setBusy(true);
     try {
       await ceremony.run((signal) => loginPasskey(input, signal));
-      if (mounted.current) navigate(returnTo, { replace: true });
+      if (mounted.current) {
+        if (onSignedIn) onSignedIn();
+        else navigate(returnTo, { replace: true });
+      }
     } catch (failure) {
       if (mounted.current) setError(toApiError(failure));
     } finally {
@@ -86,14 +103,14 @@ function LoginForm() {
 
   return (
     <section className="card login-form-panel">
-      {state.status === "authenticated" && (
+      {recheck && (
         <p>
           {state.member.display_name} 님으로 로그인되어 있어요. 현재 계정의 비밀번호를 확인하면 최근
           인증을 갱신해요.
         </p>
       )}
       <form ref={formRef} className="auth-form" onSubmit={(event) => void submit(event)}>
-        {state.status !== "authenticated" && (
+        {!recheck && (
           <div role="group" aria-label="로그인 계정 선택" className="form-actions">
             <button type="button" disabled={busy} onClick={() => chooseAccount("owner")}>
               처음 시작한 사람
@@ -103,7 +120,7 @@ function LoginForm() {
             </button>
           </div>
         )}
-        {state.status !== "authenticated" && (
+        {!recheck && (
           <div className="form-field">
             <label htmlFor="login-name">로그인 이름</label>
             <input
@@ -132,7 +149,7 @@ function LoginForm() {
             disabled={busy}
           />
         </div>
-        {state.status !== "authenticated" && (
+        {!recheck && (
           <details className="login-device-options">
             <summary>기기 이름 변경</summary>
             <div className="form-field">
@@ -159,9 +176,9 @@ function LoginForm() {
         )}
         <AuthError error={error} login={passwordError} />
         <button type="submit" disabled={busy}>
-          {busy ? "확인 중…" : state.status === "authenticated" ? "다시 인증" : "로그인"}
+          {busy ? "확인 중…" : recheck ? "다시 인증" : "로그인"}
         </button>
-        {state.status !== "authenticated" && (
+        {!recheck && (
           <button
             type="button"
             disabled={busy || !supportsWebAuthn()}
@@ -176,17 +193,17 @@ function LoginForm() {
           </button>
         )}
       </form>
-      {state.status !== "authenticated" && (
+      {!recheck && (
         <p className="muted">
           패스키 로그인에는 로그인 이름과 이 기기 이름만 필요해요. 비밀번호를 입력하지 않아도 돼요.
         </p>
       )}
-      {state.status !== "authenticated" && !supportsWebAuthn() && (
+      {!recheck && !supportsWebAuthn() && (
         <p>
           이 브라우저에서는 패스키를 사용할 수 없어요. 최신 브라우저의 HTTPS 주소에서 이용해 주세요.
         </p>
       )}
-      {state.status !== "authenticated" && (
+      {!recheck && (
         <p className="muted">
           계정을 선택하면 로그인 이름을 채워 드려요. 기존에 쓰던 이름도 직접 입력할 수 있어요.
         </p>

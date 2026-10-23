@@ -1,7 +1,8 @@
 import { FilterPanel } from "../../shared/TaskLayout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { stateFlag, useRouteNotice } from "../../shared/routeNotice";
 import { ApiError, toApiError } from "../../platform/api";
 import { useAuth } from "../auth/AuthProvider";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
@@ -240,7 +241,7 @@ function AccountDetail({ id }: { id: string }) {
   const [deleting, setDeleting] = useState(false);
   const members = useHouseholdMembers();
   const mounted = useMounted();
-  const location = useLocation();
+  const saved = useRouteNotice(stateFlag("saved"));
   const [closing, setClosing] = useState(false);
   const [endedOn, setEndedOn] = useState(todaySeoul);
   const [busy, setBusy] = useState(false);
@@ -302,7 +303,7 @@ function AccountDetail({ id }: { id: string }) {
   const account = state.account;
   return (
     <>
-      {location.state?.saved && <p role="status">계좌 정보를 저장했어요.</p>}
+      {saved && <p role="status">계좌 정보를 저장했어요.</p>}
       <section className="card">
         <h2>{account.asset.name}</h2>
         <dl className="metadata-grid">
@@ -436,6 +437,7 @@ function AccountDetail({ id }: { id: string }) {
           remove={() => accounts.delete(account.id, account.version)}
           done={() => navigate("/accounts", { replace: true, state: { deleted: "account" } })}
           cancel={() => setDeleting(false)}
+          reload={state.reload}
         >
           <p>
             다른 기록이 연결되지 않은 오등록 계좌만 실제로 삭제할 수 있어요. 연결된 금융 자산 「
@@ -463,7 +465,7 @@ function AccountEdit({ id }: { id: string }) {
 }
 export function AccountListPage() {
   const { state } = useAuth();
-  const location = useLocation();
+  const deleted = useRouteNotice(stateFlag("deleted", "account"));
   return (
     <>
       <div className="intro">
@@ -471,9 +473,7 @@ export function AccountListPage() {
         <h1>계좌 관리</h1>
         <p>은행·증권·연금저축·IRP·DC·ISA를 한곳에서 관리해요.</p>
       </div>
-      {location.state?.deleted === "account" && (
-        <p role="status">계좌와 연결된 금융 자산이 삭제된 것을 확인했어요.</p>
-      )}
+      {deleted && <p role="status">계좌와 연결된 금융 자산이 삭제된 것을 확인했어요.</p>}
       {state.status === "authenticated" ? <AccountList /> : <SessionStatus />}
     </>
   );

@@ -15,6 +15,7 @@ import type { DuplicateResponse, Income, IncomeDraft, IncomeInput } from "./mode
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { krwFieldError } from "../../shared/krw";
+import { rememberFocus } from "../../shared/focusKeeper";
 
 export function IncomeEditor({ initial }: { initial?: Income }) {
   const api = useIncomeApi();
@@ -85,6 +86,15 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
       attempt.reject(form);
       return;
     }
+    // The duplicate check disables the form before the save does, so keep the focus here.
+    const restoreFocus = rememberFocus();
+    try {
+      await save(form);
+    } finally {
+      restoreFocus();
+    }
+  }
+  async function save(form: HTMLFormElement) {
     const checked = duplicates ?? (await check(form));
     if (!checked || !command.mounted.current) return;
     if (checked.suspected && !acknowledged) {

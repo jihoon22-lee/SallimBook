@@ -19,9 +19,16 @@ export interface AuthenticatedApi {
     web: ((client: ReadClient) => Promise<ApiResult<T>>) | undefined,
     native?: () => Promise<T>,
   ): Promise<T>;
+  /**
+   * An ordinary save that finds the session ended keeps its screen and asks to sign in again.
+   * `clearOnExpiry` is for operations holding sensitive in-memory state (exports, vault,
+   * document attachments):
+   * the session ends and the screen is replaced by the sign-in prompt.
+   */
   write<T>(
     web: ((client: WriteClient) => Promise<ApiResult<T>>) | undefined,
     native?: () => Promise<T>,
     proof?: ScopeProof,
+    options?: { clearOnExpiry?: boolean },
   ): Promise<T>;
 }

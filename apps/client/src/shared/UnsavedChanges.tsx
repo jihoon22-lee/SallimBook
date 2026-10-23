@@ -54,7 +54,29 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
     ),
   );
   const open = blocker.state === "blocked";
-  const stay = useCallback(() => blocker.reset?.(), [blocker]);
+  const lastField = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const track = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.matches("input, textarea, select"))
+        lastField.current = target;
+    };
+    document.addEventListener("focusin", track);
+    return () => document.removeEventListener("focusin", track);
+  }, []);
+  // undefined: nothing to refocus; null: refocus the main form's first field.
+  const refocus = useRef<HTMLElement | null | undefined>(undefined);
+  const stay = useCallback(() => {
+    refocus.current = lastField.current;
+    blocker.reset?.();
+  }, [blocker]);
+  // Runs after the dialog's own cleanup has closed it, so closing cannot take the focus back.
+  useEffect(() => {
+    if (open || refocus.current === undefined) return;
+    const last = refocus.current;
+    refocus.current = undefined;
+    focusFormField(last);
+  }, [open]);
   const leave = useCallback(() => {
     // The person chose to discard; the left screen's guards must not block a quick next
     // navigation (e.g. back) before their unmount cleanup runs.
@@ -108,6 +130,24 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
       {children}
       {open && <LeaveDialog message={message} stay={stay} leave={leave} />}
     </UnsavedChangesContext.Provider>
+  );
+}
+
+/**
+ * After "keep editing" the person lands on the first field of the form they were in. The
+ * dialog gives focus back to what opened it when it closes, so this waits until it is gone.
+ */
+function focusFormField(last: HTMLElement | null) {
+  window.requestAnimationFrame(() =>
+    window.requestAnimationFrame(() => {
+      const form =
+        (last?.isConnected ? last.closest("form") : null) ?? document.querySelector("main form");
+      form
+        ?.querySelector<HTMLElement>(
+          "input:not([type=hidden]):not(:disabled), textarea:not(:disabled), select:not(:disabled)",
+        )
+        ?.focus({ preventScroll: true });
+    }),
   );
 }
 

@@ -26,7 +26,7 @@ import uvicorn
 from alembic import command
 from alembic.config import Config
 from android_cloud_process import CloudCommandError, checked, interrupt_cleanup
-from android_cloud_results import save_instrumentation
+from android_cloud_results import EXPECTED_INSTRUMENTATION, save_instrumentation
 from dotenv import dotenv_values
 from sallimbook.config import Settings
 from sallimbook.core.database import make_engine
@@ -75,7 +75,7 @@ def existing_instrumentation():
     env.pop("ORG_GRADLE_PROJECT_sallimbookCloudFixture", None)
     instrument(
         "existing",
-        19,
+        EXPECTED_INSTRUMENTATION["existing"],
         [
             str(ANDROID / "gradlew"),
             "-p",
@@ -290,7 +290,8 @@ def run_fixture(url, host_only, build_only=False):
                     if build_only:
                         checked(gradle, env=env, label="Fixture APK build", timeout=900)
                     else:
-                        instrument("onboarding", 1, gradle, env)
+                        expected = EXPECTED_INSTRUMENTATION["onboarding"]
+                        instrument("onboarding", expected, gradle, env)
                     if build_only:
                         # Same opt-in overlay property, but no test origin in the
                         # normal release. Inspect this APK's resources/all DEX.

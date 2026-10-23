@@ -10,9 +10,12 @@ on:
 permissions:
   contents: read
 
+# A newer commit on a pull request supersedes that pull request's older run. Every other run
+# (a push to main, a manual run) has a group of its own, so it is never cancelled and never
+# replaced while pending behind a newer push: a release commit always gets a finished run.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -58,6 +61,8 @@ jobs:
       - run: uv sync --project services/api --frozen
       - run: uv run --project services/api ruff check services/api/src services/api/tests services/api/migrations
       - run: uv run --project services/api ruff format --check services/api/src services/api/tests services/api/migrations
+      # The operations tools use the API's lint settings (Python 3.14 syntax, line length 100).
+      - run: uv run --project services/api ruff check --config services/api/pyproject.toml ops tests/operations
       # PostgreSQL tests are exercised separately with an explicit disposable test DB.
       - run: uv run --project services/api pytest services/api/tests -m 'not database'
 
@@ -116,6 +121,9 @@ jobs:
           python-version: "3.14.7"
           enable-cache: false
       - run: pnpm install --frozen-lockfile
+      # The release and image builds install with --ignore-scripts; fail when a dependency
+      # appears that has an install script nobody runs explicitly.
+      - run: uv run --no-project python scripts/check_install_scripts.py
       - run: pnpm format:check
       - run: pnpm lint
       - run: uv sync --project services/api --frozen
@@ -174,6 +182,126 @@ jobs:
         run: |
           uv run --project services/api alembic -c services/api/alembic.ini downgrade base
           uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+
+  api-migration-rows:
+    name: Migrations over rows left by earlier schema revisions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c
+        env:
+          POSTGRES_USER: sallimbook_ci
+          # Synthetic credentials exist only for this disposable CI service.
+          POSTGRES_PASSWORD: sallimbook_ci_only
+          POSTGRES_DB: sallimbook_ci_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U sallimbook_ci -d sallimbook_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SALLIMBOOK_ENVIRONMENT: test
+      UV_FROZEN: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - run: uv sync --project services/api --frozen
+      - name: Select the disposable PostgreSQL service
+        env:
+          SALLIMBOOK_CI_PG_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          printf '%s\n' \
+            "SALLIMBOOK_DATABASE_URL=postgresql+psycopg://sallimbook_ci:sallimbook_ci_only@127.0.0.1:$SALLIMBOOK_CI_PG_PORT/sallimbook_ci_test" \
+            "SALLIMBOOK_TEST_DATABASE_URL=postgresql+psycopg://sallimbook_ci:sallimbook_ci_only@127.0.0.1:$SALLIMBOOK_CI_PG_PORT/sallimbook_ci_test" >> "$GITHUB_ENV"
+      # Each test migrates a fresh schema to head, seeds synthetic rows through the API, steps
+      # back to the 0014_vault state (or just before 0016), writes the rows an older release
+      # leaves behind, upgrades to head and asserts what the upgrade kept, changed or refused.
+      - name: Upgrade rows written at the previous schema revisions
+        run: |
+          uv run --project services/api pytest -q -p no:cacheprovider --junitxml="$RUNNER_TEMP/upgrade.xml" \
+            "services/api/tests/test_recurring.py::TestRecurringDatabase::test_upgrade_normalizes_stale_manual_override_rows" \
+            "services/api/tests/test_recurring.py::TestRecurringDatabase::test_downgrade_refuses_revoked_rule_versions" \
+            "services/api/tests/test_homecare_database.py::test_replacement_cleared_before_0016_cancels_without_restoring_override"
+      - name: Require all three upgrade tests to have run, not skipped
+        run: |
+          python3 - <<'PY'
+          import os, xml.etree.ElementTree as ET
+          root = ET.parse(os.environ['RUNNER_TEMP'] + '/upgrade.xml').getroot()
+          suite = root if root.tag == 'testsuite' else root[0]
+          counts = {key: int(suite.get(key)) for key in ('tests', 'failures', 'errors', 'skipped')}
+          print(counts)
+          if counts != {'tests': 3, 'failures': 0, 'errors': 0, 'skipped': 0}:
+              raise SystemExit('The seeded upgrade tests did not all run and pass')
+          PY
+      - name: Apply the migrations to a fresh database and check model agreement
+        run: |
+          uv run --project services/api alembic -c services/api/alembic.ini upgrade head
+          uv run --project services/api alembic -c services/api/alembic.ini check
+
+  ops-images:
+    name: Operations images build (not published)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # A pull request's merge commit and its base, to see which image inputs it changed.
+          fetch-depth: 2
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14.7"
+          enable-cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: "9.15.9"
+          run_install: false
+      - name: Stage the minimal build contexts from this exact commit
+        run: uv run --no-project python -m ops.build_context "$RUNNER_TEMP/ops-context" --commit "$(git rev-parse HEAD)"
+      # Images stay on this runner: no login, registry or push.
+      - name: Build the web image
+        run: docker build --tag sallimbook-ci-web:test "$RUNNER_TEMP/ops-context/web"
+      # The API image downloads the official signed ClamAV database, whose mirror limits shared
+      # runners, so a pull request builds it only when one of its inputs changed. A push to main
+      # and a manual run always build it.
+      - name: Check whether the API image inputs changed
+        id: api-inputs
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            changed=true
+          else
+            files=$(git diff --name-only HEAD^1 HEAD -- services/api ops/Dockerfile.api ops/build_context.py infra/documents .github/workflows/ci.yml)
+            if [ -n "$files" ]; then changed=true; else changed=false; fi
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+      - name: Build the API image
+        if: steps.api-inputs.outputs.changed == 'true'
+        run: |
+          # The ClamAV mirror can refuse a shared runner for a while; retry the build, never its
+          # checks, and do not wait after the last attempt.
+          for attempt in 1 2 3; do
+            if docker build --build-arg SALLIMBOOK_CVD_REFRESH="$(date -u +%F)" --tag sallimbook-ci-api:test "$RUNNER_TEMP/ops-context/api"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 60; fi
+          done
+          exit 1
+      - name: Check the private and public proxy routing in the built web image
+        run: uv run --no-project python -m ops.test_deployment --web-image sallimbook-ci-web:test
 
   web-smoke:
     name: Web UI and real HTTPS authentication
