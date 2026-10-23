@@ -171,6 +171,18 @@ for path in /downloads /downloads/ /downloads/other.apk /downloads/SallimBook.ap
         "http://127.0.0.1:8080$path" 2>/tmp/headers; then exit 1; fi
     grep -q '404 Not Found' /tmp/headers
 done
+# Tailscale Serve forwards the incoming Host, with the port on the private listener.
+wget -q -O /tmp/apk --header='Host: synthetic.example.ts.net:8443' \\
+    http://127.0.0.1:8080/downloads/SallimBook.apk
+cmp /tmp/apk /srv/downloads/SallimBook.apk
+# A request for any other Host never reaches the web root, downloads or the API.
+for path in / /api/probe /downloads/SallimBook.apk; do
+    for host in wrong.example.invalid 127.0.0.1:8080; do
+        if wget -S -O /tmp/body --header="Host: $host" \\
+            "http://127.0.0.1:8080$path" 2>/tmp/headers; then exit 1; fi
+        grep -q '421 Misdirected Request' /tmp/headers
+    done
+done
 for path in / /assets/index.js /downloads/SallimBook.apk; do
     wget -S -O /tmp/body --header='Host: synthetic.example.ts.net' \\
         "http://127.0.0.1:8080$path" 2>/tmp/headers || true
@@ -219,7 +231,9 @@ wget -S -O /tmp/body --header='Host: synthetic.example.ts.net' \\
     http://127.0.0.1:8080/api/probe 2>/tmp/headers
 grep -qi '^ *X-Content-Type-Options: nosniff' /tmp/headers
 grep -qi '^ *Strict-Transport-Security: ' /tmp/headers
-if grep -qi -e '^ *Content-Security-Policy: ' -e '^ *X-Frame-Options: ' /tmp/headers; then exit 1; fi
+if grep -qi -e '^ *Content-Security-Policy: ' -e '^ *X-Frame-Options: ' /tmp/headers; then
+    exit 1
+fi
 """
         command(isolated + [
             "--read-only", "--tmpfs",
@@ -233,6 +247,7 @@ if grep -qi -e '^ *Content-Security-Policy: ' -e '^ *X-Frame-Options: ' /tmp/hea
     print(
         "PASS: pinned Caddy/Tailscale versions, Compose/Caddy validation, "
         "strict-umask UID10001/cap-drop reads, private exact APK/public 404 routing, "
+        "421 for a wrong Host on every private route, "
         "identity header forwarding and forwarded-IP removal. "
         "No tailnet node, installable APK, or real HTTPS tested."
     )

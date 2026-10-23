@@ -3,6 +3,7 @@ import { ApiError, toApiError } from "../../platform/api";
 import { FinanceError } from "../finance/FinanceSupport";
 import { useMounted } from "../auth/AuthFeedback";
 import { MAX_PDF_PAGES } from "./model";
+import { rememberFocus } from "../../shared/focusKeeper";
 export function DocumentError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
     DOCUMENT_STORAGE_QUOTA_EXCEEDED:
@@ -67,6 +68,7 @@ export function useDocumentCommand() {
     if (controller.current) return;
     const current = new AbortController();
     controller.current = current;
+    const restoreFocus = rememberFocus();
     setBusy(true);
     setError(null);
     try {
@@ -77,6 +79,7 @@ export function useDocumentCommand() {
     } finally {
       if (controller.current === current) controller.current = null;
       if (mounted.current) setBusy(false);
+      restoreFocus();
     }
   }
   return { run, busy, error, setError, mounted, cancel: () => controller.current?.abort() };

@@ -22,11 +22,6 @@ on:
 permissions:
   contents: read
 
-# At most one emulator job for this repository; a newer request supersedes the old one.
-concurrency:
-  group: sallimbook-android-instrumentation
-  cancel-in-progress: true
-
 defaults:
   run:
     shell: bash
@@ -39,6 +34,15 @@ jobs:
   api36:
     name: API 36 KVM and native instrumentation
     if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
+    # One emulator job at a time for this repository. A running job is never cancelled by a
+    # later request, so one pull request cannot cancel another's run. GitHub keeps a single
+    # pending job per group: if a third request arrives while one is running and one is
+    # waiting, the waiting one is replaced. The group is on the job, so a draft pull request
+    # whose job is skipped never takes or replaces that place. Re-run a replaced pull request
+    # from the Actions tab.
+    concurrency:
+      group: sallimbook-android-instrumentation
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     # Explicit step limits total 136m; reserve 14m for action post steps/runner overhead.
     timeout-minutes: 150
@@ -254,7 +258,7 @@ jobs:
           python3 - <<'PY'
           import json, os, re, xml.etree.ElementTree as ET
           from pathlib import Path
-          from scripts.android_cloud_results import failure_details
+          from scripts.android_cloud_results import EXPECTED_INSTRUMENTATION, failure_details
           output = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-evidence'
           output.mkdir(mode=0o700, parents=True, exist_ok=True)
           probe = Path(os.environ['RUNNER_TEMP']) / 'sallimbook-android-probe'
@@ -275,7 +279,7 @@ jobs:
           seen = set()
           permitted_skip = 'ownerFlagCannotUseKeystoreCipherWithoutActualBiometricAuthorization'
           total_skips = 0
-          for label, expected in (('existing', 19), ('onboarding', 1)):
+          for label, expected in EXPECTED_INSTRUMENTATION.items():
               counts = dict(tests=0, failures=0, errors=0, skipped=0)
               clean = ET.Element('testsuite', name=label)
               source = probe / 'tests' / (label + '.xml')

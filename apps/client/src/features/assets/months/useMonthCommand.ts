@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, toApiError } from "../../../platform/api";
 import { useMounted } from "../../auth/AuthFeedback";
+import { rememberFocus } from "../../../shared/focusKeeper";
 
 /** A changed payload/version gets a new key; cancelled/ambiguous retries reuse the same key. */
 export function useIdempotencyKey(fingerprint: string) {
@@ -30,6 +31,7 @@ export function useMonthCommand() {
     if (controller.current) return { ok: false, error: new ApiError(0, "REQUEST_CANCELLED") };
     const next = new AbortController();
     controller.current = next;
+    const restoreFocus = rememberFocus();
     setBusy(true);
     setError(null);
     try {
@@ -43,6 +45,7 @@ export function useMonthCommand() {
     } finally {
       if (controller.current === next) controller.current = null;
       if (mounted.current) setBusy(false);
+      restoreFocus();
     }
   }
   return { busy, error, setError, run, cancel, mounted };

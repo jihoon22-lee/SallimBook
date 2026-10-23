@@ -3,8 +3,13 @@ import { ApiError } from "../../platform/api";
 import { useAuth } from "./AuthProvider";
 import { ReturnLoginLink } from "./ReturnLoginLink";
 
+/** Shown when data could not be read; a read has nothing to retry on its own. */
+export const readFailedMessage = "불러오지 못했어요. 연결을 확인한 뒤 다시 불러와 주세요.";
+
 export function authErrorMessage(error: ApiError, login = false): string {
   if (login && error.status === 401) return "로그인 이름이나 비밀번호를 확인해 주세요.";
+  if (error.read && (error.code === "NETWORK_UNAVAILABLE" || error.code === "REQUEST_FAILED"))
+    return readFailedMessage;
   switch (error.code) {
     case "NETWORK_UNAVAILABLE":
       return "서버 연결을 확인하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.";

@@ -254,7 +254,8 @@ p.chmod(0o600); os.chown(p,10001,10001)
                     assert state["HostConfig"]["PidsLimit"] == 32
                     assert state["HostConfig"]["Init"] is True
                     # Compose passes named volumes through Binds; no host path may appear.
-                    assert all(not bind.startswith("/") for bind in state["HostConfig"]["Binds"] or [])
+                    binds = state["HostConfig"]["Binds"] or []
+                    assert all(not bind.startswith("/") for bind in binds)
                     # The /tmp tmpfs is in HostConfig.Tmpfs, not in Mounts.
                     assert {(m["Type"], m["Destination"]) for m in state["Mounts"]} == {
                         ("volume", "/run/inspector")

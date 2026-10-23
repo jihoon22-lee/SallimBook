@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 import { useUnsavedChangesGuard } from "./UnsavedChanges";
@@ -44,12 +44,17 @@ export function TaskPanel({ label, children }: { label: string; children: ReactN
   const ref = useRef<HTMLElement>(null);
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
+  // A saved panel holds nothing unsaved until the next edit, even though it stays on screen.
+  const release = useCallback(() => {
+    guard.release();
+    setDirty(false);
+  }, [guard]);
   useEffect(() => {
     ref.current?.focus({ preventScroll: true });
     ref.current?.scrollIntoView({ block: "start" });
   }, []);
   return (
-    <TaskPanelRelease.Provider value={guard.release}>
+    <TaskPanelRelease.Provider value={release}>
       <section
         ref={ref}
         className="task-panel"

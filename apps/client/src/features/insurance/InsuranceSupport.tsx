@@ -5,6 +5,7 @@ import { ApiError, toApiError } from "../../platform/api";
 import { useMounted, SessionStatus } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import { FinanceError, useHouseholdMembers, MemberLoadError } from "../finance/FinanceSupport";
+import { rememberFocus } from "../../shared/focusKeeper";
 export function InsurancePage({
   title,
   description,
@@ -61,7 +62,7 @@ export function InsuranceError({ error }: { error: ApiError | null }) {
     INVALID_MEDICAL_DATES: "진료 시작일과 종료일을 확인해 주세요.",
     MEDICAL_NODE_CYCLE: "자기 자신이나 하위 진료 아래로 이동할 수 없어요.",
     MEDICAL_NODE_IN_USE:
-      "하위 진료나 비용이 있어 삭제할 수 없어요. 연결된 기록을 먼저 확인해 주세요.",
+      "하위 진료나 비용 기록이 있어 이 작업을 할 수 없어요. 연결된 기록을 먼저 확인해 주세요.",
   };
   return error && messages[error.code] ? (
     <div role="alert" className="auth-message">
@@ -116,6 +117,7 @@ export function useMetadataCommand() {
   async function run<T>(write: () => Promise<T>, creating = false): Promise<T | undefined> {
     if (flight.current || uncertain) return;
     flight.current = true;
+    const restoreFocus = rememberFocus();
     setBusy(true);
     setError(null);
     try {
@@ -129,6 +131,7 @@ export function useMetadataCommand() {
     } finally {
       flight.current = false;
       if (mounted.current) setBusy(false);
+      restoreFocus();
     }
   }
   return {

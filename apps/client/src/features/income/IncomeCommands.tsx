@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { toApiError } from "../../platform/api";
 import { isValidMonth, useMonth } from "../../shared/MonthContext";
+import { MonthField } from "../../shared/MonthField";
 import { useIdempotencyKey, useMonthCommand } from "../assets/months/useMonthCommand";
 import { formatKrw, parseKrw } from "../assets/months/model";
 import { AccountSelect, linkDate } from "../finance/AccountChoices";
@@ -123,15 +124,7 @@ export function IncomeCommand({
                   }
                 />
                 <div className="form-field">
-                  <label>
-                    반환 귀속월
-                    <input
-                      type="month"
-                      value={period}
-                      onChange={(event) => setPeriod(event.target.value)}
-                      required
-                    />
-                  </label>
+                  <MonthField label="반환 귀속월" value={period} onChange={setPeriod} required />
                 </div>
                 <div className="form-field">
                   <label>

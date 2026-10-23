@@ -1,4 +1,5 @@
 import { MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport";
+import { MonthField } from "../../shared/MonthField";
 import { todaySeoul } from "../finance/dates";
 import { AccountSelect, linkDate } from "../finance/AccountChoices";
 import type { IncomeDraft } from "./model";
@@ -59,18 +60,13 @@ export function IncomeFields({
           </label>
         </div>
         <div className="form-field">
-          <label>
-            수입 귀속월
-            <input
-              type="month"
-              value={draft.month}
-              min="0001-01"
-              max="9999-12"
-              disabled={fixedScope}
-              onChange={(event) => change("month", event.target.value)}
-              required
-            />
-          </label>
+          <MonthField
+            label="수입 귀속월"
+            value={draft.month}
+            disabled={fixedScope}
+            onChange={(next) => change("month", next)}
+            required
+          />
         </div>
         <div className="form-field">
           <label>

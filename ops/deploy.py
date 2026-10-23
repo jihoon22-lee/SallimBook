@@ -171,9 +171,13 @@ http://:8081 {
 http://:8080 {{
     bind 127.0.0.1
     @wrong_host not host {fqdn}
-    respond @wrong_host 421
     @page not path /api/*
 {security_headers}
+    # Caddy orders every handle before a top-level respond, so the catch-all handle
+    # would shadow a plain `respond`. Keep this the first handle block.
+    handle @wrong_host {{
+        respond 421
+    }}
     @apk {{
         method GET HEAD
         path /downloads/SallimBook.apk

@@ -19,7 +19,17 @@ from ops.deploy import render
 from ops.deploy import validate as validate_deployment
 
 ROOT = Path(__file__).resolve().parents[1]
-TASKS = {"backup", "health", "restore-check", "cvd-refresh", "startup", "recover"}
+TASKS = {
+    "backup",
+    "health",
+    "restore-check",
+    "cvd-refresh",
+    "cvd-prune",
+    "startup",
+    "recover",
+}
+# cvd-prune takes arguments (ops.cvd_retention prune), so this CLI cannot start it.
+CLI_TASKS = TASKS - {"cvd-prune"}
 BACKUP_WORKER_TIMEOUT = 1800
 # Source checks, network/image checks, helper extraction, ack and failed-worker cleanup.
 BACKUP_OVERHEAD_BUDGET = 900
@@ -366,7 +376,7 @@ def unfinished_runs(config, *, exclude=None):
     return result
 
 
-def run(config_path, expected_sha256, task, *, runner=None):
+def run(config_path, expected_sha256, task, *, runner=None, arguments=None):
     if task not in TASKS:
         raise AutomationError("UNKNOWN_TASK")
     config = load_config(config_path, expected_sha256)
@@ -391,7 +401,7 @@ def run(config_path, expected_sha256, task, *, runner=None):
                 if pending:
                     raise AutomationError("RECOVERY_REQUIRED")
             else:
-                result = getattr(runtime, task.replace("-", "_"))()
+                result = getattr(runtime, task.replace("-", "_"))(**(arguments or {}))
             return journal.finish(status="completed", result=result)
         except Exception as failure:
             code = failure.code if isinstance(failure, AutomationError) else "OPERATION_FAILED"
@@ -404,7 +414,7 @@ def main():
     parser.add_argument("command", choices=("validate", "run"))
     parser.add_argument("configuration", type=Path)
     parser.add_argument("--sha256", required=True)
-    parser.add_argument("--task", choices=sorted(TASKS))
+    parser.add_argument("--task", choices=sorted(CLI_TASKS))
     args = parser.parse_args()
     os.umask(0o077)
     try:

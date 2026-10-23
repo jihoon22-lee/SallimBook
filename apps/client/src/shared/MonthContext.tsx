@@ -1,23 +1,10 @@
 import { Icon } from "./Icon";
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
+import { MonthField } from "./MonthField";
+import { formatMonth, seoulMonth } from "./month";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-export function seoulMonth(date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(date);
-  return `${parts.find((part) => part.type === "year")!.value}-${parts.find((part) => part.type === "month")!.value}`;
-}
-
-export function isValidMonth(month: string): boolean {
-  return /^(?!0000)\d{4}-(0[1-9]|1[0-2])$/.test(month);
-}
-
-export function formatMonth(month: string): string {
-  return `${month.slice(0, 4)}년 ${Number(month.slice(5))}월`;
-}
+export { formatMonth, isValidMonth, seoulMonth } from "./month";
 
 type MonthState = { month: string; currentMonth: string };
 const MonthContext = createContext<(MonthState & { setMonth: (month: string) => void }) | null>(
@@ -70,23 +57,14 @@ export function useMonth() {
 
 export function MonthPicker() {
   const { month, setMonth } = useMonth();
-  const id = useId();
   return (
     <div className="month-picker">
       <div className="month-control">
-        <label htmlFor={id}>
-          <Icon name="calendar" size={17} />
-          확인할 월
-        </label>
-        <input
-          id={id}
-          type="month"
+        <MonthField
+          label="확인할 월"
+          icon={<Icon name="calendar" size={17} />}
           value={month}
-          min="0001-01"
-          max="9999-12"
-          onChange={(event) => {
-            if (isValidMonth(event.target.value)) setMonth(event.target.value);
-          }}
+          onChange={setMonth}
         />
       </div>
       <span className="muted">서울 기준 · {formatMonth(month)}</span>

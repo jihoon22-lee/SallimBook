@@ -59,6 +59,25 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("@page not path /api/*", caddyfile)
         self.assertIn("header @page Content-Security-Policy", caddyfile)
 
+    def test_wrong_host_is_rejected_by_the_first_handle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "rendered"
+            deploy.write_config(config(), output)
+            caddyfile = (output / "private.Caddyfile").read_text()
+        # A top-level respond is ordered after every handle, so the catch-all handle
+        # would answer first. The 421 must be a handle written before all others.
+        self.assertNotIn("respond @wrong_host", caddyfile)
+        self.assertIn("@wrong_host not host synthetic.example.ts.net", caddyfile)
+        handles = re.findall(r"^    handle( \S+)? \{$", caddyfile, re.MULTILINE)
+        self.assertEqual(handles[0].strip(), "@wrong_host")
+        self.assertIn("    handle @wrong_host {\n        respond 421\n    }\n", caddyfile)
+        self.assertLess(
+            caddyfile.index("handle @wrong_host"), caddyfile.index("handle @apk"), caddyfile
+        )
+        self.assertLess(
+            caddyfile.index("handle @wrong_host"), caddyfile.index("handle /api/*"), caddyfile
+        )
+
     def test_self_setup_is_an_explicit_manifest_opt_in(self):
         original = config()
         disabled = deploy.render(original)
@@ -815,6 +834,52 @@ class SchemaRevisionTests(unittest.TestCase):
         for line in section.splitlines():
             if "--verify-database" in line:
                 self.assertIn("--sdk", line)
+
+    def runbook(self):
+        return (Path(__file__).resolve().parents[2] / "docs/operations-runbook.md").read_text()
+
+    def test_runbook_rollback_renders_a_fresh_schedule_directory(self):
+        from ops import schedule
+
+        section = self.runbook().split("되돌리기(필요할 때만):")[1].split("\n### ")[0]
+        commands = [
+            line.strip()
+            for line in section.splitlines()
+            if line.strip().startswith("python -m ops.schedule")
+        ]
+        self.assertEqual(
+            [line.split()[3] for line in commands], ["render", "validate", "install", "activate"]
+        )
+        render, *others = commands
+        # render refuses an existing directory and install refuses an installed one, so the
+        # old schedule directory cannot be reused; every later step names the fresh one.
+        self.assertIn("OLD.json --sha256 OLD_SHA256 --output ROLLBACK_SCHEDULE", render)
+        for line in others:
+            self.assertTrue(line.endswith(" ROLLBACK_SCHEDULE"), line)
+        self.assertNotIn("OLD_SCHEDULE", section)
+        self.assertNotIn("NEW_SCHEDULE", " ".join(commands))
+        self.assertLess(section.index("ops.automation validate OLD.json"), section.index(render))
+        self.assertIn("이전 운영 checkout", section)
+        # The documented argv is what the real CLI accepts.
+        done = {"status": "synthetic"}
+        with (
+            patch.multiple(
+                schedule,
+                render=MagicMock(return_value=done),
+                validate=MagicMock(return_value=done),
+                install=MagicMock(return_value=done),
+                activate=MagicMock(return_value=done),
+            ),
+            patch("sys.stdout", io.StringIO()),
+        ):
+            for line in commands:
+                with patch("sys.argv", ["ops.schedule", *line.split()[3:]]):
+                    self.assertEqual(schedule.main(), 0)
+            schedule.render.assert_called_once_with(
+                Path("OLD.json"), "OLD_SHA256", Path("ROLLBACK_SCHEDULE")
+            )
+            for name in ("validate", "install", "activate"):
+                getattr(schedule, name).assert_called_once_with(Path("ROLLBACK_SCHEDULE"))
 
     def test_preflight_reports_the_schema_state_from_the_new_image(self):
         for schema in ("current", "upgrade-required"):

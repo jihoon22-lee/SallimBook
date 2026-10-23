@@ -67,6 +67,21 @@ p { margin-block: .65rem; }
 .month-control label { display: inline-flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--muted); font-weight: 600; }
 .month-picker input { min-width: 0; max-width: 100%; min-height: 48px; padding: 6px; border: 0; border-radius: 7px; background: transparent; color: var(--foreground); font-weight: 650; }
 .month-picker > .muted { padding-left: 2px; font-size: .75rem; }
+.month-field { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; max-width: 100%; }
+.form-field .month-field { display: grid; gap: .45rem; }
+.month-field-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.month-field .month-field-row input { flex: 1 1 9rem; width: auto; min-width: 0; }
+.month-step { min-width: 48px; min-height: 48px; padding: 8px 10px; gap: 4px; font-size: .8125rem; white-space: nowrap; }
+.month-step[aria-disabled="true"] { opacity: .5; cursor: not-allowed; box-shadow: none; }
+@media (max-width: 480px) {
+  .month-picker .month-field > label { flex-basis: 100%; }
+  .month-field-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .month-field-row > .month-today { grid-column: 1 / -1; }
+  .month-step-text { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .month-step:has(.month-step-text) { font-size: 1.125rem; }
+  /* The field already shows the month; keep the Seoul note for screen readers and save a row. */
+  .dashboard-heading .month-picker > .muted { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .card { min-width: 0; padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card + .card, main > section + section, main > .card + .card { margin-top: 18px; }
 .card h2 { font-size: 1.125rem; font-weight: 720; margin: 0 0 12px; }
@@ -263,6 +278,7 @@ footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
 .chart-axis { stroke: #9baca5; stroke-width: 1; }
 .chart-gap { stroke: #9baca5; stroke-width: 2; stroke-dasharray: 2 2; }
 .chart-label { fill: currentColor; font-size: 12px; }
+.chart-month { font-size: 14px; }
 .chart-inspector { border-top: 1px solid var(--border); padding-top: 1rem; }
 @media (max-width: 640px) { .comparison-observations { grid-template-columns: 1fr; } }
 
@@ -376,8 +392,9 @@ footer { font-size: .6875rem; color: var(--muted); padding-top: 28px; }
 .date-warning h3 { font-size: .875rem; }
 .month-row-editor, .month-action-panel { border-color: var(--accent); }
 .chart-line { stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; }
-.chart-point { fill: var(--accent); stroke: var(--surface); stroke-width: 2; cursor: pointer; }
-.chart-point:focus { outline: none; stroke: var(--focus); stroke-width: 4; }
+.chart-point { fill: transparent; stroke: transparent; cursor: pointer; }
+.chart-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; pointer-events: none; }
+.chart-point:focus { outline: none; stroke: var(--focus); stroke-width: 3; }
 .unverified-chip { color: var(--warning); background: var(--warning-soft); }
 .auth-layout { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); }
 .auth-story { display: none; }
@@ -512,6 +529,11 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .leave-dialog { max-width: min(28rem, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--foreground); }
 .leave-dialog::backdrop { background: rgb(0 0 0 / 40%); }
 .leave-dialog h2 { margin-top: 0; }
+.session-dialog { width: min(30rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.session-dialog .card { padding: 0; border: 0; box-shadow: none; background: transparent; }
+.route-error { max-width: 32rem; margin: 12vh auto 0; padding: 24px; }
+.route-error:focus { outline: none; }
+.route-error h1 { margin-top: 0; }
 
 /* Task layouts: a clear next action, readable forms, and records before optional detail. */
 .finance-list > .card + .card { margin-top: 0; }

@@ -81,6 +81,8 @@ export async function mockComparison(page: Page) {
     before,
     after,
     mode: "available" as Comparison["state"],
+    /** With mode "unconfirmed": only the previous month is still a draft. */
+    previousOnly: false,
     pageSize: 200,
     version: 1,
     pageRace: false,
@@ -106,9 +108,11 @@ export async function mockComparison(page: Page) {
         (state.mode === "current_missing" && current) ||
         (state.mode === "no_previous_month" && !current)
           ? "missing"
-          : state.mode === "unconfirmed" && current
-            ? "reopened"
-            : "confirmed",
+          : state.mode === "unconfirmed" && state.previousOnly && !current
+            ? "draft"
+            : state.mode === "unconfirmed" && !state.previousOnly && current
+              ? "reopened"
+              : "confirmed",
       revision: {
         month,
         revision_id: uid(current ? 91 : 90),

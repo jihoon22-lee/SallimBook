@@ -34,6 +34,8 @@ test("home keeps date and scope cautions visible before expanding precise compar
 test("390px home presents consumable attention count and first status above the bottom navigation", async ({
   page,
 }) => {
+  // The month being looked at is the current one, so the "이번 달" shortcut needs no row.
+  await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
   await page.setViewportSize({ width: 390, height: 844 });
   await homeData(page);
   await page.goto("/");
@@ -202,6 +204,7 @@ test("failed home comparison retains navigation to month records and asset manag
 });
 
 test("390px enlarged home moves the month selector to its own readable row", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
   await page.setViewportSize({ width: 390, height: 844 });
   await homeData(page);
   await page.goto("/");
@@ -209,8 +212,11 @@ test("390px enlarged home moves the month selector to its own readable row", asy
   await page.evaluate(() => document.fonts.ready);
   const title = await page.getByRole("heading", { level: 1 }).boundingBox();
   const month = await page.getByLabel("확인할 월", { exact: true }).boundingBox();
+  const control = await page.locator(".dashboard-heading .month-control").boundingBox();
   expect(month!.y).toBeGreaterThanOrEqual(title!.y + title!.height);
-  expect(month!.width).toBeGreaterThan(280);
+  // The month buttons share the row, so the control is wide and the typed month stays readable.
+  expect(control!.width).toBeGreaterThan(280);
+  expect(month!.width).toBeGreaterThan(200);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 

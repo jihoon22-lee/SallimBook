@@ -5,6 +5,11 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+# Exact testcase count each instrumentation suite must report. The fixture runner and the
+# workflow's evidence step both read this table; update it when a native test is added or
+# removed, and nowhere else.
+EXPECTED_INSTRUMENTATION = {"existing": 19, "onboarding": 1}
+
 # Only the test-owned fixed stage can cross the diagnostic boundary. Never copy
 # raw exception text, stack traces, view snapshots, credentials or dynamic labels.
 ONBOARDING_CLASS = "io.github.jihoon22lee.sallimbook.AndroidCloudOnboardingTest"
