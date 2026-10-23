@@ -6,7 +6,7 @@ import { MAX_PDF_PAGES } from "./model";
 export function DocumentError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
     DOCUMENT_STORAGE_QUOTA_EXCEEDED:
-      "문서 보관 한도에 도달했어요. 필요 없는 문서를 정리한 뒤 공간이 확보되면 다시 시도해 주세요.",
+      "문서 보관 한도에 도달했어요. 필요 없는 문서를 삭제한 뒤 다시 시도해 주세요.",
     DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE:
       "지금은 문서를 보관할 공간을 확보할 수 없어요. 잠시 후 같은 파일로 다시 시도해 주세요.",
     DOCUMENT_UPLOAD_BUSY: "다른 파일을 확인하고 있어요. 잠시 후 같은 파일로 다시 시도해 주세요.",

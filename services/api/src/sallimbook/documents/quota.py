@@ -41,8 +41,8 @@ def reserve(engine, row, settings, store):
             if used + size > byte_limit or count + 1 > count_limit:
                 raise DomainError(
                     "DOCUMENT_STORAGE_QUOTA_EXCEEDED",
-                    "첨부파일 저장 한도에 도달했습니다. "
-                    "불필요한 파일을 삭제한 뒤 저장소 정리를 기다려 주세요.",
+                    "첨부파일 저장 한도에 도달했어요. "
+                    "필요 없는 첨부파일을 삭제한 뒤 다시 시도해 주세요.",
                     413,
                 )
         with store.directory() as directory:

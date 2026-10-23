@@ -432,7 +432,7 @@ attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만�
 pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
 업로드 저장 전에 가계·전체 byte/count 한도를 영속 예약하며 한도 초과는
 413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유 부족은 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
-예약에는 암호문 tag·실패 업로드·삭제 후 유예 파일도 포함하며 물리 정리 확인 뒤 용량을 반환한다.
+예약에는 암호문 tag와 실패 업로드도 포함한다. 문서를 삭제하면 그 문서의 용량을 바로 반환하고, 실패 업로드의 용량은 물리 정리 확인 뒤 반환한다. 한도 초과 안내는 "첨부파일 저장 한도에 도달했어요. 필요 없는 첨부파일을 삭제한 뒤 다시 시도해 주세요."다.
 정리 명령·기본 한도·설정·검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
 7개 부모 상세의 공유 패널·원본 전송·응답 유실 재시도·Android 보호 화면 연결은 [첨부 UI 검증](testing/documents-client.md)을 따른다.
 
