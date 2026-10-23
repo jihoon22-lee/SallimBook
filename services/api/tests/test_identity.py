@@ -18,7 +18,7 @@ from argon2.low_level import Type
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from sallimbook.config import Settings
@@ -40,8 +40,10 @@ from sallimbook.identity.dependencies import NATIVE_HEADER, SESSION_COOKIE
 from sallimbook.identity.models import Household
 from sallimbook.identity.router import router
 from sallimbook.identity.schemas import (
+    InstallClaim,
     InvitationAcceptance,
     LoginRequest,
+    NativeLoginRequest,
     PasswordChangeRequest,
 )
 
@@ -1744,7 +1746,15 @@ def test_native_sign_in_reuses_the_install_device_row(identity_app, account, db_
         claim = first["install"]
         second = install_login(client, account, claim, label="합성 새 이름")
         assert second["install"] == {"device_id": claim["device_id"]}
-        # The install signs in with one session at a time; the earlier one ends.
+        # The install signs in with one session at a time; the earlier one ends at the device
+        # row, without writing (and so locking) the earlier session's own row.
+        with Session(db_engine) as session:
+            earlier = session.scalar(
+                select(AuthSession).where(
+                    AuthSession.session_hash == service.token_hash("session", first["access_token"])
+                )
+            )
+            assert (earlier.revoked_at, earlier.version) == (None, 1)
         assert client.get("/api/v1/me", headers=bearer(first)).status_code == 401
         assert (
             client.post(
@@ -1765,6 +1775,50 @@ def test_native_sign_in_reuses_the_install_device_row(identity_app, account, db_
             .order_by(AuditEvent.occurred_at)
         ).all()
     assert [tuple(row) for row in logins] == [(None, 1), (1, 2)]
+
+
+def test_an_earlier_session_does_not_keep_a_reused_row_signed_in(identity_app, account):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        second = install_login(client, account, first["install"])
+
+        def refresh():
+            return client.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": second["refresh_token"]},
+            ).status_code
+
+        # Presenting the same refresh token twice ends the new session.
+        assert (refresh(), refresh()) == (200, 401)
+        listed = client.get("/api/v1/devices", headers=bearer(native_login(client, account)))
+    (device,) = [d for d in listed.json()["items"] if d["id"] == first["install"]["device_id"]]
+    assert device["login_state"] == "expired"
+
+
+def test_an_install_claim_does_not_wait_for_another_users_device(identity_app, account, db_engine):
+    partner = _partner(identity_app, account)
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        owner = install_login(client, account, {})["install"]
+    claim = InstallClaim(device_id=UUID(owner["device_id"]), key=owner["key"])
+    request = NativeLoginRequest(
+        login_name=partner.login_name,
+        password=partner.password,
+        device_label="합성 Android",
+        install=claim,
+    )
+    with Session(db_engine) as holder, db_engine.connect() as connection:
+        holder.scalars(
+            select(RegisteredDevice).where(RegisteredDevice.id == claim.device_id).with_for_update()
+        ).all()
+        try:
+            # One outer transaction, so the timeout holds across the sign-in's own commits.
+            connection.execute(text("SET lock_timeout = '1s'"))
+            with Session(bind=connection) as session:
+                result = service.login(session, request, "synthetic-claim", "native")
+        finally:
+            holder.rollback()
+    assert result.install.device_id != claim.device_id and result.install.key
 
 
 def test_wrong_install_key_gets_a_fresh_row(identity_app, account, db_engine):

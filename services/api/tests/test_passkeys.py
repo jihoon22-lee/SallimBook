@@ -49,6 +49,7 @@ from sallimbook.identity.passkeys.schemas import (
     AssertionVerification,
     AuthenticationCredential,
     LoginOptionsRequest,
+    NativeLoginVerification,
     RegisterOptionsRequest,
     RegisterVerification,
     RegistrationCredential,
@@ -1687,6 +1688,71 @@ class TestPasskeyDatabase:
             assert session.get(RegisteredDevice, challenge.pending_device_id) is None
             device = session.get(RegisteredDevice, UUID(claim["device_id"]))
             assert (device.user_id, device.version) == (passkey_account.user_id, 2)
+
+    def test_native_passkey_install_claim_locks_the_device_before_the_credential(
+        self,
+        passkey_app,
+        db_engine,
+        passkey_account,
+        enrolled,
+    ):
+        authenticator, _ = enrolled
+        with TestClient(passkey_app, base_url="https://testserver") as client:
+            options = native_options(client, passkey_account)
+            proof = native_verification(options, authenticator, passkey_account)
+            first = client.post(
+                "/api/v1/auth/native/passkeys/verify",
+                headers=NATIVE_HEADERS,
+                json={**proof, "install": {}},
+            ).json()
+            options = native_options(client, passkey_account)
+        payload = NativeLoginVerification.model_validate(
+            {
+                **native_verification(options, authenticator, passkey_account),
+                "install": first["install"],
+            }
+        )
+        device_id = UUID(first["install"]["device_id"])
+
+        def sign_in():
+            with db_engine.connect() as connection:
+                connection.execute(text("SET lock_timeout = '10s'"))
+                with Session(bind=connection) as session:
+                    return service.verify_login(
+                        session,
+                        payload,
+                        NATIVE_POLICY,
+                        payload.device_binding.get_secret_value(),
+                        "synthetic-claim",
+                    )
+
+        # Step-up takes devices before the credential; a sign-in on a busy device must too.
+        with Session(db_engine) as holder, ThreadPoolExecutor(max_workers=1) as pool:
+            holder.scalars(
+                select(RegisteredDevice).where(RegisteredDevice.id == device_id).with_for_update()
+            ).all()
+            try:
+                pending = pool.submit(sign_in)
+                deadline = time.monotonic() + 10
+                with db_engine.connect() as watcher:
+                    while not watcher.scalar(
+                        text(
+                            "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
+                            " AND datname = current_database()"
+                        )
+                    ):
+                        assert time.monotonic() < deadline, "the sign-in never reached the device"
+                        watcher.rollback()
+                        time.sleep(0.05)
+                with Session(db_engine) as probe:
+                    probe.scalars(
+                        select(AuthCredential)
+                        .where(AuthCredential.user_id == passkey_account.user_id)
+                        .with_for_update(nowait=True)
+                    ).all()
+            finally:
+                holder.rollback()
+            assert pending.result(timeout=15).install.device_id == device_id
 
     def test_web_login_binding_cookie_cannot_be_replaced_by_client_boolean(
         self,

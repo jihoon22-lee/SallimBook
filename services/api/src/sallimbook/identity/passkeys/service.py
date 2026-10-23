@@ -639,6 +639,10 @@ def verify_login(
     challenge = _consume_challenge(
         session, payload.challenge_id, "login", policy, device_binding=device_binding
     )
+    install = getattr(payload, "install", None)
+    # The claimed device before the credential, the order step-up uses; issue_session's own
+    # lock then lands on the row this transaction already holds.
+    identity.lock_install_device(session, install, challenge.user_id, challenge.household_id)
     _, user, member = _verify_owned_assertion(
         session, challenge, payload.credential, policy, discoverable=True
     )
@@ -650,7 +654,7 @@ def verify_login(
         policy.transport,
         # A new row takes the ceremony's id; a proven install claim keeps its own row.
         device_id=challenge.pending_device_id,
-        install=getattr(payload, "install", None),
+        install=install,
     )
     session.commit()
     return result

@@ -10,12 +10,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from argon2.low_level import Type
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -261,6 +261,11 @@ def _active_identity(
             RegisteredDevice.id == auth.device_id,
             RegisteredDevice.status == "active",
             RegisteredDevice.revoked_at.is_(None),
+            # An install row admits only the session of its latest sign-in.
+            or_(
+                RegisteredDevice.install_session_id.is_(None),
+                RegisteredDevice.install_session_id == auth.id,
+            ),
         )
     ).one_or_none()
     if row is None:
@@ -973,11 +978,47 @@ def reauthenticate(
 
 
 def live_session(now: datetime):
-    """The SQL form of the session checks in validate_locked_session that depend on time."""
+    """The SQL form of the session checks that depend on time or on a later install sign-in."""
+    superseded = (
+        select(RegisteredDevice.id)
+        .where(
+            RegisteredDevice.id == AuthSession.device_id,
+            RegisteredDevice.install_session_id != AuthSession.id,
+        )
+        .exists()
+    )
     return (
         AuthSession.revoked_at.is_(None)
         & (AuthSession.expires_at > now)
         & ((AuthSession.kind == "native") | (AuthSession.last_seen_at > now - WEB_IDLE))
+        & ~superseded
+    )
+
+
+def lock_install_device(
+    session: Session,
+    install: InstallClaim | None,
+    user_id: UUID | None,
+    household_id: UUID | None,
+) -> RegisteredDevice | None:
+    """Lock the device row an install claim names, only if it is this user's Android row.
+
+    Devices come before the users row and before credentials, the order password change,
+    revocation and step-up use. Another member's row is never locked, so a claim can neither
+    hold it nor learn from waiting whether it is busy.
+    """
+    if install is None or install.device_id is None or user_id is None or household_id is None:
+        return None
+    return session.scalar(
+        select(RegisteredDevice)
+        .where(
+            RegisteredDevice.id == install.device_id,
+            RegisteredDevice.user_id == user_id,
+            RegisteredDevice.household_id == household_id,
+            RegisteredDevice.platform == "android",
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
 
 
@@ -1004,15 +1045,7 @@ def issue_session(
         raise ValueError("Unsupported authentication transport")
     if install is not None and transport != "native":
         raise ValueError("Only native sign-in presents an install claim")
-    claimed = None
-    if install is not None and install.device_id is not None:
-        # Devices before the users row, the order password change and revocation use.
-        claimed = session.scalar(
-            select(RegisteredDevice)
-            .where(RegisteredDevice.id == install.device_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
+    claimed = lock_install_device(session, install, user.id, member.household_id)
     active = session.execute(
         select(User, HouseholdMember)
         .select_from(User)
@@ -1032,23 +1065,16 @@ def issue_session(
     user, member = active
     now = utcnow()
     install_key = None
+    session_id = uuid4()
     if claimed is not None and _install_matches(claimed, install, user, member):
         device = claimed
         before_version = device.version
         device.label = device_label
         device.last_seen_at = now
         device.version += 1
-        # One session per install: what this install signed in with before ends here.
-        session.execute(
-            update(AuthSession)
-            .where(
-                AuthSession.household_id == device.household_id,
-                AuthSession.device_id == device.id,
-                AuthSession.revoked_at.is_(None),
-            )
-            .values(revoked_at=now)
-            .execution_options(synchronize_session=False)
-        )
+        # One session per install: what this install signed in with before ends here, at the
+        # device row. Writing those session rows would invert the session -> device lock order.
+        device.install_session_id = session_id
     else:
         before_version = None
         device = RegisteredDevice(
@@ -1064,11 +1090,13 @@ def issue_session(
         if install is not None:
             install_key = secrets.token_urlsafe(32)
             device.install_key_hash = token_hash(INSTALL_KEY, install_key)
+            device.install_session_id = session_id
         session.add(device)
     session.flush()
     token = secrets.token_urlsafe(32)
     csrf = secrets.token_urlsafe(32) if transport == "web" else None
     auth = AuthSession(
+        id=session_id,
         household_id=member.household_id,
         user_id=user.id,
         device_id=device.id,

@@ -99,6 +99,9 @@ class RegisteredDevice(EntityMixin, Base):
             "install_key_hash IS NULL OR (platform = 'android' AND length(install_key_hash) = 64)",
             name="android_install_key",
         ),
+        CheckConstraint(
+            "install_session_id IS NULL OR install_key_hash IS NOT NULL", name="install_session"
+        ),
     )
 
     household_id: Mapped[UUID]
@@ -110,6 +113,8 @@ class RegisteredDevice(EntityMixin, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # SHA-256 of the key an Android install presents to sign in on this row again.
     install_key_hash: Mapped[str | None] = mapped_column(String(64))
+    # The session of that install's latest sign-in; the row admits no other session.
+    install_session_id: Mapped[UUID | None]
 
 
 class AuthSession(EntityMixin, Base):
