@@ -480,6 +480,18 @@ def _touch(session, principal, row, action, reason=None):
     _remember(session, principal, row, action, reason=reason, before=before)
 
 
+def _follow_rule(session, principal, row):
+    """Once its last exception is cleared, an occurrence takes what its rule now generates.
+
+    Generation leaves exceptions alone, so a rule ended or changed meanwhile only reaches the
+    occurrence here. The same refresh applies: paid and past occurrences stay as they are.
+    """
+    if row.manual_override:
+        return
+    rule = scoped_entity(session, RecurringRule, row.rule_id, principal, for_update=True)
+    _generate_rows(session, principal, row.nominal_date, row.nominal_date, [rule])
+
+
 def _active_settlements_by_obligation(session, principal, obligation_ids):
     grouped = {obligation_id: [] for obligation_id in obligation_ids}
     if not grouped:
@@ -780,6 +792,8 @@ def obligation_action(session, principal, obligation_id, payload, if_match, key,
         else:
             raise ValueError("Unknown obligation action")
         _touch(session, principal, row, action, payload.reason)
+        if action in ("unskip", "reschedule", "reopen"):
+            _follow_rule(session, principal, row)
         return IdempotentResult(row.id, "obligation", row.version, 200)
 
     return _reference_finish(
@@ -926,8 +940,11 @@ def void_settlement(session, principal, settlement_id, payload, if_match, key):
             reason=payload.reason,
             if_match=if_match,
         )
-        row.manually_completed = False
+        # A completion stands on a recorded payment: it stays while another payment remains.
+        if not _active_settlements(session, principal, row.id):
+            row.manually_completed = False
         _touch(session, principal, row, "void_settlement", payload.reason)
+        _follow_rule(session, principal, row)
         _audit(
             session,
             principal,
