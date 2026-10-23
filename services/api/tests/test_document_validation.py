@@ -564,10 +564,11 @@ def test_card_luhn_and_labelled_values_are_rejected_without_returning_the_input(
         "card security code: 321",
         "카드 보안코드 123",
         "VALID THRU 12/28",
+        "VALID THRU",
     ):
         assert_rejected(lambda text=text: worker._card_text(text), "DOCUMENT_CARD_DATA")
     # A label with nothing but masked characters next to it is an ordinary receipt.
-    for text in ("CVV synthetic", "CVC2", "card security code", "카드 보안코드", "VALID THRU"):
+    for text in ("CVV synthetic", "CVC2", "card security code", "카드 보안코드"):
         worker._card_text(text)
     worker._card_text("합성 진료비 영수증 2026-10-17 금액 25000")
     invalid = pan[:-1] + str((int(pan[-1]) + 1) % 10)

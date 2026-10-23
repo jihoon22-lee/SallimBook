@@ -416,7 +416,8 @@ HTTP 취소 후에도 시작한 worker가 끝날 때까지 처리 슬롯을 유�
 초과의 `DOCUMENT_TOO_COMPLEX`가 포함된다. 검사가 내용을 거절한 422(`DOCUMENT_UNSAFE`·`DOCUMENT_IMAGE_UNSUPPORTED`·
 `DOCUMENT_TOO_COMPLEX`·`DOCUMENT_MALWARE`·`DOCUMENT_CARD_DATA`·`DOCUMENT_UNREADABLE`)이면 pending 문서는 그 해시에
 묶여 다시 쓸 수 없으므로 서버가 사유 "업로드 검사에서 허용하지 않은 파일"로 문서를 삭제하고 연결도 종료한 뒤(감사 기록 포함)
-422를 반환한다. 거절된 문서는 목록에 남지 않고 같은 문서로 다시 올리면 409 `DOCUMENT_UNAVAILABLE`이다. 검사기 장애(503)는
+422를 반환한다. 거절된 문서는 목록에 남지 않는다. 삭제로 버전이 올라가므로 원래 요청을 그대로 다시 보내면 409 `VERSION_CONFLICT`,
+현재 버전으로 다시 올리면 409 `DOCUMENT_UNAVAILABLE`이다. 검사기 장애(503)는
 pending 문서를 그대로 둔다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
 검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
 

@@ -308,6 +308,17 @@ test("inspection refusal clears the attempt and leaves no pending record", async
   await expect(list.getByRole("button", { name: "합성 새 문서.png", exact: true })).toBeVisible();
   expect(state.documents.filter((r) => r.state === "pending")).toHaveLength(0);
 });
+test("a refused upload leaves nothing unsaved in the medical task panel", async ({ page }) => {
+  const state = await mockDocuments(page);
+  state.refused = "DOCUMENT_CARD_DATA";
+  await open(page, `/insurance/cases/${uid(90)}/nodes/${uid(91)}`, "진료·약국");
+  const form = await file(page);
+  await form.getByRole("button", { name: "문서 업로드", exact: true }).click();
+  await expect(form.getByRole("alert")).toContainText("카드번호가 가려진 영수증");
+  await page.getByRole("link", { name: "홈", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+});
 test("pending detail refusal shows the reason with the removed record", async ({ page }) => {
   const state = await mockDocuments(page);
   state.documents[0]!.state = "pending";

@@ -247,12 +247,12 @@ def _pan_candidates(text: str):
 # A security code or an expiry date is, so a label counts when the first number after it is
 # such a value, and a masked number only with an expiry date right after it. The gap before
 # a value holds no digits or masking characters, so "CVC *** 1234원" is not a code. A full
-# date (2026.10.31) is not an expiry, so coupon and point expiry lines pass.
+# date (2026.10.31) or a date with a time (10/17 14:22) is not an expiry.
 _VALUE_GAP = r"[^\d*•●#]{0,24}"
 _EXPIRY_DATE = (
     r"(?<!\d)(?<!\d[./-])(?<!\d [./-])(?<!\d[./-] )(?<!\d [./-] )"
     r"(?:(?:0[1-9]|1[0-2]) ?[./-] ?(?:20\d\d|\d\d)|20\d\d ?[./-] ?(?:0[1-9]|1[0-2]))"
-    r"(?!\d)(?! ?[./-] ?\d)"
+    r"(?!\d)(?! ?[./-] ?\d)(?! ?\d{1,2}:\d\d)"
 )
 _SECURITY_CODE = re.compile(
     r"(?i)(?:(?<![a-z])(?:cvc|cvv|cvn|csc|cid)2?(?![a-z])|"
@@ -261,15 +261,44 @@ _SECURITY_CODE = re.compile(
     + _VALUE_GAP
     + r"(?<!\d)\d{3,4}(?!\d)"
 )
+# Printed only on cards, so the label alone counts: OCR often garbles the date beside it.
+_CARD_ONLY_LABEL = re.compile(
+    r"(?i)(?<![a-z])(?:valid ?(?:thru|through)|good ?thru|month ?/ ?year)(?![a-z])"
+)
+# Policies, warranties, coupons and food print the same expiry labels, so these count only
+# right after a card word or within 40 characters of a card number.
 _EXPIRY = re.compile(
-    r"(?i)(?:valid ?(?:thru|through)|(?<![a-z])exp(?:iry|iration|ires)?(?![a-z])|"
-    r"유효 ?기간|만료)" + _VALUE_GAP + _EXPIRY_DATE
+    r"(?i)(?:(?<![a-z])exp(?:iry|iration|ires)?(?![a-z])|유효 ?기간|만료)"
+    + _VALUE_GAP
+    + _EXPIRY_DATE
 )
+_CARD_WORD = re.compile(r"(?i)(?:카드|(?<![a-z])(?:card|credit|debit))[ :./·-]{0,2}$")
+_CARD_CONTEXT = 40
 _MASK = re.compile(r"(?i)[*x•●#]")
-_MASKED_NUMBER_DATE = re.compile(
-    r"(?i)(?<![\d*x•●#])((?:[\d*x•●#]{4}[ -]?){3}[\d*x•●#]{1,7}|[\d*x•●#]{13,19})"
-    r"[^\d*x•●#]{0,3}" + _EXPIRY_DATE
-)
+_NUMBER = r"(?i)(?<![\d*x•●#])((?:[\d*x•●#]{4}[ -]?){3}[\d*x•●#]{1,7}|[\d*x•●#]{13,19})"
+_CARD_NUMBER = re.compile(_NUMBER + r"(?![\d*x•●#])")
+_MASKED_NUMBER_DATE = re.compile(_NUMBER + r"[^\d*x•●#]{0,3}" + _EXPIRY_DATE)
+# A full grid that fails Luhn is still a card when OCR misread one digit of it.
+_FULL_GRID = re.compile(r"\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}")
+
+
+def _card_number(found: str) -> bool:
+    return bool(_MASK.search(found) or _FULL_GRID.fullmatch(found))
+
+
+def _card_expiry(text: str) -> bool:
+    for found in _EXPIRY.finditer(text):
+        start, end = found.span()
+        if _CARD_WORD.search(text[max(0, start - 10) : start]) or any(
+            _card_number(number[1])
+            for window in (
+                text[max(0, start - _CARD_CONTEXT) : start],
+                text[end : end + _CARD_CONTEXT],
+            )
+            for number in _CARD_NUMBER.finditer(window)
+        ):
+            return True
+    return False
 
 
 def _card_text(value: str) -> None:
@@ -284,8 +313,9 @@ def _card_text(value: str) -> None:
     normalized = re.sub(r"\s+", " ", normalized)
     if (
         _SECURITY_CODE.search(normalized)
-        or _EXPIRY.search(normalized)
-        or any(_MASK.search(found[1]) for found in _MASKED_NUMBER_DATE.finditer(normalized))
+        or _CARD_ONLY_LABEL.search(normalized)
+        or _card_expiry(normalized)
+        or any(_card_number(found[1]) for found in _MASKED_NUMBER_DATE.finditer(normalized))
     ):
         raise Rejected("DOCUMENT_CARD_DATA")
     for candidate in _pan_candidates(normalized):

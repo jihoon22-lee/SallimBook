@@ -179,19 +179,59 @@ MASKED_RECEIPT_LINES = [
     "카드번호 **** **** **** 2349 유효기간 **/**",
     "CVC *** 보안코드 ***",
     "카드 보안코드는 저장하지 않습니다",
-    "VALID THRU",
     "만료된 쿠폰 1개 합계 12,000원",
     "결제일 2026/10/17 10/17 방문 예정",
     "보안코드 *** 카드번호 ****-****-****-2349",
     "쿠폰 만료 2026.10.31 합계 12,000원",
     "포인트 소멸(만료) 예정일 2026-12-31",
     "카드번호 ****-****-****-2349 2026.10.17 14:22",
+    "카드번호 ****-****-****-2349 10/17 14:22",
+]
+
+# Expiry labels without a card word or card number next to them belong to policies,
+# warranties, coupons and food.
+ORDINARY_EXPIRY_LINES = [
+    "납입만료 2044.01",
+    "무상보증 만료 2027.10",
+    "필터 만료 2027-03",
+    "유효기간 2027.10 까지 사용",
+    "쿠폰 만료일: 10/31",
+    "포인트 유효기간 ~ 11/30",
+    "EXP 10/31 유통기한",
+    "카드결제 12,000원 쿠폰 만료일: 10/31",
 ]
 
 
 @pytest.mark.parametrize("text", MASKED_RECEIPT_LINES)
 def test_masked_card_receipt_lines_are_accepted(text):
     worker._card_text(text)
+
+
+@pytest.mark.parametrize("text", ORDINARY_EXPIRY_LINES)
+def test_expiry_lines_without_card_context_are_accepted(text):
+    worker._card_text(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Printed only on cards, so the label counts even when OCR garbles the date.
+        "VALID THRU",
+        "VALID THRU 12128",
+        "validthru l2/28",
+        "VALID THROUGH",
+        "GOOD THRU 1Z/28",
+        "MONTH/YEAR",
+        "MONTH / YEAR 12/28",
+    ],
+)
+def test_labels_printed_only_on_cards_are_card_data(text):
+    assert_rejected(lambda: worker._card_text(text), "DOCUMENT_CARD_DATA")
+
+
+def test_a_full_card_grid_failing_luhn_with_an_expiry_is_card_data():
+    # One misread digit breaks Luhn; the grid and the date after it still mark a card photo.
+    assert_rejected(lambda: worker._card_text("4123 4567 8901 2340 12/28"), "DOCUMENT_CARD_DATA")
 
 
 @pytest.mark.parametrize(
@@ -208,11 +248,13 @@ def test_masked_card_receipt_lines_are_accepted(text):
         "card security code: 321",
         "VALID THRU 12/28",
         "valid through 01/2030",
-        "유효기간 12/28",
-        "유효기간: 07/2031",
-        "EXP 01/30",
-        "Exp. 11/29",
-        "만료 03/27",
+        "카드 유효기간 12/28",
+        "신용카드 유효기간: 07/2031",
+        "CARD EXP 01/30",
+        "카드번호 ****-****-****-2349 Exp. 11/29",
+        "4123-45**-****-2349 승인 만료 03/27",
+        "Credit card expiry 12-28",
+        "CARD NO 4123 4567 8901 2340 EXP 12.28",
         "카드번호 ****-****-****-2349 12/28",
         "CARD NO ************2349 01/30",
         "4123-45**-****-2349 06/2029",
@@ -220,10 +262,9 @@ def test_masked_card_receipt_lines_are_accepted(text):
         "CVV code: 123",
         "Card verification value 123",
         "보안코드는 아래와 같습니다 482",
-        "유효기간 12-28",
-        "유효기간 2031.07",
-        "EXP 2028/12",
-        "EXP 12.28",
+        "카드 유효기간 12-28",
+        "카드유효기간 2031.07",
+        "card no ************2349 EXP 2028/12",
     ],
 )
 def test_full_number_security_code_or_expiry_is_card_data(text):

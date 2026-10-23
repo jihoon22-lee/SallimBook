@@ -161,6 +161,7 @@ export function WebUpload({
       setChosen("");
       setAck(false);
       setStarted(false);
+      release();
       refused?.(refusal.current);
     }
     if (result && command.mounted.current) {
