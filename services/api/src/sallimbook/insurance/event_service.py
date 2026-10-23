@@ -3,6 +3,7 @@
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import uuid7
 
 from pydantic import ValidationError
 from sqlalchemy import delete, func, select
@@ -288,6 +289,8 @@ def _new_expense(
     session.add_all(
         [
             MedicalExpenseLine(
+                # Time-ordered ids keep the lines in the order they were entered.
+                id=uuid7(),
                 household_id=principal.household_id,
                 expense_id=row.id,
                 **_money_values(line.model_dump()),
@@ -930,7 +933,7 @@ def _payout_responses(session, principal, rows, *, detail=False):
                 PayoutAllocation.household_id == principal.household_id,
                 PayoutAllocation.payout_id.in_(ids),
             )
-            .order_by(PayoutAllocation.id)
+            .order_by(PayoutAllocation.created_at, PayoutAllocation.id)
         ):
             allocations[allocation.payout_id].append(
                 AllocationResponse(**_values(allocation, AllocationResponse))
@@ -987,7 +990,13 @@ def _new_payout(
     session.add(row)
     session.flush()
     allocations = [
-        PayoutAllocation(payout_id=row.id, **_money_values(item.model_dump()), **_actors(principal))
+        PayoutAllocation(
+            # Allocations share one creation time; time-ordered ids keep the entered order.
+            id=uuid7(),
+            payout_id=row.id,
+            **_money_values(item.model_dump()),
+            **_actors(principal),
+        )
         for item in payload.allocations
     ]
     session.add_all(allocations)
@@ -1439,10 +1448,12 @@ def _payout_sources(session, principal, case_ids):
     ids = [row.id for row, _ in rows]
     allocations = defaultdict(list)
     for allocation in session.scalars(
-        select(PayoutAllocation).where(
+        select(PayoutAllocation)
+        .where(
             PayoutAllocation.household_id == principal.household_id,
             PayoutAllocation.payout_id.in_(ids),
         )
+        .order_by(PayoutAllocation.created_at, PayoutAllocation.id)
     ):
         allocations[allocation.payout_id].append(
             calc.Allocation(

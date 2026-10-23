@@ -539,6 +539,62 @@ def test_audit_keyset_ties_filters_cross_household_and_no_raw_diff(export_app, a
         )
 
 
+def test_income_create_keeps_audit_list_and_export_readable(export_app, actors):
+    actor = actors[0]
+    with TestClient(export_app) as client:
+        created = client.post(
+            "/api/v1/income",
+            headers=headers(actor),
+            json=income_payload(actor) | {"duplicate_acknowledged": True},
+        )
+        assert created.status_code == 201, created.text
+        listed = client.get(
+            "/api/v1/audit-events",
+            headers=actor.headers,
+            params={"entity_type": "cash_record", "entity_id": created.json()["id"]},
+        )
+        assert listed.status_code == 200, listed.text
+        [event] = listed.json()["items"]
+        assert "duplicate_acknowledged" not in event["changed_fields"]
+        assert "amount_krw" in event["changed_fields"]
+        data = decoded(export(client, actor, formats=["json"]))
+        exported = [
+            row for row in data["json/audit_events.json"] if row["entity_id"] == event["entity_id"]
+        ]
+        assert [row["changed_fields"] for row in exported] == [event["changed_fields"]]
+
+
+def test_legacy_duplicate_acknowledged_audit_row_stays_readable(export_app, actors, db_engine):
+    actor = actors[0]
+    entity_id = uuid4()
+    with Session(db_engine) as session:
+        session.add(
+            AuditEvent(
+                household_id=actor.household_id,
+                actor_id=actor.user_id,
+                entity_type="cash_record",
+                entity_id=entity_id,
+                action="create",
+                request_id=None,
+                before_version=None,
+                after_version=1,
+                safe_diff={"changed_fields": ["duplicate_acknowledged", "amount_krw"]},
+            )
+        )
+        session.commit()
+    with TestClient(export_app) as client:
+        listed = client.get(
+            "/api/v1/audit-events", headers=actor.headers, params={"entity_id": str(entity_id)}
+        )
+        assert listed.status_code == 200, listed.text
+        assert [row["changed_fields"] for row in listed.json()["items"]] == [["amount_krw"]]
+        data = decoded(export(client, actor, formats=["json"]))
+        legacy = [
+            row for row in data["json/audit_events.json"] if row["entity_id"] == str(entity_id)
+        ]
+        assert [row["changed_fields"] for row in legacy] == [["amount_krw"]]
+
+
 def test_malformed_audit_fails_without_returning_values(export_app, actors, db_engine):
     actor = actors[0]
     with Session(db_engine) as session:
