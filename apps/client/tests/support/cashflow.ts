@@ -207,6 +207,7 @@ export async function mockCashflow(page: Page) {
     failure: "" as "" | "before" | "after",
     conflict: false,
     withdrawalBlocked: false,
+    ruleInUse: false,
     staleReceipt: false,
     pageSize: 50,
     nextId: 300,
@@ -776,6 +777,11 @@ export async function mockCashflow(page: Page) {
         row.versions.at(-1)!.note = "배우자 합성 규칙 메모";
       }
       if (version !== `"${row.version}"`) return error("VERSION_CONFLICT");
+      if (method === "DELETE") {
+        if (state.ruleInUse) return error("RULE_IN_USE");
+        state.rules = state.rules.filter((r) => r.id !== id);
+        return response(null, 204);
+      }
       // Mirrors the server's _split_at/_revoke: a cutoff at or before a not-yet-started
       // version withdraws it.
       const cutoff: string = action === "end" ? body.effective_on : body.effective_from;

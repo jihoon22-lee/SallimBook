@@ -9,6 +9,7 @@ import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { dateLabel, todaySeoul } from "../finance/dates";
 import { useFixedApi } from "./api";
 import {
+  displayedTerms,
   economicTypes,
   frequencies,
   preserveRuleChanges,
@@ -24,8 +25,6 @@ import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { AmountField } from "../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { krwFieldError } from "../../shared/krw";
-const lastTerms = (row: Rule) =>
-  [...row.versions].sort((a, b) => a.effective_from.localeCompare(b.effective_from)).at(-1)!;
 export function RuleCommandError({ error }: { error: ApiError | null }) {
   const message = error && ruleCommandMessages[error.code];
   if (message)
@@ -53,7 +52,8 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
   const command = useMonthCommand();
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() =>
-    initial ? { ...ruleDraft(lastTerms(initial)), from: "" } : ruleDraft(),
+    // A change starts from the terms in effect today, not a pending future version.
+    initial ? { ...ruleDraft(displayedTerms(initial)), from: "" } : ruleDraft(),
   );
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Rule | null>(null);
@@ -379,17 +379,21 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
             </button>
             {latest && (
               <>
-                <h4>{lastTerms(latest).title}</h4>
-                <RuleSummary terms={lastTerms(latest)} />
+                <h4>{displayedTerms(latest).title}</h4>
+                <RuleSummary terms={displayedTerms(latest)} />
                 <button
                   type="button"
                   disabled={!!latest.ended_on && latest.ended_on <= todaySeoul()}
                   onClick={() => {
                     setDraft(
-                      preserveRuleChanges({ ...ruleDraft(lastTerms(base!)), from: "" }, draft, {
-                        ...ruleDraft(lastTerms(latest)),
-                        from: "",
-                      }),
+                      preserveRuleChanges(
+                        { ...ruleDraft(displayedTerms(base!)), from: "" },
+                        draft,
+                        {
+                          ...ruleDraft(displayedTerms(latest)),
+                          from: "",
+                        },
+                      ),
                     );
                     setBase(latest);
                     setLatest(null);
