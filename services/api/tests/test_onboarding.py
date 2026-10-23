@@ -2,6 +2,7 @@
 
 import hashlib
 import socket
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
@@ -17,7 +18,13 @@ from sallimbook.config import Settings
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.identity import service
-from sallimbook.identity.auth_models import AuthSession, HouseholdMember, Invitation, User
+from sallimbook.identity.auth_models import (
+    AuthSession,
+    HouseholdMember,
+    Invitation,
+    LoginThrottle,
+    User,
+)
 from sallimbook.identity.dependencies import self_setup_identity_allowed
 from sallimbook.identity.models import Household
 from sallimbook.identity.router import router
@@ -359,3 +366,37 @@ def test_session_issue_failure_rolls_back_first_enrollment(onboarding_app, db_en
         assert session.scalar(select(func.count()).select_from(User)) == 0
         assert session.scalar(select(func.count()).select_from(HouseholdMember)) == 0
         assert session.scalar(select(func.count()).select_from(Household)) == 0
+
+
+def busy_password_work(monkeypatch):
+    monkeypatch.setattr(service, "_password_slots", threading.BoundedSemaphore(1))
+    service._password_slots.acquire()
+
+
+@pytest.mark.database
+def test_busy_password_work_during_start_does_not_use_up_attempts(
+    onboarding_app, db_engine, monkeypatch
+):
+    busy_password_work(monkeypatch)
+    with client_for(onboarding_app) as owner:
+        response = start(owner)
+    assert response.status_code == 429 and response.json()["error"]["code"] == "AUTH_BUSY"
+    with Session(db_engine) as session:
+        assert [row.attempts for row in session.scalars(select(LoginThrottle))] == [0]
+        assert session.scalar(select(func.count()).select_from(User)) == 0
+
+
+@pytest.mark.database
+def test_busy_password_work_during_connection_does_not_use_up_guesses(
+    onboarding_app, db_engine, monkeypatch
+):
+    with client_for(onboarding_app) as owner, client_for(onboarding_app) as partner:
+        code = owner_code(owner, start(owner))
+        busy_password_work(monkeypatch)
+        payload = {**INPUT, "display_name": "합성 배우자", "code": code}
+        response = partner.post("/api/v1/auth/web/connect", json=payload, headers=WEB)
+        assert response.status_code == 429 and response.json()["error"]["code"] == "AUTH_BUSY"
+    with Session(db_engine) as session:
+        key = service.token_hash("throttle", "connection-global")
+        assert session.get(LoginThrottle, key).attempts == 0
+        assert session.scalar(select(func.count()).select_from(User)) == 1

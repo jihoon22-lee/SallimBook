@@ -705,7 +705,8 @@ class TestPasskeyDatabase:
                     label=f"합성 기기 {n}",
                     platform="android",
                     status="active",
-                    last_seen_at=datetime(2026, 1, day, tzinfo=UTC),
+                    # Recently used, so the 90-day idle rule keeps them in the list.
+                    last_seen_at=datetime.now(UTC),
                     created_at=datetime(2026, 1, day, tzinfo=UTC),
                 )
                 for n, day in enumerate(days[:4])

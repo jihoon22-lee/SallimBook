@@ -58,6 +58,8 @@ DEVICE_LIST_IDLE = timedelta(days=90)
 INVITATION_LIFETIME = timedelta(minutes=15)
 THROTTLE_WINDOW = timedelta(minutes=15)
 THROTTLE_CLEANUP_BATCH = 64
+# Refreshes per device per THROTTLE_WINDOW; a 10-minute access token needs about two.
+REFRESH_DEVICE_LIMIT = 10
 PASSWORD_HASHER = PasswordHasher(
     time_cost=3,
     memory_cost=65536,
@@ -105,7 +107,7 @@ def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: dateti
     if expired:
         session.execute(delete(LoginThrottle).where(LoginThrottle.key_hash.in_(expired)))
     session.commit()
-    blocked = False
+    counters = []
     for key, limit in sorted(buckets):
         digest = token_hash("throttle", key)
         session.execute(
@@ -129,9 +131,11 @@ def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: dateti
         if now - counter.window_started_at >= THROTTLE_WINDOW:
             counter.window_started_at = now
             counter.attempts = 0
-        if counter.attempts >= limit:
-            blocked = True
-        else:
+        counters.append((counter, limit))
+    # A refused attempt counts nowhere, so one exhausted bucket cannot drain the others.
+    blocked = any(counter.attempts >= limit for counter, limit in counters)
+    if not blocked:
+        for counter, _ in counters:
             counter.attempts += 1
     session.commit()
     if blocked:
@@ -715,8 +719,11 @@ def accept_invitation(
     session: Session, request: InvitationAcceptance, source: str
 ) -> MemberResponse:
     now = utcnow()
-    _admit_attempt(session, [(f"invite-source:{source}", 30)], now)
-    user, member = _accept_invitation_locked(session, request, connection=False)
+    buckets = [(f"invite-source:{source}", 30)]
+    _admit_attempt(session, buckets, now)
+    user, member = _refund_busy(
+        session, buckets, lambda: _accept_invitation_locked(session, request, connection=False)
+    )
     result = member_response(user, member)
     session.commit()
     return result
@@ -869,7 +876,8 @@ def setup_household(
     session: Session, request: SetupRequest, source: str, transport: Literal["web", "native"]
 ) -> LoginResult:
     """Enroll once after the route verifies the private proxy's owner identity."""
-    _admit_attempt(session, [(f"setup-source:{source}", 5)], utcnow())
+    buckets = [(f"setup-source:{source}", 5)]
+    _admit_attempt(session, buckets, utcnow())
     # Same installation lock as both operator CLI paths; household lock also
     # serializes acceptance of a previously issued operator invitation.
     session.execute(select(func.pg_advisory_xact_lock(0x53414C4C494D)))
@@ -890,11 +898,11 @@ def setup_household(
         )
         .values(revoked_at=now, version=Invitation.version + 1)
     )
-    user = User(
-        login_name="owner",
-        display_name=request.display_name,
-        password_hash=hash_password(request.password.get_secret_value()),
+    # A busy server never checked anything, so the attempt is returned (as for login).
+    encoded = _refund_busy(
+        session, buckets, lambda: hash_password(request.password.get_secret_value())
     )
+    user = User(login_name="owner", display_name=request.display_name, password_hash=encoded)
     session.add(user)
     try:
         session.flush()
@@ -916,10 +924,13 @@ def connect_household(
 ) -> LoginResult:
     # Five guesses per installation/15 minutes, regardless of claimed or actual
     # source address. Reissuing a code does not reset the guessing budget.
-    _admit_attempt(
-        session, [("connection-global", 5), (f"connection-source:{source}", 5)], utcnow()
+    buckets = [("connection-global", 5), (f"connection-source:{source}", 5)]
+    _admit_attempt(session, buckets, utcnow())
+    # Password hashing starts only after the code was found valid, so a refund never helps
+    # a guesser.
+    user, member = _refund_busy(
+        session, buckets, lambda: _accept_invitation_locked(session, request, connection=True)
     )
-    user, member = _accept_invitation_locked(session, request, connection=True)
     result = issue_session(session, user, member, request.device_label, transport)
     session.commit()
     return result
@@ -1068,7 +1079,20 @@ def issue_session(
 
 def rotate_refresh(session: Session, token: str, source: str) -> NativeTokenResponse:
     now = utcnow()
-    _admit_attempt(session, [(f"refresh-source:{source}", 30)], now)
+    # Every device reaches the API through the same proxy peer, so the source bucket is shared
+    # by the whole installation. A device over its own limit is refused before it can use it up.
+    buckets = [(f"refresh-source:{source}", 30)]
+    if _valid_token(token):
+        device_id = session.scalar(
+            select(AuthSession.device_id).where(
+                AuthSession.id == RefreshToken.session_id,
+                AuthSession.household_id == RefreshToken.household_id,
+                RefreshToken.token_hash == token_hash("refresh", token),
+            )
+        )
+        if device_id is not None:
+            buckets.append((f"refresh-device:{device_id}", REFRESH_DEVICE_LIMIT))
+    _admit_attempt(session, buckets, now)
     if not _valid_token(token):
         raise _unauthenticated()
     # Look up family before locking; every rotation locks session then token in that order.
@@ -1147,7 +1171,8 @@ def revoke_device(session: Session, principal: Principal, device: RegisteredDevi
     now = utcnow()
     before = device.version
     device.status = "revoked"
-    device.revoked_at = now
+    # Revoking again keeps the time of the first revocation.
+    device.revoked_at = device.revoked_at or now
     session.flush()
     record_event(
         session,

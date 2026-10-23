@@ -636,6 +636,43 @@ class TestIdentityDatabase:
             assert session.get(LoginThrottle, key).attempts == 0
             assert session.scalar(select(func.count()).select_from(AuthSession)) == 0
 
+    def test_a_rate_limited_attempt_is_not_added_to_other_buckets(self, db_engine):
+        now = service.utcnow()
+        with Session(db_engine) as session:
+            service._admit_attempt(session, [("narrow", 1), ("wide", 30)], now)
+            for _ in range(3):
+                with pytest.raises(DomainError) as failure:
+                    service._admit_attempt(session, [("narrow", 1), ("wide", 30)], now)
+                assert failure.value.code == "RATE_LIMITED"
+            assert session.get(LoginThrottle, service.token_hash("throttle", "wide")).attempts == 1
+
+    def test_one_device_using_up_its_refreshes_does_not_block_another(self, identity_app, account):
+        # Every device refreshes through the same proxy peer, so the source bucket is shared.
+        with (
+            TestClient(identity_app, base_url="https://testserver") as first,
+            TestClient(identity_app, base_url="https://testserver") as second,
+        ):
+            tokens = native_login(first, account)
+            other = native_login(second, account)
+            refresh = tokens["refresh_token"]
+            limited = 0
+            for _ in range(31):
+                response = first.post(
+                    "/api/v1/auth/native/refresh", headers=NATIVE, json={"refresh_token": refresh}
+                )
+                if response.status_code == 200:
+                    refresh = response.json()["refresh_token"]
+                else:
+                    assert response.json()["error"]["code"] == "RATE_LIMITED"
+                    limited += 1
+            assert limited > 0
+            response = second.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": other["refresh_token"]},
+            )
+            assert response.status_code == 200, response.text
+
     def test_successful_logins_do_not_consume_account_limit(self, identity_app, account, db_engine):
         with TestClient(identity_app, base_url="https://testserver") as client:
             for _ in range(6):
@@ -1203,6 +1240,32 @@ class TestIdentityDatabase:
                 == 204
             )
             assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 401
+
+    def test_revoking_a_revoked_device_keeps_the_first_revocation(
+        self, identity_app, db_engine, account, monkeypatch
+    ):
+        with (
+            TestClient(identity_app, base_url="https://testserver") as first,
+            TestClient(identity_app, base_url="https://testserver") as second,
+        ):
+            native_login(first, account)
+            tokens = native_login(second, account)
+            devices = second.get("/api/v1/devices", headers=bearer(tokens))
+            assert devices.status_code == 200
+            other = next(row for row in devices.json()["items"] if not row["current"])
+            revoke = {**bearer(tokens), "If-Match": f'"{other["version"]}"'}
+            assert (
+                second.delete("/api/v1/devices/" + other["id"], headers=revoke).status_code == 204
+            )
+            with Session(db_engine) as session:
+                revoked = session.get(RegisteredDevice, UUID(other["id"]))
+                first_revoked_at, version = revoked.revoked_at, revoked.version
+            later = service.utcnow() + timedelta(minutes=1)
+            monkeypatch.setattr(service, "utcnow", lambda: later)
+            again = {**bearer(tokens), "If-Match": f'"{version}"'}
+            assert second.delete("/api/v1/devices/" + other["id"], headers=again).status_code == 204
+        with Session(db_engine) as session:
+            assert session.get(RegisteredDevice, UUID(other["id"])).revoked_at == first_revoked_at
 
     def test_rate_limit_persists_failed_logins_without_logging_secrets(
         self, identity_app, account, caplog
