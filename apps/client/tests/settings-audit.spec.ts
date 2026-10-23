@@ -109,7 +109,7 @@ for (const [code, status, message] of [
   ["AUDIT_METADATA_INVALID", 503, "기록의 형식"],
   ["FORBIDDEN", 403, "볼 수 없어요"],
   ["NOT_FOUND", 404, "접근할 수 없어요"],
-  ["network", 0, "서버 연결"],
+  ["network", 0, "불러오지 못했어요"],
 ] as const)
   test(`audit ${code} hides stale rows and requires explicit fresh read`, async ({ page }) => {
     const state = await mockAudit(page);

@@ -9,6 +9,7 @@ import { ScopeChanges } from "./ScopeChanges";
 import { MonthError } from "./MonthFeedback";
 import {
   formatKrw,
+  parseKrw,
   maxAsOfDate,
   ownedPreview,
   scopeIdentity,
@@ -262,9 +263,7 @@ export function MonthRowEditor({
                                 : formatKrw(
                                     draft.mode === "unchanged"
                                       ? base.row.input_amount_krw
-                                      : /^\d+$/.test(draft.amount)
-                                        ? BigInt(draft.amount).toString()
-                                        : null,
+                                      : parseKrw(draft.amount),
                                   )}
                             </td>
                             <td>{formatKrw(currentRow.input_amount_krw)}</td>

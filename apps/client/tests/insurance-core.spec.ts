@@ -264,7 +264,9 @@ test("referenced node deletion fails safely and foreign policy exposes no metada
   await page.getByRole("button", { name: "오등록 진료 삭제 검토", exact: true }).click();
   await page.getByLabel("오등록 항목 합성 첫 외래 삭제를 확인했어요.", { exact: true }).check();
   await page.getByRole("button", { name: "오등록 진료 삭제", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("하위 진료나 비용이 있어 삭제할 수 없어요");
+  await expect(page.getByRole("alert")).toContainText(
+    "하위 진료나 비용 기록이 있어 이 작업을 할 수 없어요",
+  );
   await page.goto(`/insurance/policies/${uid(999)}`);
   await expect(page.getByRole("alert")).toContainText("항목을 찾을 수 없거나 볼 권한");
   await expect(

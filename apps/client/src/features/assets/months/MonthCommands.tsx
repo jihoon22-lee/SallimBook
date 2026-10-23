@@ -21,6 +21,7 @@ import {
 import type { MonthRecord, MonthValue } from "./model";
 import { useIdempotencyKey, useMonthCommand } from "./useMonthCommand";
 import { ApiError, toApiError } from "../../../platform/api";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 
 type RecordActionProps = {
   initial: MonthRecord;
@@ -546,6 +547,7 @@ export function ReopenMonth({ initial, reload, close }: RecordActionProps) {
   const review = useReview(initial);
   const [reason, setReason] = useState("");
   const [blocked, setBlocked] = useState(false);
+  const guard = useUnsavedChangesGuard(reason.trim() !== "");
   const body = { revision_id: review.base.revision_id, reason: reason.trim() };
   const key = useIdempotencyKey(
     JSON.stringify(["reopen", initial.month, review.base.version, body]),
@@ -558,6 +560,7 @@ export function ReopenMonth({ initial, reload, close }: RecordActionProps) {
     );
     if (!command.mounted.current) return;
     if (result.ok) {
+      guard.release();
       close();
       await reload().catch(() => undefined);
     } else if (result.error.status === 409 && result.error.code !== "OPERATION_IN_PROGRESS")

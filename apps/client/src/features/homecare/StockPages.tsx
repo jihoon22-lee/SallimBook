@@ -356,6 +356,8 @@ export function CancelStock({
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
   const [message, setMessage] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const attempt = useSubmitAttempt();
   const originalDate = "replaced_on" in target ? target.replaced_on : target.occurred_on;
   const reversed =
@@ -395,7 +397,10 @@ export function CancelStock({
             signal,
           ),
     );
-    if (result.ok && command.mounted.current) saved(result.value.id);
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      saved(result.value.id);
+    }
   }
   async function compare() {
     try {
@@ -425,7 +430,13 @@ export function CancelStock({
       {reversed && (
         <p role="status">현재 원본은 이 화면에서 취소할 수 없어요. 연결 이력을 확인해 주세요.</p>
       )}
-      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setMessage("");
+          setDirty(true);
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy || reversed}>
           <legend>취소 내용</legend>
           <div className="form-field">

@@ -2,7 +2,8 @@ import { Icon } from "../../shared/Icon";
 import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { stateFlag, useRouteNotice } from "../../shared/routeNotice";
 import { ApiError, toApiError } from "../../platform/api";
 import { MonthPicker, useMonth, formatMonth } from "../../shared/MonthContext";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
@@ -354,7 +355,7 @@ function AssetDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [formError, setFormError] = useState("");
-  const location = useLocation();
+  const saved = useRouteNotice(stateFlag("saved"));
   const closure = useAssetClosure(state.asset, endedOn, closing);
   async function archive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -410,7 +411,7 @@ function AssetDetail({ id }: { id: string }) {
   const asset = state.asset;
   return (
     <>
-      {location.state?.saved && <p role="status">자산 정보를 저장했어요.</p>}
+      {saved && <p role="status">자산 정보를 저장했어요.</p>}
       <section className="card">
         <h2>{asset.name}</h2>
         <AssetSummary asset={asset} members={members.members} />
@@ -467,6 +468,7 @@ function AssetDetail({ id }: { id: string }) {
           remove={() => api.delete(asset.id, asset.version)}
           done={() => navigate("/assets", { replace: true, state: { deleted: "asset" } })}
           cancel={() => setDeleting(false)}
+          reload={state.reload}
         >
           <p>
             월 기록·계좌·납부 규칙·문서에 연결되지 않은 오등록 자산만 실제로 삭제할 수 있어요. 사용
@@ -554,7 +556,7 @@ function AssetEdit({ id }: { id: string }) {
 export function AssetListPage() {
   const { state } = useAuth();
   const { month } = useMonth();
-  const location = useLocation();
+  const deleted = useRouteNotice(stateFlag("deleted", "asset"));
   return (
     <>
       <div className="intro">
@@ -562,7 +564,7 @@ export function AssetListPage() {
         <h1>자산과 부채</h1>
         <p>소유자와 지분, 보유 기간을 함께 관리해요.</p>
       </div>
-      {location.state?.deleted === "asset" && <p role="status">자산이 삭제된 것을 확인했어요.</p>}
+      {deleted && <p role="status">자산이 삭제된 것을 확인했어요.</p>}
       <MonthPicker />
       <p className="month-action">
         <Link to={`/assets/months/${month}`}>{formatMonth(month)} 월 기록 확인</Link>
