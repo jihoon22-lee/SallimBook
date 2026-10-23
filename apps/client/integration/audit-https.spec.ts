@@ -162,7 +162,7 @@ test("real audit UI paginates metadata filters current household and rejects exp
     await page.getByLabel("대상 ID (선택)").fill(own[0]!);
     await page.getByRole("button", { name: "조건 적용", exact: true }).click();
     await expect(list.getByRole("listitem")).toHaveCount(1);
-    await expect(list.getByText("변경 필드: note", { exact: true })).toBeVisible();
+    await expect(list.getByText("변경 필드: 메모", { exact: true })).toBeVisible();
     await expect(list.getByText("버전: 1 → 2", { exact: true })).toBeVisible();
     const cross = await page.evaluate(async (id) => {
       const response = await fetch(`/api/v1/audit-events?actor_member_id=${id}`, {
