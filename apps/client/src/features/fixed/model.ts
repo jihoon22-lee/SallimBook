@@ -68,6 +68,27 @@ export function displayedTerms(rule: Rule, date = todaySeoul()): RuleTerms {
   );
 }
 /**
+ * The version a change from `date` follows, as the server's _split_at picks it: the last one
+ * starting before the date. Until a date is chosen, the terms in effect today.
+ */
+export function changeBase(rule: Rule, date: string): RuleTerms {
+  if (!isDateOnly(date)) return displayedTerms(rule);
+  return (
+    [...rule.versions]
+      .sort((a, b) => a.effective_from.localeCompare(b.effective_from))
+      .filter((row) => row.effective_from < date)
+      .at(-1) ?? displayedTerms(rule)
+  );
+}
+export function changeDraft(rule: Rule, date: string): RuleDraft {
+  return { ...ruleDraft(changeBase(rule, date)), from: date };
+}
+export function pendingVersions(rule: Rule, today = todaySeoul()): RuleTerms[] {
+  return rule.versions
+    .filter((row) => row.effective_from > today)
+    .sort((a, b) => a.effective_from.localeCompare(b.effective_from));
+}
+/**
  * Same split as the server's _split_at: a cutoff must follow the version already running
  * today (or the first version), and not-yet-started versions from the cutoff on are revoked.
  */

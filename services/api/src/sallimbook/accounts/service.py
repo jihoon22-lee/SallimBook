@@ -18,6 +18,7 @@ from sallimbook.accounts.schemas import (
     AccountRevealResponse,
     AccountType,
 )
+from sallimbook.assets import month_service
 from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
 from sallimbook.assets.service import asset_response, prepare_asset
@@ -279,6 +280,13 @@ def delete_account(
     lock_asset_scope(session, principal)
     account, asset = _account_and_asset(session, principal, account_id, lock=True)
     require_version(account, if_match)
+    in_use = DomainError(
+        "ACCOUNT_IN_USE",
+        "연결된 기록이 있어 삭제할 수 없습니다. 계좌 사용 종료를 선택해 주세요.",
+        409,
+    )
+    if not month_service.release_blank_rows(session, principal, asset.id):
+        raise in_use
     for entity_type, row in (("financial_account", account), ("asset", asset)):
         record_event(
             session,
@@ -298,11 +306,7 @@ def delete_account(
     except IntegrityError as exc:
         session.rollback()
         if getattr(exc.orig, "sqlstate", None) in {"23001", "23503"}:
-            raise DomainError(
-                "ACCOUNT_IN_USE",
-                "연결된 기록이 있어 삭제할 수 없습니다. 계좌 사용 종료를 선택해 주세요.",
-                409,
-            ) from None
+            raise in_use from None
         raise
 
 

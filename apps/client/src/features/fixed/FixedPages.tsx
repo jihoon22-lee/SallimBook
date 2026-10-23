@@ -2,7 +2,9 @@ import { TaskNotice, TaskPanel, useTaskPanelRelease } from "../../shared/TaskLay
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { stateFlag, useRouteNotice } from "../../shared/routeNotice";
+import { MisregistrationDelete } from "../assets/MisregistrationDelete";
 import { ApiError, toApiError } from "../../platform/api";
 import { MonthPicker, useMonth, formatMonth } from "../../shared/MonthContext";
 import { formatKrw, monthEnd } from "../assets/months/model";
@@ -608,7 +610,10 @@ function RuleDetail({ id, edit }: { id: string; edit: boolean }) {
     ),
   );
   const [ending, setEnding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   const row = resource.data;
+  const deleteKey = useIdempotencyKey(JSON.stringify(["rule-delete", row?.id, row?.version]));
   return (
     <>
       <CashflowError error={resource.error} />
@@ -638,13 +643,57 @@ function RuleDetail({ id, edit }: { id: string; edit: boolean }) {
                   </Link>
                 )}
                 {(!row.ended_on || row.ended_on > todaySeoul()) && (
-                  <button className="secondary-button" onClick={() => setEnding(true)}>
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      setDeleting(false);
+                      setEnding(true);
+                    }}
+                  >
                     {row.ended_on ? "규칙 종료일 앞당기기 검토" : "납부 규칙 종료 검토"}
                   </button>
                 )}
                 <Link to="/fixed-payments">월별 회차 확인</Link>
               </div>
+              <details className="secondary-actions">
+                <summary>규칙 삭제</summary>
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="danger-button"
+                    onClick={() => {
+                      setEnding(false);
+                      setDeleting(true);
+                    }}
+                  >
+                    오등록 규칙 삭제 검토
+                  </button>
+                </div>
+              </details>
             </section>
+          )}
+          {deleting && (
+            <MisregistrationDelete
+              id="rule-delete"
+              title="오등록 규칙 삭제 확인"
+              ackLabel="잘못 등록한 규칙이며 회차와 함께 삭제할 것을 확인했어요."
+              actionLabel="오등록 규칙 삭제"
+              inUseCode="RULE_IN_USE"
+              remove={() =>
+                api.deleteRule(row.id, row.version, deleteKey, new AbortController().signal)
+              }
+              done={() =>
+                navigate("/fixed-payments/rules", { replace: true, state: { deleted: "rule" } })
+              }
+              cancel={() => setDeleting(false)}
+              reload={() => void resource.reload()}
+            >
+              <p>
+                납부 기록이나 건너뛰기·예정일 변경 같은 처리 이력이 없고 확정한 월에 걸리지 않은
+                오등록 규칙만 삭제할 수 있어요. 규칙의 적용기간과 예정 회차가 함께 지워져요. 납부한
+                적이 있으면 규칙 종료를 이용해 주세요.
+              </p>
+            </MisregistrationDelete>
           )}
           {ending && (
             <>
@@ -961,11 +1010,13 @@ export function FixedListPage() {
   );
 }
 export function RuleListPage() {
+  const deleted = useRouteNotice(stateFlag("deleted", "rule"));
   return (
     <AuthenticatedFinance
       title="납부 규칙 관리"
       description="주기와 적용기간을 관리하고 과거 규칙을 보존해요."
     >
+      {deleted && <p role="status">납부 규칙을 삭제했어요.</p>}
       <RuleList />
     </AuthenticatedFinance>
   );

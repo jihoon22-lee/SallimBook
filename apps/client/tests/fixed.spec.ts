@@ -370,6 +370,117 @@ test("a pending amount typo is replaced at its own start date", async ({ page })
   });
   expect(state.writes.at(-1)!.version).toBe('"1"');
 });
+test("the rule change form starts from the terms in effect today", async ({ page }) => {
+  const state = await mockCashflow(page);
+  withPendingChange(state);
+  await page.goto(`/fixed-payments/rules/${uid(60)}/edit`);
+  await expect(page.getByLabel("원화 예정금액 (원)", { exact: true })).toHaveValue(/^33,?000$/);
+});
+async function confirmRuleChange(page: Page, reason = "합성 이후 변경") {
+  // Role names leave out a textarea's own value; label text would include it.
+  await page.getByRole("textbox", { name: "규칙 변경 사유", exact: true }).fill(reason);
+  await page
+    .getByLabel(
+      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
+      { exact: true },
+    )
+    .check();
+}
+test("a change dated after a pending change starts from the pending terms", async ({ page }) => {
+  const state = await mockCashflow(page);
+  const rule = withPendingChange(state);
+  await page.goto(`/fixed-payments/rules/${uid(60)}/edit`);
+  const amount = page.getByLabel("원화 예정금액 (원)", { exact: true });
+  await expect(amount).toHaveValue(/^33,?000$/);
+  await page.getByLabel("적용 시작일", { exact: true }).fill("2026-01-01");
+  await expect(amount).toHaveValue(/^34,?000$/);
+  await page.getByLabel("규칙 메모", { exact: true }).fill("합성 이후 메모");
+  await confirmRuleChange(page);
+  await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
+  expect(state.writes.at(-1)!.body).toMatchObject({
+    effective_from: "2026-01-01",
+    expected_amount_krw: "34000",
+    note: "합성 이후 메모",
+  });
+  expect(
+    rule.versions.map((row) => [row.effective_from, row.effective_until, row.expected_amount_krw]),
+  ).toEqual([
+    ["2025-01-01", "2025-12-01", "33000"],
+    ["2025-12-01", "2026-01-01", "34000"],
+    ["2026-01-01", null, "34000"],
+  ]);
+});
+test("an amount typed before the start date stays when the date passes a pending change", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  withPendingChange(state);
+  await page.goto(`/fixed-payments/rules/${uid(60)}/edit`);
+  const amount = page.getByLabel("원화 예정금액 (원)", { exact: true });
+  await amount.fill("36000");
+  await page.getByLabel("적용 시작일", { exact: true }).fill("2026-01-01");
+  await expect(amount).toHaveValue(/^36,?000$/);
+});
+test("a rule change conflict lists pending changes and keeps edits on the version it follows", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  withPendingChange(state);
+  await page.goto(`/fixed-payments/rules/${uid(60)}/edit`);
+  await page.getByLabel("적용 시작일", { exact: true }).fill("2026-01-01");
+  await page.getByLabel("원화 예정금액 (원)", { exact: true }).fill("36000");
+  await confirmRuleChange(page);
+  state.conflict = true;
+  await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
+  await page.getByRole("button", { name: "현재 규칙 다시 확인", exact: true }).click();
+  const review = page.locator(".review-panel");
+  await expect(review.getByText("2025.12.01부터 적용 예정", { exact: true })).toBeVisible();
+  await review.getByRole("button", { name: "비교한 규칙 변경 유지", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "규칙 메모", exact: true })).toHaveValue(
+    "배우자 합성 규칙 메모",
+  );
+  await expect(page.getByLabel("원화 예정금액 (원)", { exact: true })).toHaveValue(/^36,?000$/);
+  await confirmRuleChange(page);
+  await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
+  expect(state.writes.at(-1)!.body).toMatchObject({
+    effective_from: "2026-01-01",
+    expected_amount_krw: "36000",
+    note: "배우자 합성 규칙 메모",
+  });
+});
+async function reviewRuleDelete(page: Page) {
+  await page.goto(`/fixed-payments/rules/${uid(60)}`);
+  await openDisclosure(page, "규칙 삭제");
+  await page.getByRole("button", { name: "오등록 규칙 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("잘못 등록한 규칙이며 회차와 함께 삭제할 것을 확인했어요.", { exact: true })
+    .check();
+}
+test("a mistaken rule is deleted after confirmation", async ({ page }) => {
+  const state = await mockCashflow(page);
+  await reviewRuleDelete(page);
+  await page.getByRole("button", { name: "오등록 규칙 삭제", exact: true }).click();
+  await expect(page).toHaveURL(/\/fixed-payments\/rules$/);
+  await expect(
+    page.getByRole("status").filter({ hasText: "납부 규칙을 삭제했어요." }),
+  ).toBeVisible();
+  expect(state.rules.some((row) => row.id === uid(60))).toBe(false);
+  const write = state.writes.at(-1)!;
+  expect([write.method, write.version]).toEqual(["DELETE", '"1"']);
+  expect(write.key).toBeTruthy();
+});
+test("a rule with payment records explains that it can only be ended", async ({ page }) => {
+  const state = await mockCashflow(page);
+  state.ruleInUse = true;
+  await reviewRuleDelete(page);
+  await page.getByRole("button", { name: "오등록 규칙 삭제", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("보험료로 연결됐거나");
+  await expect(page.getByRole("alert")).toContainText("규칙 종료로 과거 기록을 보존해 주세요");
+  await expect(page.getByRole("button", { name: "오등록 규칙 삭제", exact: true })).toBeDisabled();
+  expect(state.rules.some((row) => row.id === uid(60))).toBe(true);
+});
 test("a pending change with handled occurrences explains why it cannot be withdrawn", async ({
   page,
 }) => {
