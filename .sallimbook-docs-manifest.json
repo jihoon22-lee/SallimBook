@@ -90,8 +90,8 @@
       "git_sha1": "4b9d6f91a74d1efef01967749a02f08be25b0951"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "5740d6e3c5a063cb9da9dc5b35980a10d05abc2a5b84088b815635ef622ff64b",
-      "git_sha1": "93ea643beeb2095301d443cafee3e4ce3ef1564d"
+      "sha256": "5394458b34c9b36aec95c307246fd9219346313eef7653d56a2dadc5d22c1199",
+      "git_sha1": "23a6f147f34d836c0fbf141a772dc625dd23e94e"
     },
     "docs/deployment-backup-operations.md": {
       "sha256": "b75cd92cddb480468b2062965e4b7060111dc88bf6ebf606ff201afa4e76698a",
@@ -274,8 +274,8 @@
       "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
     },
     "docs/operations-runbook.md": {
-      "sha256": "d7558ca3c8ebb1746fd6523f8a7f07bf4acbffdb10eaf7c66752e34bb88a5fa0",
-      "git_sha1": "2f196751285de72fcfe771dd377ca86bc2d93db4"
+      "sha256": "1d3fc59ba888034dae21bc722c645ead6eba20ef33554890d3af31d331073a9a",
+      "git_sha1": "9f2c2dd061ca8a24162e11258654f802832ac2f3"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
@@ -374,16 +374,16 @@
       "git_sha1": "10b7d5a3395629224b144f837cfb318b43f0b388"
     },
     "docs/testing/operations-automation.md": {
-      "sha256": "aaee40ba4b481c433305ca69b8c1895140722b205d7535761023444884ef9a36",
-      "git_sha1": "b3b88066b133567dd6c347e801ac98d1a76931d6"
+      "sha256": "005a80a081401c0b8b4991873e39336b3ce41d44350059a4e9d5c68acb376bf6",
+      "git_sha1": "002e65b2bda74c9cf8ab183f3a1a7d0a47b0af8a"
     },
     "docs/testing/design-refresh.md": {
       "sha256": "a5128aaaa9f0a4c50f42932b431576abad96711042d15ef0807d45d7e0aa0433",
       "git_sha1": "ca5a0f50d029e9a600739c3703e78f64cc225c4d"
     },
     "docs/testing/android-ci.md": {
-      "sha256": "4eacf7873b13f956c07be8044ee0c06e2d7f55351d1a73df7e79129a3f74e6ce",
-      "git_sha1": "6d7a7e934c270e2611d4297835e674d63d70c736"
+      "sha256": "e84ca638b3af31df2cf3a0d3fa15e2a52e391878f0dedd3595f19e0f1cddc4f6",
+      "git_sha1": "07ec6996c104dc7e22001767073a4a9c2f4792b7"
     },
     "docs/testing/android-cloud-results.md": {
       "sha256": "738ccc2a9de11a8e12ba124392aa7211329af489b3501448a4bed581e0fdb602",

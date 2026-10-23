@@ -17,6 +17,7 @@
 | `… -m ops.recovery prepare …` | 격리 복원 DB의 인증 폐기와 두 계정 비밀번호 재설정 | 보관함/금전/진료 기록 삭제 |
 | `… -m ops.recovery verify …` | 새 인증·키 회전·첨부 AEAD·운영 인수 증거 검사 | QUARANTINE 제거, 서비스 시작 |
 | `python3 -m ops.release …` | release 빌드·보안 검사·기존 외부키 서명·서명 확인 | 서명키 생성, 업로드, 실기기 설치 |
+| `python3 -m ops.cvd_retention prune …` | 롤백 창이 끝난 뒤 이전 운영 설정이 남긴 검증된 CVD 세대 정리(`--keep` 필수, `--dry-run` 제공) | 현재·직전·기준선 세대, 검증을 통과하지 못한 세대의 삭제 |
 
 운영 도구는 비밀 값이나 원본 SQL/진료 내용을 출력하지 않는다. 실패 시 원본 예외를 일반 로그로 내보내지 않는다. 자세한 원인은 비공개 터미널에서 조사하고 비밀 경로·값·원문을 이슈/채팅에 복사하지 않는다.
 
@@ -53,7 +54,7 @@ docker compose -f /PRIVATE_CONFIG/NEW_RENDERED_DIRECTORY/compose.json config --q
 uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/NEW_RENDERED_DIRECTORY
 ```
 
-`build-inputs.json`은 commit, 원본 API lock SHA와 모든 빌드 입력 해시를 기록한다. 두 이미지 context에는 같은 clean archive SHA와 api/web 역할을 담은 `source-revision.json`을 추가하고 생성 Dockerfile에 literal OCI revision/역할 label을 넣는다. 운영자가 revision build-arg를 따로 입력하지 않는다. `preflight`는 digest로 선택한 실제 로컬 API/웹 이미지의 label이 manifest의 source_commit 및 해당 역할과 모두 같은지 검사하며, 누락·다른 revision·API/웹 바꿔치기는 거부한다. API와 웹은 같은 검토 commit에서 함께 빌드한다. 이 metadata 확인은 이미지 게시자의 암호학적 서명 검증을 의미하지 않는다. API는 `uv export --frozen --no-dev --no-emit-project`의 hash-pinned requirements를 사용한다. 이미지/APK 빌드는 임시 `git archive` checkout에서 수행하므로 원래 작업 트리의 ignored `.env`, 키, 첨부, public 디렉터리의 미추적 파일을 가져가지 않는다. 운영자 환경의 `VITE_*`도 상속하지 않는다. 최종 Docker context에는 필요한 API/웹 빌드 입력만 넣는다. API 이미지의 PostgreSQL client는 같은 공식 이미지의 loader/공유 라이브러리와 함께 격리하여 API Python의 시스템 라이브러리를 덮어쓰지 않는다.
+`build-inputs.json`은 commit, 원본 API lock SHA와 모든 빌드 입력 해시를 기록한다. 두 이미지 context에는 같은 clean archive SHA와 api/web 역할을 담은 `source-revision.json`을 추가하고 생성 Dockerfile에 literal OCI revision/역할 label을 넣는다. 운영자가 revision build-arg를 따로 입력하지 않는다. `preflight`는 digest로 선택한 실제 로컬 API/웹 이미지의 label이 manifest의 source_commit 및 해당 역할과 모두 같은지 검사하며, 누락·다른 revision·API/웹 바꿔치기는 거부한다. API와 웹은 같은 검토 commit에서 함께 빌드한다. 이 metadata 확인은 이미지 게시자의 암호학적 서명 검증을 의미하지 않는다. API는 `uv export --frozen --no-dev --no-emit-project`의 hash-pinned requirements를 사용한다. 이미지/APK 빌드는 임시 `git archive` checkout에서 수행하므로 원래 작업 트리의 ignored `.env`, 키, 첨부, public 디렉터리의 미추적 파일을 가져가지 않는다. 빌드 명령은 운영자 환경을 허용 목록(`PATH`, `HOME`, `JAVA_HOME`, `ANDROID_HOME`, `GRADLE_USER_HOME`, `LANG`, pnpm 저장소 변수) 외에는 상속하지 않으므로 `VITE_*`도 들어오지 않고, 의존성 설치는 `pnpm install --frozen-lockfile --ignore-scripts`로 install 스크립트를 실행하지 않는다. 최종 Docker context에는 필요한 API/웹 빌드 입력만 넣는다. API 이미지의 PostgreSQL client는 같은 공식 이미지의 loader/공유 라이브러리와 함께 격리하여 API Python의 시스템 라이브러리를 덮어쓰지 않는다.
 
 `write_config`는 운영자 전용 최상위 출력 디렉터리를 0700으로 유지한다. 컨테이너에 mount하는 공개 설정의 `node/`, `public/`, `public/.well-known/`, `downloads/`는 0755, 생성 설정 파일은 0644로 명시하여 `umask 077`에서도 cap-drop된 node와 UID 10001 Caddy가 읽을 수 있게 한다. 비밀번호·keyring·서명키 등 비밀 파일은 이 출력 디렉터리에 생성하지 않으며 기존 owner-only 권한을 유지한다.
 
@@ -73,9 +74,9 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 1. 위 절차로 새 이미지와 렌더 디렉터리를 만들고 `docker compose -f NEW/compose.json config --quiet`와 `uv run --project services/api python -m ops.preflight NEW`를 통과시킨 뒤 배포한다.
 2. 검사기 변경이 포함된 병합 커밋으로 깨끗한 새 운영 checkout을 만들고, 그 SHA·새 렌더·새 state 디렉터리로 새 자동화 설정 JSON을 만든다. 기존 설정·checkout·state는 고치지 않고 보존한다(되돌리기용).
-3. `python -m ops.automation validate NEW.json --sha256 NEW_SHA256` → `python -m ops.schedule render NEW.json --sha256 NEW_SHA256 --output NEW_SCHEDULE` → `python -m ops.schedule validate NEW_SCHEDULE` → 기존 unit 파일과 health의 디스크 검사 drop-in(`PROJECT-health.service.d/`) 정리(별도 운영 절차, `install`은 같은 이름의 파일·drop-in이 있으면 거부하고 `activate`는 drop-in이 붙은 unit을 거부한다) → `python -m ops.schedule install NEW_SCHEDULE` → `python -m ops.schedule activate NEW_SCHEDULE` 순서로 실행한다.
-4. `activate`는 9개 unit을 모두 켠다. 백업 유예(2026-10-18 결정, [v1 완료 계획](v1-completion-plan.md))를 유지하려면 바로 `systemctl --user disable --now PROJECT-backup.timer PROJECT-restore-check.timer`를 실행한다. 그다음 health의 `ExecStartPre` 디스크 검사 drop-in을 새 설정 경로·해시로 다시 설치하고 `systemctl --user daemon-reload`를 실행한다.
-5. 새 설정으로 `--task health`를 수동 실행한다. 백업 유예 중에는 서비스·scanner 검사를 통과한 뒤 `BACKUP_MISSING`(새 state에는 백업 기록이 없다) 또는 `BACKUP_STALE`로 끝나는 것이 정상이다. 그 앞의 `SERVICE_SET`·`SCANNER_STALE` 등으로 실패하면 정상이 아니다. 디스크 여유는 drop-in 검사가 매회 확인한다.
+3. `python -m ops.automation validate NEW.json --sha256 NEW_SHA256` → `python -m ops.schedule render NEW.json --sha256 NEW_SHA256 --output NEW_SCHEDULE` → `python -m ops.schedule validate NEW_SCHEDULE` → 기존 unit 파일 정리(별도 운영 절차, `install`은 같은 이름의 파일·drop-in이 있으면 거부하고 `activate`는 drop-in이 붙은 unit을 거부한다) → **수동으로 만든 health 디스크 검사 drop-in 삭제**: `PROJECT-health.service.d/` 디렉터리(안에 `backup-pause-disk-check.conf`가 있다)를 사용자 unit 디렉터리(`~/.config/systemd/user/`)에서 지우고 `systemctl --user daemon-reload`를 실행한다(`install`은 이 디렉터리가 남아 있으면 `UNIT_ALREADY_EXISTS`로 거부한다) → `python -m ops.schedule install NEW_SCHEDULE` → `python -m ops.schedule activate NEW_SCHEDULE` 순서로 실행한다.
+4. `activate`는 9개 unit을 모두 켠다. 백업 유예(2026-10-18 결정, [v1 완료 계획](v1-completion-plan.md))를 유지하려면 바로 `systemctl --user disable --now PROJECT-backup.timer PROJECT-restore-check.timer`를 실행한다. 디스크 검사 drop-in은 다시 만들지 않는다. health가 디스크 검사를 첫 단계로 하므로 백업이 멈춰 있어도 닿는다.
+5. 새 설정으로 `--task health`를 수동 실행한다. 백업 유예 중에는 서비스·scanner 검사를 통과한 뒤 `BACKUP_MISSING`(새 state에는 백업 기록이 없다) 또는 `BACKUP_STALE`로 끝나는 것이 정상이다. 그 앞의 `SERVICE_SET`·`SCANNER_STALE` 등으로 실패하면 정상이 아니다. 상태·빌드·Docker·백업·첨부 저장소의 디스크 여유(각각 1GiB 이상)는 health의 첫 단계이므로 백업 기록이 없어도 `DISK_SPACE_LOW`가 `BACKUP_MISSING`보다 먼저 나온다. 디스크 부족은 종료 상태 1이라 예약 서비스가 다시 시도하지 않는다.
 
 배포 후 확인표:
 
@@ -91,7 +92,17 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 1. 새 예약을 멈춘다(위의 `systemctl --user disable --now` 명령).
 2. `docker compose -f PREVIOUS/compose.json up -d --wait --remove-orphans`로 이전 렌더에 되돌린다. `PREVIOUS`는 **이전 state 디렉터리의 `active-deployment.json`이 가리키는 렌더**다. 파일이 없을 때만 이전 설정의 `deployment_directory`를 쓴다. 매일 `cvd-refresh`가 새 렌더를 승격하므로 처음 렌더의 ClamAV DB는 7일이 지나면 clamd가 시작을 거부해 scanner·api·web이 뜨지 않는다. 같은 프로젝트 이름이므로 inspector 컨테이너는 orphan으로 제거되고, 이전 API 이미지는 로컬 워커로 동작한다. 스키마를 올린 뒤라면 먼저 아래 절차의 DB 되돌리기를 끝낸다.
 3. 남은 볼륨을 지운다: `docker volume rm PROJECT_inspector_socket`(`PROJECT`는 manifest의 `project`). 다시 배포할 때 새 볼륨이 이미지 디렉터리의 소유권(10002:10003, 0750)을 받는다.
-4. 새 unit 파일과 drop-in을 정리하고(별도 운영 절차) 이전 schedule 디렉터리로 `ops.schedule install`·`activate`를 실행한다. 위 배포 4단계처럼 backup·restore-check 타이머를 다시 끄고 디스크 검사 drop-in을 이전 설정으로 다시 설치한 뒤, 이전 설정으로 `--task health`를 실행해 위 5단계와 같은 결과인지 확인한다.
+4. 새 unit 파일을 정리한다(별도 운영 절차. 같은 이름의 파일·drop-in이 있으면 `install`이 거부한다). 이전 schedule 디렉터리는 다시 쓰지 않는다. 이미 `install`·`activate`한 기록(`installation.json`·`activation.json`)이 있어 `install`이 `SCHEDULE_ALREADY_INSTALLED`로 거부하고, `render`도 존재하는 출력 디렉터리를 거부한다. **이전 운영 checkout**(이전 설정의 `operator_source_commit`, 청결한 상태)으로 이동해 존재하지 않는 새 경로 `ROLLBACK_SCHEDULE`에 다시 렌더한 뒤 같은 디렉터리로 검증·설치·활성화한다. 렌더는 현재 checkout의 경로와 HEAD를 unit에 고정하므로 다른 checkout에서 실행하면 `validate`가 `OPERATOR_SOURCE_CHANGED`로 실패한다.
+
+   ```bash
+   python -m ops.automation validate OLD.json --sha256 OLD_SHA256
+   python -m ops.schedule render OLD.json --sha256 OLD_SHA256 --output ROLLBACK_SCHEDULE
+   python -m ops.schedule validate ROLLBACK_SCHEDULE
+   python -m ops.schedule install ROLLBACK_SCHEDULE
+   python -m ops.schedule activate ROLLBACK_SCHEDULE
+   ```
+
+   그다음 위 배포 4단계처럼 `activate`가 켠 backup·restore-check 타이머를 다시 끈다. 이전 운영 checkout의 health가 디스크 검사를 첫 단계로 하지 않는 버전(이 변경 이전)이면 백업 유예 중 디스크 검사가 닿지 않으므로, 그 `activate`가 끝난 **뒤에** 기존 수동 drop-in(`PROJECT-health.service.d/backup-pause-disk-check.conf`)을 이전 설정 경로·해시로 다시 설치하고 `systemctl --user daemon-reload`를 실행한다(`activate`는 drop-in이 붙은 unit을 거부하므로 순서를 바꾸지 않는다). 이 변경 이후의 checkout이면 따로 할 일이 없다. 끝으로 이전 설정으로 `--task health`를 실행해 위 5단계와 같은 결과인지 확인한다.
 5. 되돌린 경우 문서 검사 격리가 다시 해제된 상태로 기록하고 원인을 조사한다.
 
 ### 스키마가 바뀌는 업그레이드 — 점검 시간 절차
@@ -127,7 +138,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 이후:
 
-12. 위 배포 2~5단계로 자동화를 전환한다(새 운영 checkout·state, backup·restore-check 타이머 다시 끄기, 디스크 검사 drop-in 재설치, `BACKUP_MISSING`/`BACKUP_STALE`가 정상).
+12. 위 배포 2~5단계로 자동화를 전환한다(새 운영 checkout·state, install 전에 수동 health drop-in 디렉터리 `PROJECT-health.service.d/` 삭제와 `systemctl --user daemon-reload`, backup·restore-check 타이머 다시 끄기, `BACKUP_MISSING`/`BACKUP_STALE`가 정상).
 13. 앱의 고정 납부 화면 "예정 회차 생성"을 **오늘부터** 이전에 생성해 둔 가장 먼 달까지 다시 실행한다(요청당 366일, 규칙 100개 이내). 0015는 예외가 풀린 회차의 `manual_override`를 실제 예외 여부로 정규화한다. 재생성은 그중 오늘 이후의 납부 기록 없는 회차를 현재 규칙으로 다시 맞춘다. 오늘 이전 회차는 다시 계산하지 않는다.
 
 **되돌리기 — 11단계(폰 업데이트) 전까지만.** 그 뒤에는 되돌리지 않고 앞으로 고친다.
@@ -149,6 +160,19 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 자동화(systemd)·web/node·실제 백업 복원(`ops.test_recovery`)·실제 APK 업데이트는 이 리허설에 포함하지 않는다. 2026-10-21에 165d46b 이미지 → 이 절차를 추가한 커밋의 이미지로 통과했다(커밋과 출력은 해당 PR 기록).
 
+### 롤백 창이 끝난 뒤 — 이전 운영 설정의 CVD 세대 정리
+
+운영 설정을 새 운영 checkout·state로 전환하면 이전 설정이 만든 ClamAV DB 세대(`BUILD_DIRECTORY/<run id>/`와 `sallimbook-ops-api:cvd-…` 이미지)는 새 설정의 `cvd-refresh` 정리가 지우지 않는다. 그 세대의 영수증은 다른 운영 commit·앱 commit으로 봉인되었고 완료 기록은 이전 state 디렉터리에만 있기 때문이다. 이 세대도 6개 상한(`CVD_GENERATION_LIMIT`)에 계속 포함되므로 **롤백이 더 필요 없어진 뒤에** 정리한다. 롤백 가능한 동안에는 실행하지 않는다. 롤백 대상 세대를 지울 수 있다.
+
+1. 남길 세대의 run id를 정한다. 새 state의 `active-deployment.json`의 `source_run`(활성 세대)이 하나다. 이전 설정으로 되돌릴 가능성이 남아 있으면 이전 state의 `active-deployment.json`의 `source_run`(롤백 대상 세대)도 남긴다. 현재 배포·직전 배포·기준선 세대는 이 목록과 무관하게 항상 보호된다.
+2. 새 운영 checkout에서 먼저 `--dry-run`으로 확인하고, `would_remove_generations`가 기대와 같으면 `--dry-run`을 빼고 같은 명령을 실행한다.
+
+   ```bash
+   python -m ops.cvd_retention prune NEW.json --sha256 NEW_SHA256 --keep ACTIVE_RUN_ID --keep ROLLBACK_RUN_ID --previous-state OLD_STATE_DIRECTORY --dry-run
+   ```
+
+`--keep`은 한 번 이상 필요하고 현재 build 디렉터리에 없는 id는 `CVD_KEEP_UNKNOWN`으로 거부한다. 매일 정리와 같은 제거 절차를 쓰므로 세대마다 영수증·파일 해시·완료 journal(이전 state는 `--previous-state`로 지정)·정확한 이미지 태그와 라벨·사용 중인 컨테이너 없음·다른 저장 manifest의 참조 없음을 모두 확인하고, 통과한 세대의 정확한 태그만 `docker image rm --no-prune`으로 지운 뒤 기록된 트리를 지운다. 하나라도 통과하지 못하면 그 세대는 그대로 두고 `skipped_generations`에 나온다(운영자가 따로 판단). 복구가 필요한 중단 기록이 있으면 `RECOVERY_REQUIRED`로 시작하지 않는다. 결과는 state의 `latest-cvd-prune.json`에 남는다.
+
 ## 3. 전용 네트워크와 비밀 주입
 
 생성 Compose는 프로젝트별 네트워크·볼륨만 사용한다. `ports`, `container_name`, `network_mode: host`, `/dev/net/tun`, `NET_ADMIN`, Docker socket을 사용하지 않는다. PostgreSQL은 내부 DB 네트워크, API는 내부 app/DB 네트워크에만 연결한다. API는 하나의 worker로 실행하여 현재 프로세스별 업로드·내보내기 한도와 맞춘다.
@@ -156,6 +180,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy 두 프로세스가 이 노드의 network namespace를 공유하고 각각 loopback 8080/8081만 수신한다. Tailscale Serve가 지원하는 loopback HTTP upstream과 일치한다.
 
 - 사설 HTTPS `https://FQDN:8443`: 웹/API와 `GET/HEAD /downloads/SallimBook.apk`만 허용하는 APK 다운로드. RP ID는 포트 없는 FQDN이다.
+- 사설 Caddy는 요청의 `Host`(포트 제외)가 manifest의 FQDN과 다르면 웹 루트·APK·API 어디에도 가지 않고 421을 응답한다. 이 규칙은 첫 `handle` 블록이며, 최상위 `respond`는 뒤따르는 catch-all `handle`에 가려져 동작하지 않는다. Tailscale Serve는 들어온 `Host`를 그대로 전달하므로(1.104.1 소스에서 확인) 정상 요청은 영향이 없다. 이 규칙이 처음 켜지는 배포에서는 첫 요청(웹 첫 화면 또는 앱 로그인)이 421이 아닌지 바로 확인하고, 421이면 이전 렌더로 되돌린다.
 - 공개 HTTPS `https://FQDN:443`: `/.well-known/assetlinks.json`의 GET/HEAD만 제공한다. 다른 경로는 404다. 공개 Caddy에는 API upstream, DB·첨부·비밀 mount가 없다. 사설·공개 Caddy는 같은 source-bound 웹 이미지를 사용하되 공개 설정은 DAL 경로만 제공한다. 이 이미지는 고정된 Caddy base의 불필요한 cap_net_bind_service 파일 capability를 빌드 시 제거한다. 8080/8081 고포트만 사용하므로 런타임 UID 10001·cap_drop ALL·no-new-privileges는 그대로 유지한다.
 - TLS는 전용 노드의 Serve/Funnel에서 종료한다. Caddy는 같은 격리 namespace의 HTTP proxy다. 이전 문서의 “Caddy만 외부 HTTPS” 설명은 이 배치에서는 적용되지 않는다.
 - 외부에서 들어온 `Forwarded`/`X-Forwarded-For`는 API에 전달하지 않고, API의 proxy header 해석도 끈다. 내부 HTTP가 인증 쿠키를 비보안 쿠키로 바꾸지 않는다.
@@ -322,6 +347,10 @@ python3 -m ops.release \
   --previous-apk /PRIVATE_RELEASE_PARENT/PREVIOUS_RELEASE.apk \
   --output /PRIVATE_RELEASE_PARENT/NEW_RELEASE.apk
 ```
+
+빌드와 서명은 별개 단계다. 빌드(`pnpm install --frozen-lockfile --ignore-scripts` → `pnpm android:sync` → Gradle)는 서명 키·비밀번호 경로를 받지 않고 허용 목록의 환경 변수(`PATH`, `HOME`, `JAVA_HOME`, `ANDROID_HOME`, `GRADLE_USER_HOME`, `LANG`, pnpm 저장소 변수)만 받으며, 명령은 그 허용 목록만 환경으로 받는다. Gradle은 `--no-daemon`과 Kotlin in-process 컴파일로 실행한다. 서명(zipalign·apksigner)은 모든 빌드 명령이 끝난 뒤에 시작한다. 의존성의 install 스크립트는 실행하지 않는다. pnpm 9의 lockfile에는 install 스크립트 여부가 기록되지 않으므로, CI(`types-contract`)가 `pnpm install` 뒤 설치된 의존성 트리에서 preinstall/install/postinstall 스크립트와 `binding.gyp`가 있는 패키지, 그리고 워크스페이스 프로젝트의 수명주기 스크립트를 찾는다(`scripts/check_install_scripts.py`). 결과가 `ops.build_context.INSTALL_SCRIPT_PACKAGES`와 다르면 실패하므로, 필요한 패키지가 생기면 그 목록에 기록하고 그 스크립트만 명시적으로 실행하는 빌드 단계를 추가한다. 현재 설치 트리에는 그런 패키지가 없다. `ops.build_context`의 이미지 빌드 입력(`pnpm install`, `pnpm build`)도 같은 허용 목록과 `--ignore-scripts`를 쓴다. 빌드는 제3자 코드를 같은 사용자로 실행하므로 서명 전에 두 가지를 더 확인한다. (1) 빌드 전에 서명 경로의 도구 전체(SDK의 `build-tools/36.0.0`, `cmdline-tools/15859902`와 `JAVA_HOME` JDK 트리: zipalign, apksigner와 jar, apkanalyzer, `bin/java`, `lib/modules` 포함)의 파일별 모드·SHA-256 지문을 만들고, 서명 직전에 다시 비교한다. 하나라도 달라지면 `SIGNING_TOOLS_CHANGED`로 중단하고 서명하지 않는다. (2) 릴리스 프로세스는 빌드 전에 자신을 child subreaper(`prctl(PR_SET_CHILD_SUBREAPER)`)로 설정한다. 그러면 빌드가 띄운 프로세스의 부모가 끝날 때 그 프로세스(Gradle·Kotlin 데몬처럼 `setsid`나 이중 fork로 세션을 벗어난 것 포함)는 init이 아니라 릴리스 프로세스의 자식이 된다. 빌드 명령이 끝날 때마다 남은 자식을 모두 SIGKILL로 종료·회수하고 남은 것이 없음을 확인한다. 정해진 시간 안에 사라지지 않으면 `BUILD_PROCESS_LEFT_RUNNING`으로 중단한다. 빌드 전에 `setsid`로 분리한 시험 프로세스가 실제로 자식으로 돌아오는지 확인하며, subreaper를 설정할 수 없거나 확인에 실패하면 `BUILD_CONTAINMENT_UNAVAILABLE`로 중단하고 다른 방식으로 대신하지 않는다. 사용자 systemd 관리자나 linger는 필요 없다. 빌드가 끝나면(남은 프로세스 회수 뒤) 출력 디렉터리 옆에 비공개 임시 디렉터리(0700)를 새로 만들어 서명되지 않은 APK를 즉시 0600으로 복사한다. 이 디렉터리는 빌드가 끝난 뒤에 생기므로 빌드 코드가 볼 수 없다. 검사·정렬·서명은 그 복사본만 읽는다. 빌드 트리의 파일을 바꿔도 서명 대상에 영향이 없다. zipalign·apksigner·apkanalyzer는 검증한 JDK의 `JAVA_HOME`, 그 `bin`+`/usr/bin:/bin`인 `PATH`, `LANG`만 가진 고정 환경으로 실행하며 `JAVA_TOOL_OPTIONS`·`_JAVA_OPTIONS`·`JDK_JAVA_OPTIONS`·`CLASSPATH` 등 다른 변수는 받지 않는다. 중단 코드는 명령 출력에 고정된 코드로만 나오고 원인 세부는 출력하지 않는다.
+
+**남는 위험:** 남은 프로세스 회수는 빌드가 끝난 뒤 살아남은 프로세스가 출력이나 서명 도구를 바꾸지 못하게 하는 장치이고 서명 키의 비밀 유지 장치가 아니다. 빌드 코드는 같은 사용자로 실행되므로 빌드가 도는 동안 같은 사용자가 읽을 수 있는 파일을 모두 읽을 수 있다. 키 저장소와 비밀번호 파일의 경로는 `ops.release` 명령줄(`/proc/<pid>/cmdline`)에 보이므로 빌드 중에 그 파일을 읽을 수 있다. 빌드가 이 프로세스 트리 밖의 실행기에 작업을 맡기면(예: 이 사용자가 쓸 수 있는 Docker socket으로 `docker run -d`, 사용자 systemd 관리자가 떠 있을 때의 `systemd-run --user`) 그 프로세스는 회수 대상이 아니고 서명 뒤에도 남을 수 있다. 빌드가 끝나기 전에 지문 대상이 아닌 같은 사용자의 파일을 바꾸는 것도 막지 못한다. 서명 도구와 JDK의 지문 비교는 이런 변경 중 서명 경로의 변조만 잡는다. 완전한 격리는 빌드를 별도 사용자 또는 컨테이너에서 실행하고 서명 자료를 그 밖에 두는 것이 필요하며, 현재 구현하지 않았다. 서명키 보관 위치와 권한은 §7 앞부분의 조건을 유지한다.
 
 깨끗한 source commit, JDK 21, 고정 SDK/build-tools 36.0.0을 요구한다. `ops/release.init.gradle`은 이 실행에만 versionCode/versionName과 debuggable=false를 적용한다. 이전 배포 versionCode보다 커야 하며 이전 APK의 실제 앱 ID·버전·서명 인증서도 확인한다. 최초 배포만 `--previous-version 0`과 previous-apk 생략이 가능하다. 검사 항목은 release 앱 ID, manifest backup/cleartext/debug 설정, bundled WebView URL/allowNavigation/mixed-content 부재, native 공개 설정 값, debug proof class 부재, zipalign, apksigner 서명과 인증서 지문이다.
 

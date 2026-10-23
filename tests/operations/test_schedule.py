@@ -1,6 +1,7 @@
 """Validate systemd artifacts with synthetic files and mocked systemctl only."""
 
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,9 @@ class ScheduleTests(unittest.TestCase):
                 return self.config["operator_source_commit"] if args[1] == "rev-parse" else ""
             if args[1:] == ["--user", "unit-paths"]:
                 return str(self.destination) + "\n"
+            if args[1:4] == ["--user", "show", "--property=DropInPaths"]:
+                directory = self.destination / (args[-1] + ".d")
+                return " ".join(str(path) for path in sorted(directory.glob("*.conf"))) + "\n"
             return ""
 
         self.runner.run.side_effect = command
@@ -159,3 +163,71 @@ class ScheduleTests(unittest.TestCase):
         private(path, value)
         with self.assertRaisesRegex(automation.AutomationError, "SCHEDULE_FILES"):
             schedule.validate(self.directory, runner=self.runner)
+
+    def test_rollback_renders_a_fresh_directory_from_the_same_configuration(self):
+        schedule.install(self.directory, runner=self.runner)
+        schedule.activate(self.directory, runner=self.runner)
+        # The operator removes the switched units first; the used directory stays refused.
+        for path in self.destination.iterdir():
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        with self.assertRaisesRegex(automation.AutomationError, "SCHEDULE_ALREADY_INSTALLED"):
+            schedule.install(self.directory, runner=self.runner)
+        with self.assertRaises(FileExistsError):
+            schedule.render(self.configuration, self.sha, self.directory)
+        fresh = self.root / "rollback-schedule"
+        schedule.render(self.configuration, self.sha, fresh)
+        schedule.validate(fresh, runner=self.runner)
+        self.assertEqual(schedule.install(fresh, runner=self.runner)["units"], 9)
+        self.assertEqual(len(schedule.activate(fresh, runner=self.runner)["units"]), 5)
+        self.assertTrue((fresh / "activation.json").exists())
+
+    def test_rendered_schedule_has_no_pre_step_and_no_dropin(self):
+        # `Restart=on-failure` also applies to ExecStartPre, and RestartPreventExitStatus covers
+        # only the main process, so a pre-step failing on DISK_SPACE_LOW would retry every
+        # minute. The disk check is the first step of the health task instead.
+        project = self.config["project"]
+        self.assertEqual(sorted(path.name for path in self.directory.glob("*.d")), [])
+        self.assertEqual(sorted(path.name for path in self.directory.glob("**/*.conf")), [])
+        for path in self.directory.glob("*.service"):
+            self.assertNotIn("ExecStartPre", path.read_text())
+        health = (self.directory / (project + "-health.service")).read_text()
+        self.assertIn("RestartPreventExitStatus=1", health)
+        self.assertIn(f"TimeoutStartSec={automation.LIMITS['health']}\n", health)
+        record = automation.read_json(self.directory / "schedule.json")
+        self.assertEqual(len(record["files"]), 9)
+
+    def test_activate_still_refuses_a_foreign_dropin(self):
+        project = self.config["project"]
+        schedule.install(self.directory, runner=self.runner)
+        folder = self.destination / (project + "-health.service.d")
+        folder.mkdir(mode=0o700)
+        private(folder / "backup-pause-disk-check.conf", "[Service]\nExecStartPre=/bin/true\n")
+        with self.assertRaisesRegex(automation.AutomationError, "INSTALLED_UNIT_CHANGED"):
+            schedule.activate(self.directory, runner=self.runner)
+        shutil.rmtree(folder)
+        # A drop-in systemd loads from a path this tool never wrote.
+        original = self.runner.run.side_effect
+        self.runner.run.side_effect = lambda args, **kwargs: (
+            f"/etc/systemd/user/{args[-1]}.d/50.conf\n"
+            if args[1:4] == ["--user", "show", "--property=DropInPaths"]
+            else original(args, **kwargs)
+        )
+        self.calls.clear()
+        with self.assertRaisesRegex(automation.AutomationError, "INSTALLED_UNIT_OVERRIDE"):
+            schedule.activate(self.directory, runner=self.runner)
+        self.assertFalse(any("enable" in call for call in self.calls))
+        self.assertFalse((self.directory / "activation.json").exists())
+
+    def test_handmade_health_dropin_blocks_install_and_is_preserved(self):
+        existing = self.destination / (self.config["project"] + "-health.service.d")
+        existing.mkdir(parents=True)
+        handmade = private(
+            existing / "backup-pause-disk-check.conf", "[Service]\nExecStartPre=/bin/true\n"
+        )
+        with self.assertRaisesRegex(automation.AutomationError, "UNIT_ALREADY_EXISTS"):
+            schedule.install(self.directory, runner=self.runner)
+        self.assertEqual(handmade.read_text(), "[Service]\nExecStartPre=/bin/true\n")
+        self.assertEqual([path.name for path in self.destination.iterdir()], [existing.name])
