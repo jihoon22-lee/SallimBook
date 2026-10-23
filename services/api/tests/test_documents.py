@@ -950,9 +950,38 @@ def test_unlinked_documents_keep_charge_and_deleting_releases_it(document_app, a
         # Deleting frees the household's quota at once; the file itself waits for cleanup.
         assert upload(client, actor, other).status_code == 200
         with Session(document_app.state.engine) as session:
+            charged = session.scalars(
+                select(DocumentStorageReservation).where(
+                    DocumentStorageReservation.document_id == UUID(row["id"])
+                )
+            ).one()
+            assert charged.released_at is None
+        with Session(document_app.state.engine) as session:
             assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 1
             reservations = list(session.scalars(select(DocumentStorageReservation)))
             assert sorted(r.released_at is None for r in reservations) == [False, True]
+
+
+def test_deleted_files_still_count_toward_the_global_quota_until_cleanup(document_app, actors):
+    settings = document_app.state.settings
+    settings.document_global_quota_count = 2
+    actor = actors[0]
+    with TestClient(document_app) as client:
+        first, second, third = (pending(client, actor) for _ in range(3))
+        assert upload(client, actor, first).status_code == 200
+        assert upload(client, actor, second).status_code == 200
+        deleted = client.post(
+            f"/api/v1/documents/{first['id']}/delete",
+            json={"reason": "합성 정리"},
+            headers=headers(actor, version=detail(client, actor, first)["version"]),
+        )
+        assert deleted.status_code == 200, deleted.text
+        # Deleting and uploading again cannot grow the disk past the global bound.
+        assert upload(client, actor, third).status_code == 413
+        with Session(document_app.state.engine) as session:
+            future = datetime.now(UTC) + timedelta(hours=25)
+            assert cleanup_files(session, settings, apply=True, now=future)["removed"] == 1
+        assert upload(client, actor, third).status_code == 200
 
 
 def test_deleting_documents_releases_upload_quota(document_app, actors):

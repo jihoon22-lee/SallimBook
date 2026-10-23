@@ -13,7 +13,7 @@ from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
 from sallimbook.core.pagination import keyset_page
-from sallimbook.documents.models import Document, DocumentLink, DocumentStorageReservation
+from sallimbook.documents.models import Document, DocumentLink
 from sallimbook.documents.quota import STORAGE_BARRIER, reserve
 from sallimbook.documents.schemas import (
     DocumentLinkListResponse,
@@ -462,18 +462,6 @@ def delete_document(session, principal, document_id, payload, if_match, key):
         before = _touch(row, principal)
         row.state, row.deleted_at, row.deletion_reason = "deleted", now, payload.reason
         _audit(session, principal, row, "delete", ("state",), before)
-        # A deleted document no longer counts toward the quota. Its ciphertext stays until
-        # the cleanup grace period ends; the free-disk check still guards the disk itself.
-        for reservation in session.scalars(
-            select(DocumentStorageReservation)
-            .where(
-                DocumentStorageReservation.household_id == principal.household_id,
-                DocumentStorageReservation.document_id == row.id,
-                DocumentStorageReservation.released_at.is_(None),
-            )
-            .with_for_update()
-        ):
-            reservation.released_at = now
         return IdempotentResult(row.id, "document", row.version, 200)
 
     return _mutation(

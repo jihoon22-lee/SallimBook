@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from sallimbook.core.errors import DomainError
-from sallimbook.documents.models import DocumentStorageReservation
+from sallimbook.documents.models import Document, DocumentStorageReservation
 
 STORAGE_BARRIER = 91544042505043
 QUOTA_LOCK = 91544042505044
@@ -37,6 +37,15 @@ def reserve(engine, row, settings, store):
             ).where(active)
             if household is not None:
                 query = query.where(DocumentStorageReservation.household_id == household)
+            if household is not None:
+                # A document the household deleted no longer counts toward its own quota. Its
+                # ciphertext still counts toward the global quota until cleanup removes it, so
+                # deleting and uploading again cannot grow the disk beyond that bound.
+                query = query.join(
+                    Document,
+                    (Document.id == DocumentStorageReservation.document_id)
+                    & (Document.household_id == DocumentStorageReservation.household_id),
+                ).where(Document.state != "deleted")
             used, count = accounting.execute(query).one()
             if used + size > byte_limit or count + 1 > count_limit:
                 raise DomainError(
