@@ -84,6 +84,20 @@ class NativeDocumentTransferTest {
         finally { content.close() }
         assertTrue(output.size() < 20_000)
     }
+    @Test fun aFileTooLargeForTheDevicesMemoryIsReportedInsteadOfCrashing() {
+        for (size in listOf<Long?>(4, null)) {
+            try {
+                NativeDocumentBytes.read(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)), size, { throw OutOfMemoryError() }) {}
+                fail("Synthetic allocation failure ignored")
+            } catch (_: NativeDocumentTooLarge) {}
+        }
+        assertTrue(NativeDocumentPolicy.errorMessage(NativeDocumentBytes.TOO_LARGE_CODE).contains("파일이 너무 커요"))
+        // Upload (picker read) and download (network read) both end with that message.
+        val source = { name: String -> java.io.File("src/main/java/io/github/jihoon22lee/sallimbook/auth/$name").readText() }
+        assertTrue(source("NativeDocumentActivity.kt").contains("catch (_: NativeDocumentTooLarge) { main.post { failure(AuthCode.INVALID_REQUEST, NativeDocumentBytes.TOO_LARGE_CODE) } }"))
+        assertTrue(source("NativeDocumentHttp.kt").contains("catch (failure: NativeDocumentTooLarge) { throw failure }"))
+        assertTrue(source("NativeAuthSession.kt").contains("\"error_code\" to NativeDocumentBytes.TOO_LARGE_CODE"))
+    }
     @Test fun networkAndProviderCancellationOwnersCannotOverwriteEachOther() {
         val gate = ForegroundRequest(); val provider = Any(); val file = Any()
         var providerCalls = 0; var networkCalls = 0; var fileCalls = 0

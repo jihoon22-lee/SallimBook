@@ -50,6 +50,8 @@ internal object NativeDocumentUploadLease {
     fun <T> run(lease: (Long) -> String, send: (String) -> T): T = send(lease(REQUIRED_MILLIS))
 }
 
+internal class NativeDocumentTooLarge : Exception()
+
 /** A single bounded native buffer, never a JSON value, Intent extra, or disk cache. */
 internal class NativeDocumentBytes private constructor(private val bytes: ByteArray, val size: Int, val checksum: String) : Closeable {
     companion object {
@@ -57,9 +59,12 @@ internal class NativeDocumentBytes private constructor(private val bytes: ByteAr
         const val TRANSFER_MILLIS = 180_000L
         /** The server re-checks the session after inspection, so the token must outlive the transfer. */
         const val REQUIRED_ACCESS_MILLIS = TRANSFER_MILLIS + 5_000L
-        fun read(input: InputStream, expectedSize: Long?, check: () -> Unit): NativeDocumentBytes {
+        /** Local document code: the phone has no room for the whole file. */
+        const val TOO_LARGE_CODE = "DOCUMENT_TOO_LARGE_FOR_DEVICE"
+        fun read(input: InputStream, expectedSize: Long?, allocate: (Int) -> ByteArray = { ByteArray(it) }, check: () -> Unit): NativeDocumentBytes {
             if (expectedSize != null && expectedSize !in 1..MAX_BYTES.toLong()) throw AuthFailure(AuthCode.INVALID_REQUEST)
-            val buffer = ByteArray((expectedSize?.toInt() ?: MAX_BYTES) + 1)
+            // The file is held whole in memory; a device without room for it gets a message, not a crash.
+            val buffer = try { allocate((expectedSize?.toInt() ?: MAX_BYTES) + 1) } catch (_: OutOfMemoryError) { throw NativeDocumentTooLarge() }
             var count = 0
             try {
                 while (true) {

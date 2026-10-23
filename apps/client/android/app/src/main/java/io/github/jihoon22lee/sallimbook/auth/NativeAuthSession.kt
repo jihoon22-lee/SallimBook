@@ -7,7 +7,6 @@ import io.github.jihoon22lee.sallimbook.BuildConfig
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.time.Instant
-import java.time.OffsetDateTime
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -367,16 +366,9 @@ internal class NativeAuthSession private constructor(context: Context) {
                     throw AuthFailure(AuthCode.SESSION_EXPIRED)
                 }
                 if (response.status != 201) throw AuthFailure(AuthCode.ACCESS_DENIED)
-                val body = response.body as? Map<*, *> ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
-                if (body.keys != setOf("id", "token", "expires_at")) throw AuthFailure(AuthCode.ACCESS_DENIED)
-                val id = body["id"] as? String ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
-                val token = body["token"] as? String ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
-                val expiry = body["expires_at"] as? String ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
-                if (!Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").matches(id) ||
-                    !Regex("[A-Za-z0-9_-]{32,128}").matches(token)) throw AuthFailure(AuthCode.ACCESS_DENIED)
-                try { OffsetDateTime.parse(expiry) } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
-                gate.check()
-                invitation = NativeInvitation(token.toCharArray(), expiry)
+                val created = NativeInvitationReply.read(response.body)
+                try { gate.check() } catch (failure: AuthFailure) { created.discard(); throw failure }
+                invitation = created
                 AuthOutcome.success(mapOf("status" to "created"))
             } catch (failure: AuthFailure) {
                 AuthOutcome.failure(failure.code)
@@ -538,12 +530,12 @@ internal class NativeAuthSession private constructor(context: Context) {
                         idempotencyKey = create.idempotencyKey, nativeDocumentCreate = true)
                     if (created.status != 201) documentFailure(created)
                     else {
-                        val reference = NativeDocumentPolicy.reference(created.body)
+                        val reference = NativeDocumentPolicy.written(created.body)
                         val documentId = reference["id"] as String
                         val uploaded = documentHttp.upload(documentId, "\"${reference["version"]}\"", UUID.randomUUID().toString(), content, token, gate)
                         if (uploaded.status != 200) documentFailure(uploaded)
                         else {
-                            NativeDocumentPolicy.reference(uploaded.body, documentId)
+                            NativeDocumentPolicy.written(uploaded.body, documentId)
                             gate.check()
                             AuthOutcome.success(mapOf("status" to "uploaded"))
                         }
@@ -579,6 +571,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                     }
                 }
             } catch (failure: AuthFailure) { content?.close(); content = null; AuthOutcome.failure(failure.code) }
+            catch (_: NativeDocumentTooLarge) { AuthOutcome.success(mapOf("status" to "failed", "error_code" to NativeDocumentBytes.TOO_LARGE_CODE)) }
             catch (_: Exception) { content?.close(); content = null; AuthOutcome.failure(AuthCode.NETWORK_UNAVAILABLE) }
             try { callback(outcome, content) } catch (_: Exception) { content?.close() }
         }
@@ -753,10 +746,9 @@ internal class NativeAuthSession private constructor(context: Context) {
                 }
                 val response = http.send("POST", path, gate, body = payload, accessToken = access)
                 if (response.status != 200) passkeyFailure(response, operation == PasskeyOperation.LOGIN)
-                val record = response.body as? Map<*, *> ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
                 val keys = setOf("challenge_id", "public_key", "expires_at") +
                     if (operation == PasskeyOperation.LOGIN) setOf("device_binding") else emptySet()
-                if (record.keys != keys) throw AuthFailure(AuthCode.PASSKEY_FAILED)
+                val record = NativeResponseShape.fields(response.body, keys) { throw AuthFailure(AuthCode.PASSKEY_FAILED) }
                 val id = record["challenge_id"] as? String ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
                 if (!PasskeyPolicy.uuid.matches(id)) throw AuthFailure(AuthCode.PASSKEY_FAILED)
                 val options = PasskeyPolicy.options(record["public_key"], operation == PasskeyOperation.REGISTER, configuration.rpId)
@@ -862,13 +854,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                                 body = JSONObject().put("intended_login", ceremony.intendedLogin),
                                 accessToken = access, stepUpToken = String(grant))
                             if (created.status != 201) passkeyFailure(created)
-                            val record = created.body as? Map<*, *> ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
-                            if (record.keys != setOf("id", "token", "expires_at") ||
-                                !PasskeyPolicy.uuid.matches(record["id"] as? String ?: "")) throw AuthFailure(AuthCode.PASSKEY_FAILED)
-                            val token = PasskeyPolicy.encoded(record["token"], 32, 128)
-                            val expiry = record["expires_at"] as? String ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)
-                            if (PasskeyPolicy.remaining(expiry, Instant.now(), 30_000) == 0L) throw AuthFailure(AuthCode.PASSKEY_FAILED)
-                            invitation = NativeInvitation(token.toCharArray(), expiry)
+                            invitation = NativeInvitationReply.read(created.body, Instant.now())
                             AuthOutcome.success(mapOf("status" to "created"))
                         }
                     }

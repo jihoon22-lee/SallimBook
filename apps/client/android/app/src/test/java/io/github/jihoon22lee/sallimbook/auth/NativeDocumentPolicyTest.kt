@@ -115,6 +115,21 @@ class NativeDocumentPolicyTest {
         bad(AuthCode.ACCESS_DENIED) { NativeDocumentPolicy.info(document + mapOf("state" to "pending", "stored_at" to null), id) }
         assertFalse(info.toString().contains("합성"))
     }
+    @Test fun aReferenceReadAfterAWriteToleratesAddedFieldsAndIsOtherwiseUnknown() {
+        val id = "00000000-0000-4000-8000-000000000001"
+        assertEquals(mapOf("id" to id, "version" to 1), NativeDocumentPolicy.written(mapOf("id" to id, "version" to 1, "state" to "pending")))
+        assertEquals(mapOf("id" to id, "version" to 2), NativeDocumentPolicy.written(mapOf("id" to id, "version" to 2), id))
+        for (reply in listOf<Any?>(mapOf("id" to id), mapOf("id" to id, "version" to 1, "secret" to "x"), null)) {
+            try { NativeDocumentPolicy.written(reply); fail("Synthetic reference accepted") }
+            catch (failure: AuthFailure) { assertEquals(AuthCode.NETWORK_UNAVAILABLE, failure.code) }
+        }
+        try { NativeDocumentPolicy.written(mapOf("id" to id, "version" to 1), "00000000-0000-4000-8000-000000000002"); fail() }
+        catch (failure: AuthFailure) { assertEquals(AuthCode.NETWORK_UNAVAILABLE, failure.code) }
+        val session = java.io.File("src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeAuthSession.kt").readText()
+        assertEquals(2, Regex("NativeDocumentPolicy\\.written\\(").findAll(session).count())
+        assertFalse(session.contains("NativeDocumentPolicy.reference("))
+    }
+
     @Test fun tooComplexCodeKeepsStatusAndNamesThePageLimit() {
         val raw = mapOf("error" to mapOf("code" to "DOCUMENT_TOO_COMPLEX", "message" to "SYNTHETIC PRIVATE"))
         assertEquals("DOCUMENT_TOO_COMPLEX", (AuthPolicy.safeError(422, raw, id)!!["error"] as Map<*, *>)["code"])

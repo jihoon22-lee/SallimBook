@@ -280,6 +280,7 @@ class NativeDocumentActivity : AppCompatActivity() {
                 }
                 content = null // The session closes the buffer even when the queued request was cancelled.
             } catch (error: AuthFailure) { main.post { failure(error.code) } }
+            catch (_: NativeDocumentTooLarge) { main.post { failure(AuthCode.INVALID_REQUEST, NativeDocumentBytes.TOO_LARGE_CODE) } }
             catch (_: Exception) { main.post { failure(AuthCode.NETWORK_UNAVAILABLE) } }
             finally { content?.close() }
         }

@@ -446,7 +446,8 @@ class NativePasskeyActivity : AppCompatActivity() {
             AuthCode.PASSKEY_REQUIRED -> "사용할 수 있는 패스키가 없어요. 로그인 후 패스키를 등록해 주세요."
             AuthCode.REAUTHENTICATION_REQUIRED, AuthCode.SESSION_EXPIRED -> "이 화면을 닫고 다시 로그인한 후 진행해 주세요."
             AuthCode.PASSKEY_CANCELLED, AuthCode.AUTH_CANCELLED -> "인증을 중단했어요. 다시 진행하려면 버튼을 눌러 주세요."
-            AuthCode.NETWORK_UNAVAILABLE -> "연결을 확인할 수 없어요. 자동으로 다시 전송하지 않았어요."
+            AuthCode.NETWORK_UNAVAILABLE ->
+                if (mode == INVITE) NativeAuthMessages.invitationMessage(code) else "연결을 확인할 수 없어요. 자동으로 다시 전송하지 않았어요."
             else -> "요청을 완료하지 못했어요. 대상과 계정 상태를 확인해 주세요."
         }
         submit.isEnabled = !shownAccountNumber && providerOwner == null && (mode !in setOf(REVOKE, DEVICE, ACCOUNT) || targetLoaded)

@@ -35,6 +35,17 @@ class NativeResponseShapeTest {
         rejected { NativeResponseShape.project { check(mapOf("note" to "missing id")) } }
     }
 
+    @Test fun flatRepliesKeepTheirKnownFieldsWhenTheServerAddsSafeOnes() {
+        val nested = mapOf("challenge" to "c", "added" to "kept inside")
+        val reply = mapOf("id" to "a", "note" to nested, "added_note" to "x")
+        assertEquals(mapOf("id" to "a", "note" to nested), NativeResponseShape.fields(reply, known, invalid))
+        assertFalse(NativeResponseShape.tolerant)
+        rejected { NativeResponseShape.fields(mapOf("id" to "a"), known, invalid) }
+        rejected { NativeResponseShape.fields(reply + ("refresh_token" to "synthetic"), known, invalid) }
+        rejected { NativeResponseShape.fields(mapOf(1 to "a", "id" to "a", "note" to "n"), known, invalid) }
+        rejected { NativeResponseShape.fields(listOf("id"), known, invalid) }
+    }
+
     @Test fun addedFieldsNamedLikeSecretsAreRefused() {
         for (name in listOf("refresh_token", "card_number_pan", "account_number", "policyNumber", "ciphertext", "cvc"))
             rejected { NativeResponseShape.project { check(mapOf("id" to "a", name to "synthetic")) } }

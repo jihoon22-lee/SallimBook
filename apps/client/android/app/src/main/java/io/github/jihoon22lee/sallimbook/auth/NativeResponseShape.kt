@@ -48,6 +48,18 @@ internal object NativeResponseShape {
         return row.filterKeys { it in keys }
     }
 
+    /**
+     * A flat reply outside the metadata wires (invitations, passkey options): its [known] fields,
+     * also when a later API adds safe ones. Every known field is required; [invalid] also covers a
+     * non-string key and an added name that looks like a credential. Nested values stay as sent.
+     */
+    fun fields(value: Any?, known: Set<String>, invalid: () -> Nothing): Map<String, Any?> {
+        val row = value as? Map<*, *> ?: invalid()
+        if (row.keys.any { it !is String }) invalid()
+        @Suppress("UNCHECKED_CAST")
+        return project { accept(row, row.keys as Set<String>, known, known, invalid); row } as Map<String, Any?>
+    }
+
     /** Validates a metadata response and returns it without fields this APK does not know. */
     fun project(validate: () -> Any?): Any? {
         if (registry.get() != null) return validate()

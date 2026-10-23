@@ -350,7 +350,7 @@ class NativeAuthActivity : AppCompatActivity() {
                             close.text = "닫기"
                         } else {
                             submit.isEnabled = true
-                            status.text = NativeAuthMessages.message(outcome.code ?: AuthCode.AUTH_UNAVAILABLE)
+                            status.text = NativeAuthMessages.invitationMessage(outcome.code ?: AuthCode.AUTH_UNAVAILABLE)
                         }
                     } else {
                         gate.cancel()
