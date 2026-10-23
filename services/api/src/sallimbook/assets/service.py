@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from sallimbook.accounts.models import FinancialAccount
+from sallimbook.assets import month_service
 from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
 from sallimbook.assets.month_models import AssetMonthValue
@@ -271,6 +272,22 @@ def update_asset(
         after_version=asset.version,
         changed_fields=payload.model_fields_set - CLOSURE_FIELDS,
     )
+    if account is not None:
+        # The account shows this asset, so its version moves too: an account edit or delete
+        # prepared before this change gets a conflict instead of undoing it.
+        account_before = account.version
+        account.updated_at = utcnow()
+        session.flush()
+        record_event(
+            session,
+            principal,
+            entity_type="financial_account",
+            entity_id=account.id,
+            action="update",
+            before_version=account_before,
+            after_version=account.version,
+            changed_fields=("asset",),
+        )
     return _save(session, asset)
 
 
@@ -298,6 +315,11 @@ def delete_asset(
     lock_asset_scope(session, principal)
     asset = scoped_entity(session, Asset, asset_id, principal, for_update=True)
     require_version(asset, if_match)
+    in_use = DomainError(
+        "ASSET_IN_USE", "연결된 기록이 있어 삭제할 수 없습니다. 사용 종료를 선택해 주세요.", 409
+    )
+    if not month_service.release_blank_rows(session, principal, asset.id):
+        raise in_use
     record_event(
         session,
         principal,
@@ -313,9 +335,5 @@ def delete_asset(
     except IntegrityError as exc:
         session.rollback()
         if getattr(exc.orig, "sqlstate", None) in {"23001", "23503"}:
-            raise DomainError(
-                "ASSET_IN_USE",
-                "연결된 기록이 있어 삭제할 수 없습니다. 사용 종료를 선택해 주세요.",
-                409,
-            ) from None
+            raise in_use from None
         raise

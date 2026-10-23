@@ -38,6 +38,7 @@ const methods = [
   "getRecurringRule",
   "changeRecurringRule",
   "endRecurringRule",
+  "deleteRecurringRule",
   "generateObligations",
   "listObligations",
   "fixedCostSummary",
@@ -100,7 +101,8 @@ async function setup(
                   },
                 },
               };
-            if (method === "deleteCard") return { ok: true, value: { status: 204, body: null } };
+            if (method === "deleteCard" || method === "deleteRecurringRule")
+              return { ok: true, value: { status: 204, body: null } };
             return {
               ok: true,
               value: {
@@ -128,7 +130,7 @@ async function setup(
   await page.goto("/__cashflow-bridge");
 }
 
-test("47 named metadata commands retain DTO values and mutation keys without web HTTP", async ({
+test("48 named metadata commands retain DTO values and mutation keys without web HTTP", async ({
   page,
 }) => {
   await setup(page);
@@ -295,6 +297,7 @@ test("47 named metadata commands retain DTO values and mutation keys without web
           "endRecurringRule",
           { ruleId: id, input: { effective_on: "2027-01-01", reason: "합성 종료" }, ...mutation },
         ],
+        ["deleteRecurringRule", { ruleId: id, ...mutation }],
         [
           "generateObligations",
           {
@@ -374,7 +377,7 @@ test("47 named metadata commands retain DTO values and mutation keys without web
   expect(result.calls).toEqual(result.expected);
   expect(result.values).toEqual(
     methods.map((marker) =>
-      marker === "deleteCard"
+      marker === "deleteCard" || marker === "deleteRecurringRule"
         ? null
         : { marker, amount_krw: "99999999999999999999", missing: null, zero: "0" },
     ),

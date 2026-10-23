@@ -113,6 +113,18 @@ def end(
     )
 
 
+@router.delete("/recurring-rules/{rule_id}", status_code=204, operation_id="deleteRecurringRule")
+def delete_rule(
+    rule_id: UUID,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    if_match: IfMatch,
+    idempotency_key: IdempotencyKey,
+):
+    service.delete_rule(session, principal, rule_id, if_match, idempotency_key)
+    return Response(status_code=204)
+
+
 @router.post(
     "/obligations/generate",
     response_model=GenerationResponse,

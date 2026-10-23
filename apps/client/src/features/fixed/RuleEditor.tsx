@@ -9,8 +9,11 @@ import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { dateLabel, todaySeoul } from "../finance/dates";
 import { useFixedApi } from "./api";
 import {
+  changeDraft,
+  displayedTerms,
   economicTypes,
   frequencies,
+  pendingVersions,
   preserveRuleChanges,
   ruleCommandMessages,
   ruleDraft,
@@ -24,8 +27,6 @@ import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { AmountField } from "../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { krwFieldError } from "../../shared/krw";
-const lastTerms = (row: Rule) =>
-  [...row.versions].sort((a, b) => a.effective_from.localeCompare(b.effective_from)).at(-1)!;
 export function RuleCommandError({ error }: { error: ApiError | null }) {
   const message = error && ruleCommandMessages[error.code];
   if (message)
@@ -52,9 +53,9 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
   const navigate = useNavigate();
   const command = useMonthCommand();
   const [base, setBase] = useState(initial);
-  const [draft, setDraft] = useState(() =>
-    initial ? { ...ruleDraft(lastTerms(initial)), from: "" } : ruleDraft(),
-  );
+  // A change starts from the version it will follow: today's terms until a start date is
+  // chosen, then the pending version that date comes after, so that change is not undone.
+  const [draft, setDraft] = useState(() => (initial ? changeDraft(initial, "") : ruleDraft()));
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Rule | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -81,12 +82,17 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
   const payload = base ? changed : input;
   const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, payload]));
   function change(field: keyof RuleDraft, value: string) {
-    setDraft((old) => ({
-      ...old,
-      [field]: value,
-      ...(field === "until" && !value ? { endReason: "" } : {}),
-      ...(field === "economic" && value !== "loan" ? { loan: "" } : {}),
-    }));
+    setDraft((old) => {
+      const next = {
+        ...old,
+        [field]: value,
+        ...(field === "until" && !value ? { endReason: "" } : {}),
+        ...(field === "economic" && value !== "loan" ? { loan: "" } : {}),
+      };
+      return base && field === "from"
+        ? preserveRuleChanges(changeDraft(base, old.from), next, changeDraft(base, value))
+        : next;
+    });
     setReviewAck(false);
     setValidation("");
   }
@@ -379,17 +385,24 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
             </button>
             {latest && (
               <>
-                <h4>{lastTerms(latest).title}</h4>
-                <RuleSummary terms={lastTerms(latest)} />
+                <h4>{displayedTerms(latest).title}</h4>
+                <RuleSummary terms={displayedTerms(latest)} />
+                {pendingVersions(latest).map((row) => (
+                  <div key={row.id}>
+                    <h5>{dateLabel(row.effective_from)}부터 적용 예정</h5>
+                    <RuleSummary terms={row} />
+                  </div>
+                ))}
                 <button
                   type="button"
                   disabled={!!latest.ended_on && latest.ended_on <= todaySeoul()}
                   onClick={() => {
                     setDraft(
-                      preserveRuleChanges({ ...ruleDraft(lastTerms(base!)), from: "" }, draft, {
-                        ...ruleDraft(lastTerms(latest)),
-                        from: "",
-                      }),
+                      preserveRuleChanges(
+                        changeDraft(base!, draft.from),
+                        draft,
+                        changeDraft(latest, draft.from),
+                      ),
                     );
                     setBase(latest);
                     setLatest(null);

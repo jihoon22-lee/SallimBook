@@ -55,6 +55,8 @@ export function documentsFixture() {
       "" | "create-before" | "create-after" | "upload-before" | "upload-after" | "mutation-after",
     error: "",
     status: 422,
+    // Inspection refuses the uploaded bytes; the server deletes the pending record (422).
+    refused: "",
     conflict: false,
     delay: 0,
     writes: [] as {
@@ -199,6 +201,20 @@ export function documentsFixture() {
         createHash("sha256").update(buffer).digest("hex") !== source.checksum_sha256
       )
         return error("DOCUMENT_CONTENT_MISMATCH", 422);
+      if (state.refused) {
+        const code = state.refused;
+        state.refused = "";
+        source.state = "deleted";
+        source.deleted_at = time;
+        source.version++;
+        source.active_link_count = 0;
+        for (const l of state.links.filter((l) => l.document_id === source.id && l.active)) {
+          l.active = false;
+          l.ended_at = time;
+          l.version++;
+        }
+        return error(code, 422);
+      }
       source.state = "ready";
       source.stored_at = time;
       source.version++;

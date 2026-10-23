@@ -86,6 +86,25 @@ export function useFixedApi() {
               }),
             ),
         ),
+      deleteRule: (id: string, version: number, key: string, signal: AbortSignal) =>
+        domainApi.write(
+          (client) =>
+            client.DELETE("/api/v1/recurring-rules/{rule_id}", {
+              params: {
+                path: { rule_id: id },
+                header: { "Idempotency-Key": key, "If-Match": `"${version}"` },
+              },
+              signal,
+            }),
+          () =>
+            cancellableNative(signal, () =>
+              nativeFinance.deleteRecurringRule({
+                ruleId: id,
+                ifMatch: `"${version}"`,
+                idempotencyKey: key,
+              }),
+            ),
+        ),
       generate: (input: S["GenerateObligations"], key: string, signal: AbortSignal) =>
         domainApi.write(
           (client) =>

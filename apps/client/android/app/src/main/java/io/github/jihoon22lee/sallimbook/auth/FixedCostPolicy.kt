@@ -76,6 +76,7 @@ internal object FixedCostPolicy {
         FinanceOperation.GET_RECURRING_RULE to Route("GET", "/api/v1/recurring-rules/{ruleId}"),
         FinanceOperation.CHANGE_RECURRING_RULE to Route("PATCH", "/api/v1/recurring-rules/{ruleId}", version = true),
         FinanceOperation.END_RECURRING_RULE to Route("POST", "/api/v1/recurring-rules/{ruleId}/end", version = true),
+        FinanceOperation.DELETE_RECURRING_RULE to Route("DELETE", "/api/v1/recurring-rules/{ruleId}", version = true, status = 204),
         FinanceOperation.GENERATE_OBLIGATIONS to Route("POST", "/api/v1/obligations/generate", status = 201),
         FinanceOperation.LIST_OBLIGATIONS to Route("GET", "/api/v1/obligations", query = true),
         FinanceOperation.FIXED_COST_SUMMARY to Route("GET", "/api/v1/obligations/summary", query = true),
@@ -144,12 +145,15 @@ internal object FixedCostPolicy {
         val args = obj(value)
         val variables = Regex("\\{([A-Za-z]+)\\}").findAll(route.path).map { it.groupValues[1] }.toList()
         val write = route.method != "GET"
-        val required = variables.toSet() + (if (route.version) setOf("ifMatch") else emptySet()) + (if (write) setOf("input", "idempotencyKey") else emptySet())
+        // A delete is a write without a body: it still carries its version and key.
+        val body = write && route.method != "DELETE"
+        val required = variables.toSet() + (if (route.version) setOf("ifMatch") else emptySet()) +
+            (if (write) setOf("idempotencyKey") else emptySet()) + (if (body) setOf("input") else emptySet())
         if (!args.keys.containsAll(required) || !(required + if (route.query) setOf("query") else emptySet()).containsAll(args.keys)) invalid()
         var path = route.path
         variables.forEach { name -> path = path.replace("{$name}", FinancePolicy.id(args[name])) }
         if (route.query) path += query(operation, args["query"])
-        return FinanceRequest(route.method, path, if (write) input(operation, args["input"]) else null,
+        return FinanceRequest(route.method, path, if (body) input(operation, args["input"]) else null,
             if (route.version) tag(args["ifMatch"]) else null, if (write) key(args["idempotencyKey"]) else null)
     }
     private fun parsedQuery(raw: String, operation: FinanceOperation): Map<String, Any?> {
@@ -176,7 +180,8 @@ internal object FixedCostPolicy {
                 }) continue
                 if ((ifMatch != null) != route.version || (idempotencyKey != null) != (method != "GET")) return false
                 if (route.version) args["ifMatch"] = ifMatch
-                if (method != "GET") { args["input"] = body; args["idempotencyKey"] = idempotencyKey } else if (body != null) return false
+                if (method == "GET" || method == "DELETE") { if (body != null) return false } else args["input"] = body
+                if (method != "GET") args["idempotencyKey"] = idempotencyKey
                 uri.rawQuery?.let { if (!route.query) invalid(); args["query"] = parsedQuery(it, operation) }
                 val expected = prepare(operation, args)
                 return expected.path == path && expected.body == body && expected.ifMatch == ifMatch && expected.idempotencyKey == idempotencyKey
@@ -226,8 +231,9 @@ internal object FixedCostPolicy {
     }
     private fun page(value: Any?, item: (Any?) -> Map<String, Any?>, history: Boolean = false): Map<String, Any?> =
         shape(value, mapOf("items" to records({ item(it); Unit }), "next_cursor" to nullable(if (history) positive else id)))
-    fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Map<String, Any?> {
+    fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Map<String, Any?>? {
         if (status != routes.getValue(operation).status) invalid()
+        if (operation == FinanceOperation.DELETE_RECURRING_RULE) { if (value != null) invalid(); return null }
         val uri = URI(request.path); val target = uri.path.split('/').getOrNull(4)
         return when (operation) {
             FinanceOperation.LIST_RECURRING_RULES -> page(value, ::rule)

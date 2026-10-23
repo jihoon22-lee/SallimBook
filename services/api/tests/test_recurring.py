@@ -22,6 +22,8 @@ from test_accounts import make_actor
 from test_income import CATALOG, close_account, headers, make_account
 from test_pagination import api_pages, ids, pairs
 
+from sallimbook.assets import month_service
+from sallimbook.assets.month_schemas import MonthConfirm, MonthDraft
 from sallimbook.audit.service import KNOWN_FIELDS
 from sallimbook.cashflow import recurring_service as service
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision
@@ -753,6 +755,341 @@ class TestRecurringDatabase:
                 False,
                 False,
                 "unpaid",
+            )
+
+    def test_clearing_last_exception_regenerates_from_current_rule(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            march = obligation_for(client, actor, "2026-03")
+            path = f"/api/v1/obligations/{march['id']}"
+            skipped = client.post(
+                f"{path}/skip", headers=headers(actor, version=1), json={"reason": "합성 건너뜀"}
+            )
+            assert skipped.status_code == 200, skipped.text
+            ended = client.post(
+                f"/api/v1/recurring-rules/{rule['id']}/end",
+                headers=headers(actor, version=1),
+                json={"effective_on": "2026-02-15", "reason": "합성 해지"},
+            )
+            assert ended.status_code == 200, ended.text
+            # The skipped occurrence is an exception, so ending the rule leaves it as it was.
+            assert client.get(path, headers=actor.headers).json()["status"] == "skipped"
+            restored = client.post(
+                f"{path}/unskip", headers=headers(actor, version=2), json={"reason": "합성 복구"}
+            )
+            assert restored.status_code == 200, restored.text
+            current = client.get(path, headers=actor.headers).json()
+            assert current["status"] == "superseded"
+            assert restored.json()["version"] == current["version"]
+            latest = client.get(path + "/history", headers=actor.headers).json()["items"][0]
+            assert latest["action"] == "regenerate"
+            summary = client.get(
+                "/api/v1/obligations/summary?month=2026-03", headers=actor.headers
+            ).json()
+            assert (summary["obligation_count"], summary["expected_known_krw"]) == (0, "0")
+
+    def test_restoring_the_nominal_date_takes_the_current_rule_amount(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            march = obligation_for(client, actor, "2026-03")
+            path = f"/api/v1/obligations/{march['id']}"
+            moved = client.patch(
+                path,
+                headers=headers(actor, version=1),
+                json={"scheduled_date": "2026-03-30", "reason": "합성 은행 이연"},
+            )
+            assert moved.status_code == 200, moved.text
+            changed = client.patch(
+                f"/api/v1/recurring-rules/{rule['id']}",
+                headers=headers(actor, version=1),
+                json=rule_payload()
+                | {
+                    "expected_amount_krw": "40000",
+                    "effective_from": "2026-03-01",
+                    "reason": "합성 요금 변경",
+                },
+            )
+            assert changed.status_code == 200, changed.text
+            assert obligation_for(client, actor, "2026-03")["expected_amount_krw"] == "33000"
+            back = client.patch(
+                path,
+                headers=headers(actor, version=2),
+                json={"scheduled_date": "2026-03-31", "reason": "합성 원래 날짜"},
+            )
+            assert back.status_code == 200, back.text
+            current = obligation_for(client, actor, "2026-03")
+            assert (current["expected_amount_krw"], current["manual_override"]) == ("40000", False)
+
+    def test_void_settlement_keeps_manual_completion(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            feb = obligation_for(client, actor, "2026-02")
+            path = f"/api/v1/obligations/{feb['id']}"
+            first = settle(client, actor, feb, amount="10").json()
+            second = settle(client, actor, obligation_for(client, actor, "2026-02"), amount="20")
+            completed = client.post(
+                f"{path}/complete", headers=headers(actor, version=3), json={"reason": "합성 완료"}
+            )
+            assert completed.status_code == 200, completed.text
+            voided = client.post(
+                f"/api/v1/settlements/{first['id']}/void",
+                headers=headers(actor, version=1),
+                json={"reason": "합성 납부 오등록"},
+            )
+            assert voided.status_code == 200, voided.text
+            # Another payment still backs the completion a spouse recorded; it stays.
+            current = client.get(path, headers=actor.headers).json()
+            assert (current["manually_completed"], current["actual_amount_krw"]) == (True, "20")
+            last = client.post(
+                f"/api/v1/settlements/{second.json()['id']}/void",
+                headers=headers(actor, version=1),
+                json={"reason": "합성 납부 오등록"},
+            )
+            assert last.status_code == 200, last.text
+            # A completion needs a recorded payment, so voiding the last one reopens it.
+            current = client.get(path, headers=actor.headers).json()
+            assert (current["manually_completed"], current["status"]) == (False, "unpaid")
+
+    def delete_rule(self, client, actor, rule, *, version=1, key=None):
+        return client.delete(
+            f"/api/v1/recurring-rules/{rule['id']}", headers=headers(actor, key, version)
+        )
+
+    def occurrence(self, client, actor, month, rule):
+        items = client.get(f"/api/v1/obligations?month={month}", headers=actor.headers).json()
+        return next(item for item in items["items"] if item["rule_id"] == rule["id"])
+
+    def assert_in_use(self, result):
+        assert result.status_code == 409, result.text
+        assert result.json()["error"] == {
+            "code": "RULE_IN_USE",
+            "message": "보험료로 연결됐거나 납부 기록·확정된 월이 있는 규칙은 종료만 할 수 있어요.",
+            "request_id": result.json()["error"]["request_id"],
+        }
+
+    def test_unused_rule_can_be_deleted(self, recurring_app, actors, db_engine):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            kept = post_rule(client, actor, title="합성 유지 규칙")
+            generate(client, actor, rule["id"])
+            generate(client, actor, kept["id"])
+            stale = self.delete_rule(client, actor, rule, version=2)
+            assert stale.json()["error"]["code"] == "VERSION_CONFLICT"
+            removed = self.delete_rule(client, actor, rule)
+            assert removed.status_code == 204, removed.text
+            missing = client.get(f"/api/v1/recurring-rules/{rule['id']}", headers=actor.headers)
+            assert missing.status_code == 404
+            for month in ("2026-01", "2026-02", "2026-03"):
+                items = client.get(
+                    f"/api/v1/obligations?month={month}", headers=actor.headers
+                ).json()["items"]
+                assert [item["rule_id"] for item in items] == [kept["id"]]
+        with Session(db_engine) as session:
+            rule_id = UUID(rule["id"])
+            for model, column in (
+                (RecurringRuleVersion, RecurringRuleVersion.rule_id),
+                (ScheduledObligation, ScheduledObligation.rule_id),
+                (ObligationGeneration, ObligationGeneration.rule_id),
+            ):
+                assert (
+                    session.scalar(select(func.count()).select_from(model).where(column == rule_id))
+                    == 0
+                )
+            assert session.scalar(select(func.count()).select_from(ObligationRevision)) == 3
+            event = session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.entity_type == "recurring_rule", AuditEvent.action == "delete"
+                )
+            ).one()
+            assert (event.entity_id, event.before_version, event.after_version) == (
+                rule_id,
+                1,
+                None,
+            )
+
+    def test_rule_with_settlement_cannot_be_deleted(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            payment = settle(client, actor, obligation_for(client, actor, "2026-01")).json()
+            self.assert_in_use(self.delete_rule(client, actor, rule))
+            voided = client.post(
+                f"/api/v1/settlements/{payment['id']}/void",
+                headers=headers(actor, version=1),
+                json={"reason": "합성 납부 오등록"},
+            )
+            assert voided.status_code == 200, voided.text
+            # A voided payment is still part of the ledger history.
+            self.assert_in_use(self.delete_rule(client, actor, rule))
+            assert (
+                client.get(
+                    f"/api/v1/recurring-rules/{rule['id']}", headers=actor.headers
+                ).status_code
+                == 200
+            )
+
+    def test_rule_with_confirmed_month_occurrence_cannot_be_deleted(
+        self, recurring_app, actors, db_engine
+    ):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            with Session(db_engine) as session:
+                draft = month_service.create_draft(
+                    session, actor.principal, "2026-01", MonthDraft(copy_previous=False), "rule-m"
+                )
+            with Session(db_engine) as session:
+                month_service.confirm_month(
+                    session,
+                    actor.principal,
+                    "2026-01",
+                    MonthConfirm(revision_id=draft.revision_id),
+                    f'"{draft.version}"',
+                    "rule-confirm",
+                )
+            self.assert_in_use(self.delete_rule(client, actor, rule))
+
+    def test_rule_with_handled_occurrence_cannot_be_deleted(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            for step in (
+                lambda path: client.post(
+                    f"{path}/skip", headers=headers(actor, version=1), json={"reason": "합성"}
+                ),
+                lambda path: client.patch(
+                    path,
+                    headers=headers(actor, version=1),
+                    json={"scheduled_date": "2026-03-30", "reason": "합성"},
+                ),
+            ):
+                rule = post_rule(client, actor)
+                generate(client, actor, rule["id"])
+                march = self.occurrence(client, actor, "2026-03", rule)
+                assert step(f"/api/v1/obligations/{march['id']}").status_code == 200
+                self.assert_in_use(self.delete_rule(client, actor, rule))
+            # Undoing the exception still leaves its history on the occurrence.
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            feb = self.occurrence(client, actor, "2026-02", rule)
+            path = f"/api/v1/obligations/{feb['id']}"
+            for version, action in ((1, "skip"), (2, "unskip")):
+                done = client.post(
+                    f"{path}/{action}",
+                    headers=headers(actor, version=version),
+                    json={"reason": "합성"},
+                )
+                assert done.status_code == 200, done.text
+            self.assert_in_use(self.delete_rule(client, actor, rule))
+
+    def test_rule_delete_retry_is_idempotent(self, recurring_app, actors):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            generate(client, actor, rule["id"])
+            first = self.delete_rule(client, actor, rule, key="synthetic-rule-delete")
+            again = self.delete_rule(client, actor, rule, key="synthetic-rule-delete")
+            assert (first.status_code, again.status_code) == (204, 204)
+            other = self.delete_rule(client, actor, rule, key="synthetic-other-delete")
+            assert other.status_code == 404
+
+    def test_history_delete_exception_covers_only_the_named_rules_generated_rows(
+        self, recurring_app, actors, db_engine
+    ):
+        actor = actors[0]
+        with TestClient(recurring_app) as client:
+            named = post_rule(client, actor)
+            other = post_rule(client, actor, title="합성 다른 규칙")
+            generate(client, actor, named["id"])
+            generate(client, actor, other["id"])
+            rows = {
+                item["rule_id"]: item
+                for item in client.get(
+                    "/api/v1/obligations?month=2026-02", headers=actor.headers
+                ).json()["items"]
+            }
+            skipped = client.post(
+                f"/api/v1/obligations/{rows[named['id']]['id']}/skip",
+                headers=headers(actor, version=1),
+                json={"reason": "합성"},
+            )
+            assert skipped.status_code == 200, skipped.text
+            january = {
+                item["rule_id"]: item
+                for item in client.get(
+                    "/api/v1/obligations?month=2026-01", headers=actor.headers
+                ).json()["items"]
+            }
+            settle(client, actor, january[named["id"]])
+        named_id, other_id = UUID(named["id"]), UUID(other["id"])
+        others = select(ScheduledObligation.id).where(ScheduledObligation.rule_id == other_id)
+        mine = select(ScheduledObligation.id).where(ScheduledObligation.rule_id == named_id)
+        refused = (
+            delete(ObligationRevision).where(ObligationRevision.obligation_id.in_(others)),
+            delete(ObligationGenerationItem).where(
+                ObligationGenerationItem.obligation_id.in_(others)
+            ),
+            delete(ObligationGeneration).where(ObligationGeneration.rule_id == other_id),
+            delete(RecurringRuleVersion).where(RecurringRuleVersion.rule_id == other_id),
+            # A handled occurrence's history and any payment stay, even for the named rule.
+            delete(ObligationRevision).where(
+                ObligationRevision.obligation_id.in_(mine), ObligationRevision.action == "skip"
+            ),
+            delete(FixedSettlement),
+            update(ObligationRevision)
+            .where(ObligationRevision.obligation_id.in_(mine))
+            .values(reason="합성 변경"),
+        )
+        with Session(db_engine) as session:
+            session.execute(
+                text("SELECT set_config('sallimbook.deleting_rule', :rule, true)"),
+                {"rule": named["id"]},
+            )
+            for statement in refused:
+                with pytest.raises(DBAPIError) as rejected, session.begin_nested():
+                    session.execute(statement)
+                assert rejected.value.orig.sqlstate == "55000"
+            # Generation items point at the creating revisions, so they go first.
+            items = session.execute(
+                delete(ObligationGenerationItem).where(
+                    ObligationGenerationItem.obligation_id.in_(mine)
+                )
+            )
+            created = session.execute(
+                delete(ObligationRevision).where(
+                    ObligationRevision.obligation_id.in_(mine),
+                    ObligationRevision.action == "create",
+                )
+            )
+            assert (items.rowcount, created.rowcount) == (3, 3)
+            session.rollback()
+        # The setting lasts for its transaction only.
+        with Session(db_engine) as session:
+            with pytest.raises(DBAPIError) as rejected:
+                session.execute(
+                    delete(RecurringRuleVersion).where(RecurringRuleVersion.rule_id == named_id)
+                )
+            assert rejected.value.orig.sqlstate == "55000"
+
+    def test_rule_delete_other_household_is_404(self, recurring_app, actors):
+        actor, _, stranger = actors
+        with TestClient(recurring_app) as client:
+            rule = post_rule(client, actor)
+            refused = self.delete_rule(client, stranger, rule)
+            assert refused.status_code == 404
+            assert (
+                client.get(
+                    f"/api/v1/recurring-rules/{rule['id']}", headers=actor.headers
+                ).status_code
+                == 200
             )
 
     def test_t10_repeat_generation_and_failure_catchup(self, recurring_app, actors, db_engine):

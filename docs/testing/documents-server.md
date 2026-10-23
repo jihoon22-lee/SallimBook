@@ -25,7 +25,7 @@ DB 직접 우회, 암호문 치환·훼손·권한·symlink/hardlink 거부, 멱
 동시 삭제/링크 추가도 포함한다. 파일에 원문이 저장되지 않고 복원 checksum이 일치함을 검사한다.
 
 실제 ClamAV 1.4.6·Pillow 13.0.0·pypdf 6.21.1·Poppler·Tesseract 도구 검사 **20개도 통과**했다.
-합성 영어/한글 영수증 PNG/JPEG/PDF 허용과 EICAR·카드 라벨/PAN·실행 PDF·빈 이미지·도구 장애 거부,
+합성 영어/한글 영수증 PNG/JPEG/PDF 허용과 EICAR·카드 보안코드/PAN·실행 PDF·빈 이미지·도구 장애 거부,
 검사 후 RAM spool 정리를 확인했다. 81개 검사에 있는 가짜 Unix daemon/OCR 경계 시험과 구분한다.
 고정 버전·이미지 ID·자원 제한·공식 근거는 [도구 기록](../../infra/documents/README.md)에 있다.
 
@@ -67,9 +67,11 @@ worker는 요청 dependency와 별도 DB session을 소유해 취소된 요청�
 
 세 번째 리뷰 보완: 저장 전에 독립 DB 트랜잭션으로 파일명·가계·문서·암호문 크기를 예약한다.
 기본 가계 한도는 256MiB/200개, 전체는 2GiB/2,000개이며 AES-GCM tag 16바이트도 센다.
-실패·취소·DB rollback이나 commit 결과 불명에도 예약은 유지된다. ready 문서의 마지막 연결 종료나
-논리 삭제만으로는 용량을 반환하지 않는다. 24시간 유예 뒤 정리 작업이 실제 제거와 fsync 또는 파일
-부재를 확인해야 반환한다. dry-run은 예약을 바꾸지 않는다. 모든 API worker는 같은 설정과 DB를 사용한다.
+실패·취소·DB rollback이나 commit 결과 불명에도 예약은 유지된다. ready 문서의 마지막 연결 종료만으로는
+용량을 반환하지 않는다(다시 연결할 수 있다). 사용자가 삭제한 문서는 바로 가계 한도에서 빠져 다른 파일을
+올릴 수 있다. 그 암호문은 24시간 유예 뒤 정리 작업이 지울 때까지 전체 한도에는 계속 포함되므로, 삭제와
+업로드를 반복해도 디스크 사용은 전체 한도를 넘지 않는다. 예약 자체는 정리 작업이 실제 제거와 fsync 또는
+파일 부재를 확인해야 반환한다. dry-run은 예약을 바꾸지 않는다. 모든 API worker는 같은 설정과 DB를 사용한다.
 저장/정리 공통 exclusive barrier가 프로세스 사이의 디스크 쓰기를 직렬화하며 별도 quota 잠금이
 용량 집계·예약 commit을 보호한다. 문서는 NO KEY UPDATE로 잠가 독립 예약의 가계 복합 FK 검사를 허용한다.
 현재 파일을 가리키는 용량 예약의 직접 해제·변조·삭제와 예약 없는 ready 전환도 DB가 거부한다.
@@ -173,7 +175,35 @@ M16은 쪽수·해상도 제한 없이 OCR이 worker 시간을 넘기던 문제,
 OCR TSV는 따옴표를 인용 문자로 해석하지 않는다. 따옴표로 시작하는 단어가 뒤 단어를 삼키지 않는다. OCR에서 공백 없이
 13자리 이상 이어진 한 단어는 신뢰도 30 이상일 때만 후보로 본다(사용자 결정, 2026-10-20).
 옆으로 누운 글자의 숫자 덩어리는 신뢰도 4~22였고 바로 선 실제 번호는 95 이상이었다.
-묶음 숫자·PDF 글자 layer·EXIF·카드 라벨 검사는 바꾸지 않았다.
+묶음 숫자·PDF 글자 layer·EXIF 검사는 바꾸지 않았다.
+
+카드 영수증에도 인쇄되는 항목 이름만으로는 거절하지 않는다(2026-10-23). 카드 영수증은 `카드번호 4123-45**-****-2349`,
+`CARD NO ****-****-****-2349`처럼 가린 번호와 항목 이름을 인쇄하므로, 가린 번호와 이름만 있는 줄은 허용한다.
+거절(`DOCUMENT_CARD_DATA`)은 다음 중 하나가 있을 때다: 가리지 않은 Luhn 번호 후보, CVC·CVV·CVN·CSC·CID·
+보안코드·카드 인증번호·card verification value 같은 이름 뒤 첫 숫자가 3~4자리일 때, 카드에만 인쇄되는
+`VALID THRU`·`VALID THROUGH`·`GOOD THRU`·`MONTH/YEAR`(OCR이 옆 날짜를 `12128`처럼 잘못 읽어도 이름만으로),
+`exp`·`유효기간`·`만료` 뒤 첫 숫자가 유효기간 형태이면서 바로 앞에 카드·card·credit·debit이 있거나 앞뒤 40자 안에
+가린 카드번호 또는 4-4-4-4 번호가 있을 때, 가린 카드번호나 4-4-4-4 번호 바로 뒤의 유효기간(한 자리를 잘못 읽어
+Luhn이 맞지 않아도). 보험 납입만료·무상보증 만료·쿠폰 만료일·식품 EXP처럼 카드 문맥이 없는 줄은 허용한다.
+유효기간 형태는
+`MM/YY`·`MM/YYYY`·`YYYY/MM`이고 구분자는 `/`·`.`·`-`를 모두 본다. 이름과 값 사이는 24자까지 보며 숫자와 가림
+문자(`*`·`•`·`●`·`#`)가 없어야 하므로 `CVC *** 1234원`은 코드가 아니다. `2026.10.31`처럼 일까지 있는 날짜는
+유효기간이 아니므로 쿠폰·포인트 만료일 줄은 허용하고, `10/17 14:22`처럼 시각이 붙은 날짜도 유효기간이 아니다. OCR은 줄 구분 없이 단어를 이어 붙이므로 줄 대신 거리로
+판단하며, `보안코드 미저장 합계 1200원`처럼 이름 뒤 첫 숫자가 3~4자리면 거절 쪽으로 판단한다.
+실제 OCR 검사에는 가린 번호 영수증 PNG(`png_masked_card_receipt`) 허용을 더했다.
+
+무손실 A4 스캔 PDF는 허용한다(2026-10-23). 스캔 앱이 내보내는 200dpi RGB Flate 이미지 한 장은 풀면
+11.6MB여서 모든 스트림에 적용하던 8MiB 해제 한도(`MAX_STREAM`)에 걸렸고, 압축이 잘 안 되는 스캔은 선언 길이
+한도에도 걸렸다. 이미지 스트림은 이제 화소 한도의 RGB 크기(`MAX_IMAGE_STREAM` = 16,000,000 × 3)까지 풀 수
+있고, 다른 스트림은 그대로 8MiB다. 선언 길이는 파일 크기 한도(20MiB)로 묶이고 문서 전체 해제 합계 64MiB와 이미지
+가로·세로·화소 한도는 바뀌지 않았다. 실제 도구 검사에 무손실 A4 스캔 PDF(`pdf_lossless_a4_scan`) 허용을 더했다.
+
+검사가 내용을 거절하면 pending 문서를 삭제한다(2026-10-23). pending 문서는 처음 등록한 크기·해시에 묶이므로
+거절된 기록은 다시 쓸 수 없고, 목록에 "업로드 기한 만료"로 남기만 했다. 이제 422 판정이면 별도 트랜잭션에서 문서를
+삭제·연결 종료·감사 기록한 뒤 같은 422를 반환한다. 503 장애는 재시도를 위해 pending으로 둔다. 웹은 거절 사유를 보여 주고
+파일 선택과 확인을 초기화하며, 대기 문서 상세에서는 삭제된 상태와 사유를 함께 보여 준다.
+`test_rejected_content_removes_the_pending_document`, `test_unavailable_inspection_keeps_the_pending_document`,
+documents-ui의 거절 시나리오 두 개가 이를 확인한다.
 
 ### 실제 도구 검사
 
@@ -182,10 +212,11 @@ uv run --project services/api --frozen python scripts/test_document_tools.py
 uv run --project services/api --frozen python scripts/test_document_tools.py --measure
 ```
 
-기존 단계에 아래 8개를 더해 모두 통과했다. `pdf_max_pages`(5쪽 이미지 PDF)는
+기존 단계에 아래 10개를 더해 모두 통과했다. `pdf_max_pages`(5쪽 이미지 PDF)는
 `max_pages_seconds` 4.102초로 `WORKER_SECONDS` 90초 안에서 끝났다.
 
-- 허용: `jpeg_marker_in_scan`, `jpeg_reencoded_phone`, `png_dates_korean`, `pdf_max_pages`
+- 허용: `jpeg_marker_in_scan`, `jpeg_reencoded_phone`, `png_dates_korean`, `png_masked_card_receipt`,
+  `pdf_lossless_a4_scan`, `pdf_max_pages`
 - 거절: `jpeg_phone_original`(`DOCUMENT_IMAGE_UNSUPPORTED`), `jpeg_comment_marker`,
   `jpeg_trailer_zip`, `pdf_too_many_pages`(`DOCUMENT_TOO_COMPLEX`)
 

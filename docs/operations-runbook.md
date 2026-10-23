@@ -107,7 +107,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 ### 스키마가 바뀌는 업그레이드 — 점검 시간 절차
 
-새 API 이미지의 `REQUIRED_SCHEMA_REVISION`(`services/api/src/sallimbook/core/database.py`)이 운영 DB와 다를 때 사용한다. 예: 0.1.6(165d46b, `0014_vault`) → `0016_replacement_override`. API는 시작할 때 마이그레이션하지 않는다. 스키마가 다르면 `/api/v1/ready`가 503이라 api가 healthy가 되지 못하고, web은 api를 기다리므로 사설 사이트가 멈춘다. 아래 명령은 운영자가 실행한다.
+새 API 이미지의 `REQUIRED_SCHEMA_REVISION`(`services/api/src/sallimbook/core/database.py`)이 운영 DB와 다를 때 사용한다. 예: 0.1.6(165d46b, `0014_vault`) → `0017_rule_delete`. API는 시작할 때 마이그레이션하지 않는다. 스키마가 다르면 `/api/v1/ready`가 503이라 api가 healthy가 되지 못하고, web은 api를 기다리므로 사설 사이트가 멈춘다. 아래 명령은 운영자가 실행한다.
 
 **순서 원칙: 서버 먼저 → 확인 → 두 폰 즉시 업데이트.** 그 사이에는 확인 외에 두 폰의 앱과 웹을 쓰지 않는다.
 - 0.1.6까지의 APK는 응답에 필드가 추가되면 거부한다. 서버만 올라간 동안 이전 APK의 보험 사건 목록·사건 선택·청구 상세가 실패한다.
