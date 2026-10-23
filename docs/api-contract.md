@@ -46,6 +46,7 @@ RATE_LIMITED와 달리 실패 횟수를 늘리지 않으며 클라이언트는 �
 네이티브는 `POST /auth/native/login`, `/refresh`, `/logout`으로 분리한다. native 전용 transport는
 `X-SallimBook-Native: 1`을 요구하고 Cookie/Origin을 거부한다. 이 헤더를 기기 신뢰 증거로 사용하지 않는다.
 native access/refresh 응답은 Kotlin 인증 adapter에서만 처리한다. refresh 회전 재사용은 세션을 폐기한다.
+native 로그인(`POST /auth/native/login`·`/auth/native/passkeys/verify`)은 선택 필드 `install`을 받는다. 설치의 첫 로그인은 `{}`를 보내고, 응답의 `install: {device_id, key}`를 받는다. 서버는 `key`의 SHA-256만 기기 행에 둔다. 다음 로그인에서 `{device_id, key}`를 보내면 key가 맞고 같은 사용자·가계이며 해지되지 않은 Android 기기 행일 때 그 행을 다시 쓰고(라벨·마지막 사용·version 갱신, 그 기기의 이전 세션 종료) 응답은 `install: {device_id}`뿐이다. 그 밖의 모든 경우는 오류 없이 새 행과 새 key를 준다. `device_id`와 `key`는 함께 보내야 하며 아니면 422다. `install`을 보내지 않은 요청의 응답은 이전과 같은 필드만 담고, 웹 로그인과 `/auth/native/refresh`는 이 필드를 받지도 돌려주지도 않는다.
 
 로그인 상태에서 `POST /auth/web/reauthenticate` 또는 `POST /auth/native/reauthenticate`에
 `{"password":"..."}`를 보내 현재 계정의 비밀번호를 확인한다. 응답은 `MemberResponse`이며 웹은 CSRF,

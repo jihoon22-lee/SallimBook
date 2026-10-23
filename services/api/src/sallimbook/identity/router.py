@@ -33,6 +33,8 @@ from sallimbook.identity.schemas import (
     InvitationResponse,
     LoginRequest,
     MemberResponse,
+    NativeLoginRequest,
+    NativeLoginResponse,
     NativeTokenResponse,
     PasswordChangeRequest,
     ReauthenticationRequest,
@@ -231,14 +233,17 @@ def logout_web(principal: PrincipalDependency, session: SessionDependency) -> Re
 
 @router.post(
     "/auth/native/login",
-    response_model=NativeTokenResponse,
+    response_model=NativeLoginResponse,
+    # Without an install claim the body keeps exactly the fields older apps expect.
+    response_model_exclude_none=True,
     dependencies=[Depends(require_native_transport)],
     operation_id="loginNative",
 )
 def login_native(
-    payload: LoginRequest, request: Request, session: SessionDependency
-) -> NativeTokenResponse:
-    return service.login(session, payload, request_source(request), "native").native_tokens
+    payload: NativeLoginRequest, request: Request, session: SessionDependency
+) -> NativeLoginResponse:
+    result = service.login(session, payload, request_source(request), "native")
+    return NativeLoginResponse(**result.native_tokens.model_dump(), install=result.install)
 
 
 @router.post(

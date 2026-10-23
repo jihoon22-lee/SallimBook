@@ -42,7 +42,7 @@ float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. �
 | auth_sessions | user_id, device_id?, session_hash, refresh_hash?, expires_at, revoked_at, last_seen_at | 웹 세션/Android refresh 갱신·폐기 |
 | refresh_tokens | household_id, session_id, token_hash, expires_at, consumed_at | 소비한 해시도 보존해 이전 refresh 재사용 탐지; 세션 복합 FK |
 | login_throttles | key_hash, window_started_at, attempts | 로그인/초대/갱신 시도 제한; 인증 실패에도 카운터는 유지 |
-| registered_devices | user_id, household_id, label, platform, status, last_seen_at | 기기 해지와 세션 제거 연계; 키 원문 없음 |
+| registered_devices | user_id, household_id, label, platform, status, last_seen_at, install_key_hash | 기기 해지와 세션 제거 연계; 키 원문 없음(Android 설치 key는 SHA-256만) |
 | auth_challenges | household_id?, user_id?, session_id?, device_id?, pending_device_id?, kind, transport, label?, challenge_hash, binding_hash?, policy_hash, action?, target_id?, expires_at, consumed_at | 5분 일회성; ceremony 종류별 필드 조합 CHECK·세션/기기/구성원 FK |
 | auth_step_up_grants | household_id, user_id, session_id, device_id, credential_record_id, grant_hash, purpose, target_id, expires_at, consumed_at | 2분 일회성; 목적/대상/세션/기기 바인딩·credential/사용자 복합 FK |
 
@@ -329,3 +329,5 @@ BEFORE guard는 가계 잠금과 수명주기/동결을 검사하고 deferred tr
 버전, 그 규칙 회차의 생성 항목, `create`·`regenerate` 이력, 규칙 단위 생성 기록. UPDATE와 다른 규칙의 행,
 건너뛰기 등 처리 이력은 그대로 55000으로 거부한다. `fixed_settlements`는 예외 없는 원래 트리거를 유지하므로
 납부가 있는 회차는 FK로도 지울 수 없다. downgrade는 0015의 트리거 함수를 복원한다.
+
+`0018_install_device`는 `registered_devices.install_key_hash`(Android 설치 key의 SHA-256, 64자)를 더하고 Android 행에만 둘 수 있게 검사 제약을 건다. downgrade는 열과 제약을 지운다(저장된 key는 다음 로그인에서 새 행을 받는다).

@@ -3,7 +3,15 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 LoginName = Annotated[
     str,
@@ -26,6 +34,28 @@ class LoginRequest(InputModel):
     login_name: LoginName
     password: SecretStr = Field(min_length=1, max_length=128)
     device_label: DisplayName
+
+
+class InstallClaim(InputModel):
+    """An Android install's device row from an earlier sign-in; empty on its first sign-in."""
+
+    device_id: UUID | None = None
+    key: SecretStr | None = Field(default=None, min_length=32, max_length=128)
+
+    @model_validator(mode="after")
+    def _both_or_neither(self) -> InstallClaim:
+        if (self.device_id is None) != (self.key is None):
+            raise ValueError("device_id and key go together")
+        if self.key is not None and not re.fullmatch(
+            r"[A-Za-z0-9_-]{32,128}", self.key.get_secret_value()
+        ):
+            raise ValueError("malformed install key")
+        return self
+
+
+class NativeLoginRequest(LoginRequest):
+    # Opt-in, so an older app that never sends it keeps the old response.
+    install: InstallClaim | None = None
 
 
 class ReauthenticationRequest(InputModel):
@@ -109,6 +139,17 @@ class NativeTokenResponse(BaseModel):
     token_type: Literal["Bearer"] = "Bearer"
     expires_in: int = Field(default=600, ge=1, le=600)
     refresh_expires_at: datetime
+
+
+class InstallDevice(BaseModel):
+    device_id: UUID
+    # Only when a new row was made; the install keeps its key otherwise.
+    key: str | None = Field(default=None, repr=False)
+
+
+class NativeLoginResponse(NativeTokenResponse):
+    # Present only when the sign-in sent an install claim.
+    install: InstallDevice | None = None
 
 
 class InvitationResponse(BaseModel):

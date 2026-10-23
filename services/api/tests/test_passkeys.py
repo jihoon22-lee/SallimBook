@@ -1651,6 +1651,43 @@ class TestPasskeyDatabase:
                 "passkey-device-binding", options["device_binding"]
             )
 
+    def test_native_passkey_login_reuses_the_install_device_row(
+        self,
+        passkey_app,
+        db_engine,
+        passkey_account,
+        enrolled,
+    ):
+        authenticator, _ = enrolled
+        with TestClient(passkey_app, base_url="https://testserver") as client:
+
+            def sign_in(install):
+                options = native_options(client, passkey_account)
+                payload = native_verification(options, authenticator, passkey_account)
+                response = client.post(
+                    "/api/v1/auth/native/passkeys/verify",
+                    headers=NATIVE_HEADERS,
+                    json={**payload, "install": install},
+                )
+                assert response.status_code == 200
+                return options, response.json()
+
+            _, first = sign_in({})
+            claim = first["install"]
+            options, second = sign_in(claim)
+            assert second["install"] == {"device_id": claim["device_id"]}
+            assert (
+                client.get(
+                    "/api/v1/me", headers={"Authorization": "Bearer " + first["access_token"]}
+                ).status_code
+                == 401
+            )
+        with Session(db_engine) as session:
+            challenge = session.get(AuthChallenge, UUID(options["challenge_id"]))
+            assert session.get(RegisteredDevice, challenge.pending_device_id) is None
+            device = session.get(RegisteredDevice, UUID(claim["device_id"]))
+            assert (device.user_id, device.version) == (passkey_account.user_id, 2)
+
     def test_web_login_binding_cookie_cannot_be_replaced_by_client_boolean(
         self,
         passkey_app,

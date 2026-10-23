@@ -36,11 +36,14 @@ from sallimbook.identity.models import Household
 from sallimbook.identity.schemas import (
     ConnectionCodeResponse,
     ConnectionRequest,
+    InstallClaim,
+    InstallDevice,
     InvitationAcceptance,
     InvitationRequest,
     InvitationResponse,
     LoginRequest,
     MemberResponse,
+    NativeLoginRequest,
     NativeTokenResponse,
     PasswordChangeRequest,
     ReauthenticationRequest,
@@ -56,6 +59,7 @@ REFRESH_LIFETIME = timedelta(days=30)
 # since sessions, passkeys and audit history refer to it; it can no longer sign in anyway.
 DEVICE_LIST_IDLE = timedelta(days=90)
 INVITATION_LIFETIME = timedelta(minutes=15)
+INSTALL_KEY = "install-device"
 THROTTLE_WINDOW = timedelta(minutes=15)
 THROTTLE_CLEANUP_BATCH = 64
 # Refreshes per device per THROTTLE_WINDOW; a 10-minute access token needs about two.
@@ -827,6 +831,7 @@ class LoginResult:
     token: str = field(repr=False)
     csrf_token: str | None = field(default=None, repr=False)
     native_tokens: NativeTokenResponse | None = field(default=None, repr=False)
+    install: InstallDevice | None = field(default=None, repr=False)
 
 
 def login(
@@ -852,7 +857,14 @@ def login(
     if not verified or user is None or user.disabled_at is not None or member is None:
         raise _unauthenticated()
     # Creating a device is backed by this actual password verification, never a client flag.
-    result = issue_session(session, user, member, request.device_label, transport)
+    result = issue_session(
+        session,
+        user,
+        member,
+        request.device_label,
+        transport,
+        install=request.install if isinstance(request, NativeLoginRequest) else None,
+    )
     # issue_session locked and reloaded the users row. A hash that changed after our
     # verification is rechecked: a same-password rehash passes, an old password does not.
     if user.password_hash != encoded and not _verify_password(user.password_hash, password):
@@ -977,16 +989,30 @@ def issue_session(
     transport: Literal["web", "native"],
     *,
     device_id: UUID | None = None,
+    install: InstallClaim | None = None,
 ) -> LoginResult:
     """Issue credentials after server verification; caller owns the atomic commit.
 
     This is an internal service, not an authentication bypass endpoint. The optional device
-    ID must come from server ceremony state, never from a client's device identifier.
+    ID must come from server ceremony state. A client's device id counts only inside an
+    install claim whose key matches the stored hash for the same user and household; any
+    other claim gets a new row, so a claim reveals nothing about other devices.
     Locks the users row so password changes and sign-out of other devices serialize with
     new sessions.
     """
     if transport not in {"web", "native"}:
         raise ValueError("Unsupported authentication transport")
+    if install is not None and transport != "native":
+        raise ValueError("Only native sign-in presents an install claim")
+    claimed = None
+    if install is not None and install.device_id is not None:
+        # Devices before the users row, the order password change and revocation use.
+        claimed = session.scalar(
+            select(RegisteredDevice)
+            .where(RegisteredDevice.id == install.device_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
     active = session.execute(
         select(User, HouseholdMember)
         .select_from(User)
@@ -1005,17 +1031,40 @@ def issue_session(
         raise _unauthenticated()
     user, member = active
     now = utcnow()
-    device = RegisteredDevice(
-        household_id=member.household_id,
-        user_id=user.id,
-        label=device_label,
-        platform="web" if transport == "web" else "android",
-        status="active",
-        last_seen_at=now,
-    )
-    if device_id is not None:
-        device.id = device_id
-    session.add(device)
+    install_key = None
+    if claimed is not None and _install_matches(claimed, install, user, member):
+        device = claimed
+        before_version = device.version
+        device.label = device_label
+        device.last_seen_at = now
+        device.version += 1
+        # One session per install: what this install signed in with before ends here.
+        session.execute(
+            update(AuthSession)
+            .where(
+                AuthSession.household_id == device.household_id,
+                AuthSession.device_id == device.id,
+                AuthSession.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+            .execution_options(synchronize_session=False)
+        )
+    else:
+        before_version = None
+        device = RegisteredDevice(
+            household_id=member.household_id,
+            user_id=user.id,
+            label=device_label,
+            platform="web" if transport == "web" else "android",
+            status="active",
+            last_seen_at=now,
+        )
+        if device_id is not None:
+            device.id = device_id
+        if install is not None:
+            install_key = secrets.token_urlsafe(32)
+            device.install_key_hash = token_hash(INSTALL_KEY, install_key)
+        session.add(device)
     session.flush()
     token = secrets.token_urlsafe(32)
     csrf = secrets.token_urlsafe(32) if transport == "web" else None
@@ -1065,7 +1114,7 @@ def issue_session(
         entity_type="registered_device",
         entity_id=device.id,
         action="login",
-        before_version=None,
+        before_version=before_version,
         after_version=device.version,
     )
     return LoginResult(
@@ -1074,6 +1123,22 @@ def issue_session(
         token=token,
         csrf_token=csrf,
         native_tokens=native_tokens,
+        install=None if install is None else InstallDevice(device_id=device.id, key=install_key),
+    )
+
+
+def _install_matches(
+    device: RegisteredDevice, install: InstallClaim, user: User, member: HouseholdMember
+) -> bool:
+    key = install.key.get_secret_value() if install.key else ""
+    return (
+        device.install_key_hash is not None
+        and hmac.compare_digest(device.install_key_hash, token_hash(INSTALL_KEY, key))
+        and device.user_id == user.id
+        and device.household_id == member.household_id
+        and device.platform == "android"
+        and device.status == "active"
+        and device.revoked_at is None
     )
 
 

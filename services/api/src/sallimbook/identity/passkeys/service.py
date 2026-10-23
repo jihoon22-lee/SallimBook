@@ -648,7 +648,9 @@ def verify_login(
         member,
         challenge.label,
         policy.transport,
+        # A new row takes the ceremony's id; a proven install claim keeps its own row.
         device_id=challenge.pending_device_id,
+        install=getattr(payload, "install", None),
     )
     session.commit()
     return result

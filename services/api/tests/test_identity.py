@@ -1670,3 +1670,168 @@ class TestIdentityDatabase:
             stored = session.get(RegisteredDevice, UUID(device["id"]))
             assert stored.last_seen_at < later
             assert stored.version == 1
+
+
+def install_login(client, account, install, label="합성 Android"):
+    response = client.post(
+        "/api/v1/auth/native/login",
+        headers=NATIVE,
+        json={
+            "login_name": account.login_name,
+            "password": account.password,
+            "device_label": label,
+            "install": install,
+        },
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def _user_devices(db_engine, user_id):
+    with Session(db_engine) as session:
+        return session.scalars(
+            select(RegisteredDevice).where(RegisteredDevice.user_id == user_id)
+        ).all()
+
+
+def _partner(identity_app, account):
+    password = secrets.token_urlsafe(24)
+    # A separate client: the web cookie must not mix with native requests.
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        login = web_login(client, account)
+        invited = client.post(
+            "/api/v1/household/invitations",
+            headers=csrf(login),
+            json={"intended_login": "synthetic_partner"},
+        )
+        accepted = client.post(
+            "/api/v1/auth/invitations/accept",
+            headers={"Origin": ORIGIN},
+            json={"token": invited.json()["token"], "password": password, "display_name": "합성 B"},
+        )
+        assert accepted.is_success
+    return Account(
+        "synthetic_partner", account.user_id, account.member_id, account.household_id, password
+    )
+
+
+def test_native_sign_in_without_install_keeps_the_old_response(identity_app, account):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        tokens = native_login(client, account)
+    assert set(tokens) == {
+        "access_token",
+        "refresh_token",
+        "token_type",
+        "expires_in",
+        "refresh_expires_at",
+    }
+
+
+def test_first_install_sign_in_returns_a_device_key_stored_only_as_a_hash(
+    identity_app, account, db_engine
+):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        install = install_login(client, account, {})["install"]
+    assert set(install) == {"device_id", "key"}
+    (device,) = _user_devices(db_engine, account.user_id)
+    assert str(device.id) == install["device_id"]
+    assert device.install_key_hash == service.token_hash("install-device", install["key"])
+
+
+def test_native_sign_in_reuses_the_install_device_row(identity_app, account, db_engine):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        claim = first["install"]
+        second = install_login(client, account, claim, label="합성 새 이름")
+        assert second["install"] == {"device_id": claim["device_id"]}
+        # The install signs in with one session at a time; the earlier one ends.
+        assert client.get("/api/v1/me", headers=bearer(first)).status_code == 401
+        assert (
+            client.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": first["refresh_token"]},
+            ).status_code
+            == 401
+        )
+        assert client.get("/api/v1/me", headers=bearer(second)).status_code == 200
+    (device,) = _user_devices(db_engine, account.user_id)
+    assert str(device.id) == claim["device_id"]
+    assert (device.label, device.version, device.status) == ("합성 새 이름", 2, "active")
+    with Session(db_engine) as session:
+        logins = session.execute(
+            select(AuditEvent.before_version, AuditEvent.after_version)
+            .where(AuditEvent.entity_id == device.id, AuditEvent.action == "login")
+            .order_by(AuditEvent.occurred_at)
+        ).all()
+    assert [tuple(row) for row in logins] == [(None, 1), (1, 2)]
+
+
+def test_wrong_install_key_gets_a_fresh_row(identity_app, account, db_engine):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        claim = {**first["install"], "key": secrets.token_urlsafe(32)}
+        fresh = install_login(client, account, claim)["install"]
+        assert client.get("/api/v1/me", headers=bearer(first)).status_code == 200
+    assert fresh["device_id"] != claim["device_id"] and fresh["key"]
+    assert len(_user_devices(db_engine, account.user_id)) == 2
+
+
+def test_install_credential_of_another_user_gets_a_fresh_row(identity_app, account, db_engine):
+    partner = _partner(identity_app, account)
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        owner = install_login(client, account, {})
+        taken = install_login(client, partner, owner["install"])["install"]
+        assert taken["device_id"] != owner["install"]["device_id"] and taken["key"]
+        assert client.get("/api/v1/me", headers=bearer(owner)).status_code == 200
+    (device,) = [d for d in _user_devices(db_engine, account.user_id) if d.platform == "android"]
+    assert (str(device.id), device.version) == (owner["install"]["device_id"], 1)
+
+
+def test_revoked_install_device_gets_a_new_row(identity_app, account, db_engine):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        assert (
+            client.post(
+                "/api/v1/auth/native/logout", headers={**NATIVE, **bearer(first)}, json={}
+            ).status_code
+            == 204
+        )
+        fresh = install_login(client, account, first["install"])["install"]
+    assert fresh["device_id"] != first["install"]["device_id"] and fresh["key"]
+
+
+@pytest.mark.parametrize(
+    "install",
+    [{"device_id": str(uuid4())}, {"key": "k" * 43}, {"device_id": str(uuid4()), "key": "short"}],
+)
+def test_an_install_claim_needs_both_a_device_id_and_a_well_formed_key(
+    identity_app, account, install
+):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        response = client.post(
+            "/api/v1/auth/native/login",
+            headers=NATIVE,
+            json={
+                "login_name": account.login_name,
+                "password": account.password,
+                "device_label": "합성 Android",
+                "install": install,
+            },
+        )
+    assert response.status_code == 422
+
+
+def test_web_sign_in_cannot_present_an_install_credential(identity_app, account):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        response = client.post(
+            "/api/v1/auth/web/login",
+            headers={"Origin": ORIGIN},
+            json={
+                "login_name": account.login_name,
+                "password": account.password,
+                "device_label": "합성 PC",
+                "install": {},
+            },
+        )
+    assert response.status_code == 422

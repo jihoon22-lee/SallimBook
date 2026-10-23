@@ -717,6 +717,7 @@ PRIVATE_TABLES = {
         "status",
         "last_seen_at",
         "revoked_at",
+        "install_key_hash",
         "id",
         "created_at",
         "updated_at",
