@@ -869,7 +869,7 @@ class TestRecurringDatabase:
         assert result.status_code == 409, result.text
         assert result.json()["error"] == {
             "code": "RULE_IN_USE",
-            "message": "납부 기록이나 확정된 월이 있는 규칙은 종료만 할 수 있어요.",
+            "message": "보험료로 연결됐거나 납부 기록·확정된 월이 있는 규칙은 종료만 할 수 있어요.",
             "request_id": result.json()["error"]["request_id"],
         }
 

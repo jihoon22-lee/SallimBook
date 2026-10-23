@@ -103,7 +103,7 @@ class FixedCostPolicyTest {
         bad(AuthCode.NETWORK_UNAVAILABLE) { FinancePolicy.reply(FinanceOperation.DELETE_RECURRING_RULE, r, 204, mapOf("id" to ruleId)) }
         val refused = AuthPolicy.safeError(409, mapOf("error" to mapOf("code" to "RULE_IN_USE", "message" to "synthetic secret")), ruleId)!!
         assertEquals("RULE_IN_USE", (refused["error"] as Map<*, *>)["code"])
-        assertEquals("납부 기록이나 확정된 월이 있는 규칙은 종료만 할 수 있어요.", (refused["error"] as Map<*, *>)["message"])
+        assertEquals("보험료로 연결됐거나 납부 기록·확정된 월이 있는 규칙은 종료만 할 수 있어요.", (refused["error"] as Map<*, *>)["message"])
     }
     @Test fun initialRuleEndRequiresBothDateAndReasonAndFullTermsChangeIsSeparate() {
         val ended = create() + mapOf("effective_until" to "2026-02-01", "end_reason" to "합성 초기 종료")

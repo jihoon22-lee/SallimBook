@@ -298,7 +298,7 @@ internal object AuthPolicy {
             "CARD_UNAVAILABLE" to (422 to "사용 중인 납부 카드를 선택해 주세요."),
             "RULE_PERIOD_OVERLAP" to (409 to "기존 마지막 규칙 이후 적용일을 선택해 주세요."),
             "PAST_RULE_CHANGE" to (409 to "지난 규칙은 변경할 수 없습니다."),
-            "RULE_IN_USE" to (409 to "납부 기록이나 확정된 월이 있는 규칙은 종료만 할 수 있어요."),
+            "RULE_IN_USE" to (409 to "보험료로 연결됐거나 납부 기록·확정된 월이 있는 규칙은 종료만 할 수 있어요."),
             "GENERATION_TOO_LARGE" to (422 to "규칙 또는 생성 기간을 줄여 주세요."),
             "OBLIGATION_SUPERSEDED" to (409 to "현재 적용되는 회차를 선택해 주세요."),
             "OBLIGATION_HAS_PAYMENT" to (409 to "납부·처리 이력이 있는 회차를 확인해 주세요."),

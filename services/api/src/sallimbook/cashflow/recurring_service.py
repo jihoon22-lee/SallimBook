@@ -459,7 +459,9 @@ def delete_rule(session, principal, rule_id, if_match, key):
         )
         if _rule_in_use(session, principal, row, obligations):
             raise DomainError(
-                "RULE_IN_USE", "납부 기록이나 확정된 월이 있는 규칙은 종료만 할 수 있어요.", 409
+                "RULE_IN_USE",
+                "보험료로 연결됐거나 납부 기록·확정된 월이 있는 규칙은 종료만 할 수 있어요.",
+                409,
             )
         record_event(
             session,
