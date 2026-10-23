@@ -12,6 +12,7 @@ import { eventNames, needsCompare } from "./model";
 import type { EventKind, EventRow } from "./model";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 import { formatSeoulDateTime } from "../../../shared/format";
+import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 export const getters = {
   expense: "getMedicalExpense",
   refund: "getMedicalRefund",
@@ -90,6 +91,8 @@ export function VoidEvent({
   const [ack, setAck] = useState(false);
   const [latest, setLatest] = useState<EventRow | null>(null);
   const [message, setMessage] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
   const attempt = useSubmitAttempt();
   const key = useIdempotencyKey(JSON.stringify([kind, base.id, base.version, reason.trim()]));
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -112,7 +115,10 @@ export function VoidEvent({
         signal,
       ),
     );
-    if (result.ok && command.mounted.current) saved();
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      saved();
+    }
   }
   async function compare() {
     try {
@@ -127,7 +133,13 @@ export function VoidEvent({
       <h2>{eventNames[kind]} 무효 처리</h2>
       <p>오등록을 무효 이력으로 남겨요. 실제 환불·반환은 별도 금전 기록으로 입력해 주세요.</p>
       <CashSummary cash={base.cash} />
-      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setMessage("");
+          setDirty(true);
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy}>
           <legend>무효 사유와 확인</legend>
           <div className="form-field">

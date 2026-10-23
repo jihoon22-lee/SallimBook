@@ -69,9 +69,9 @@ function TodayList({ compact }: { compact: boolean }) {
   );
   const attentionCount = resource.data?.items.filter((row) => attentionRank(row) < 5).length;
   return (
-    <>
-      <ResourceFeedback resource={resource} />
-      {resource.data && !resource.error && !resource.loading && (
+    <div aria-busy={resource.loading}>
+      <ResourceFeedback resource={resource} keepsData />
+      {resource.data && !resource.error && (
         <>
           <div className="care-summary">
             <p className="eyebrow">오늘 기준 · {dateLabel(resource.data.as_of)}</p>
@@ -153,7 +153,7 @@ function TodayList({ compact }: { compact: boolean }) {
           </button>
         </>
       )}
-    </>
+    </div>
   );
 }
 export function TodayConsumables({ compact = false }: { compact?: boolean }) {

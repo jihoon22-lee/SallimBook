@@ -40,6 +40,7 @@ export function useExportsApi() {
             passkey && householdId
               ? { purpose: "data.export", targetId: householdId, signal }
               : undefined,
+            { clearOnExpiry: true },
           );
         } catch (error) {
           received?.bytes.fill(0);

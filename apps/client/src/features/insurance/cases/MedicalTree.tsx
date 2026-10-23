@@ -131,6 +131,8 @@ function NodeEditor({
   const [latest, setLatest] = useState<MedicalNode | null>(null);
   const [message, setMessage] = useState("");
   const attempt = useSubmitAttempt();
+  // A node in use is not an edit conflict: the message says why, and the form stays editable.
+  const conflicted = command.error?.status === 409 && command.error.code !== "MEDICAL_NODE_IN_USE";
   const forbidden = base ? descendants(nodes, base.id) : new Set<string>();
   const input = medicalInput(draft);
   const changes = input && base ? changedFields(medicalInput(draftOf(base))!, input) : null;
@@ -147,7 +149,7 @@ function NodeEditor({
   async function submit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
     event.preventDefault();
-    if (command.error?.status === 409) return;
+    if (conflicted) return;
     if (!input || !valid) {
       setMessage(
         changes && Object.keys(changes).length === 0
@@ -296,7 +298,7 @@ function NodeEditor({
         <FormError message={message} />
         <MetadataFeedback command={command} listPath={`/insurance/cases/${caseId}`} />
         <ConflictReview
-          error={command.error}
+          error={conflicted ? command.error : null}
           compare={() => void compare()}
           latest={!!latest}
           adopt={() => adopt(true)}
@@ -313,10 +315,7 @@ function NodeEditor({
           )}
         </ConflictReview>
         <div className="form-actions">
-          <button
-            type="submit"
-            disabled={command.busy || command.uncertain || command.error?.status === 409}
-          >
+          <button type="submit" disabled={command.busy || command.uncertain || conflicted}>
             진료 기록 저장
           </button>
           <button type="button" onClick={cancel} disabled={command.busy}>
@@ -397,17 +396,17 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
     }
   }
   return (
-    <section className="card" aria-label="사건 진료 트리">
+    <section className="card" aria-label="사건 진료 트리" aria-busy={list.loading}>
       <h2>진료·처방·약국</h2>
       <p>진료를 추가해도 지출은 생기지 않아요. 실제 비용 원본만 합산해요.</p>
       <InsuranceError error={list.error} />
       {list.error && <button onClick={() => void list.reload()}>진료 트리 다시 확인</button>}
-      {list.loading && (
+      {list.loading && !list.data && (
         <p className="loading-state" role="status">
           전체 진료 연결을 불러오고 있어요.
         </p>
       )}
-      {!list.loading && !list.error && (
+      {list.data && !list.error && (
         <>
           <button
             className="primary-button"

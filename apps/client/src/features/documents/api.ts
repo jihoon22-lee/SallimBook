@@ -66,26 +66,36 @@ export function useDocumentsApi() {
             }),
           () => cancellableNative(signal, () => nativeFinance.deleteDocument(o)),
         ),
+      // An attachment draft holds the chosen file, so an ended session clears it instead of
+      // keeping it on screen behind the sign-in dialog.
       create: (input: CreateDocument, key: string, signal: AbortSignal) =>
-        domainApi.write((c) =>
-          c.POST("/api/v1/documents", {
-            body: input,
-            params: { header: { "Idempotency-Key": key } },
-            signal,
-          }),
+        domainApi.write(
+          (c) =>
+            c.POST("/api/v1/documents", {
+              body: input,
+              params: { header: { "Idempotency-Key": key } },
+              signal,
+            }),
+          undefined,
+          undefined,
+          { clearOnExpiry: true },
         ),
       upload: (id: string, version: string, key: string, bytes: ArrayBuffer, signal: AbortSignal) =>
-        domainApi.write((c) =>
-          c.PUT("/api/v1/documents/{document_id}/content", {
-            params: {
-              path: { document_id: id },
-              header: { "If-Match": version, "Idempotency-Key": key },
-            },
-            headers: { "Content-Type": "application/octet-stream" },
-            body: "",
-            bodySerializer: () => bytes,
-            signal,
-          }),
+        domainApi.write(
+          (c) =>
+            c.PUT("/api/v1/documents/{document_id}/content", {
+              params: {
+                path: { document_id: id },
+                header: { "If-Match": version, "Idempotency-Key": key },
+              },
+              headers: { "Content-Type": "application/octet-stream" },
+              body: "",
+              bodySerializer: () => bytes,
+              signal,
+            }),
+          undefined,
+          undefined,
+          { clearOnExpiry: true },
         ),
       download: async (id: string, signal: AbortSignal) => {
         let received: ArrayBuffer | undefined;

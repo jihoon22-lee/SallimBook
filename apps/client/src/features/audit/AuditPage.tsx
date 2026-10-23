@@ -11,6 +11,7 @@ import { actionLabels, emptyFilters, entityLabels, queryFromFilters } from "./mo
 import type { AuditFilterDraft, AuditQuery } from "./model";
 import "./audit.css";
 import { formatSeoulDateTime } from "../../shared/format";
+import { changedFieldLabels } from "./fields";
 
 function AuditError({ error }: { error: ApiError | null }) {
   if (!error) return null;
@@ -84,7 +85,9 @@ function AuditResults({ query, members }: { query: AuditQuery; members: Househol
               </p>
               <p>
                 변경 필드:{" "}
-                {row.changed_fields.length ? row.changed_fields.join(", ") : "변경 필드 없음"}
+                {row.changed_fields.length
+                  ? changedFieldLabels(row.changed_fields).join(", ")
+                  : "변경 필드 없음"}
               </p>
               {row.entity_type === "user_export" && row.action === "export" && (
                 <p>

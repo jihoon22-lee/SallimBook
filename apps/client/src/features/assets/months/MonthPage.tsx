@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { components } from "@sallimbook/api-client";
 import { ApiError, toApiError } from "../../../platform/api";
 import { formatMonth, isValidMonth, useMonth } from "../../../shared/MonthContext";
+import { MonthField } from "../../../shared/MonthField";
 import { useAuth } from "../../auth/AuthProvider";
 import { SessionStatus, useMounted } from "../../auth/AuthFeedback";
 import { dateLabel, MemberLoadError, useHouseholdMembers } from "../../finance/FinanceSupport";
@@ -479,7 +480,6 @@ export function AssetMonthPage() {
   const { setMonth } = useMonth();
   const { state } = useAuth();
   const navigate = useNavigate();
-  const id = useId();
   const [editing, setEditing] = useState(false);
   const revision = params.get("revision");
   const validRevision =
@@ -510,18 +510,11 @@ export function AssetMonthPage() {
       </div>
       <div className="month-picker">
         <div className="month-control">
-          <label htmlFor={id}>확인할 월</label>
-          <input
-            id={id}
-            type="month"
-            min="0001-01"
-            max="9999-12"
+          <MonthField
+            label="확인할 월"
             value={month}
             disabled={editing}
-            onChange={(event) => {
-              if (isValidMonth(event.target.value))
-                navigate(`/assets/months/${event.target.value}`);
-            }}
+            onChange={(next) => navigate(`/assets/months/${next}`, { replace: true })}
           />
         </div>
         <span className="muted">서울 기준 · {formatMonth(month)}</span>

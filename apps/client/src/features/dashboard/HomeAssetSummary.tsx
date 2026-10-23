@@ -170,12 +170,16 @@ function CurrentAssetSummary({ view, hintId }: { view: HomeAssetView; hintId: st
   // The 390px home keeps today's consumables above the navigation, so the hint for an
   // unconfirmed month stays in the change line instead of a paragraph of its own.
   const unconfirmedMonth = view === "month" && data?.state === "unconfirmed";
+  // The shown month can be confirmed already while only the month before it is still open.
+  const onlyPreviousOpen = unconfirmedMonth && data?.current.state === "confirmed";
   return (
     <>
       {unconfirmedMonth && (
         <span className="sr-only" id={hintId}>
-          {monthLabel} 기록을 확정하면 전월과 비교해요. 확정된 비교는 &apos;최근 확정 비교&apos;에서
-          볼 수 있어요.
+          {onlyPreviousOpen
+            ? "전월 기록을 확정하면 비교해요."
+            : `${monthLabel} 기록을 확정하면 전월과 비교해요.`}{" "}
+          확정된 비교는 &apos;최근 확정 비교&apos;에서 볼 수 있어요.
         </span>
       )}
       <ComparisonError error={error} />
@@ -237,7 +241,9 @@ function CurrentAssetSummary({ view, hintId }: { view: HomeAssetView; hintId: st
                 {data.total_delta_krw !== null
                   ? signedKrw(data.total_delta_krw)
                   : unconfirmedMonth
-                    ? "확정 후 비교"
+                    ? onlyPreviousOpen
+                      ? "전월 확정 후 비교"
+                      : "확정 후 비교"
                     : "비교할 수 없음"}
               </strong>
             </div>

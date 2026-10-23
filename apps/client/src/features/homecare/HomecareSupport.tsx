@@ -6,6 +6,7 @@ import { SessionStatus, useMounted } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import { todaySeoul } from "../finance/dates";
 import { FinanceError } from "../finance/FinanceSupport";
+import { rememberFocus } from "../../shared/focusKeeper";
 export function HomecarePage({
   title,
   children,
@@ -79,6 +80,7 @@ export function useMetadataCommand() {
   async function run<T>(write: () => Promise<T>, creating = false): Promise<T | undefined> {
     if (flight.current || uncertain) return;
     flight.current = true;
+    const restoreFocus = rememberFocus();
     setBusy(true);
     setError(null);
     try {
@@ -92,6 +94,7 @@ export function useMetadataCommand() {
     } finally {
       flight.current = false;
       if (mounted.current) setBusy(false);
+      restoreFocus();
     }
   }
   return {
@@ -208,14 +211,22 @@ export function ListFeedback({
     </>
   );
 }
+/** `keepsData`: a reload keeps the last data on screen, so only a first read shows the spinner. */
 export function ResourceFeedback({
   resource,
+  keepsData = false,
 }: {
-  resource: { loading: boolean; error: ApiError | null; reload: () => Promise<void> };
+  resource: {
+    loading: boolean;
+    error: ApiError | null;
+    reload: () => Promise<void>;
+    data?: unknown;
+  };
+  keepsData?: boolean;
 }) {
   return (
     <>
-      {resource.loading && (
+      {resource.loading && !(keepsData && resource.data) && (
         <p className="loading-state" role="status">
           현재 기록을 확인하고 있어요.
         </p>
