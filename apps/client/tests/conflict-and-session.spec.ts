@@ -100,6 +100,82 @@ test("a save answered with an expired session opens a sign-in dialog over the ke
   expect(await stored()).toEqual({ local: 0, session: 0, databases: 0 });
 });
 
+test("a passkey sign-in in the expired-session dialog keeps the person signed in", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  await expireOnNextSave(page, state);
+  // A synthetic assertion object: the server mock below does not check the signature.
+  await page.addInitScript(() => {
+    const bytes = (text: string) => new TextEncoder().encode(text).buffer;
+    Object.defineProperty(navigator.credentials, "get", {
+      value: async () => {
+        const response = Object.create(AuthenticatorAssertionResponse.prototype);
+        for (const [key, value] of Object.entries({
+          clientDataJSON: bytes("synthetic-client-data"),
+          authenticatorData: bytes("synthetic-authenticator-data"),
+          signature: bytes("synthetic-signature"),
+          userHandle: null,
+        }))
+          Object.defineProperty(response, key, { value });
+        const credential = Object.create(PublicKeyCredential.prototype);
+        const rawId = bytes("synthetic-passkey");
+        Object.defineProperties(credential, {
+          id: { value: btoa("synthetic-passkey").replace(/=+$/, "") },
+          rawId: { value: rawId },
+          type: { value: "public-key" },
+          authenticatorAttachment: { value: "platform" },
+          response: { value: response },
+          getClientExtensionResults: { value: () => ({}) },
+        });
+        return credential;
+      },
+    });
+  });
+  const verifies: unknown[] = [];
+  await page.route("**/api/v1/auth/web/passkeys/options", (route) =>
+    route.fulfill({
+      json: {
+        challenge_id: uid(90),
+        expires_at: "2025-02-20T03:05:00Z",
+        public_key: {
+          challenge: "c3ludGhldGljLXVpLWNoYWxsZW5nZQ",
+          timeout: 120000,
+          rpId: "localhost",
+          userVerification: "required",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v1/auth/web/passkeys/verify", (route) => {
+    verifies.push(route.request().postDataJSON());
+    state.finance.csrfCalls++;
+    return route.fulfill({
+      json: { csrf_token: `synthetic-finance-csrf-${state.finance.csrfCalls}`, member: members[0] },
+    });
+  });
+  await page.goto("/income/new");
+  await page.getByRole("combobox", { name: "수입 구성원", exact: true }).selectOption(uid(2));
+  const amount = page.getByLabel("수입 금액 (원)", { exact: true });
+  await amount.fill("5200");
+  await page.getByRole("combobox", { name: "입금계좌", exact: true }).selectOption(uid(30));
+  await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "로그인이 만료되었어요", exact: true });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("로그인 이름", { exact: true }).fill("synthetic-owner");
+  await dialog.getByRole("button", { name: "패스키로 로그인", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(verifies).toHaveLength(1);
+  await expect(amount).toHaveValue("5200");
+
+  // Saving and then moving to another screen keeps the restored session.
+  await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "수입 상세", exact: true })).toBeVisible();
+  expect(state.writes).toHaveLength(1);
+  await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
+});
+
 test("closing the sign-in dialog keeps the form and a later save asks again", async ({ page }) => {
   const state = await mockCashflow(page);
   await expireOnNextSave(page, state);

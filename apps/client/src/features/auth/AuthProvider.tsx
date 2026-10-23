@@ -559,6 +559,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signal.throwIfAborted();
       csrf.current = data.csrf_token;
       member.current = data.member;
+      setExpiry(null);
       setState({ status: "authenticated", member: data.member });
     },
     [ensureCurrent],
