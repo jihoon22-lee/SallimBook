@@ -18,6 +18,7 @@ from pypdf.generic import (
     DecodedStreamObject,
     DictionaryObject,
     NameObject,
+    NumberObject,
     TextStringObject,
 )
 from sallimbook.core.errors import DomainError
@@ -85,10 +86,17 @@ def synthetic_pan():
 
 
 def receipt(
-    kind="PNG", *, korean=False, card=False, pan=False, dates=False, noise_seed=None
+    kind="PNG",
+    *,
+    korean=False,
+    card=False,
+    pan=False,
+    dates=False,
+    masked=False,
+    noise_seed=None,
 ):
     image = receipt_image(
-        korean=korean, card=card, pan=pan, dates=dates, noise_seed=noise_seed
+        korean=korean, card=card, pan=pan, dates=dates, masked=masked, noise_seed=noise_seed
     )
     buffer = io.BytesIO()
     # Fixtures are clock-independent; dated PDF acceptance uses explicit metadata.
@@ -98,7 +106,9 @@ def receipt(
     return buffer.getvalue()
 
 
-def receipt_image(*, korean=False, card=False, pan=False, dates=False, noise_seed=None):
+def receipt_image(
+    *, korean=False, card=False, pan=False, dates=False, masked=False, noise_seed=None
+):
     image = Image.new("RGB", (1200, 700), "white")
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(FONT, 52)
@@ -134,6 +144,14 @@ def receipt_image(*, korean=False, card=False, pan=False, dates=False, noise_see
             "2026.10.01 2026.10.08",
             "2026-09-30 2026-10-07",
             "합성 병원",
+        ]
+    if masked:
+        # A card receipt prints a masked number and bare field labels; it is not card data.
+        lines = [
+            "합성 카드 영수증",
+            "CARD NO ****-****-****-2349",
+            "카드번호 4123-45**-****-2349",
+            "TOTAL PAID 25000 KRW",
         ]
     for number, line in enumerate(lines):
         draw.text((40, 45 + 125 * number), line, font=font, fill="black")
@@ -214,6 +232,38 @@ def marker_in_scan_jpeg():
     require(False, "jpeg_marker_in_scan")
 
 
+def lossless_scan_pdf():
+    # A Korean receipt on a lossless (Flate) A4 200 dpi RGB page; it decodes to 11.6 MB.
+    page_image = Image.new("RGB", (1654, 2339), "white")
+    with receipt_image(korean=True) as image:
+        page_image.paste(image, (200, 300))
+    writer = PdfWriter()
+    page = writer.add_blank_page(595, 842)
+    scan = DecodedStreamObject()
+    scan.set_data(page_image.tobytes())
+    scan.update(
+        {
+            NameObject("/Type"): NameObject("/XObject"),
+            NameObject("/Subtype"): NameObject("/Image"),
+            NameObject("/Width"): NumberObject(page_image.width),
+            NameObject("/Height"): NumberObject(page_image.height),
+            NameObject("/ColorSpace"): NameObject("/DeviceRGB"),
+            NameObject("/BitsPerComponent"): NumberObject(8),
+        }
+    )
+    page_image.close()
+    reference = writer._add_object(scan.flate_encode())
+    content = DecodedStreamObject()
+    content.set_data(b"q 595 0 0 842 0 0 cm /Scan Do Q")
+    page[NameObject("/Contents")] = writer._add_object(content)
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/XObject"): DictionaryObject({NameObject("/Scan"): reference})}
+    )
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
 def text_pdf(*, card=False, active=False, pan=False):
     writer = PdfWriter()
     page = writer.add_blank_page(600, 400)
@@ -229,7 +279,7 @@ def text_pdf(*, card=False, active=False, pan=False):
     page[NameObject("/Resources")] = DictionaryObject(
         {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
     )
-    text = b"CARD NUMBER CVC SECURITY CODE" if card else b"SYNTHETIC MEDICAL RECEIPT"
+    text = b"CARD NUMBER CVC SECURITY CODE 123" if card else b"SYNTHETIC MEDICAL RECEIPT"
     if pan:
         text = synthetic_pan().encode()
     content = DecodedStreamObject()
@@ -506,6 +556,7 @@ def main():
             ("png_korean", receipt(korean=True), "image/png"),
             ("pdf_text", text_pdf(), "application/pdf"),
             ("pdf_image_korean", receipt("PDF", korean=True), "application/pdf"),
+            ("pdf_lossless_a4_scan", lossless_scan_pdf(), "application/pdf"),
             (
                 "pdf_dated_korean",
                 metadata_pdf(
@@ -527,6 +578,9 @@ def main():
             results.append(stage)
         stage = "png_dates_korean"
         accepted(receipt(korean=True, dates=True), "image/png", stage)
+        results.append(stage)
+        stage = "png_masked_card_receipt"
+        accepted(receipt(masked=True), "image/png", stage)
         results.append(stage)
         stage = "pdf_max_pages"
         max_pages_seconds = accepted(
@@ -585,7 +639,7 @@ def main():
             ),
             (
                 "card_pdf_date_suffix",
-                metadata_pdf({"/CreationDate": "D:20261018051908Z CVC SECURITY CODE"}),
+                metadata_pdf({"/CreationDate": "D:20261018051908Z CVC SECURITY CODE 123"}),
                 "application/pdf",
                 {"DOCUMENT_CARD_DATA"},
                 {},

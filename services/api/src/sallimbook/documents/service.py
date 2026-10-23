@@ -41,6 +41,7 @@ TARGETS = {
     "asset": Asset,
 }
 TTL = timedelta(hours=24)
+REJECTED_REASON = "업로드 검사에서 허용하지 않은 파일"
 
 
 def _actors(principal):
@@ -247,6 +248,36 @@ def list_documents(session, principal, *, target_kind=None, target_id=None, curs
     return result
 
 
+def _discard_rejected(session, principal, document_id, digest):
+    # A pending row is bound to its checksum, so rejected bytes leave it unusable; remove it
+    # instead of leaving it to expire in the list. Scanner/OCR outages (503) keep it for retry.
+    recheck = _lock(session, principal)
+    row = scoped_entity(session, Document, document_id, principal, for_update=True)
+    if row.state != "pending" or row.checksum_sha256 != digest:
+        session.rollback()
+        return
+    now = datetime.now(UTC)
+    links = session.scalars(
+        select(DocumentLink)
+        .where(
+            DocumentLink.household_id == principal.household_id,
+            DocumentLink.document_id == row.id,
+            DocumentLink.active.is_(True),
+        )
+        .with_for_update()
+    )
+    for link in links:
+        before = _touch(link, principal)
+        link.active, link.ended_at, link.end_reason = False, now, REJECTED_REASON
+        _audit(session, principal, link, "archive", ("active",), before)
+    before = _touch(row, principal)
+    row.state, row.deleted_at, row.deletion_reason = "deleted", now, REJECTED_REASON
+    _audit(session, principal, row, "delete", ("state",), before)
+    session.flush()
+    recheck()
+    session.commit()
+
+
 def upload_content(session, principal, document_id, content, if_match, key, settings):
     # No domain or session locks are held during isolated parsing/scanning/OCR.
     row = scoped_entity(session, Document, document_id, principal)
@@ -260,22 +291,27 @@ def upload_content(session, principal, document_id, content, if_match, key, sett
         _linked(session, principal, row)
     session.rollback()
     if needs_inspection:
-        validate_document(
-            content,
-            mime,
-            scanner_socket=(
-                str(settings.document_scanner_socket)
-                if settings.document_scanner_socket is not None
-                else None
-            ),
-            tesseract_path=str(settings.document_tesseract_path),
-            pdftoppm_path=str(settings.document_pdftoppm_path),
-            inspector_socket=(
-                str(settings.document_inspector_socket)
-                if settings.document_inspector_socket is not None
-                else None
-            ),
-        )
+        try:
+            validate_document(
+                content,
+                mime,
+                scanner_socket=(
+                    str(settings.document_scanner_socket)
+                    if settings.document_scanner_socket is not None
+                    else None
+                ),
+                tesseract_path=str(settings.document_tesseract_path),
+                pdftoppm_path=str(settings.document_pdftoppm_path),
+                inspector_socket=(
+                    str(settings.document_inspector_socket)
+                    if settings.document_inspector_socket is not None
+                    else None
+                ),
+            )
+        except DomainError as error:
+            if error.status == 422:
+                _discard_rejected(session, principal, document_id, digest)
+            raise
     recheck = _lock(session, principal)
     store = PrivateStore(settings.document_storage_directory)
 

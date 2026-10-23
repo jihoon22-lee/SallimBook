@@ -147,11 +147,12 @@ test("jpeg normalization is deterministic for pending resume", async ({ page }) 
   );
 });
 
-test("undecodable jpeg uploads the original bytes unchanged", async ({ page }) => {
+test("undecodable jpeg is refused without sending the original", async ({ page }) => {
+  // The screen promises location and photo data are removed, so the original never leaves.
   const state = await mockDocuments(page);
   await open(page);
-  const source = Buffer.from("SYNTHETIC DOCUMENT FIXTURE ONLY");
-  await upload(page, "합성 손상 사진.jpg", source);
-  await expect(detail(page).getByText("보관 완료", { exact: true })).toBeVisible();
-  expect(state.writes[1]!.bytes!.equals(source)).toBe(true);
+  await upload(page, "합성 손상 사진.jpg", Buffer.from("SYNTHETIC DOCUMENT FIXTURE ONLY"));
+  const form = page.getByRole("region", { name: "새 문서 첨부", exact: true });
+  await expect(form.getByRole("alert")).toContainText("사진을 변환하지 못해 올리지 않았어요");
+  expect(state.writes).toHaveLength(0);
 });

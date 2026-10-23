@@ -55,7 +55,10 @@ _ERRORS = {
         "필요한 쪽만 나누거나 해상도를 낮춰 첨부해 주세요.",
     ),
     "DOCUMENT_MALWARE": (422, "보안 검사에서 허용하지 않은 파일입니다."),
-    "DOCUMENT_CARD_DATA": (422, "카드번호·보안코드 또는 카드 사진은 첨부할 수 없습니다."),
+    "DOCUMENT_CARD_DATA": (
+        422,
+        "전체 카드번호·보안코드·유효기간 또는 카드 사진은 첨부할 수 없습니다.",
+    ),
     "DOCUMENT_UNREADABLE": (422, "글자를 명확히 읽을 수 있는 영수증·문서를 선택해 주세요."),
     "DOCUMENT_SCAN_UNAVAILABLE": (503, "파일 보안 검사를 준비하고 있습니다."),
     "DOCUMENT_OCR_UNAVAILABLE": (503, "문서 내용 검사를 준비하고 있습니다."),
