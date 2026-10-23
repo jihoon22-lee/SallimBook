@@ -243,6 +243,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                 AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE)
             } finally {
                 payload?.remove("password")
+                payload?.remove("install")
                 password.fill('\u0000')
             }
             callback(outcome)

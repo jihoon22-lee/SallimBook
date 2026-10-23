@@ -82,6 +82,8 @@ class NativeInstallDeviceTest {
         // Password and passkey sign-in both present the claim and keep the answer.
         assertEquals(2, Regex("NativeInstallDevice\\.claim\\(").findAll(session).count())
         assertEquals(2, Regex("keepInstallDevice\\(").findAll(session).count() - 1)
+        // Neither leaves the device key in its request body once the request is done.
+        assertEquals(2, Regex("payload\\?\\.remove\\(\"install\"\\)").findAll(session).count())
         val drop = session.substringAfter("private fun dropSession(").substringBefore("\n    }")
         assertFalse(drop.contains("installDevices"))
         assertTrue(session.contains("InstallDeviceStore("))
