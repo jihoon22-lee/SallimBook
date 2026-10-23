@@ -36,11 +36,15 @@ class MainBranchRuns(unittest.TestCase):
 class AndroidInstrumentationRuns(unittest.TestCase):
     def test_runs_queue_in_one_group_and_never_cancel_a_running_job(self):
         group = re.search(
-            r"^concurrency:\n  group: (.+)\n  cancel-in-progress: (.+)$", INSTRUMENTATION, re.M
+            r"^    concurrency:\n      group: (.+)\n      cancel-in-progress: (.+)$",
+            job(INSTRUMENTATION, "api36"),
+            re.M,
         )
         self.assertIsNotNone(group)
         self.assertEqual(group.group(1), "sallimbook-android-instrumentation")
         self.assertEqual(group.group(2), "false")
+        # A draft pull request skips the job, so it must not hold the group at workflow level.
+        self.assertNotRegex(INSTRUMENTATION, re.compile(r"^concurrency:", re.M))
 
     def test_expected_counts_have_a_single_source(self):
         self.assertEqual(set(EXPECTED_INSTRUMENTATION), {"existing", "onboarding"})
@@ -83,8 +87,21 @@ class OperationsChecks(unittest.TestCase):
                           "docker/build-push-action", "secrets."):
             self.assertNotIn(forbidden, text)
 
-    def test_seeded_upgrade_job_runs_exactly_the_migration_tests_and_checks_they_ran(self):
-        text = job(CI, "api-upgrade")
+    def test_the_clamav_image_is_built_only_for_changed_inputs_without_a_final_wait(self):
+        text = job(CI, "ops-images")
+        build = text.split("- name: Build the API image\n", 1)[1].split("\n      - ", 1)[0]
+        self.assertIn("if: steps.api-inputs.outputs.changed == 'true'", build)
+        gate = text.split("id: api-inputs\n", 1)[1].split("\n      - ", 1)[0]
+        for path in ("services/api", "ops/Dockerfile.api", "ops/build_context.py",
+                     "infra/documents", ".github/workflows/ci.yml"):
+            self.assertIn(path, gate)
+        # Pushes to main and manual runs always build the image.
+        self.assertIn('"$GITHUB_EVENT_NAME" != pull_request', gate)
+        self.assertIn('if [ "$attempt" -lt 3 ]; then sleep 60; fi', build)
+        self.assertIn("fetch-depth: 2", text)
+
+    def test_migration_row_job_runs_exactly_the_migration_tests_and_checks_they_ran(self):
+        text = job(CI, "api-migration-rows")
         nodes = re.findall(r'"(services/api/tests/[^"]+::[^"]+)"', text)
         self.assertEqual(len(nodes), 3)
         for node in nodes:

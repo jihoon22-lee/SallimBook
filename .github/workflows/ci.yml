@@ -183,8 +183,8 @@ jobs:
           uv run --project services/api alembic -c services/api/alembic.ini downgrade base
           uv run --project services/api alembic -c services/api/alembic.ini upgrade head
 
-  api-upgrade:
-    name: Seeded upgrade from 0014_vault to head
+  api-migration-rows:
+    name: Migrations over rows left by earlier schema revisions
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -255,6 +255,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # A pull request's merge commit and its base, to see which image inputs it changed.
+          fetch-depth: 2
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: "0.12.5"
@@ -273,15 +275,29 @@ jobs:
       # Images stay on this runner: no login, registry or push.
       - name: Build the web image
         run: docker build --tag sallimbook-ci-web:test "$RUNNER_TEMP/ops-context/web"
-      - name: Build the API image
+      # The API image downloads the official signed ClamAV database, whose mirror limits shared
+      # runners, so a pull request builds it only when one of its inputs changed. A push to main
+      # and a manual run always build it.
+      - name: Check whether the API image inputs changed
+        id: api-inputs
         run: |
-          # The official signed ClamAV database is downloaded at build time and its mirror can
-          # refuse a shared runner for a while; retry the build, never its checks.
-          for _ in 1 2 3; do
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            changed=true
+          else
+            files=$(git diff --name-only HEAD^1 HEAD -- services/api ops/Dockerfile.api ops/build_context.py infra/documents .github/workflows/ci.yml)
+            if [ -n "$files" ]; then changed=true; else changed=false; fi
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+      - name: Build the API image
+        if: steps.api-inputs.outputs.changed == 'true'
+        run: |
+          # The ClamAV mirror can refuse a shared runner for a while; retry the build, never its
+          # checks, and do not wait after the last attempt.
+          for attempt in 1 2 3; do
             if docker build --build-arg SALLIMBOOK_CVD_REFRESH="$(date -u +%F)" --tag sallimbook-ci-api:test "$RUNNER_TEMP/ops-context/api"; then
               exit 0
             fi
-            sleep 60
+            if [ "$attempt" -lt 3 ]; then sleep 60; fi
           done
           exit 1
       - name: Check the private and public proxy routing in the built web image

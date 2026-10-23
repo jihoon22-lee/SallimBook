@@ -63,9 +63,10 @@ Temurin의 정확한 패치 릴리스는 [공식 릴리스](https://github.com/a
 `package.xml` 대조가 고정을 대신한다(검토한 revision 2가 아니면 실패). 이 대조는 이 workflow에만 있으며 일반 CI의
 Android 컴파일 job은 compileSdk 36의 현재 stable 플랫폼을 쓴다.
 
-이 workflow는 `sallimbook-android-instrumentation` 한 그룹에서 차례로 실행되며 실행 중인 job을 새 요청이 취소하지 않는다.
-GitHub은 그룹마다 대기 중인 실행을 하나만 보관하므로 실행 중 하나와 대기 하나가 있을 때 세 번째 요청이 오면 대기하던
-실행은 취소된다. 취소된 pull request는 Actions 탭에서 다시 실행한다. 일반 CI는 pull request 번호별 그룹에서 새 commit이
+이 workflow의 AVD job은 `sallimbook-android-instrumentation` 한 그룹에서 차례로 실행되며 실행 중인 job을 새 요청이 취소하지 않는다.
+GitHub은 그룹마다 대기 중인 job을 하나만 보관하므로 실행 중 하나와 대기 하나가 있을 때 세 번째 요청이 오면 대기하던
+job은 취소된다. 그룹은 job에 걸려 있어 job을 건너뛰는 draft pull request는 그 자리를 차지하거나 대체하지 않는다.
+취소된 pull request는 Actions 탭에서 다시 실행한다. 일반 CI는 pull request 번호별 그룹에서 새 commit이
 이전 실행을 취소하지만 `main` push는 commit마다 별도 그룹이라 취소되거나 대체되지 않는다.
 
 SDK는 runner의 기존 SDK를 재사용하지 않고 `RUNNER_TEMP` 안에 새로 설치한다. 설치 전에 Google 공식

@@ -22,14 +22,6 @@ on:
 permissions:
   contents: read
 
-# One emulator job at a time for this repository. A running job is never cancelled by a
-# later request, so one pull request cannot cancel another's run. GitHub keeps a single
-# pending run per group: if a third request arrives while one is running and one is
-# waiting, the waiting one is replaced. Re-run a replaced pull request from the Actions tab.
-concurrency:
-  group: sallimbook-android-instrumentation
-  cancel-in-progress: false
-
 defaults:
   run:
     shell: bash
@@ -42,6 +34,15 @@ jobs:
   api36:
     name: API 36 KVM and native instrumentation
     if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
+    # One emulator job at a time for this repository. A running job is never cancelled by a
+    # later request, so one pull request cannot cancel another's run. GitHub keeps a single
+    # pending job per group: if a third request arrives while one is running and one is
+    # waiting, the waiting one is replaced. The group is on the job, so a draft pull request
+    # whose job is skipped never takes or replaces that place. Re-run a replaced pull request
+    # from the Actions tab.
+    concurrency:
+      group: sallimbook-android-instrumentation
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     # Explicit step limits total 136m; reserve 14m for action post steps/runner overhead.
     timeout-minutes: 150

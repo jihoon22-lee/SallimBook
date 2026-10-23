@@ -10,10 +10,12 @@ SB-004의 [공유 합성 fixture](../packages/test-fixtures/README.md)는 H1/H2�
 아래 제품 인수 완료를 뜻하지 않는다. 각 vector의 제품 인수 상태는 현재 `pending`이다.
 
 GitHub Actions는 문서·도구(운영 도구 시험 포함), API lint/단위(`ops/`·`tests/operations` lint 포함), 격리 문서 검사 도구,
-웹 린트(ESLint·jsx-a11y)·타입·OpenAPI 생성 drift, PostgreSQL migration/API, 이전 schema(0014_vault)에서 합성 행을 올리는
-업그레이드(`api-upgrade`), 운영 이미지 빌드(`ops-images`: `ops/Dockerfile.*`를 빌드하고 게시하지 않으며 실제 Caddy 경로를 검사),
+웹 린트(ESLint·jsx-a11y)·타입·OpenAPI 생성 drift, PostgreSQL migration/API, 이전 schema revision(0014_vault 등)이
+남긴 합성 행의 migration 검사(`api-migration-rows`), 운영 이미지 빌드(`ops-images`: `ops/Dockerfile.*`를 빌드하고 게시하지 않으며 실제 Caddy 경로를 검사.
+ClamAV DB를 내려받는 API 이미지는 pull request가 그 입력을 바꿨을 때와 main push·수동 실행에서만 빌드),
 PC·모바일 viewport 웹 동작·실제 HTTPS, Android 개발 빌드의 9개 job을 정의한다.
-`api-upgrade`는 migration 시험의 합성 시드 세 건을 이름으로 지정해 실행하고 skip이면 실패한다. 실제 이전 릴리스 이미지로 하는
+`api-migration-rows`는 head에서 합성 행을 만든 뒤 이전 revision으로 내려 이전 릴리스가 남기는 행을 쓰고 다시 올리는(또는 내리기 거부를 확인하는)
+migration 시험 세 건을 이름으로 지정해 실행하고 skip이면 실패한다. 실제 이전 릴리스 이미지로 하는
 업그레이드 리허설(`ops.test_upgrade`)은 이미지 두 개와 ClamAV 빌드가 필요해 운영자가 직접 실행한다.
 main push의 CI는 취소되지 않고 새 push에 밀려 대기 중 취소되지도 않는다. pull request만 새 commit이 이전 실행을 취소한다.
 동일 PostgreSQL 이미지 digest와 frozen 의존성을 사용하며 저장소 비밀·서명키·실데이터를 주입하지 않는다.
