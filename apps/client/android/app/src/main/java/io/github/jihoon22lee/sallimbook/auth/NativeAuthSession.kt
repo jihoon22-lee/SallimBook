@@ -393,11 +393,11 @@ internal class NativeAuthSession private constructor(context: Context) {
                 val token = if (available && gate.isActive()) {
                     try { authorize(gate, AppRequestKind.LOGOUT); access(gate) } catch (_: AuthFailure) { null }
                 } else null
-                // A foreground logout intent still clears locally if the Activity pauses while queued.
-                clearLocal()
-                val revoked = if (token == null || !gate.isActive()) false else try {
-                    http.send("POST", "/api/v1/auth/native/logout", gate, body = JSONObject(), accessToken = token).status == 204
-                } catch (_: AuthFailure) { false }
+                // The server hears first, since clearing cancels this gate. A foreground logout
+                // intent still clears locally if the Activity pauses while queued.
+                val revoked = NativeLogout.run(token, gate::isActive, {
+                    http.send("POST", "/api/v1/auth/native/logout", gate, body = JSONObject(), accessToken = it).status == 204
+                }, ::clearLocal)
                 appLock.lock()
                 AuthOutcome.success(mapOf("status" to "signedOut", "serverRevoked" to revoked))
             } catch (failure: AuthFailure) {
