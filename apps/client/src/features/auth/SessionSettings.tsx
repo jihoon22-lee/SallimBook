@@ -183,9 +183,6 @@ function InvitationPanel() {
   );
 }
 
-const possiblyApplied =
-  "응답을 받지 못했어요. 비밀번호가 이미 바뀌었을 수 있으니, 다시 시도할 때는 현재 비밀번호 칸에 새 비밀번호를 넣어 보세요.";
-
 function PasswordPanel({ onChanged }: { onChanged: () => void }) {
   const { changePassword } = useAuth();
   const formRef = useSensitiveForm();
@@ -299,7 +296,13 @@ function PasswordPanel({ onChanged }: { onChanged: () => void }) {
         </form>
       )}
       <AuthError error={error} />
-      {error?.code === "NETWORK_UNAVAILABLE" && <p className="muted">{possiblyApplied}</p>}
+      {error?.code === "NETWORK_UNAVAILABLE" && (
+        <p className="muted">
+          응답을 받지 못했어요. 비밀번호가 이미 바뀌었을 수 있어요. 먼저{" "}
+          <Link to="/login">새 비밀번호로 다시 인증</Link>해 보세요. 인증되면 변경이 끝난 거예요.
+          인증되지 않으면 바뀌지 않은 것이니 다시 변경해 주세요.
+        </p>
+      )}
       {done && <p role="status">비밀번호를 바꿨어요. 다른 기기는 모두 로그아웃됐어요.</p>}
     </section>
   );

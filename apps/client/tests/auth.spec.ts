@@ -30,6 +30,8 @@ async function mockIdentity(page: Page, loggedIn = false) {
     loginAttempts: 0,
     reauthAttempts: 0,
     rejectReauth: false,
+    expireReauth: false,
+    abortPassword: false,
     validReauthShape: false,
     logoutAttempts: 0,
     invitationAttempts: 0,
@@ -167,11 +169,16 @@ async function mockIdentity(page: Page, loggedIn = false) {
       if (await csrfRejected(route)) return;
       state.validReauthShape = Object.keys(route.request().postDataJSON()).join(",") === "password";
       if (state.rejectReauth) return failure(route, 403, "REAUTHENTICATION_FAILED");
+      if (state.expireReauth) {
+        state.loggedIn = false;
+        return failure(route, 401, "UNAUTHENTICATED");
+      }
       return route.fulfill({ json: member });
     }
     if (path === "/api/v1/auth/password" && method === "POST") {
       state.passwordChanges += 1;
       if (await csrfRejected(route)) return;
+      if (state.abortPassword) return route.abort("failed");
       const body = route.request().postDataJSON();
       state.validPasswordShape =
         Object.keys(body).sort().join(",") === "current_password,new_password" &&
@@ -282,6 +289,37 @@ test("current web account reauthenticates without another login or changing devi
   expect(api.reauthAttempts).toBe(2);
   expect(api.loginAttempts).toBe(0);
   await expectNoPersistence(page);
+});
+
+test("an expired session during re-authentication asks to sign in again", async ({ page }) => {
+  const api = await mockIdentity(page, true);
+  api.expireReauth = true;
+  await page.goto("/settings/auth");
+  await page.getByRole("link", { name: "패스키 관리 전 다시 로그인", exact: true }).click();
+  await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
+  await page.getByRole("button", { name: "다시 인증", exact: true }).click();
+  await expect(page.getByText(/다시 로그인해 주세요/).first()).toBeVisible();
+  await expect(page.getByText("로그인 이름이나 비밀번호를 확인해 주세요.")).toHaveCount(0);
+});
+
+test("a lost password-change response points to re-authenticating with the new password", async ({
+  page,
+}) => {
+  const api = await mockIdentity(page, true);
+  api.abortPassword = true;
+  await page.goto("/settings/auth");
+  const next = `synthetic-new-${crypto.randomUUID()}`;
+  await page
+    .getByLabel("현재 비밀번호", { exact: true })
+    .fill(`synthetic-old-${crypto.randomUUID()}`);
+  await page.getByLabel("새 비밀번호", { exact: true }).fill(next);
+  await page.getByLabel("새 비밀번호 확인", { exact: true }).fill(next);
+  await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+  await expect(page.getByText(/새 비밀번호로 다시 인증/)).toBeVisible();
+  await expect(page.getByText(/현재 비밀번호 칸에 새 비밀번호/)).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "새 비밀번호로 다시 인증", exact: true }),
+  ).toHaveAttribute("href", "/login");
 });
 
 test("return path accepts only same-app paths", () => {
