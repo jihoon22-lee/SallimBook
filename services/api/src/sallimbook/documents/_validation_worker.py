@@ -241,14 +241,19 @@ def _pan_candidates(text: str):
 
 
 # Receipts print masked card numbers and the bare labels of card fields; neither is card data.
-# A security code or an expiry date is, so a label counts only with its value close behind
-# it, and a masked number only with an expiry date right after it. The gap before a value
-# never contains masking characters, so "CVC *** 1234원" is not a code.
-_VALUE_GAP = r"[^\d*•●#]{0,6}"
-_EXPIRY_DATE = r"(?<!\d)(?:0[1-9]|1[0-2]) ?/ ?(?:20\d\d|\d\d)(?!\d)"
+# A security code or an expiry date is, so a label counts when the first number after it is
+# such a value, and a masked number only with an expiry date right after it. The gap before
+# a value holds no digits or masking characters, so "CVC *** 1234원" is not a code. A full
+# date (2026.10.31) is not an expiry, so coupon and point expiry lines pass.
+_VALUE_GAP = r"[^\d*•●#]{0,24}"
+_EXPIRY_DATE = (
+    r"(?<!\d)(?<!\d[./-])(?<!\d [./-])(?<!\d[./-] )(?<!\d [./-] )"
+    r"(?:(?:0[1-9]|1[0-2]) ?[./-] ?(?:20\d\d|\d\d)|20\d\d ?[./-] ?(?:0[1-9]|1[0-2]))"
+    r"(?!\d)(?! ?[./-] ?\d)"
+)
 _SECURITY_CODE = re.compile(
     r"(?i)(?:(?<![a-z])(?:cvc|cvv|cvn|csc|cid)2?(?![a-z])|"
-    r"card ?(?:security|verification) ?(?:code|number)|security ?code|"
+    r"card ?(?:security|verification) ?(?:code|number|value)|security ?code|"
     r"카드 ?(?:보안|인증) ?(?:코드|번호)|보안 ?(?:코드|번호))"
     + _VALUE_GAP
     + r"(?<!\d)\d{3,4}(?!\d)"

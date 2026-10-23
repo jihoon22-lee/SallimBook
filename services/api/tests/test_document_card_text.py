@@ -182,6 +182,10 @@ MASKED_RECEIPT_LINES = [
     "VALID THRU",
     "만료된 쿠폰 1개 합계 12,000원",
     "결제일 2026/10/17 10/17 방문 예정",
+    "보안코드 *** 카드번호 ****-****-****-2349",
+    "쿠폰 만료 2026.10.31 합계 12,000원",
+    "포인트 소멸(만료) 예정일 2026-12-31",
+    "카드번호 ****-****-****-2349 2026.10.17 14:22",
 ]
 
 
@@ -212,6 +216,14 @@ def test_masked_card_receipt_lines_are_accepted(text):
         "카드번호 ****-****-****-2349 12/28",
         "CARD NO ************2349 01/30",
         "4123-45**-****-2349 06/2029",
+        # A wider label-to-value gap, other labels and other expiry layouts.
+        "CVV code: 123",
+        "Card verification value 123",
+        "보안코드는 아래와 같습니다 482",
+        "유효기간 12-28",
+        "유효기간 2031.07",
+        "EXP 2028/12",
+        "EXP 12.28",
     ],
 )
 def test_full_number_security_code_or_expiry_is_card_data(text):
