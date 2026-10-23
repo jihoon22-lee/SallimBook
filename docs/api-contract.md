@@ -407,14 +407,19 @@ JPEG는 웹·Android 클라이언트가 EXIF 방향을 적용하고 긴 변을 3
 `POST /documents`에 파일명·MIME·실제 크기·SHA-256·typed target·`contains_no_card_data: true`를
 제출하면 pending 문서와 최초 연결을 같은 트랜잭션으로 만든다. 생성은 Idempotency-Key를 요구하고
 201 Location 및 불변 `{id, version}` 참조를 반환한다. 파일명은 경로·제어문자·방향 제어문자를
-허용하지 않으며 확장자도 선언 MIME과 일치해야 한다. 카드 사진·번호·CVC 첨부는 지원하지 않는다.
+허용하지 않으며 확장자도 선언 MIME과 일치해야 한다. 카드 사진·전체 번호·CVC·유효기간 첨부는 지원하지 않는다. 가린 카드번호와 항목 이름만 있는 카드 영수증은 첨부할 수 있다(판정 기준은 [첨부 서버 검증](testing/documents-server.md)).
 
 `PUT /documents/{id}/content`는 `application/octet-stream` 원본과 문서 If-Match/Idempotency-Key를
 받는다. 크기·해시·실제 형식·악성 내용·카드 정보 검사를 모두 통과한 원본만 암호화해 ready로 전환한다.
 본문을 읽기 전부터 프로세스당 업로드 한 개로 제한하며 초과는 503 `DOCUMENT_UPLOAD_BUSY`다.
 HTTP 취소 후에도 시작한 worker가 끝날 때까지 처리 슬롯을 유지한다. 본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
 503이다. 422에는 지원하지 않는 사진 정보·꼬리 데이터의 `DOCUMENT_IMAGE_UNSUPPORTED`와 쪽수·픽셀·검사 시간
-초과의 `DOCUMENT_TOO_COMPLEX`가 포함된다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
+초과의 `DOCUMENT_TOO_COMPLEX`가 포함된다. 검사가 내용을 거절한 422(`DOCUMENT_UNSAFE`·`DOCUMENT_IMAGE_UNSUPPORTED`·
+`DOCUMENT_TOO_COMPLEX`·`DOCUMENT_MALWARE`·`DOCUMENT_CARD_DATA`·`DOCUMENT_UNREADABLE`)이면 pending 문서는 그 해시에
+묶여 다시 쓸 수 없으므로 서버가 사유 "업로드 검사에서 허용하지 않은 파일"로 문서를 삭제하고 연결도 종료한 뒤(감사 기록 포함)
+422를 반환한다. 거절된 문서는 목록에 남지 않는다. 삭제로 버전이 올라가므로 원래 요청을 그대로 다시 보내면 409 `VERSION_CONFLICT`,
+현재 버전으로 다시 올리면 409 `DOCUMENT_UNAVAILABLE`이다. 검사기 장애(503)는
+pending 문서를 그대로 둔다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
 검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
 
 | 동작 | 경로·버전 기준 |
@@ -433,7 +438,7 @@ attachment 헤더를 사용한다. 공개 URL이나 장기 유효 링크를 만�
 pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서는 사용자의 명시적 삭제 전까지 보존한다.
 업로드 저장 전에 가계·전체 byte/count 한도를 영속 예약하며 한도 초과는
 413 `DOCUMENT_STORAGE_QUOTA_EXCEEDED`, 디스크 여유 부족은 503 `DOCUMENT_STORAGE_CAPACITY_UNAVAILABLE`다.
-예약에는 암호문 tag·실패 업로드·삭제 후 유예 파일도 포함하며 물리 정리 확인 뒤 용량을 반환한다.
+예약에는 암호문 tag와 실패 업로드도 포함한다. 삭제한 문서는 바로 가계 한도에서 빠지고, 물리 정리 확인 전까지는 전체 한도에 남는다. 실패 업로드의 용량은 물리 정리 확인 뒤 반환한다. 한도 초과 안내는 "첨부파일 저장 한도에 도달했어요. 필요 없는 첨부파일을 삭제한 뒤 다시 시도해 주세요."다.
 정리 명령·기본 한도·설정·검증 범위는 [첨부 서버 검증](testing/documents-server.md)을 따른다.
 7개 부모 상세의 공유 패널·원본 전송·응답 유실 재시도·Android 보호 화면 연결은 [첨부 UI 검증](testing/documents-client.md)을 따른다.
 

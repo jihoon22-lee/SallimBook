@@ -17,8 +17,8 @@ function aborted(signal: AbortSignal) {
 /**
  * Re-encodes a JPEG through a CPU canvas so the same file always yields the same bytes
  * (pending uploads are resumed by name, type, size and SHA-256). Returns null when the
- * browser cannot decode or encode it; the original bytes are then uploaded for the server
- * to judge.
+ * browser cannot decode or encode it; the caller then refuses the upload, since the original
+ * still carries location and camera data.
  */
 export async function normalizeJpeg(
   bytes: ArrayBuffer,

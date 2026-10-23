@@ -110,8 +110,30 @@ class NativeDocumentTransferTest {
         assertTrue(NativeDocumentBytes.REQUIRED_ACCESS_MILLIS > NativeDocumentBytes.TRANSFER_MILLIS)
         assertFalse(NativeAccessLifetime.usable(0, 180_000, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS))
         assertTrue(NativeAccessLifetime.usable(0, 600_000, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS))
+        // A fresh 10-minute server lease covers the create deadline and the whole transfer.
+        assertTrue(NativeAccessLifetime.usable(0, 600_000, NativeDocumentUploadLease.REQUIRED_MILLIS))
         val session = java.io.File("src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeAuthSession.kt").readText()
-        val upload = session.substringAfter("documentHttp.upload(").substringBefore("if (uploaded.status")
-        assertTrue(upload, upload.contains("access(gate, NativeDocumentBytes.REQUIRED_ACCESS_MILLIS)"))
+        val flow = session.substringAfter("fun uploadDocument(").substringBefore("fun downloadDocument(")
+        val leased = flow.substringAfter("NativeDocumentUploadLease.run({ access(gate, it) }) { token ->")
+        assertNotEquals(flow, leased)
+        assertFalse(flow.substringBefore("NativeDocumentUploadLease.run").contains("http.send"))
+        assertTrue(leased, leased.contains("accessToken = token"))
+        val upload = leased.substringAfter("documentHttp.upload(").substringBefore("if (uploaded.status")
+        assertTrue(upload, upload.contains("content, token, gate)"))
+    }
+    @Test fun theUploadLeaseIsTakenBeforeTheCreateAndCoversBothCalls() {
+        val requested = mutableListOf<Long>(); val sent = mutableListOf<String>()
+        val result = NativeDocumentUploadLease.run({ requested.add(it); "synthetic-lease" }) { token -> sent.add(token); "created" }
+        assertEquals("created", result); assertEquals(listOf("synthetic-lease"), sent)
+        assertEquals(listOf(NativeDocumentUploadLease.REQUIRED_MILLIS), requested)
+        assertTrue(NativeDocumentUploadLease.REQUIRED_MILLIS >= NativeDocumentBytes.REQUIRED_ACCESS_MILLIS + 15_000L)
+    }
+    @Test fun aFailedLeaseSendsNoCreate() {
+        var sent = 0
+        try {
+            NativeDocumentUploadLease.run({ throw AuthFailure(AuthCode.AUTH_UNAVAILABLE) }) { sent++ }
+            fail("Create sent without a lease")
+        } catch (failure: AuthFailure) { assertEquals(AuthCode.AUTH_UNAVAILABLE, failure.code) }
+        assertEquals(0, sent)
     }
 }

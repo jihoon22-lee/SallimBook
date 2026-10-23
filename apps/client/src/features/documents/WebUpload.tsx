@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { ApiError } from "../../platform/api";
+import { ApiError, toApiError } from "../../platform/api";
 import type { DocumentsApi } from "./api";
-import { MAX_BYTES, checksum, etag, expired, fileProblem, sameContent, stateLabel } from "./model";
+import {
+  MAX_BYTES,
+  REFUSED_CONTENT,
+  checksum,
+  etag,
+  expired,
+  fileProblem,
+  sameContent,
+  stateLabel,
+} from "./model";
 import type { CreateDocument, Document, Target } from "./model";
 import { CommandFeedback, useDocumentCommand } from "./DocumentSupport";
 import { MAX_LONG_EDGE, normalizeJpeg } from "./normalize";
@@ -20,11 +29,13 @@ export function WebUpload({
   target,
   pending,
   saved,
+  refused,
 }: {
   api: DocumentsApi;
   target: Target;
   pending?: Document;
   saved: (id: string) => void;
+  refused?: (error: ApiError) => void;
 }) {
   const command = useDocumentCommand();
   const release = useTaskPanelRelease();
@@ -58,6 +69,7 @@ export function WebUpload({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!ack || command.error?.status === 409 || (!file.current && !attempt.current)) return;
+    const refusal = { current: null as ApiError | null };
     const result = await command.run(async (signal) => {
       if (!attempt.current) {
         const selected = file.current!;
@@ -74,11 +86,16 @@ export function WebUpload({
           // Camera JPEGs carry orientation, location and vendor trailers; upload a clean copy.
           if (selected.type === "image/jpeg") {
             const normalized = await normalizeJpeg(bytes, signal);
-            if (normalized) {
-              new Uint8Array(bytes).fill(0);
-              bytes = normalized;
-            }
+            new Uint8Array(bytes).fill(0);
+            bytes = normalized ?? new ArrayBuffer(0);
             if (!command.mounted.current) throw new DOMException("", "AbortError");
+            // The original still carries location and camera data; never send it instead.
+            if (!normalized) {
+              setProblem(
+                "사진을 변환하지 못해 올리지 않았어요. 위치 등 사진 정보가 남은 원본은 보내지 않아요. 화면을 캡처하거나 다른 사진을 선택해 주세요.",
+              );
+              return;
+            }
             if (bytes.byteLength > MAX_BYTES) {
               new Uint8Array(bytes).fill(0);
               setProblem("변환한 사진이 20MiB를 넘어요. 사진 크기를 줄여 다시 선택해 주세요.");
@@ -123,15 +140,30 @@ export function WebUpload({
       if (row.state === "ready") return row.id;
       if (row.state === "deleted") throw new ApiError(409, "DOCUMENT_UNAVAILABLE");
       if (expired(row)) throw new ApiError(409, "DOCUMENT_UPLOAD_EXPIRED");
-      await api.upload(
-        current.id,
-        etag(current.version!),
-        current.uploadKey,
-        current.bytes,
-        signal,
-      );
+      try {
+        await api.upload(
+          current.id,
+          etag(current.version!),
+          current.uploadKey,
+          current.bytes,
+          signal,
+        );
+      } catch (failure) {
+        const error = toApiError(failure);
+        if (error.status === 422 && REFUSED_CONTENT.has(error.code)) refusal.current = error;
+        throw failure;
+      }
       return current.id;
     });
+    if (refusal.current && command.mounted.current) {
+      // The server removed the pending record, so the same attempt can never be retried.
+      clear();
+      setChosen("");
+      setAck(false);
+      setStarted(false);
+      release();
+      refused?.(refusal.current);
+    }
     if (result && command.mounted.current) {
       clear();
       setChosen("");

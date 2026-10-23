@@ -42,6 +42,15 @@ export async function checksum(bytes: ArrayBuffer) {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+// Inspection verdicts on the bytes themselves; the server then deletes the pending record.
+export const REFUSED_CONTENT: ReadonlySet<string> = new Set([
+  "DOCUMENT_CARD_DATA",
+  "DOCUMENT_MALWARE",
+  "DOCUMENT_UNSAFE",
+  "DOCUMENT_IMAGE_UNSUPPORTED",
+  "DOCUMENT_TOO_COMPLEX",
+  "DOCUMENT_UNREADABLE",
+]);
 export const expired = (row: Document) =>
   row.state === "pending" && Date.parse(row.pending_expires_at) <= Date.now();
 export function stateLabel(row: Document) {
