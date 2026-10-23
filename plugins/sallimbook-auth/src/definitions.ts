@@ -559,6 +559,11 @@ export interface SallimBookAuth {
     ifMatch: string;
     idempotencyKey: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  deleteRecurringRule(options: {
+    ruleId: string;
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   voidFixedSettlement(options: {
     settlementId: string;
     input: components["schemas"]["ObligationAction"];

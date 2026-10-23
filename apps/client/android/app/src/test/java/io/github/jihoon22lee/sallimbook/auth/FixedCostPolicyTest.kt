@@ -41,14 +41,16 @@ class FixedCostPolicyTest {
     private fun settlement() = mapOf("id" to paymentId, "obligation_id" to obligationId, "economic_type" to "expense", "principal_krw" to "0",
         "consumption_krw" to "35000", "asset_transfer_krw" to "0", "cash" to cash())
     private fun payment() = mapOf("amount_krw" to "35000", "occurred_on" to "2026-01-31")
+    private fun deletion() = mapOf<String, Any?>("ruleId" to ruleId, "ifMatch" to tag, "idempotencyKey" to "synthetic.stable:fixed-delete")
 
-    @Test fun allEighteenNamedCommandsReachOnlyTheirFixedRoutesAndHeaders() {
+    @Test fun allNineteenNamedCommandsReachOnlyTheirFixedRoutesAndHeaders() {
         val commands = listOf(
             FinanceOperation.LIST_RECURRING_RULES to emptyMap<String, Any?>(),
             FinanceOperation.CREATE_RECURRING_RULE to write(create()),
             FinanceOperation.GET_RECURRING_RULE to mapOf("ruleId" to ruleId),
             FinanceOperation.CHANGE_RECURRING_RULE to mutation("ruleId", ruleId, change()),
             FinanceOperation.END_RECURRING_RULE to mutation("ruleId", ruleId, mapOf("effective_on" to "2026-02-01", "reason" to "합성 종료")),
+            FinanceOperation.DELETE_RECURRING_RULE to deletion(),
             FinanceOperation.GENERATE_OBLIGATIONS to write(mapOf("start_date" to "2026-01-01", "end_date" to "2026-12-31", "rule_id" to ruleId)),
             FinanceOperation.LIST_OBLIGATIONS to mapOf("query" to mapOf("month" to "2026-01", "cursor" to obligationId, "limit" to 200)),
             FinanceOperation.FIXED_COST_SUMMARY to mapOf("query" to mapOf("month" to "2026-01")),
@@ -63,7 +65,7 @@ class FixedCostPolicyTest {
             FinanceOperation.LIST_OBLIGATION_SETTLEMENTS to mapOf("obligationId" to obligationId, "query" to mapOf("cursor" to paymentId)),
             FinanceOperation.VOID_FIXED_SETTLEMENT to mutation("settlementId", paymentId, mapOf("reason" to "합성 납부 취소")),
         )
-        assertEquals(18, commands.size)
+        assertEquals(19, commands.size)
         for ((op, args) in commands) {
             val r = request(op, args)
             assertTrue("Fixed route denied: $op", FinancePolicy.metadataHttpAllowed(r.method, r.path, r.body, r.ifMatch, r.idempotencyKey))
@@ -84,6 +86,24 @@ class FixedCostPolicyTest {
         }
         bad { request(FinanceOperation.END_RECURRING_RULE, mutation("ruleId", ruleId, mapOf("effective_on" to "2026-02-01", "reason" to "합성")) - "ifMatch") }
         bad { request(FinanceOperation.GENERATE_OBLIGATIONS, write(mapOf("start_date" to "2026-01-01", "end_date" to "2026-01-31")) - "idempotencyKey") }
+    }
+    @Test fun ruleDeleteSendsNoBodyNeedsVersionAndKeyAndAcceptsOnlyAnEmpty204() {
+        val r = request(FinanceOperation.DELETE_RECURRING_RULE, deletion())
+        assertEquals(listOf("DELETE", "/api/v1/recurring-rules/$ruleId", null, tag, "synthetic.stable:fixed-delete"),
+            listOf(r.method, r.path, r.body, r.ifMatch, r.idempotencyKey))
+        assertTrue(FinancePolicy.metadataHttpAllowed("DELETE", r.path, null, tag, "synthetic.stable:fixed-delete"))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", r.path, emptyMap<String, Any?>(), tag, "synthetic.stable:fixed-delete"))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", r.path, null, null, "synthetic.stable:fixed-delete"))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", r.path, null, tag, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("DELETE", "/api/v1/obligations/$obligationId", null, tag, "synthetic.stable:fixed-delete"))
+        for (missing in listOf("ruleId", "ifMatch", "idempotencyKey")) bad { request(FinanceOperation.DELETE_RECURRING_RULE, deletion() - missing) }
+        bad { request(FinanceOperation.DELETE_RECURRING_RULE, deletion() + mapOf("input" to emptyMap<String, Any?>())) }
+        assertNull(FinancePolicy.response(FinanceOperation.DELETE_RECURRING_RULE, r, 204, null))
+        bad(AuthCode.NETWORK_UNAVAILABLE) { FinancePolicy.reply(FinanceOperation.DELETE_RECURRING_RULE, r, 200, null) }
+        bad(AuthCode.NETWORK_UNAVAILABLE) { FinancePolicy.reply(FinanceOperation.DELETE_RECURRING_RULE, r, 204, mapOf("id" to ruleId)) }
+        val refused = AuthPolicy.safeError(409, mapOf("error" to mapOf("code" to "RULE_IN_USE", "message" to "synthetic secret")), ruleId)!!
+        assertEquals("RULE_IN_USE", (refused["error"] as Map<*, *>)["code"])
+        assertEquals("납부 기록이나 확정된 월이 있는 규칙은 종료만 할 수 있어요.", (refused["error"] as Map<*, *>)["message"])
     }
     @Test fun initialRuleEndRequiresBothDateAndReasonAndFullTermsChangeIsSeparate() {
         val ended = create() + mapOf("effective_until" to "2026-02-01", "end_reason" to "합성 초기 종료")
