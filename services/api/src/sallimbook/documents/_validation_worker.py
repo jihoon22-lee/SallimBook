@@ -38,6 +38,9 @@ MAX_OBJECTS = 10_000
 MAX_DEPTH = 64
 MAX_NODES = 100_000
 MAX_STREAM = 8 * 1024 * 1024
+# A lossless A4 200 dpi RGB scan decodes to 11.6 MB; an image may decode to an RGB image at the
+# pixel cap, and every other stream stays at MAX_STREAM.
+MAX_IMAGE_STREAM = MAX_PIXELS * 3
 MAX_DECOMPRESSED = 64 * 1024 * 1024
 MAX_OCR_OUTPUT = 2 * 1024 * 1024
 # Per render/OCR tool call; every call is further bounded by the worker deadline.
@@ -830,7 +833,7 @@ def _pdf(data: bytes):
 
     try:
         with apply_configuration(
-            maximum_declared_stream_length=MAX_STREAM,
+            maximum_declared_stream_length=MAX_BYTES,
             array_based_stream_maximum_output_length=MAX_STREAM,
             array_maximum_element_count=MAX_OBJECTS,
             dictionary_maximum_element_count=MAX_OBJECTS,
@@ -838,7 +841,7 @@ def _pdf(data: bytes):
             jbig2dec_binary=None,
             lzw_maximum_output_length=MAX_STREAM,
             run_length_maximum_output_length=MAX_STREAM,
-            zlib_maximum_output_length=MAX_STREAM,
+            zlib_maximum_output_length=MAX_IMAGE_STREAM,
             zlib_maximum_recovery_input_length=0,
             brotli_maximum_output_length=MAX_STREAM,
             flate_maximum_columns=MAX_DIMENSION,
@@ -948,11 +951,13 @@ def _read_pdf(data: bytes):
                     or any(item not in _FILTERS for item in filters)
                 ):
                     raise Rejected
-                if value.get("/Subtype") == "/Image":
+                image = value.get("/Subtype") == "/Image"
+                if image:
                     _size(int(value.get("/Width", 0)), int(value.get("/Height", 0)))
                 decoded = value.get_data()
                 decompressed += len(decoded)
-                if len(decoded) > MAX_STREAM or decompressed > MAX_DECOMPRESSED:
+                limit = MAX_IMAGE_STREAM if image else MAX_STREAM
+                if len(decoded) > limit or decompressed > MAX_DECOMPRESSED:
                     raise Rejected
             for key, child in value.items():
                 if not isinstance(key, NameObject) or len(str(key)) > 256:

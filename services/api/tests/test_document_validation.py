@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import re
 import socket
 import struct
@@ -496,6 +497,48 @@ def test_pdf_compressed_stream_bomb_unknown_filters_and_oversized_images_are_rej
         writer._add_object(stream)
 
     assert_rejected(lambda: worker._pdf(pdf_bytes(image)), "DOCUMENT_TOO_COMPLEX")
+
+
+def a4_scan_pdf(pixels, size=(1654, 2339)):
+    # One A4 page holding a lossless (Flate) RGB scan at 200 dpi, as scanner apps export it.
+    writer = PdfWriter()
+    page = writer.add_blank_page(595, 842)
+    image = DecodedStreamObject()
+    image.set_data(pixels)
+    image.update(
+        {
+            NameObject("/Type"): NameObject("/XObject"),
+            NameObject("/Subtype"): NameObject("/Image"),
+            NameObject("/Width"): NumberObject(size[0]),
+            NameObject("/Height"): NumberObject(size[1]),
+            NameObject("/ColorSpace"): NameObject("/DeviceRGB"),
+            NameObject("/BitsPerComponent"): NumberObject(8),
+        }
+    )
+    reference = writer._add_object(image.flate_encode())
+    content = DecodedStreamObject()
+    content.set_data(b"q 595 0 0 842 0 0 cm /Scan Do Q")
+    page[NameObject("/Contents")] = writer._add_object(content)
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/XObject"): DictionaryObject({NameObject("/Scan"): reference})}
+    )
+    result = io.BytesIO()
+    writer.write(result)
+    return result.getvalue()
+
+
+@pytest.mark.parametrize("scan", ["clean", "noisy"])
+def test_lossless_a4_scan_pdf_is_accepted(scan):
+    # 1654 x 2339 x 3 bytes decode to 11.6 MB; a noisy scan also stays over 8 MiB compressed.
+    length = 1654 * 2339 * 3
+    pixels = b"\xff" * length if scan == "clean" else random.Random(2026).randbytes(length)
+    worker._pdf(a4_scan_pdf(pixels)).close()
+
+
+def test_an_image_stream_over_the_image_bound_is_still_rejected(monkeypatch):
+    length = 1654 * 2339 * 3
+    monkeypatch.setattr(worker, "MAX_IMAGE_STREAM", length - 1)
+    assert_rejected(lambda: worker._pdf(a4_scan_pdf(b"\xff" * length)))
 
 
 def synthetic_pan():

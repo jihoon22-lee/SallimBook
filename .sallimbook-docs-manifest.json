@@ -254,8 +254,8 @@
       "git_sha1": "9659bc019a5da56eaf04c5c78a82aed2422dfb11"
     },
     "docs/testing/documents-server.md": {
-      "sha256": "2fd7b6f988eca5bce57ef49aae1d4fb216cc2b284c0b09f0c737006621e6eb50",
-      "git_sha1": "1003c6b94cd1e76be0caa444580f290bb499ce53"
+      "sha256": "574f28789beb361ec6cc5418eebcc1f94b4edfd24867bf6a0b98f58b47e69c80",
+      "git_sha1": "ee00a617b6e7235cb575df709b08367fa898a547"
     },
     "infra/documents/README.md": {
       "sha256": "489e8b1864f12fd1ec588a738ebc088309f82a0c4cb3c8919e50751343c8f519",

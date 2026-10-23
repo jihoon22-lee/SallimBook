@@ -188,6 +188,12 @@ OCR TSV는 따옴표를 인용 문자로 해석하지 않는다. 따옴표로 �
 판단하며, `보안코드 미저장 합계 1200원`처럼 이름 뒤 첫 숫자가 3~4자리면 거절 쪽으로 판단한다.
 실제 OCR 검사에는 가린 번호 영수증 PNG(`png_masked_card_receipt`) 허용을 더했다.
 
+무손실 A4 스캔 PDF는 허용한다(2026-10-23). 스캔 앱이 내보내는 200dpi RGB Flate 이미지 한 장은 풀면
+11.6MB여서 모든 스트림에 적용하던 8MiB 해제 한도(`MAX_STREAM`)에 걸렸고, 압축이 잘 안 되는 스캔은 선언 길이
+한도에도 걸렸다. 이미지 스트림은 이제 화소 한도의 RGB 크기(`MAX_IMAGE_STREAM` = 16,000,000 × 3)까지 풀 수
+있고, 다른 스트림은 그대로 8MiB다. 선언 길이는 파일 크기 한도(20MiB)로 묶이고 문서 전체 해제 합계 64MiB와 이미지
+가로·세로·화소 한도는 바뀌지 않았다. 실제 도구 검사에 무손실 A4 스캔 PDF(`pdf_lossless_a4_scan`) 허용을 더했다.
+
 ### 실제 도구 검사
 
 ```bash
@@ -195,10 +201,11 @@ uv run --project services/api --frozen python scripts/test_document_tools.py
 uv run --project services/api --frozen python scripts/test_document_tools.py --measure
 ```
 
-기존 단계에 아래 8개를 더해 모두 통과했다. `pdf_max_pages`(5쪽 이미지 PDF)는
+기존 단계에 아래 10개를 더해 모두 통과했다. `pdf_max_pages`(5쪽 이미지 PDF)는
 `max_pages_seconds` 4.102초로 `WORKER_SECONDS` 90초 안에서 끝났다.
 
-- 허용: `jpeg_marker_in_scan`, `jpeg_reencoded_phone`, `png_dates_korean`, `png_masked_card_receipt`, `pdf_max_pages`
+- 허용: `jpeg_marker_in_scan`, `jpeg_reencoded_phone`, `png_dates_korean`, `png_masked_card_receipt`,
+  `pdf_lossless_a4_scan`, `pdf_max_pages`
 - 거절: `jpeg_phone_original`(`DOCUMENT_IMAGE_UNSUPPORTED`), `jpeg_comment_marker`,
   `jpeg_trailer_zip`, `pdf_too_many_pages`(`DOCUMENT_TOO_COMPLEX`)
 

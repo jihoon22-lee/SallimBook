@@ -18,6 +18,7 @@ from pypdf.generic import (
     DecodedStreamObject,
     DictionaryObject,
     NameObject,
+    NumberObject,
     TextStringObject,
 )
 from sallimbook.core.errors import DomainError
@@ -229,6 +230,38 @@ def marker_in_scan_jpeg():
             continue
         return data
     require(False, "jpeg_marker_in_scan")
+
+
+def lossless_scan_pdf():
+    # A Korean receipt on a lossless (Flate) A4 200 dpi RGB page; it decodes to 11.6 MB.
+    page_image = Image.new("RGB", (1654, 2339), "white")
+    with receipt_image(korean=True) as image:
+        page_image.paste(image, (200, 300))
+    writer = PdfWriter()
+    page = writer.add_blank_page(595, 842)
+    scan = DecodedStreamObject()
+    scan.set_data(page_image.tobytes())
+    scan.update(
+        {
+            NameObject("/Type"): NameObject("/XObject"),
+            NameObject("/Subtype"): NameObject("/Image"),
+            NameObject("/Width"): NumberObject(page_image.width),
+            NameObject("/Height"): NumberObject(page_image.height),
+            NameObject("/ColorSpace"): NameObject("/DeviceRGB"),
+            NameObject("/BitsPerComponent"): NumberObject(8),
+        }
+    )
+    page_image.close()
+    reference = writer._add_object(scan.flate_encode())
+    content = DecodedStreamObject()
+    content.set_data(b"q 595 0 0 842 0 0 cm /Scan Do Q")
+    page[NameObject("/Contents")] = writer._add_object(content)
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/XObject"): DictionaryObject({NameObject("/Scan"): reference})}
+    )
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
 
 
 def text_pdf(*, card=False, active=False, pan=False):
@@ -523,6 +556,7 @@ def main():
             ("png_korean", receipt(korean=True), "image/png"),
             ("pdf_text", text_pdf(), "application/pdf"),
             ("pdf_image_korean", receipt("PDF", korean=True), "application/pdf"),
+            ("pdf_lossless_a4_scan", lossless_scan_pdf(), "application/pdf"),
             (
                 "pdf_dated_korean",
                 metadata_pdf(
