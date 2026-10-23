@@ -511,18 +511,21 @@ def synthetic_pan():
     raise AssertionError
 
 
-def test_card_luhn_and_labels_are_rejected_without_returning_the_input():
+def test_card_luhn_and_labelled_values_are_rejected_without_returning_the_input():
     pan = synthetic_pan()
     for text in (
         pan,
         " ".join(pan[n : n + 4] for n in range(0, 16, 4)),
-        "CVV synthetic",
-        "CVC2",
-        "card security code",
-        "카드 보안코드",
-        "VALID THRU",
+        "CVV 123",
+        "CVC2 4321",
+        "card security code: 321",
+        "카드 보안코드 123",
+        "VALID THRU 12/28",
     ):
         assert_rejected(lambda text=text: worker._card_text(text), "DOCUMENT_CARD_DATA")
+    # A label with nothing but masked characters next to it is an ordinary receipt.
+    for text in ("CVV synthetic", "CVC2", "card security code", "카드 보안코드", "VALID THRU"):
+        worker._card_text(text)
     worker._card_text("합성 진료비 영수증 2026-10-17 금액 25000")
     invalid = pan[:-1] + str((int(pan[-1]) + 1) % 10)
     worker._card_text(invalid)

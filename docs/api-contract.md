@@ -406,7 +406,7 @@ JPEG는 웹·Android 클라이언트가 EXIF 방향을 적용하고 긴 변을 3
 `POST /documents`에 파일명·MIME·실제 크기·SHA-256·typed target·`contains_no_card_data: true`를
 제출하면 pending 문서와 최초 연결을 같은 트랜잭션으로 만든다. 생성은 Idempotency-Key를 요구하고
 201 Location 및 불변 `{id, version}` 참조를 반환한다. 파일명은 경로·제어문자·방향 제어문자를
-허용하지 않으며 확장자도 선언 MIME과 일치해야 한다. 카드 사진·번호·CVC 첨부는 지원하지 않는다.
+허용하지 않으며 확장자도 선언 MIME과 일치해야 한다. 카드 사진·전체 번호·CVC·유효기간 첨부는 지원하지 않는다. 가린 카드번호와 항목 이름만 있는 카드 영수증은 첨부할 수 있다(판정 기준은 [첨부 서버 검증](testing/documents-server.md)).
 
 `PUT /documents/{id}/content`는 `application/octet-stream` 원본과 문서 If-Match/Idempotency-Key를
 받는다. 크기·해시·실제 형식·악성 내용·카드 정보 검사를 모두 통과한 원본만 암호화해 ready로 전환한다.

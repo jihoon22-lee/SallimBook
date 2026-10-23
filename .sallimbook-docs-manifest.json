@@ -66,8 +66,8 @@
       "git_sha1": "10ecceb05237d5cb3637885fc8f7c33e3e5b8aa9"
     },
     "docs/api-contract.md": {
-      "sha256": "dfd4efab89e7af429fe4f54951139dcd72c1bf3e0793cd8fd8d7fe45bc75a84e",
-      "git_sha1": "808afa6db90b848da9782f6b57394608ed0aa242"
+      "sha256": "82773b18f4544e79f4db3b979dc1808cd0bcf14288511de5f4568b727adb54f3",
+      "git_sha1": "46b16d63cff158ef512586a02481736e6fe50b9b"
     },
     "docs/screen-specifications.md": {
       "sha256": "021ba88a9c58de117a3d82e6ffdd3f38d8795a9768f296dfc32affdcffd62fa5",
@@ -254,8 +254,8 @@
       "git_sha1": "9659bc019a5da56eaf04c5c78a82aed2422dfb11"
     },
     "docs/testing/documents-server.md": {
-      "sha256": "88d4770696d0fbf167e7879a2cde94ef8c0d36016b9cabac4b50c872e65e00c1",
-      "git_sha1": "dea000d32d7a5cce058d2d83b22d3a7f1bcd1516"
+      "sha256": "b5fa2fff852d4589b92592b235f78d58e6826315d7abee37f5fc4119e7f3d2c9",
+      "git_sha1": "5e843e389ff1bb23976587a5f6f5cdce91a68700"
     },
     "infra/documents/README.md": {
       "sha256": "489e8b1864f12fd1ec588a738ebc088309f82a0c4cb3c8919e50751343c8f519",

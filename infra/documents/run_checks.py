@@ -85,10 +85,17 @@ def synthetic_pan():
 
 
 def receipt(
-    kind="PNG", *, korean=False, card=False, pan=False, dates=False, noise_seed=None
+    kind="PNG",
+    *,
+    korean=False,
+    card=False,
+    pan=False,
+    dates=False,
+    masked=False,
+    noise_seed=None,
 ):
     image = receipt_image(
-        korean=korean, card=card, pan=pan, dates=dates, noise_seed=noise_seed
+        korean=korean, card=card, pan=pan, dates=dates, masked=masked, noise_seed=noise_seed
     )
     buffer = io.BytesIO()
     # Fixtures are clock-independent; dated PDF acceptance uses explicit metadata.
@@ -98,7 +105,9 @@ def receipt(
     return buffer.getvalue()
 
 
-def receipt_image(*, korean=False, card=False, pan=False, dates=False, noise_seed=None):
+def receipt_image(
+    *, korean=False, card=False, pan=False, dates=False, masked=False, noise_seed=None
+):
     image = Image.new("RGB", (1200, 700), "white")
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(FONT, 52)
@@ -134,6 +143,14 @@ def receipt_image(*, korean=False, card=False, pan=False, dates=False, noise_see
             "2026.10.01 2026.10.08",
             "2026-09-30 2026-10-07",
             "합성 병원",
+        ]
+    if masked:
+        # A card receipt prints a masked number and bare field labels; it is not card data.
+        lines = [
+            "합성 카드 영수증",
+            "CARD NO ****-****-****-2349",
+            "카드번호 4123-45**-****-2349",
+            "TOTAL PAID 25000 KRW",
         ]
     for number, line in enumerate(lines):
         draw.text((40, 45 + 125 * number), line, font=font, fill="black")
@@ -229,7 +246,7 @@ def text_pdf(*, card=False, active=False, pan=False):
     page[NameObject("/Resources")] = DictionaryObject(
         {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
     )
-    text = b"CARD NUMBER CVC SECURITY CODE" if card else b"SYNTHETIC MEDICAL RECEIPT"
+    text = b"CARD NUMBER CVC SECURITY CODE 123" if card else b"SYNTHETIC MEDICAL RECEIPT"
     if pan:
         text = synthetic_pan().encode()
     content = DecodedStreamObject()
@@ -528,6 +545,9 @@ def main():
         stage = "png_dates_korean"
         accepted(receipt(korean=True, dates=True), "image/png", stage)
         results.append(stage)
+        stage = "png_masked_card_receipt"
+        accepted(receipt(masked=True), "image/png", stage)
+        results.append(stage)
         stage = "pdf_max_pages"
         max_pages_seconds = accepted(
             receipt_pdf(worker.MAX_PAGES),
@@ -585,7 +605,7 @@ def main():
             ),
             (
                 "card_pdf_date_suffix",
-                metadata_pdf({"/CreationDate": "D:20261018051908Z CVC SECURITY CODE"}),
+                metadata_pdf({"/CreationDate": "D:20261018051908Z CVC SECURITY CODE 123"}),
                 "application/pdf",
                 {"DOCUMENT_CARD_DATA"},
                 {},

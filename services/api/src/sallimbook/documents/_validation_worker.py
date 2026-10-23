@@ -240,6 +240,30 @@ def _pan_candidates(text: str):
             opened = None
 
 
+# Receipts print masked card numbers and the bare labels of card fields; neither is card data.
+# A security code or an expiry date is, so a label counts only with its value close behind
+# it, and a masked number only with an expiry date right after it. The gap before a value
+# never contains masking characters, so "CVC *** 1234원" is not a code.
+_VALUE_GAP = r"[^\d*•●#]{0,6}"
+_EXPIRY_DATE = r"(?<!\d)(?:0[1-9]|1[0-2]) ?/ ?(?:20\d\d|\d\d)(?!\d)"
+_SECURITY_CODE = re.compile(
+    r"(?i)(?:(?<![a-z])(?:cvc|cvv|cvn|csc|cid)2?(?![a-z])|"
+    r"card ?(?:security|verification) ?(?:code|number)|security ?code|"
+    r"카드 ?(?:보안|인증) ?(?:코드|번호)|보안 ?(?:코드|번호))"
+    + _VALUE_GAP
+    + r"(?<!\d)\d{3,4}(?!\d)"
+)
+_EXPIRY = re.compile(
+    r"(?i)(?:valid ?(?:thru|through)|(?<![a-z])exp(?:iry|iration|ires)?(?![a-z])|"
+    r"유효 ?기간|만료)" + _VALUE_GAP + _EXPIRY_DATE
+)
+_MASK = re.compile(r"(?i)[*x•●#]")
+_MASKED_NUMBER_DATE = re.compile(
+    r"(?i)(?<![\d*x•●#])((?:[\d*x•●#]{4}[ -]?){3}[\d*x•●#]{1,7}|[\d*x•●#]{13,19})"
+    r"[^\d*x•●#]{0,3}" + _EXPIRY_DATE
+)
+
+
 def _card_text(value: str) -> None:
     # NFKC makes full-width digits and punctuation equivalent. Do not log candidates.
     normalized = "".join(
@@ -250,12 +274,10 @@ def _card_text(value: str) -> None:
     if len(normalized) > MAX_OCR_OUTPUT:
         raise Rejected
     normalized = re.sub(r"\s+", " ", normalized)
-    if re.search(
-        r"(?i)(?<![a-z])(?:cvc|cvv|cvn|csc|cid)(?:2)?(?![a-z])|"
-        r"card\s*(?:security|verification)\s*(?:code|number)|"
-        r"security\s*code|카드\s*(?:보안|인증)\s*(?:코드|번호)|"
-        r"보안\s*(?:코드|번호)|카드\s*번호|card\s*(?:number|no\b)|valid\s*(?:thru|through)",
-        normalized,
+    if (
+        _SECURITY_CODE.search(normalized)
+        or _EXPIRY.search(normalized)
+        or any(_MASK.search(found[1]) for found in _MASKED_NUMBER_DATE.finditer(normalized))
     ):
         raise Rejected("DOCUMENT_CARD_DATA")
     for candidate in _pan_candidates(normalized):
