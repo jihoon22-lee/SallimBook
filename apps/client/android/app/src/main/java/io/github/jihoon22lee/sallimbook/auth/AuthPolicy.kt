@@ -22,6 +22,11 @@ internal object AuthPolicy {
         "challenge", "assertion", "attestation", "devicebinding", "grant", "clientdata", "authenticatordata", "signature",
     )
 
+    private val longestForbidden = forbiddenFields.maxOf { it.length }
+    // Invisible format characters join a word instead of splitting it.
+    private val fieldSeparator = Regex("[^\\p{L}\\p{N}\\p{Cf}]+")
+    private val wordBoundary = Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{L})(?=\\p{N})|(?<=\\p{N})(?=\\p{L})")
+
     fun apiOrigin(value: String): String? = try {
         if (value.isEmpty() || value.length > 512 || value.any { it.isWhitespace() || it.code < 32 } ||
             '%' in value || '\\' in value) null
@@ -80,10 +85,29 @@ internal object AuthPolicy {
         return true
     }
 
+    /**
+     * Field names are compared word by word (split on separators, camelCase and digits), so
+     * `company` or `possession` pass while `cardPan` or `session_token` do not. Words of eight
+     * letters or more, such as `password`, also count inside a longer word.
+     */
     fun safeField(name: String): Boolean {
-        val normalized = Normalizer.normalize(name, Normalizer.Form.NFKC).lowercase()
-            .filter { it.isLetterOrDigit() }
-        return name.length in 1..128 && forbiddenFields.none { it in normalized }
+        if (name.length !in 1..128) return false
+        val normalized = Normalizer.normalize(name, Normalizer.Form.NFKC)
+        val squashed = normalized.lowercase().filter { it.isLetterOrDigit() }
+        if (forbiddenFields.any { it.length >= 8 && it in squashed }) return false
+        val words = normalized.split(fieldSeparator)
+            .map { part -> part.filter { it.isLetterOrDigit() } }
+            .flatMap { it.split(wordBoundary) }
+            .map { it.lowercase() }
+            .filter { it.isNotEmpty() }
+        return words.indices.none { start ->
+            var joined = ""
+            words.drop(start).any { word ->
+                joined += word
+                joined.length <= longestForbidden + 2 &&
+                    forbiddenFields.any { joined == it || joined == "${it}s" || joined == "${it}es" }
+            }
+        }
     }
 
     /** Defense in depth for the metadata allowlist; never used to permit arbitrary endpoints. */
