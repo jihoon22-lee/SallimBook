@@ -306,7 +306,8 @@ jobs:
   web-smoke:
     name: Web UI and real HTTPS authentication
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Usually 23-28 minutes; a slow runner must not cancel a passing suite.
+    timeout-minutes: 45
     env:
       UV_FROZEN: "true"
     steps:

@@ -32,6 +32,7 @@ export async function mockNativeCashflow(
     createRecurringRule: { method: "POST", path: () => "/recurring-rules" },
     changeRecurringRule: { method: "PATCH", path: (a) => `/recurring-rules/${a.ruleId}` },
     endRecurringRule: { method: "POST", path: (a) => `/recurring-rules/${a.ruleId}/end` },
+    deleteRecurringRule: { method: "DELETE", path: (a) => `/recurring-rules/${a.ruleId}` },
     generateObligations: { method: "POST", path: () => "/obligations/generate" },
     listObligations: { method: "GET", path: () => "/obligations" },
     fixedCostSummary: { method: "GET", path: () => "/obligations/summary" },
