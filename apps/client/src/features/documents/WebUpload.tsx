@@ -84,11 +84,16 @@ export function WebUpload({
           // Camera JPEGs carry orientation, location and vendor trailers; upload a clean copy.
           if (selected.type === "image/jpeg") {
             const normalized = await normalizeJpeg(bytes, signal);
-            if (normalized) {
-              new Uint8Array(bytes).fill(0);
-              bytes = normalized;
-            }
+            new Uint8Array(bytes).fill(0);
+            bytes = normalized ?? new ArrayBuffer(0);
             if (!command.mounted.current) throw new DOMException("", "AbortError");
+            // The original still carries location and camera data; never send it instead.
+            if (!normalized) {
+              setProblem(
+                "사진을 변환하지 못해 올리지 않았어요. 위치 등 사진 정보가 남은 원본은 보내지 않아요. 화면을 캡처하거나 다른 사진을 선택해 주세요.",
+              );
+              return;
+            }
             if (bytes.byteLength > MAX_BYTES) {
               new Uint8Array(bytes).fill(0);
               setProblem("변환한 사진이 20MiB를 넘어요. 사진 크기를 줄여 다시 선택해 주세요.");

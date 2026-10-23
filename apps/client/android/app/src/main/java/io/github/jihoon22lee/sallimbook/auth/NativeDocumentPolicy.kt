@@ -44,6 +44,7 @@ internal object NativeDocumentPolicy {
     fun errorMessage(code: String?): String = errorMessages[code]?.second ?: when (code) {
         "UNAUTHENTICATED", "REAUTHENTICATION_REQUIRED" -> "화면을 닫고 다시 로그인한 후 진행해 주세요."
         "VERSION_CONFLICT", "IDEMPOTENCY_CONFLICT" -> "첨부 상태가 변경됐습니다. 목록을 다시 확인해 주세요."
+        NativeDocumentImage.FAILURE_CODE -> "사진을 변환하지 못해 올리지 않았어요. 위치 등 사진 정보가 남은 원본은 보내지 않아요. 화면을 캡처하거나 다른 사진을 선택해 주세요."
         "NOT_FOUND", "FORBIDDEN" -> "이 첨부파일에 접근할 수 없습니다. 연결된 항목을 확인해 주세요."
         else -> "파일 처리를 완료하지 못했습니다. 자동 재전송하지 않았으니 목록을 다시 확인해 주세요."
     }

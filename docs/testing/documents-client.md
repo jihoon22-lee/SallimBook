@@ -150,11 +150,11 @@ git diff --check
 - 웹은 크기 확인 뒤 `createImageBitmap(imageOrientation: "from-image")`로 방향을 적용하고
   CPU canvas에서 긴 변 3,072px 이하, 품질 0.9 JPEG로 다시 인코딩한다. 같은 파일은 같은 bytes가
   되므로 pending 재개의 이름·형식·크기·SHA-256 대조가 유지된다. 변환 결과가 20MiB를 넘으면
-  업로드하지 않고 사진 크기를 줄이라고 안내한다. 브라우저가 디코딩/인코딩하지 못하면 선택한 bytes를
-  그대로 올리고 서버 검사가 판단한다. 이 경우 EXIF가 남을 수 있으며 가계 보관함에 암호화해 보관한다.
+  업로드하지 않고 사진 크기를 줄이라고 안내한다. 브라우저가 디코딩/인코딩하지 못하면 업로드하지 않는다
+  (2026-10-23 변경, 아래 참고).
 - Android는 네이티브 보호 화면에서 `ImageDecoder`(software allocator, target size)로 방향을 적용하고
-  같은 긴 변·품질 90으로 다시 압축한다. 변환 bytes는 JS bridge로 전달하지 않으며 실패하면 선택한
-  bytes를 올린다. 웹과 Android의 긴 변·품질 값은 JVM 시험이 `normalize.ts`와 대조한다.
+  같은 긴 변·품질 90으로 다시 압축한다. 변환 bytes는 JS bridge로 전달하지 않으며 실패(메모리 부족 포함)하면
+  업로드하지 않는다(2026-10-23 변경). 웹과 Android의 긴 변·품질 값은 JVM 시험이 `normalize.ts`와 대조한다.
 - 업로드 안내에 PDF 최대 5쪽과 JPEG 사본 업로드를 표시한다.
 - 새 422 코드의 안내 문구는 웹 `DocumentSupport`와 `NativeDocumentPolicy.errorMessages`에 있다.
   - `DOCUMENT_IMAGE_UNSUPPORTED`: 지원하지 않는 부가 정보(편집 정보·동영상 등)가 있으니
@@ -192,3 +192,16 @@ bytes 업로드로 돌아간다. 업로드는 서버 검사 후 세션을 다시
 | 가로로 돌려 찍은 사진 | 미실행 | 미실행 |
 | Ultra HDR 켬(지원 기기) | 미실행 | 미실행 |
 | 스캔 앱 5쪽 PDF 첨부 / 6쪽 PDF `DOCUMENT_TOO_COMPLEX` 안내 | 미실행 | 미실행 |
+
+## 사진 변환 실패와 업로드 접근 토큰 — 2026-10-23
+
+- 변환하지 못한 JPEG는 원본을 올리지 않는다. 업로드 화면은 위치 등 사진 정보를 뺀 사본으로 올린다고
+  안내하므로, 원본(EXIF·GPS 포함)을 대신 보내면 그 안내가 틀린다. 웹은 "사진을 변환하지 못해 올리지 않았어요"
+  안내를 보여 주고 메타데이터를 만들지 않는다. Android는 `NativeDocumentImage.uploadContent`가 원본 버퍼를 닫고
+  `DOCUMENT_IMAGE_NORMALIZATION` 안내를 표시한다. PNG·PDF는 바뀌지 않는다.
+- Android 업로드는 생성 POST 전에 접근 토큰 한 개를 확보하고(`NativeDocumentUploadLease`, 생성 20초 + 전송
+  185초 이상 남은 토큰) 생성과 원본 PUT에 같이 쓴다. 두 요청 사이의 토큰 갱신 실패로 pending 기록만
+  남는 일이 없다. 토큰 확보에 실패하면 생성 요청을 보내지 않는다.
+- 시험: `NativeDocumentImageTest`(변환 실패 시 업로드 bytes 없음·원본 닫힘, PNG/PDF 그대로),
+  `NativeDocumentTransferTest`(토큰 실패 시 생성 미전송, 한 토큰 사용), `documents-normalize.spec.ts`의
+  변환 실패 거절. Android 실기기 검증은 미실행 — 사용자 확인 예정.
