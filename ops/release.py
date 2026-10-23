@@ -4,8 +4,8 @@ import argparse
 import json
 import os
 import re
+import secrets
 import shutil
-import signal
 import subprocess
 import tempfile
 import time
@@ -30,9 +30,11 @@ DEBUG_PROOF_MARKERS = (
 )
 
 
-PROC = Path("/proc")
-# Time for the killed build processes to disappear before they count as left running.
-SESSION_SETTLE_SECONDS = 5
+SYSTEMD_RUN = "/usr/bin/systemd-run"
+SYSTEMCTL = "/usr/bin/systemctl"
+CGROUP_ROOT = Path("/sys/fs/cgroup")
+# Time for the processes of a stopped build scope to disappear before they count as left.
+SCOPE_SETTLE_SECONDS = 5
 # The pinned SDK packages whose files take part in aligning, signing and inspecting.
 SIGNING_TOOL_DIRECTORIES = ("build-tools/36.0.0", "cmdline-tools/15859902")
 
@@ -56,64 +58,123 @@ def run(command, **kwargs):
     return result.stdout.decode().strip()
 
 
-def session_members(session, proc=None):
-    """Running processes whose session id is `session`, read from /proc/*/stat."""
-    members = []
-    for entry in (proc or PROC).iterdir():
-        if not entry.name.isdigit():
-            continue
-        try:
-            # "pid (comm) state ppid pgrp session ..."; comm may contain spaces and ")".
-            fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
-        except (OSError, IndexError):
-            continue  # exited while scanning
-        if fields[3] == str(session) and fields[0] != "Z":
-            members.append(int(entry.name))
-    return members
+def scope_unavailable():
+    return ReleaseAbort(
+        "BUILD_SCOPE_UNAVAILABLE",
+        "Build commands must run in a systemd user scope and none could be used",
+    )
 
 
-def stop_session(session):
-    """Kill the build's process group, then prove nothing of its session still runs."""
+def manager_environment():
+    """What systemd-run/systemctl need to reach the user manager, and nothing else."""
+    environment = {"PATH": "/usr/bin:/bin"}
+    if os.environ.get("XDG_RUNTIME_DIR"):
+        environment["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
+    return environment
+
+
+def scope_processes(unit):
+    """Process ids still in the scope's cgroup; empty once the scope is gone."""
     try:
-        os.killpg(session, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    deadline = time.monotonic() + SESSION_SETTLE_SECONDS
-    while members := session_members(session):
+        shown = subprocess.run(
+            [SYSTEMCTL, "--user", "show", "--property=ControlGroup", "--value", unit],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=manager_environment(),
+            stdin=subprocess.DEVNULL,
+        )
+    except OSError as error:
+        raise scope_unavailable() from error
+    if shown.returncode:
+        raise scope_unavailable()
+    cgroup = shown.stdout.strip()
+    if not cgroup:
+        return []
+    try:
+        return (CGROUP_ROOT / cgroup.lstrip("/") / "cgroup.procs").read_text().split()
+    except FileNotFoundError:
+        return []
+
+
+def empty_scope(unit):
+    """Stop the scope (killing everything in its cgroup) and prove that nothing is left."""
+    try:
+        # A collected scope is already gone; stop then fails harmlessly and the check passes.
+        subprocess.run(
+            [SYSTEMCTL, "--user", "stop", unit],
+            capture_output=True,
+            check=False,
+            env=manager_environment(),
+            stdin=subprocess.DEVNULL,
+        )
+    except OSError as error:
+        raise scope_unavailable() from error
+    deadline = time.monotonic() + SCOPE_SETTLE_SECONDS
+    while scope_processes(unit):
         if time.monotonic() >= deadline:
-            for pid in members:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
             raise ReleaseAbort(
                 "BUILD_PROCESS_LEFT_RUNNING",
-                "A process started by the build is still running after the build exited",
+                "A process started by the build is still running after its scope was stopped",
             )
         time.sleep(0.05)
 
 
+def run_scoped(command, *, cwd, env):
+    """Run one command in a fresh transient user scope; return its exit status.
+
+    The command gets exactly `env` (through `env -i`); systemd-run itself only gets what it
+    needs to reach the user manager. Whatever happens, the scope is stopped and checked
+    empty before this returns.
+    """
+    name = "sallimbook-release-build-" + secrets.token_hex(8)
+    argv = [
+        SYSTEMD_RUN,
+        "--user",
+        "--scope",
+        "--quiet",
+        "--collect",
+        "--unit=" + name,
+        "--",
+        "/usr/bin/env",
+        "-i",
+        *(key + "=" + value for key, value in sorted(env.items())),
+        *(str(item) for item in command),
+    ]
+    try:
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=manager_environment(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as error:
+        raise scope_unavailable() from error
+    try:
+        return process.wait()
+    finally:
+        empty_scope(name + ".scope")
+
+
+def check_build_scopes():
+    """Fail closed before a long build when no user scope can be started; no fallback."""
+    if run_scoped(["/bin/true"], cwd="/", env={"PATH": "/usr/bin:/bin"}):
+        raise scope_unavailable()
+
+
 def run_build(command, *, cwd, env):
-    """Run one build command in its own session; nothing it started may outlive it.
+    """Run one build command in its own cgroup; nothing it started may outlive it.
 
     A daemon or background script left behind could read the signing files once the
-    signing step starts, because it runs as the same user. A process that leaves the
-    session (setsid, double fork) is outside what this can see; see the runbook.
+    signing step starts, because it runs as the same user. Gradle's daemon detaches with
+    setsid, so a session or process group cannot contain the build; a cgroup can. Every
+    process in the command's scope is killed and the scope checked empty before the next
+    step. Same-user code can still move itself into another cgroup of the user's tree;
+    see the runbook.
     """
-    process = subprocess.Popen(
-        command,
-        cwd=cwd,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    try:
-        status = process.wait()
-    finally:
-        stop_session(process.pid)
-    if status:
+    if run_scoped(command, cwd=cwd, env=env):
         # Build output may contain local paths or secrets; never echo it.
         raise OperationError(
             "Release tool failed; inspect locally without publishing sensitive output"
@@ -202,9 +263,7 @@ def inspect_apk(apk, config, sdk, *, signed, env=None):
             or server.get("cleartext") is True
             or android.get("allowMixedContent") is True
         ):
-            raise OperationError(
-                "Remote WebView or cleartext configuration is forbidden"
-            )
+            raise OperationError("Remote WebView or cleartext configuration is forbidden")
         dex = b"".join(
             archive.read(name)
             for name in archive.namelist()
@@ -215,13 +274,10 @@ def inspect_apk(apk, config, sdk, *, signed, env=None):
             config["fqdn"],
             config["certificate_sha256"],
         ]
-        if (
-            any(value.encode() not in dex for value in expected)
-            or any(marker in dex for marker in DEBUG_PROOF_MARKERS)
+        if any(value.encode() not in dex for value in expected) or any(
+            marker in dex for marker in DEBUG_PROOF_MARKERS
         ):
-            raise OperationError(
-                "Native release identity or proof-class exclusion failed"
-            )
+            raise OperationError("Native release identity or proof-class exclusion failed")
     if signed:
         report = run(
             [
@@ -263,30 +319,32 @@ def build(
 ):
     config = validate(config)
     if type(previous_version) is not int or config["version_code"] <= previous_version:
-        raise OperationError(
-            "versionCode must increase over the previously distributed release"
-        )
+        raise OperationError("versionCode must increase over the previously distributed release")
     if previous_version < 0:
         raise OperationError("Invalid previous version code")
     if previous_version > 0:
         if previous_apk is None:
-            raise OperationError(
-                "The previously distributed signed APK is required for an update"
-            )
+            raise OperationError("The previously distributed signed APK is required for an update")
         binaries = tools(sdk)
+        if not os.environ.get("JAVA_HOME"):
+            raise OperationError("Set JAVA_HOME to the selected JDK 21")
+        # The same fixed environment as signing: no inherited Java options reach the tools.
+        inspection = signing_environment(signing_jdk(os.environ["JAVA_HOME"]))
         old_name = run(
             [
                 str(binaries["apkanalyzer"]),
                 "manifest",
                 "version-name",
                 str(previous_apk),
-            ]
+            ],
+            env=inspection,
         )
         inspect_apk(
             previous_apk,
             {**config, "version_code": previous_version, "version_name": old_name},
             sdk,
             signed=True,
+            env=inspection,
         )
     if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,64}", alias):
         raise OperationError("Invalid signing alias")
@@ -301,9 +359,7 @@ def build(
     output = Path(output).absolute()
     private_directory(output.parent)
     if output.exists() or output.is_relative_to(ROOT):
-        raise OperationError(
-            "Use a new APK path in an external private release directory"
-        )
+        raise OperationError("Use a new APK path in an external private release directory")
     if run(["git", "status", "--porcelain"], cwd=ROOT):
         raise OperationError("Build requires a clean reviewed source tree")
     if run(["git", "rev-parse", "HEAD"], cwd=ROOT) != config["source_commit"]:
@@ -336,18 +392,17 @@ def build_snapshot(
     if not env.get("JAVA_HOME"):
         raise OperationError("Set JAVA_HOME to the selected JDK 21")
     jdk = signing_jdk(env["JAVA_HOME"])
+    check_build_scopes()
     # Third-party build code runs as this user and could rewrite the tools that later
     # see the signing key. Pin them now and compare right before they are used.
     pinned = signing_fingerprints(sdk, jdk)
     output = Path(output)
-    # Step 1 has no access to signing material and every process it started has exited
-    # (or the release aborted) before anything below exists.
+    # Step 1 has no access to signing material, and every process left in each build
+    # command's cgroup was killed (or the release aborted) before anything below exists.
     unsigned = build_unsigned(config, checkout, env)
     # The private directory is created only now, so build code never saw it. The unsigned
     # APK is copied into it at once; only the copy is inspected and signed.
-    with tempfile.TemporaryDirectory(
-        prefix=".sallimbook-release-", dir=output.parent
-    ) as temporary:
+    with tempfile.TemporaryDirectory(prefix=".sallimbook-release-", dir=output.parent) as temporary:
         candidate = Path(temporary) / "unsigned.apk"
         copy_private(unsigned, candidate)
         if signing_fingerprints(sdk, jdk) != pinned:
@@ -401,6 +456,8 @@ def build_unsigned(config, checkout, env):
             "--no-daemon",
             "--no-configuration-cache",
             "--max-workers=2",
+            # Compile Kotlin inside the build, so no Kotlin daemon outlives it.
+            "-Pkotlin.compiler.execution.strategy=in-process",
             "-I",
             str(checkout / "ops/release.init.gradle"),
             *["-P" + key + "=" + value for key, value in properties.items()],
@@ -410,10 +467,7 @@ def build_unsigned(config, checkout, env):
         cwd=checkout / "apps/client/android",
         env=env,
     )
-    return (
-        checkout
-        / "apps/client/android/app/build/outputs/apk/release/app-release-unsigned.apk"
-    )
+    return checkout / "apps/client/android/app/build/outputs/apk/release/app-release-unsigned.apk"
 
 
 def sign_release(
@@ -487,9 +541,7 @@ def main():
             f"Release preparation failed ({abort.code}). Nothing installed or published."
         ) from None
     except Exception:
-        raise SystemExit(
-            "Release preparation failed. Nothing installed or published."
-        ) from None
+        raise SystemExit("Release preparation failed. Nothing installed or published.") from None
     print(json.dumps(result, sort_keys=True))
 
 

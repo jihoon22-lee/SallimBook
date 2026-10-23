@@ -4,10 +4,12 @@ No real key, SDK or package install: every subprocess is replaced or synthetic.
 """
 
 import os
+import subprocess
 import tempfile
-import time
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from ops import backup, build_context, release
@@ -104,6 +106,38 @@ JAVA_OPTION_VARIABLES = {
 }
 
 
+class FakeScopes:
+    """Stands in for systemd-run and the user manager; nothing real is started or stopped."""
+
+    def __init__(self, events, *, status=0, show_status=0, cgroup="", missing=False):
+        self.events = events
+        self.status = status
+        self.show_status = show_status
+        self.cgroup = cgroup
+        self.missing = missing
+
+    def popen(self, args, **kwargs):
+        self.events.append(("scope-start", [str(item) for item in args], kwargs))
+        if self.missing:
+            raise FileNotFoundError(args[0])
+        return SimpleNamespace(pid=1, wait=lambda: self.status)
+
+    def run(self, args, **kwargs):
+        args = [str(item) for item in args]
+        if args[1:3] == ["--user", "stop"]:
+            self.events.append(("scope-stop", args, kwargs))
+            return subprocess.CompletedProcess(args, 0, "", "")
+        self.events.append(("scope-check", args, kwargs))
+        output = self.cgroup + "\n" if self.show_status == 0 else ""
+        return subprocess.CompletedProcess(args, self.show_status, output, "")
+
+    def patches(self):
+        stack = ExitStack()
+        stack.enter_context(patch.object(release.subprocess, "Popen", side_effect=self.popen))
+        stack.enter_context(patch.object(release.subprocess, "run", side_effect=self.run))
+        return stack
+
+
 class ReleaseSteps(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -111,7 +145,8 @@ class ReleaseSteps(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.checkout = self.root / "source"
         self.unsigned = (
-            self.checkout / "apps/client/android/app/build/outputs/apk/release"
+            self.checkout
+            / "apps/client/android/app/build/outputs/apk/release"
             / "app-release-unsigned.apk"
         )
         self.unsigned.parent.mkdir(parents=True)
@@ -150,7 +185,7 @@ class ReleaseSteps(unittest.TestCase):
             "JAVA_HOME": str(self.jdk),
         }
 
-    def build(self):
+    def build(self, scopes=None):
         def build_command(command, **kwargs):
             self.events.append(("build", [str(item) for item in command], kwargs))
             if self.during_build and command[0] == "./gradlew":
@@ -181,12 +216,15 @@ class ReleaseSteps(unittest.TestCase):
             see(apk)
             return {"signed": kwargs.get("signed")}
 
-        with (
-            patch.dict(os.environ, self.environment(), clear=True),
-            patch.object(release, "run_build", side_effect=build_command),
-            patch.object(release, "run", side_effect=tool),
-            patch.object(release, "inspect_apk", side_effect=inspect),
-        ):
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict(os.environ, self.environment(), clear=True))
+            stack.enter_context(patch.object(release, "run", side_effect=tool))
+            stack.enter_context(patch.object(release, "inspect_apk", side_effect=inspect))
+            if scopes is None:
+                stack.enter_context(patch.object(release, "run_build", side_effect=build_command))
+                stack.enter_context(patch.object(release, "check_build_scopes"))
+            else:
+                stack.enter_context(scopes.patches())
             release.build_snapshot(
                 config(),
                 self.sdk,
@@ -219,6 +257,8 @@ class ReleaseSteps(unittest.TestCase):
         )
         self.assertEqual(builds[2][1][0], "./gradlew")
         self.assertIn("--no-daemon", builds[2][1])
+        # A normal build then leaves no Kotlin compile daemon behind.
+        self.assertIn("-Pkotlin.compiler.execution.strategy=in-process", builds[2][1])
         self.assertIn("assembleRelease", builds[2][1])
         for _, command, kwargs in builds:
             self.assertLessEqual(set(kwargs["env"]), ALLOWED_KEYS)
@@ -250,7 +290,8 @@ class ReleaseSteps(unittest.TestCase):
             "LANG": "C.UTF-8",
         }
         after_build = [
-            event for event in self.events[self.events.index(self.last_build_event()) + 1:]
+            event
+            for event in self.events[self.events.index(self.last_build_event()) + 1 :]
             if event[0] in {"tool", "inspect"}
         ]
         self.assertGreaterEqual(len(after_build), 4)  # inspect, zipalign, sign, inspect
@@ -344,6 +385,122 @@ class ReleaseSteps(unittest.TestCase):
             self.build()
         self.assertEqual(list(self.output.parent.glob(".sallimbook-release-*")), [])
 
+    def test_each_scope_is_emptied_before_the_fingerprints_are_verified_and_signing_starts(self):
+        original = release.signing_fingerprints
+
+        def logged(*arguments):
+            self.events.append(("fingerprint", [], {}))
+            return original(*arguments)
+
+        scopes = FakeScopes(self.events)
+        with patch.object(release, "signing_fingerprints", side_effect=logged):
+            self.build(scopes)
+        kinds = [kind for kind, _, _ in self.events]
+        # Probe, then pnpm install, pnpm android:sync and gradle: four scopes in all.
+        self.assertEqual(kinds.count("scope-start"), 4)
+        self.assertEqual(kinds.count("scope-stop"), 4)
+        self.assertEqual(kinds.count("scope-check"), 4)
+        pinned, verified = [i for i, kind in enumerate(kinds) if kind == "fingerprint"]
+        self.assertLess(kinds.index("scope-start"), pinned)  # the probe runs before the pin
+        last_check = max(i for i, kind in enumerate(kinds) if kind == "scope-check")
+        first_tool = min(i for i, kind in enumerate(kinds) if kind in {"tool", "inspect"})
+        self.assertLess(last_check, verified)
+        self.assertLess(verified, first_tool)
+        self.assertLess(verified, self.signing_index())
+        # Every start is followed by its own stop and check before the next start.
+        scoped = [event for event in self.events if event[0].startswith("scope-")]
+        for index in range(0, len(scoped), 3):
+            self.assertEqual(
+                [e[0] for e in scoped[index : index + 3]],
+                ["scope-start", "scope-stop", "scope-check"],
+            )
+
+    def test_an_unemptied_scope_aborts_before_any_signing_tool_runs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            cgroup = Path(temporary) / "user.slice/leftover.scope"
+            cgroup.mkdir(parents=True)
+            (cgroup / "cgroup.procs").write_text("4321\n")
+            scopes = FakeScopes(self.events, cgroup="/user.slice/leftover.scope")
+            with (
+                patch.object(release, "CGROUP_ROOT", Path(temporary)),
+                patch.object(release, "SCOPE_SETTLE_SECONDS", 0.2),
+                self.assertRaises(release.ReleaseAbort) as caught,
+            ):
+                self.build(scopes)
+        self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
+        self.assertFalse(any(kind in {"tool", "inspect"} for kind, _, _ in self.events))
+        self.assertFalse(self.output.exists())
+
+    def test_without_a_user_scope_the_release_fails_closed_before_building(self):
+        for case in (
+            FakeScopes(self.events, missing=True),
+            FakeScopes(self.events, status=1),
+            FakeScopes(self.events, show_status=1),
+        ):
+            with self.subTest(case=vars(case)):
+                self.setUp()
+                case.events = self.events
+                with self.assertRaises(release.ReleaseAbort) as caught:
+                    self.build(case)
+                self.assertEqual(caught.exception.code, "BUILD_SCOPE_UNAVAILABLE")
+                # Only the probe was attempted: no install, no Gradle, no tool.
+                self.assertEqual([k for k, _, _ in self.events].count("scope-start"), 1)
+                self.assertFalse(any(kind in {"tool", "inspect"} for kind, _, _ in self.events))
+
+    def test_previous_apk_is_inspected_with_the_fixed_signing_environment(self):
+        calls = []
+        previous = self.root / "previous.apk"
+        previous.write_bytes(b"synthetic previous")
+        binaries = {key: self.sdk / key for key in ("apksigner", "zipalign", "apkanalyzer")}
+
+        def tool(command, **kwargs):
+            calls.append(("run", [str(item) for item in command], kwargs))
+            if command[:2] == ["git", "rev-parse"]:
+                return config()["source_commit"]
+            return "0.1.0" if "version-name" in command else ""
+
+        def inspect(apk, *arguments, **kwargs):
+            calls.append(("inspect", [str(apk)], kwargs))
+            return {}
+
+        from contextlib import contextmanager
+
+        @contextmanager
+        def snapshot(*arguments):
+            yield self.checkout
+
+        with (
+            patch.dict(os.environ, self.environment(), clear=True),
+            patch.object(release, "tools", return_value=binaries),
+            patch.object(release, "run", side_effect=tool),
+            patch.object(release, "inspect_apk", side_effect=inspect),
+            patch.object(release, "source_snapshot", snapshot),
+            patch.object(release, "build_snapshot", return_value={}),
+            patch.object(release, "ROOT", self.root / "outside-the-repository"),
+        ):
+            release.build(
+                {**config(), "version_code": 3},
+                self.sdk,
+                self.keystore,
+                self.store_password,
+                self.key_password,
+                "synthetic",
+                self.output,
+                2,
+                previous,
+            )
+        expected = {
+            "JAVA_HOME": str(self.jdk.resolve()),
+            "PATH": str(self.jdk.resolve() / "bin") + ":/usr/bin:/bin",
+            "LANG": "C.UTF-8",
+        }
+        previous_calls = [
+            call for call in calls if call[0] == "inspect" or "version-name" in call[1]
+        ]
+        self.assertEqual(len(previous_calls), 2)
+        for _, _, kwargs in previous_calls:
+            self.assertEqual(kwargs["env"], expected)
+
     def test_build_requires_the_selected_jdk(self):
         with patch.dict(os.environ, {"PATH": "/synthetic/bin"}, clear=True):
             with self.assertRaisesRegex(backup.OperationError, "JAVA_HOME"):
@@ -359,83 +516,152 @@ class ReleaseSteps(unittest.TestCase):
                 )
 
 
-class BuildProcesses(unittest.TestCase):
-    def test_descendants_of_a_build_command_do_not_outlive_it(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            marker = Path(temporary) / "child.pid"
+class BuildScopes(unittest.TestCase):
+    ENVIRONMENT = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/synthetic/home",
+        "JAVA_HOME": "/synthetic/jdk",
+    }
+
+    def run_build(self, command, scopes, **overrides):
+        environment = {
+            "XDG_RUNTIME_DIR": "/run/user/1000",
+            "SSH_AUTH_SOCK": "/synthetic/agent",
+            "GITHUB_TOKEN": "synthetic",
+        }
+        with scopes.patches(), patch.dict(os.environ, environment, clear=True):
             release.run_build(
-                ["sh", "-c", f"sleep 300 & echo $! > {marker}"],
-                cwd=temporary,
-                env={"PATH": os.environ["PATH"]},
+                command, cwd="/synthetic/work", env=overrides.get("env", self.ENVIRONMENT)
             )
-            child = int(marker.read_text())
-            deadline = time.monotonic() + 5
-            while time.monotonic() < deadline and self.alive(child):
-                time.sleep(0.05)
-            self.assertFalse(self.alive(child), "a build descendant survived")
 
-    @staticmethod
-    def alive(pid):
-        try:
-            state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-        except (FileNotFoundError, ProcessLookupError):
-            return False
-        return state != "Z"
+    def test_every_build_command_runs_in_a_transient_user_scope(self):
+        events = []
+        scopes = FakeScopes(events)
+        self.run_build(["pnpm", "install"], scopes)
+        self.run_build(["./gradlew", "assembleRelease"], scopes)
+        starts = [event for event in events if event[0] == "scope-start"]
+        units = []
+        for _, argv, kwargs in starts:
+            self.assertEqual(
+                argv[:5],
+                [
+                    "/usr/bin/systemd-run",
+                    "--user",
+                    "--scope",
+                    "--quiet",
+                    "--collect",
+                ],
+            )
+            self.assertRegex(argv[5], r"^--unit=sallimbook-release-build-[0-9a-f]{16}$")
+            units.append(argv[5])
+            self.assertEqual(argv[6:9], ["--", "/usr/bin/env", "-i"])
+            # The build sees exactly the allowlisted environment, nothing of the caller's.
+            self.assertEqual(argv[9:12], [f"{k}={v}" for k, v in sorted(self.ENVIRONMENT.items())])
+            # systemd-run itself only gets what it needs to reach the user manager.
+            self.assertEqual(
+                kwargs["env"], {"PATH": "/usr/bin:/bin", "XDG_RUNTIME_DIR": "/run/user/1000"}
+            )
+            self.assertEqual(kwargs["cwd"], "/synthetic/work")
+        self.assertEqual(
+            [event[1][12:] for event in starts],
+            [["pnpm", "install"], ["./gradlew", "assembleRelease"]],
+        )
+        self.assertEqual(len(set(units)), 2)
 
-    def test_session_members_scan_proc_by_session_id_and_ignore_zombies(self):
+    def test_the_scope_is_stopped_and_checked_before_the_build_returns(self):
+        events = []
+        self.run_build(["gradle"], FakeScopes(events, status=0, cgroup=""))
+        self.assertEqual(
+            [event[0] for event in events], ["scope-start", "scope-stop", "scope-check"]
+        )
+        unit = events[0][1][5].removeprefix("--unit=") + ".scope"
+        self.assertEqual(events[1][1], ["/usr/bin/systemctl", "--user", "stop", unit])
+        self.assertEqual(
+            events[2][1],
+            ["/usr/bin/systemctl", "--user", "show", "--property=ControlGroup", "--value", unit],
+        )
+
+    def test_a_failed_or_interrupted_build_still_stops_its_scope(self):
+        events = []
+        with self.assertRaisesRegex(backup.OperationError, "Release tool failed"):
+            self.run_build(["gradle"], FakeScopes(events, status=1))
+        self.assertEqual(
+            [event[0] for event in events], ["scope-start", "scope-stop", "scope-check"]
+        )
+
+        class Interrupted(FakeScopes):
+            def popen(self, args, **kwargs):
+                self.events.append(("scope-start", list(args), kwargs))
+                return SimpleNamespace(pid=1, wait=self.interrupt)
+
+            @staticmethod
+            def interrupt():
+                raise KeyboardInterrupt
+
+        events = []
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_build(["gradle"], Interrupted(events))
+        self.assertEqual(
+            [event[0] for event in events], ["scope-start", "scope-stop", "scope-check"]
+        )
+
+    def test_processes_left_in_the_scope_after_stop_abort_the_release(self):
         with tempfile.TemporaryDirectory() as temporary:
-            proc = Path(temporary)
-
-            def process(pid, name, state, session):
-                (proc / str(pid)).mkdir()
-                (proc / str(pid) / "stat").write_text(
-                    f"{pid} ({name}) {state} 1 {pid} {session} 0 -1 4194560 1 0 0 0\n"
-                )
-
-            process(101, "sleep", "S", 4242)
-            process(102, "a b) c", "R", 4242)  # a command name with spaces and a parenthesis
-            process(103, "defunct", "Z", 4242)
-            process(104, "other", "S", 999)
-            (proc / "105").mkdir()  # exited between listing and reading
-            (proc / "self").mkdir()
-            self.assertEqual(sorted(release.session_members(4242, proc)), [101, 102])
-
-    def test_a_process_left_in_the_build_session_aborts_the_release(self):
-        with (
-            patch.object(release, "session_members", return_value=[4242]),
-            patch.object(release, "SESSION_SETTLE_SECONDS", 0.2),
-            patch.object(release.os, "kill") as kill,
-        ):
-            with self.assertRaises(release.ReleaseAbort) as caught:
-                release.run_build(["sh", "-c", "true"], cwd="/", env={"PATH": "/usr/bin:/bin"})
-        self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
-        kill.assert_called_once_with(4242, release.signal.SIGKILL)
-
-    def test_a_leftover_process_found_in_a_mocked_proc_aborts_the_release(self):
-        class Finished:
-            pid = 4242
-
-            def wait(self):
-                return 0
-
-        with tempfile.TemporaryDirectory() as temporary:
-            proc = Path(temporary)
-            (proc / "4243").mkdir()
-            (proc / "4243/stat").write_text("4243 (daemon) S 1 4243 4242 0 -1 4194560 1\n")
-            (proc / "4300").mkdir()
-            (proc / "4300/stat").write_text("4300 (unrelated) S 1 4300 4300 0 -1 4194560 1\n")
+            cgroup = Path(temporary) / "user.slice/left.scope"
+            cgroup.mkdir(parents=True)
+            (cgroup / "cgroup.procs").write_text("4321\n4322\n")
             with (
-                patch.object(release.subprocess, "Popen", return_value=Finished()),
-                patch.object(release, "PROC", proc),
-                patch.object(release, "SESSION_SETTLE_SECONDS", 0.2),
-                patch.object(release.os, "killpg") as killpg,
-                patch.object(release.os, "kill") as kill,
+                patch.object(release, "CGROUP_ROOT", Path(temporary)),
+                patch.object(release, "SCOPE_SETTLE_SECONDS", 0.2),
+                self.assertRaises(release.ReleaseAbort) as caught,
             ):
+                self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/left.scope"))
+            self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
+            # An emptied cgroup, or one that is already gone, passes.
+            (cgroup / "cgroup.procs").write_text("")
+            self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/left.scope"))
+            (cgroup / "cgroup.procs").unlink()
+            cgroup.rmdir()
+            self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/left.scope"))
+
+    def test_a_scope_that_empties_while_waiting_passes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            cgroup = Path(temporary) / "user.slice/slow.scope"
+            cgroup.mkdir(parents=True)
+            procs = cgroup / "cgroup.procs"
+            procs.write_text("4321\n")
+            sleeps = []
+
+            def sleep(seconds):
+                sleeps.append(seconds)
+                procs.write_text("")
+
+            with (
+                patch.object(release, "CGROUP_ROOT", Path(temporary)),
+                patch.object(release.time, "sleep", side_effect=sleep),
+            ):
+                self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/slow.scope"))
+            self.assertEqual(len(sleeps), 1)
+
+    def test_a_missing_or_unreachable_systemd_fails_closed_without_a_fallback(self):
+        for scopes in (
+            FakeScopes([], missing=True),
+            FakeScopes([], show_status=1),
+        ):
+            with self.subTest(case=vars(scopes)):
                 with self.assertRaises(release.ReleaseAbort) as caught:
-                    release.run_build(["gradle"], cwd="/", env={})
-        self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
-        killpg.assert_called_once_with(4242, release.signal.SIGKILL)
-        kill.assert_called_once_with(4243, release.signal.SIGKILL)
+                    self.run_build(["gradle"], scopes)
+                self.assertEqual(caught.exception.code, "BUILD_SCOPE_UNAVAILABLE")
+                # Nothing was started outside a scope.
+                self.assertTrue(all(event[0] != "plain" for event in scopes.events))
+        for scopes in (FakeScopes([], status=1), FakeScopes([], missing=True)):
+            with self.subTest(probe=vars(scopes)):
+                with scopes.patches():
+                    with self.assertRaises(release.ReleaseAbort) as caught:
+                        release.check_build_scopes()
+                self.assertEqual(caught.exception.code, "BUILD_SCOPE_UNAVAILABLE")
+        with FakeScopes([]).patches():
+            release.check_build_scopes()
 
     def test_the_release_command_names_only_the_fixed_abort_code(self):
         import json
@@ -444,10 +670,23 @@ class BuildProcesses(unittest.TestCase):
             path = Path(temporary) / "manifest.json"
             path.write_text(json.dumps(config()))
             arguments = [
-                "ops.release", "--manifest", str(path), "--sdk", temporary,
-                "--keystore", temporary, "--store-password-file", temporary,
-                "--key-password-file", temporary, "--alias", "synthetic", "--output", temporary,
-                "--previous-version", "0",
+                "ops.release",
+                "--manifest",
+                str(path),
+                "--sdk",
+                temporary,
+                "--keystore",
+                temporary,
+                "--store-password-file",
+                temporary,
+                "--key-password-file",
+                temporary,
+                "--alias",
+                "synthetic",
+                "--output",
+                temporary,
+                "--previous-version",
+                "0",
             ]
             abort = release.ReleaseAbort("SIGNING_TOOLS_CHANGED", "detail that stays private")
             with (
@@ -466,10 +705,6 @@ class BuildProcesses(unittest.TestCase):
                 release.main()
             self.assertNotIn("secret", str(caught.exception))
             self.assertNotIn("(", str(caught.exception))
-
-    def test_failed_build_command_reports_a_generic_error(self):
-        with self.assertRaisesRegex(backup.OperationError, "Release tool failed"):
-            release.run_build(["sh", "-c", "echo synthetic-secret >&2; exit 3"], cwd="/", env={})
 
 
 if __name__ == "__main__":
