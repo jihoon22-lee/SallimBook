@@ -72,7 +72,8 @@ async function image(page: Page, forbidden = false) {
     context.fillStyle = "black";
     context.font = "44px Arial";
     for (const [i, line] of [
-      forbidden ? "SYNTHETIC CARD NUMBER" : "SYNTHETIC DOCUMENT RECEIPT",
+      // A label printed only on cards is refused even when OCR misreads the date beside it.
+      forbidden ? "SYNTHETIC CARD VALID THRU 12/28" : "SYNTHETIC DOCUMENT RECEIPT",
       "Household appliance purchase record",
       "This fixture contains no personal data",
       "Original document validation sample",
@@ -252,20 +253,13 @@ test("real scanner OCR original-byte attachments seven parents history conflicts
   await expect(
     page.getByRole("region", { name: "새 문서 첨부", exact: true }).getByRole("alert"),
   ).toContainText("카드 사진", { timeout: 90_000 });
+  // The server removes a refused upload instead of leaving a pending record to clean up.
   documents = await read<S["DocumentListResponse"]>(page, "/api/v1/documents");
-  const pending = documents.items.find((r) => r.original_name === "합성 제한 문서.png")!;
-  expect(pending.state).toBe("pending");
-  expect(pending.stored_at).toBeNull();
-  await page.getByRole("button", { name: "파일 선택 초기화" }).click();
-  await page.getByRole("button", { name: "문서 목록 새로 확인" }).click();
-  await page.getByRole("button", { name: "합성 제한 문서.png", exact: true }).click();
-  detail = page.getByRole("region", { name: "문서 상세", exact: true });
-  await expect(detail.getByText("파일 업로드 대기", { exact: true })).toBeVisible();
-  await detail.getByLabel("문서 연결 종료·삭제 사유").fill("합성 제한 대기 정리");
-  await detail.getByLabel("모든 연결 대상에서 이 문서를 삭제하는 것을 확인했어요").check();
-  await detail.getByRole("button", { name: "문서 삭제", exact: true }).click();
-  await expect(detail.getByText("삭제됨", { exact: true })).toBeVisible();
-  console.log("SAFE_PHASE=DOCUMENT_REJECTION_PENDING");
+  expect(documents.items.some((r) => r.original_name === "합성 제한 문서.png")).toBe(false);
+  await expect(page.getByRole("button", { name: "합성 제한 문서.png", exact: true })).toHaveCount(
+    0,
+  );
+  console.log("SAFE_PHASE=DOCUMENT_REJECTION_REMOVED");
   await page.getByRole("button", { name: "합성 원본 영수증.png", exact: true }).click();
   detail = page.getByRole("region", { name: "문서 상세", exact: true });
   await detail.getByLabel("문서 연결 종료·삭제 사유").fill("합성 원본 삭제 정리");
