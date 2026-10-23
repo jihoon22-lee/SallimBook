@@ -1,11 +1,13 @@
 """Build/inspect/sign a release using existing external keys; never installs or uploads."""
 
 import argparse
+import contextlib
+import ctypes
 import json
 import os
 import re
-import secrets
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -30,11 +32,10 @@ DEBUG_PROOF_MARKERS = (
 )
 
 
-SYSTEMD_RUN = "/usr/bin/systemd-run"
-SYSTEMCTL = "/usr/bin/systemctl"
-CGROUP_ROOT = Path("/sys/fs/cgroup")
-# Time for the processes of a stopped build scope to disappear before they count as left.
-SCOPE_SETTLE_SECONDS = 5
+# prctl(2) option that makes every orphaned descendant a child of this process.
+PR_SET_CHILD_SUBREAPER = 36
+# Time for the killed leftovers of a build command to be reaped before they count as left.
+LEFTOVER_SETTLE_SECONDS = 5
 # The pinned SDK packages whose files take part in aligning, signing and inspecting.
 SIGNING_TOOL_DIRECTORIES = ("build-tools/36.0.0", "cmdline-tools/15859902")
 
@@ -58,123 +59,108 @@ def run(command, **kwargs):
     return result.stdout.decode().strip()
 
 
-def scope_unavailable():
+def containment_unavailable():
     return ReleaseAbort(
-        "BUILD_SCOPE_UNAVAILABLE",
-        "Build commands must run in a systemd user scope and none could be used",
+        "BUILD_CONTAINMENT_UNAVAILABLE",
+        "Processes left by build commands could not be collected on this host",
     )
 
 
-def manager_environment():
-    """What systemd-run/systemctl need to reach the user manager, and nothing else."""
-    environment = {"PATH": "/usr/bin:/bin"}
-    if os.environ.get("XDG_RUNTIME_DIR"):
-        environment["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
-    return environment
+def child_processes():
+    """Ids of this process's children, live or exited but not yet reaped, from /proc."""
+    me = os.getpid()
+    found = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / "stat").read_text()
+        except OSError:  # The process went away meanwhile.
+            continue
+        # The command name may hold spaces or parentheses; the fields after the last ")" do not.
+        if int(stat.rsplit(")", 1)[1].split()[1]) == me:
+            found.append(int(entry.name))
+    return found
 
 
-def scope_processes(unit):
-    """Process ids still in the scope's cgroup; empty once the scope is gone."""
-    try:
-        shown = subprocess.run(
-            [SYSTEMCTL, "--user", "show", "--property=ControlGroup", "--value", unit],
-            capture_output=True,
-            text=True,
-            check=False,
-            env=manager_environment(),
-            stdin=subprocess.DEVNULL,
-        )
-    except OSError as error:
-        raise scope_unavailable() from error
-    if shown.returncode:
-        raise scope_unavailable()
-    cgroup = shown.stdout.strip()
-    if not cgroup:
-        return []
-    try:
-        return (CGROUP_ROOT / cgroup.lstrip("/") / "cgroup.procs").read_text().split()
-    except FileNotFoundError:
-        return []
+def reap_leftovers():
+    """Kill and reap everything a finished build command left behind; prove none is left.
 
-
-def empty_scope(unit):
-    """Stop the scope (killing everything in its cgroup) and prove that nothing is left."""
-    try:
-        # A collected scope is already gone; stop then fails harmlessly and the check passes.
-        subprocess.run(
-            [SYSTEMCTL, "--user", "stop", unit],
-            capture_output=True,
-            check=False,
-            env=manager_environment(),
-            stdin=subprocess.DEVNULL,
-        )
-    except OSError as error:
-        raise scope_unavailable() from error
-    deadline = time.monotonic() + SCOPE_SETTLE_SECONDS
-    while scope_processes(unit):
+    This process is the subreaper (see check_containment), so a descendant whose parent
+    exits, including one that detached with setsid or a double fork, becomes its child.
+    """
+    deadline = time.monotonic() + LEFTOVER_SETTLE_SECONDS
+    while children := child_processes():
+        for pid in children:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+        for pid in children:
+            with contextlib.suppress(ChildProcessError):
+                os.waitpid(pid, os.WNOHANG)
         if time.monotonic() >= deadline:
             raise ReleaseAbort(
                 "BUILD_PROCESS_LEFT_RUNNING",
-                "A process started by the build is still running after its scope was stopped",
+                "A process started by the build is still running after it was killed",
             )
         time.sleep(0.05)
 
 
-def run_scoped(command, *, cwd, env):
-    """Run one command in a fresh transient user scope; return its exit status.
+def check_containment():
+    """Collect orphans from here on, and prove it works before a long build; no fallback."""
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        if libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0:
+            raise containment_unavailable()
+    except (OSError, AttributeError) as error:
+        raise containment_unavailable() from error
+    if child_processes():
+        raise containment_unavailable()
+    # A detached process like a build daemon must come back as this process's child.
+    probe = subprocess.Popen(
+        ["/bin/sh", "-c", "/usr/bin/setsid /bin/sleep 30 </dev/null >/dev/null 2>&1 &"],
+        cwd="/",
+        env={"PATH": "/usr/bin:/bin"},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        if probe.wait():
+            raise containment_unavailable()
+        if not [pid for pid in child_processes() if pid != probe.pid]:
+            raise containment_unavailable()
+    finally:
+        reap_leftovers()
 
-    The command gets exactly `env` (through `env -i`); systemd-run itself only gets what it
-    needs to reach the user manager. Whatever happens, the scope is stopped and checked
-    empty before this returns.
+
+def run_build(command, *, cwd, env):
+    """Run one build command with exactly `env`; nothing it started may outlive it.
+
+    Third-party build code runs as this user. Whatever it leaves running (a Gradle or Kotlin
+    daemon, a background script) is killed before the next step, so no survivor can change
+    the build output or the signing tools after their check. This is not secrecy: while the
+    build runs, its code can read anything this user can, signing files included; see the
+    runbook.
     """
-    name = "sallimbook-release-build-" + secrets.token_hex(8)
-    argv = [
-        SYSTEMD_RUN,
-        "--user",
-        "--scope",
-        "--quiet",
-        "--collect",
-        "--unit=" + name,
-        "--",
-        "/usr/bin/env",
-        "-i",
-        *(key + "=" + value for key, value in sorted(env.items())),
-        *(str(item) for item in command),
-    ]
     try:
         process = subprocess.Popen(
-            argv,
+            [str(item) for item in command],
             cwd=cwd,
-            env=manager_environment(),
+            env=env,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except OSError as error:
-        raise scope_unavailable() from error
+        raise OperationError(
+            "Release tool failed; inspect locally without publishing sensitive output"
+        ) from error
     try:
-        return process.wait()
+        status = process.wait()
     finally:
-        empty_scope(name + ".scope")
-
-
-def check_build_scopes():
-    """Fail closed before a long build when no user scope can be started; no fallback."""
-    if run_scoped(["/bin/true"], cwd="/", env={"PATH": "/usr/bin:/bin"}):
-        raise scope_unavailable()
-
-
-def run_build(command, *, cwd, env):
-    """Run one build command in its own cgroup; nothing it started may outlive it.
-
-    A daemon or background script left behind could read the signing files once the
-    signing step starts, because it runs as the same user. Gradle's daemon detaches with
-    setsid, so a session or process group cannot contain the build; a cgroup can. Every
-    process in the command's scope is killed and the scope checked empty before the next
-    step. Same-user code can still move itself into another cgroup of the user's tree;
-    see the runbook.
-    """
-    if run_scoped(command, cwd=cwd, env=env):
+        # An interrupted wait leaves the command itself running; it is a child too.
+        reap_leftovers()
+    if status:
         # Build output may contain local paths or secrets; never echo it.
         raise OperationError(
             "Release tool failed; inspect locally without publishing sensitive output"
@@ -392,13 +378,13 @@ def build_snapshot(
     if not env.get("JAVA_HOME"):
         raise OperationError("Set JAVA_HOME to the selected JDK 21")
     jdk = signing_jdk(env["JAVA_HOME"])
-    check_build_scopes()
+    check_containment()
     # Third-party build code runs as this user and could rewrite the tools that later
     # see the signing key. Pin them now and compare right before they are used.
     pinned = signing_fingerprints(sdk, jdk)
     output = Path(output)
-    # Step 1 has no access to signing material, and every process left in each build
-    # command's cgroup was killed (or the release aborted) before anything below exists.
+    # Step 1 has no access to signing material, and every process left by each build
+    # command was killed and reaped (or the release aborted) before anything below exists.
     unsigned = build_unsigned(config, checkout, env)
     # The private directory is created only now, so build code never saw it. The unsigned
     # APK is copied into it at once; only the copy is inspected and signed.

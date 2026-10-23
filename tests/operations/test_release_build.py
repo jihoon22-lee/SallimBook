@@ -5,6 +5,7 @@ No real key, SDK or package install: every subprocess is replaced or synthetic.
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -106,35 +107,32 @@ JAVA_OPTION_VARIABLES = {
 }
 
 
-class FakeScopes:
-    """Stands in for systemd-run and the user manager; nothing real is started or stopped."""
+class FakeBuild:
+    """Stands in for build processes and their reaping; nothing real is started or killed."""
 
-    def __init__(self, events, *, status=0, show_status=0, cgroup="", missing=False):
+    def __init__(self, events, *, status=0):
         self.events = events
         self.status = status
-        self.show_status = show_status
-        self.cgroup = cgroup
-        self.missing = missing
 
     def popen(self, args, **kwargs):
-        self.events.append(("scope-start", [str(item) for item in args], kwargs))
-        if self.missing:
-            raise FileNotFoundError(args[0])
+        self.events.append(("build-start", [str(item) for item in args], kwargs))
         return SimpleNamespace(pid=1, wait=lambda: self.status)
-
-    def run(self, args, **kwargs):
-        args = [str(item) for item in args]
-        if args[1:3] == ["--user", "stop"]:
-            self.events.append(("scope-stop", args, kwargs))
-            return subprocess.CompletedProcess(args, 0, "", "")
-        self.events.append(("scope-check", args, kwargs))
-        output = self.cgroup + "\n" if self.show_status == 0 else ""
-        return subprocess.CompletedProcess(args, self.show_status, output, "")
 
     def patches(self):
         stack = ExitStack()
         stack.enter_context(patch.object(release.subprocess, "Popen", side_effect=self.popen))
-        stack.enter_context(patch.object(release.subprocess, "run", side_effect=self.run))
+        stack.enter_context(
+            patch.object(
+                release, "reap_leftovers", side_effect=lambda: self.events.append(("reap", [], {}))
+            )
+        )
+        stack.enter_context(
+            patch.object(
+                release,
+                "check_containment",
+                side_effect=lambda: self.events.append(("contain", [], {})),
+            )
+        )
         return stack
 
 
@@ -185,7 +183,7 @@ class ReleaseSteps(unittest.TestCase):
             "JAVA_HOME": str(self.jdk),
         }
 
-    def build(self, scopes=None):
+    def build(self, builds=None):
         def build_command(command, **kwargs):
             self.events.append(("build", [str(item) for item in command], kwargs))
             if self.during_build and command[0] == "./gradlew":
@@ -220,11 +218,11 @@ class ReleaseSteps(unittest.TestCase):
             stack.enter_context(patch.dict(os.environ, self.environment(), clear=True))
             stack.enter_context(patch.object(release, "run", side_effect=tool))
             stack.enter_context(patch.object(release, "inspect_apk", side_effect=inspect))
-            if scopes is None:
+            if builds is None:
                 stack.enter_context(patch.object(release, "run_build", side_effect=build_command))
-                stack.enter_context(patch.object(release, "check_build_scopes"))
+                stack.enter_context(patch.object(release, "check_containment"))
             else:
-                stack.enter_context(scopes.patches())
+                stack.enter_context(builds.patches())
             release.build_snapshot(
                 config(),
                 self.sdk,
@@ -385,67 +383,62 @@ class ReleaseSteps(unittest.TestCase):
             self.build()
         self.assertEqual(list(self.output.parent.glob(".sallimbook-release-*")), [])
 
-    def test_each_scope_is_emptied_before_the_fingerprints_are_verified_and_signing_starts(self):
+    def test_each_build_command_is_reaped_before_the_fingerprints_are_verified_and_signing_starts(
+        self,
+    ):
         original = release.signing_fingerprints
 
         def logged(*arguments):
             self.events.append(("fingerprint", [], {}))
             return original(*arguments)
 
-        scopes = FakeScopes(self.events)
         with patch.object(release, "signing_fingerprints", side_effect=logged):
-            self.build(scopes)
+            self.build(FakeBuild(self.events))
         kinds = [kind for kind, _, _ in self.events]
-        # Probe, then pnpm install, pnpm android:sync and gradle: four scopes in all.
-        self.assertEqual(kinds.count("scope-start"), 4)
-        self.assertEqual(kinds.count("scope-stop"), 4)
-        self.assertEqual(kinds.count("scope-check"), 4)
         pinned, verified = [i for i, kind in enumerate(kinds) if kind == "fingerprint"]
-        self.assertLess(kinds.index("scope-start"), pinned)  # the probe runs before the pin
-        last_check = max(i for i, kind in enumerate(kinds) if kind == "scope-check")
+        # Containment is in place and proven before the tools are pinned or anything builds.
+        self.assertEqual(kinds.index("contain"), 0)
+        self.assertLess(kinds.index("contain"), pinned)
+        # pnpm install, pnpm android:sync and gradle: each one reaped before the next starts.
+        built = [kind for kind in kinds if kind in {"build-start", "reap"}]
+        self.assertEqual(built, ["build-start", "reap"] * 3)
+        last_reap = max(i for i, kind in enumerate(kinds) if kind == "reap")
         first_tool = min(i for i, kind in enumerate(kinds) if kind in {"tool", "inspect"})
-        self.assertLess(last_check, verified)
+        self.assertLess(last_reap, verified)
         self.assertLess(verified, first_tool)
         self.assertLess(verified, self.signing_index())
-        # Every start is followed by its own stop and check before the next start.
-        scoped = [event for event in self.events if event[0].startswith("scope-")]
-        for index in range(0, len(scoped), 3):
-            self.assertEqual(
-                [e[0] for e in scoped[index : index + 3]],
-                ["scope-start", "scope-stop", "scope-check"],
-            )
 
-    def test_an_unemptied_scope_aborts_before_any_signing_tool_runs(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            cgroup = Path(temporary) / "user.slice/leftover.scope"
-            cgroup.mkdir(parents=True)
-            (cgroup / "cgroup.procs").write_text("4321\n")
-            scopes = FakeScopes(self.events, cgroup="/user.slice/leftover.scope")
-            with (
-                patch.object(release, "CGROUP_ROOT", Path(temporary)),
-                patch.object(release, "SCOPE_SETTLE_SECONDS", 0.2),
-                self.assertRaises(release.ReleaseAbort) as caught,
-            ):
-                self.build(scopes)
+    def test_a_leftover_that_cannot_be_killed_aborts_before_any_signing_tool_runs(self):
+        builds = FakeBuild(self.events)
+
+        def real_reaping():
+            # Fake build processes and containment; the real reap loop sees one that stays.
+            stack = ExitStack()
+            stack.enter_context(patch.object(release.subprocess, "Popen", side_effect=builds.popen))
+            stack.enter_context(patch.object(release, "check_containment"))
+            stack.enter_context(patch.object(release, "child_processes", return_value=[4321]))
+            stack.enter_context(patch.object(release.os, "kill"))
+            stack.enter_context(patch.object(release.os, "waitpid"))
+            stack.enter_context(patch.object(release, "LEFTOVER_SETTLE_SECONDS", 0.2))
+            return stack
+
+        with self.assertRaises(release.ReleaseAbort) as caught:
+            self.build(SimpleNamespace(patches=real_reaping))
         self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
+        # The first build command never got a successor, and nothing was signed.
+        self.assertEqual([kind for kind, _, _ in self.events].count("build-start"), 1)
         self.assertFalse(any(kind in {"tool", "inspect"} for kind, _, _ in self.events))
         self.assertFalse(self.output.exists())
 
-    def test_without_a_user_scope_the_release_fails_closed_before_building(self):
-        for case in (
-            FakeScopes(self.events, missing=True),
-            FakeScopes(self.events, status=1),
-            FakeScopes(self.events, show_status=1),
+    def test_without_containment_the_release_fails_closed_before_building(self):
+        refusing = SimpleNamespace(prctl=lambda *_: -1)
+        with (
+            patch.object(release.ctypes, "CDLL", return_value=refusing),
+            self.assertRaises(release.ReleaseAbort) as caught,
         ):
-            with self.subTest(case=vars(case)):
-                self.setUp()
-                case.events = self.events
-                with self.assertRaises(release.ReleaseAbort) as caught:
-                    self.build(case)
-                self.assertEqual(caught.exception.code, "BUILD_SCOPE_UNAVAILABLE")
-                # Only the probe was attempted: no install, no Gradle, no tool.
-                self.assertEqual([k for k, _, _ in self.events].count("scope-start"), 1)
-                self.assertFalse(any(kind in {"tool", "inspect"} for kind, _, _ in self.events))
+            self.build(SimpleNamespace(patches=ExitStack))
+        self.assertEqual(caught.exception.code, "BUILD_CONTAINMENT_UNAVAILABLE")
+        self.assertFalse(any(kind in {"tool", "inspect"} for kind, _, _ in self.events))
 
     def test_previous_apk_is_inspected_with_the_fixed_signing_environment(self):
         calls = []
@@ -516,82 +509,41 @@ class ReleaseSteps(unittest.TestCase):
                 )
 
 
-class BuildScopes(unittest.TestCase):
+class BuildContainment(unittest.TestCase):
     ENVIRONMENT = {
         "PATH": "/usr/bin:/bin",
         "HOME": "/synthetic/home",
         "JAVA_HOME": "/synthetic/jdk",
     }
 
-    def run_build(self, command, scopes, **overrides):
-        environment = {
-            "XDG_RUNTIME_DIR": "/run/user/1000",
-            "SSH_AUTH_SOCK": "/synthetic/agent",
-            "GITHUB_TOKEN": "synthetic",
-        }
-        with scopes.patches(), patch.dict(os.environ, environment, clear=True):
-            release.run_build(
-                command, cwd="/synthetic/work", env=overrides.get("env", self.ENVIRONMENT)
-            )
+    def run_build(self, command, builds):
+        environment = {"SSH_AUTH_SOCK": "/synthetic/agent", "GITHUB_TOKEN": "synthetic"}
+        with builds.patches(), patch.dict(os.environ, environment, clear=True):
+            release.run_build(command, cwd="/synthetic/work", env=self.ENVIRONMENT)
 
-    def test_every_build_command_runs_in_a_transient_user_scope(self):
+    def test_every_build_command_gets_exactly_the_allowlisted_environment(self):
         events = []
-        scopes = FakeScopes(events)
-        self.run_build(["pnpm", "install"], scopes)
-        self.run_build(["./gradlew", "assembleRelease"], scopes)
-        starts = [event for event in events if event[0] == "scope-start"]
-        units = []
-        for _, argv, kwargs in starts:
-            self.assertEqual(
-                argv[:5],
-                [
-                    "/usr/bin/systemd-run",
-                    "--user",
-                    "--scope",
-                    "--quiet",
-                    "--collect",
-                ],
-            )
-            self.assertRegex(argv[5], r"^--unit=sallimbook-release-build-[0-9a-f]{16}$")
-            units.append(argv[5])
-            self.assertEqual(argv[6:9], ["--", "/usr/bin/env", "-i"])
-            # The build sees exactly the allowlisted environment, nothing of the caller's.
-            self.assertEqual(argv[9:12], [f"{k}={v}" for k, v in sorted(self.ENVIRONMENT.items())])
-            # systemd-run itself only gets what it needs to reach the user manager.
-            self.assertEqual(
-                kwargs["env"], {"PATH": "/usr/bin:/bin", "XDG_RUNTIME_DIR": "/run/user/1000"}
-            )
+        self.run_build(["pnpm", "install"], FakeBuild(events))
+        self.run_build(["./gradlew", "assembleRelease"], FakeBuild(events))
+        starts = [event for event in events if event[0] == "build-start"]
+        self.assertEqual(
+            [argv for _, argv, _ in starts], [["pnpm", "install"], ["./gradlew", "assembleRelease"]]
+        )
+        for _, _, kwargs in starts:
+            # Nothing of the caller's environment reaches the build.
+            self.assertEqual(kwargs["env"], self.ENVIRONMENT)
             self.assertEqual(kwargs["cwd"], "/synthetic/work")
-        self.assertEqual(
-            [event[1][12:] for event in starts],
-            [["pnpm", "install"], ["./gradlew", "assembleRelease"]],
-        )
-        self.assertEqual(len(set(units)), 2)
+            self.assertEqual(kwargs["stdout"], subprocess.DEVNULL)
 
-    def test_the_scope_is_stopped_and_checked_before_the_build_returns(self):
-        events = []
-        self.run_build(["gradle"], FakeScopes(events, status=0, cgroup=""))
-        self.assertEqual(
-            [event[0] for event in events], ["scope-start", "scope-stop", "scope-check"]
-        )
-        unit = events[0][1][5].removeprefix("--unit=") + ".scope"
-        self.assertEqual(events[1][1], ["/usr/bin/systemctl", "--user", "stop", unit])
-        self.assertEqual(
-            events[2][1],
-            ["/usr/bin/systemctl", "--user", "show", "--property=ControlGroup", "--value", unit],
-        )
-
-    def test_a_failed_or_interrupted_build_still_stops_its_scope(self):
+    def test_a_failed_or_interrupted_build_is_still_reaped(self):
         events = []
         with self.assertRaisesRegex(backup.OperationError, "Release tool failed"):
-            self.run_build(["gradle"], FakeScopes(events, status=1))
-        self.assertEqual(
-            [event[0] for event in events], ["scope-start", "scope-stop", "scope-check"]
-        )
+            self.run_build(["gradle"], FakeBuild(events, status=1))
+        self.assertEqual([event[0] for event in events], ["build-start", "reap"])
 
-        class Interrupted(FakeScopes):
+        class Interrupted(FakeBuild):
             def popen(self, args, **kwargs):
-                self.events.append(("scope-start", list(args), kwargs))
+                self.events.append(("build-start", list(args), kwargs))
                 return SimpleNamespace(pid=1, wait=self.interrupt)
 
             @staticmethod
@@ -601,67 +553,94 @@ class BuildScopes(unittest.TestCase):
         events = []
         with self.assertRaises(KeyboardInterrupt):
             self.run_build(["gradle"], Interrupted(events))
-        self.assertEqual(
-            [event[0] for event in events], ["scope-start", "scope-stop", "scope-check"]
+        self.assertEqual([event[0] for event in events], ["build-start", "reap"])
+
+    def test_leftovers_are_killed_and_one_that_stays_aborts_the_release(self):
+        killed, children = [], [[4321, 4322], []]
+        with (
+            patch.object(release, "child_processes", side_effect=lambda: children.pop(0)),
+            patch.object(release.os, "kill", side_effect=lambda pid, sig: killed.append(pid)),
+            patch.object(release.os, "waitpid"),
+            patch.object(release.time, "sleep"),
+        ):
+            release.reap_leftovers()
+        self.assertEqual(killed, [4321, 4322])
+        with (
+            patch.object(release, "child_processes", return_value=[4321]),
+            patch.object(release.os, "kill"),
+            patch.object(release.os, "waitpid"),
+            patch.object(release, "LEFTOVER_SETTLE_SECONDS", 0.2),
+            self.assertRaises(release.ReleaseAbort) as caught,
+        ):
+            release.reap_leftovers()
+        self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
+
+    def test_a_host_that_cannot_collect_orphans_fails_closed_without_a_fallback(self):
+        cases = (
+            {"CDLL": SimpleNamespace(prctl=lambda *_: -1)},
+            {"CDLL": OSError("no libc")},
+            {"CDLL": SimpleNamespace(prctl=lambda *_: 0), "children": [[999]]},
+            # The probe's detached process never came back as a child.
+            {"CDLL": SimpleNamespace(prctl=lambda *_: 0), "children": [[], [], []]},
+        )
+        for case in cases:
+            with self.subTest(case=case):
+                library = case["CDLL"]
+                children = list(case.get("children", [[]]))
+                with (
+                    patch.object(
+                        release.ctypes,
+                        "CDLL",
+                        side_effect=library if isinstance(library, Exception) else None,
+                        return_value=None if isinstance(library, Exception) else library,
+                    ),
+                    patch.object(
+                        release,
+                        "child_processes",
+                        side_effect=lambda left=children: left.pop(0) if left else [],
+                    ),
+                    self.assertRaises(release.ReleaseAbort) as caught,
+                ):
+                    release.check_containment()
+                self.assertEqual(caught.exception.code, "BUILD_CONTAINMENT_UNAVAILABLE")
+
+    def real_release_process(self, script):
+        """Run `script` in a fresh interpreter, so the subreaper never applies to the tests."""
+        return subprocess.run(
+            [sys.executable, "-I", "-c", script],
+            cwd=ROOT,
+            env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(ROOT)},
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
         )
 
-    def test_processes_left_in_the_scope_after_stop_abort_the_release(self):
+    def test_a_real_detached_build_daemon_is_killed_before_the_build_returns(self):
         with tempfile.TemporaryDirectory() as temporary:
-            cgroup = Path(temporary) / "user.slice/left.scope"
-            cgroup.mkdir(parents=True)
-            (cgroup / "cgroup.procs").write_text("4321\n4322\n")
-            with (
-                patch.object(release, "CGROUP_ROOT", Path(temporary)),
-                patch.object(release, "SCOPE_SETTLE_SECONDS", 0.2),
-                self.assertRaises(release.ReleaseAbort) as caught,
-            ):
-                self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/left.scope"))
-            self.assertEqual(caught.exception.code, "BUILD_PROCESS_LEFT_RUNNING")
-            # An emptied cgroup, or one that is already gone, passes.
-            (cgroup / "cgroup.procs").write_text("")
-            self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/left.scope"))
-            (cgroup / "cgroup.procs").unlink()
-            cgroup.rmdir()
-            self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/left.scope"))
-
-    def test_a_scope_that_empties_while_waiting_passes(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            cgroup = Path(temporary) / "user.slice/slow.scope"
-            cgroup.mkdir(parents=True)
-            procs = cgroup / "cgroup.procs"
-            procs.write_text("4321\n")
-            sleeps = []
-
-            def sleep(seconds):
-                sleeps.append(seconds)
-                procs.write_text("")
-
-            with (
-                patch.object(release, "CGROUP_ROOT", Path(temporary)),
-                patch.object(release.time, "sleep", side_effect=sleep),
-            ):
-                self.run_build(["gradle"], FakeScopes([], cgroup="/user.slice/slow.scope"))
-            self.assertEqual(len(sleeps), 1)
-
-    def test_a_missing_or_unreachable_systemd_fails_closed_without_a_fallback(self):
-        for scopes in (
-            FakeScopes([], missing=True),
-            FakeScopes([], show_status=1),
-        ):
-            with self.subTest(case=vars(scopes)):
-                with self.assertRaises(release.ReleaseAbort) as caught:
-                    self.run_build(["gradle"], scopes)
-                self.assertEqual(caught.exception.code, "BUILD_SCOPE_UNAVAILABLE")
-                # Nothing was started outside a scope.
-                self.assertTrue(all(event[0] != "plain" for event in scopes.events))
-        for scopes in (FakeScopes([], status=1), FakeScopes([], missing=True)):
-            with self.subTest(probe=vars(scopes)):
-                with scopes.patches():
-                    with self.assertRaises(release.ReleaseAbort) as caught:
-                        release.check_build_scopes()
-                self.assertEqual(caught.exception.code, "BUILD_SCOPE_UNAVAILABLE")
-        with FakeScopes([]).patches():
-            release.check_build_scopes()
+            pids = Path(temporary) / "pids"
+            script = f"""
+import sys
+sys.path.insert(0, {str(ROOT)!r})
+from ops import release
+release.check_containment()
+# One daemon detaches with setsid, another with a double fork; both outlive the command.
+release.run_build(
+    ["/bin/sh", "-c",
+     "setsid /bin/sleep 60 </dev/null >/dev/null 2>&1 & echo $! >> {pids}; "
+     "(/bin/sleep 61 </dev/null >/dev/null 2>&1 & echo $! >> {pids}) &"],
+    cwd={temporary!r},
+    env={{"PATH": "/usr/bin:/bin"}},
+)
+print("returned", release.child_processes())
+"""
+            result = self.real_release_process(script)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("returned []", result.stdout)
+            started = [int(line) for line in pids.read_text().split()]
+            self.assertEqual(len(started), 2)
+            for pid in started:
+                self.assertFalse(Path(f"/proc/{pid}").exists(), f"process {pid} survived")
 
     def test_the_release_command_names_only_the_fixed_abort_code(self):
         import json
