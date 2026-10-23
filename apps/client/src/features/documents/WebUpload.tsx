@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { ApiError } from "../../platform/api";
+import { ApiError, toApiError } from "../../platform/api";
 import type { DocumentsApi } from "./api";
-import { MAX_BYTES, checksum, etag, expired, fileProblem, sameContent, stateLabel } from "./model";
+import {
+  MAX_BYTES,
+  REFUSED_CONTENT,
+  checksum,
+  etag,
+  expired,
+  fileProblem,
+  sameContent,
+  stateLabel,
+} from "./model";
 import type { CreateDocument, Document, Target } from "./model";
 import { CommandFeedback, useDocumentCommand } from "./DocumentSupport";
 import { MAX_LONG_EDGE, normalizeJpeg } from "./normalize";
@@ -19,11 +28,13 @@ export function WebUpload({
   target,
   pending,
   saved,
+  refused,
 }: {
   api: DocumentsApi;
   target: Target;
   pending?: Document;
   saved: (id: string) => void;
+  refused?: (error: ApiError) => void;
 }) {
   const command = useDocumentCommand();
   const input = useRef<HTMLInputElement>(null);
@@ -56,6 +67,7 @@ export function WebUpload({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!ack || command.error?.status === 409 || (!file.current && !attempt.current)) return;
+    const refusal = { current: null as ApiError | null };
     const result = await command.run(async (signal) => {
       if (!attempt.current) {
         const selected = file.current!;
@@ -121,15 +133,29 @@ export function WebUpload({
       if (row.state === "ready") return row.id;
       if (row.state === "deleted") throw new ApiError(409, "DOCUMENT_UNAVAILABLE");
       if (expired(row)) throw new ApiError(409, "DOCUMENT_UPLOAD_EXPIRED");
-      await api.upload(
-        current.id,
-        etag(current.version!),
-        current.uploadKey,
-        current.bytes,
-        signal,
-      );
+      try {
+        await api.upload(
+          current.id,
+          etag(current.version!),
+          current.uploadKey,
+          current.bytes,
+          signal,
+        );
+      } catch (failure) {
+        const error = toApiError(failure);
+        if (error.status === 422 && REFUSED_CONTENT.has(error.code)) refusal.current = error;
+        throw failure;
+      }
       return current.id;
     });
+    if (refusal.current && command.mounted.current) {
+      // The server removed the pending record, so the same attempt can never be retried.
+      clear();
+      setChosen("");
+      setAck(false);
+      setStarted(false);
+      refused?.(refusal.current);
+    }
     if (result && command.mounted.current) {
       clear();
       setChosen("");

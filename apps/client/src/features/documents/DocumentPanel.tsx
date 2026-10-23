@@ -58,6 +58,7 @@ function Documents({ target }: { target: Target }) {
             setSelected(id);
             void list.reload();
           }}
+          refused={() => void list.reload()}
         />
       )}
       <div className="form-actions">

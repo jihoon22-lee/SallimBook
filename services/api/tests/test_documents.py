@@ -274,16 +274,42 @@ def test_upload_mime_body_limit_and_missing_headers(document_app, actors):
         assert client.put(path, content=CONTENT, headers=first.headers).status_code == 400
 
 
-def test_failed_inspection_never_stores_or_changes_pending(document_app, actors, monkeypatch):
+@pytest.mark.parametrize(
+    "code", ["DOCUMENT_MALWARE", "DOCUMENT_CARD_DATA", "DOCUMENT_TOO_COMPLEX", "DOCUMENT_UNSAFE"]
+)
+def test_rejected_content_removes_the_pending_document(document_app, actors, monkeypatch, code):
+    # The pending row is bound to the rejected bytes, so it could only expire in the list.
     def reject(*args, **kwargs):
-        raise DomainError("DOCUMENT_MALWARE", "합성 거부", 422)
+        raise DomainError(code, "합성 거부", 422)
 
     monkeypatch.setattr(service, "validate_document", reject)
+    first, partner, _ = actors
+    with TestClient(document_app) as client:
+        row = pending(client, first)
+        result = upload(client, first, row)
+        assert result.status_code == 422 and result.json()["error"]["code"] == code
+        rejected = detail(client, partner, row)
+        assert rejected["state"] == "deleted" and rejected["active_link_count"] == 0
+        listed = client.get("/api/v1/documents", headers=partner.headers).json()["items"]
+        assert row["id"] not in {item["id"] for item in listed}
+        retry = upload(client, first, row, version=rejected["version"])
+        assert retry.json()["error"]["code"] == "DOCUMENT_UNAVAILABLE"
+    assert not document_app.state.settings.document_storage_directory.exists()
+
+
+@pytest.mark.parametrize("code", ["DOCUMENT_SCAN_UNAVAILABLE", "DOCUMENT_OCR_UNAVAILABLE"])
+def test_unavailable_inspection_keeps_the_pending_document(document_app, actors, monkeypatch, code):
+    def unavailable(*args, **kwargs):
+        raise DomainError(code, "합성 점검", 503)
+
+    monkeypatch.setattr(service, "validate_document", unavailable)
     with TestClient(document_app) as client:
         row = pending(client, actors[0])
-        assert upload(client, actors[0], row).status_code == 422
+        assert upload(client, actors[0], row).status_code == 503
+        assert detail(client, actors[0], row) | {"version": 1} == detail(client, actors[0], row)
         assert detail(client, actors[0], row)["state"] == "pending"
-    assert not document_app.state.settings.document_storage_directory.exists()
+        monkeypatch.setattr(service, "validate_document", lambda *args, **kwargs: None)
+        assert upload(client, actors[0], row).status_code == 200
 
 
 @pytest.mark.parametrize("first_result", ["success", "invalid", "cancelled"])

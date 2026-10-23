@@ -413,7 +413,11 @@ JPEG는 웹·Android 클라이언트가 EXIF 방향을 적용하고 긴 변을 3
 본문을 읽기 전부터 프로세스당 업로드 한 개로 제한하며 초과는 503 `DOCUMENT_UPLOAD_BUSY`다.
 HTTP 취소 후에도 시작한 worker가 끝날 때까지 처리 슬롯을 유지한다. 본문 수신은 120초로 제한하며 408, 크기 초과는 413, 잘못된 파일은 422, 검사기/키/저장소 장애는
 503이다. 422에는 지원하지 않는 사진 정보·꼬리 데이터의 `DOCUMENT_IMAGE_UNSUPPORTED`와 쪽수·픽셀·검사 시간
-초과의 `DOCUMENT_TOO_COMPLEX`가 포함된다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
+초과의 `DOCUMENT_TOO_COMPLEX`가 포함된다. 검사가 내용을 거절한 422(`DOCUMENT_UNSAFE`·`DOCUMENT_IMAGE_UNSUPPORTED`·
+`DOCUMENT_TOO_COMPLEX`·`DOCUMENT_MALWARE`·`DOCUMENT_CARD_DATA`·`DOCUMENT_UNREADABLE`)이면 pending 문서는 그 해시에
+묶여 다시 쓸 수 없으므로 서버가 사유 "업로드 검사에서 허용하지 않은 파일"로 문서를 삭제하고 연결도 종료한 뒤(감사 기록 포함)
+422를 반환한다. 거절된 문서는 목록에 남지 않고 같은 문서로 다시 올리면 409 `DOCUMENT_UNAVAILABLE`이다. 검사기 장애(503)는
+pending 문서를 그대로 둔다. 검사 중에는 가계·세션 DB 잠금을 유지하지 않고 완료 후 현재 세션·기기·연결·버전을 다시 검증한다.
 검사한 내용을 재전송하면 처음의 성공 참조를 반환하며 삭제·연결 해제된 내용을 복원하지 않는다.
 
 | 동작 | 경로·버전 기준 |

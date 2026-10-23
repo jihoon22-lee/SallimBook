@@ -290,6 +290,42 @@ for (const [code, status, message] of [
     await expect(page.getByText("UNTRUSTED_DOCUMENT_ERROR")).toHaveCount(0);
     await expect(form.getByRole("button", { name: "같은 파일로 업로드 재시도" })).toBeEnabled();
   });
+test("inspection refusal clears the attempt and leaves no pending record", async ({ page }) => {
+  const state = await mockDocuments(page);
+  state.refused = "DOCUMENT_CARD_DATA";
+  const list = await open(page);
+  const form = await file(page);
+  await form.getByRole("button", { name: "문서 업로드", exact: true }).click();
+  await expect(form.getByRole("alert")).toContainText(
+    "카드번호가 가려진 영수증은 첨부할 수 있어요",
+  );
+  await expect(form.getByRole("button", { name: "같은 파일로 업로드 재시도" })).toHaveCount(0);
+  await expect(form.getByRole("checkbox")).not.toBeChecked();
+  await expect(form.getByRole("button", { name: "문서 업로드", exact: true })).toBeDisabled();
+  await expect(list.getByText(/합성 새 문서|업로드 기한 만료|파일 업로드 대기/)).toHaveCount(0);
+  await file(page);
+  await form.getByRole("button", { name: "문서 업로드", exact: true }).click();
+  await expect(list.getByRole("button", { name: "합성 새 문서.png", exact: true })).toBeVisible();
+  expect(state.documents.filter((r) => r.state === "pending")).toHaveLength(0);
+});
+test("pending detail refusal shows the reason with the removed record", async ({ page }) => {
+  const state = await mockDocuments(page);
+  state.documents[0]!.state = "pending";
+  state.documents[0]!.stored_at = null;
+  state.refused = "DOCUMENT_UNREADABLE";
+  await open(page);
+  const detail = await select(page);
+  const resume = detail.getByRole("region", { name: "대기 파일 업로드", exact: true });
+  await resume
+    .getByLabel("문서 파일", { exact: true })
+    .setInputFiles({ name: "합성 영수증.png", mimeType: "image/png", buffer: bytes });
+  await resume.getByRole("checkbox").check();
+  await resume.getByRole("button", { name: "문서 업로드", exact: true }).click();
+  await expect(detail.getByRole("alert")).toContainText("문서 내용을 읽기 어려워");
+  await expect(detail.getByText("삭제됨", { exact: true })).toBeVisible();
+  await expect(resume).toHaveCount(0);
+  await expect(detail.getByText("업로드 기한 만료")).toHaveCount(0);
+});
 test("foreign and unauthenticated parents expose no attachment operations", async ({ page }) => {
   const state = await mockDocuments(page);
   await page.goto(`/appliances/${uid(999)}`);
