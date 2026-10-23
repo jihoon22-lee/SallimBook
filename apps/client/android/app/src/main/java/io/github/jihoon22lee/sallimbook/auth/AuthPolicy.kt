@@ -356,9 +356,15 @@ internal object AuthPolicy {
             "FIELD_ENCRYPTION_UNAVAILABLE" to (503 to "계좌번호 보호 설정을 확인해 주세요."),
             "ACCOUNT_NUMBER_UNAVAILABLE" to (503 to "계좌번호를 열 수 없습니다."),
         ) + NativeDocumentPolicy.errorMessages
+        // Codes the server also returns at a second status, with the message for that status.
+        val alternates = mapOf(
+            ("INVALID_REVERSAL" to 422) to "반환일은 원본 날짜보다 빠를 수 없어요.",
+        )
         val serverError = (body as? Map<*, *>)?.get("error") as? Map<*, *>
         val suppliedCode = serverError?.get("code") as? String
-        val knownCode = suppliedCode?.takeIf { messages[it]?.first == status }
+        val knownCode = suppliedCode?.takeIf {
+            messages[it]?.first == status || (it to status) in alternates
+        }
         val code = knownCode ?: when (status) {
             400 -> "BAD_REQUEST"
             401 -> "UNAUTHENTICATED"
@@ -371,7 +377,8 @@ internal object AuthPolicy {
             else -> "REQUEST_FAILED"
         }
         val detail = mutableMapOf<String, Any?>(
-            "code" to code, "message" to (messages[code]?.second ?: "요청을 처리하지 못했습니다."),
+            "code" to code,
+            "message" to (alternates[code to status] ?: messages[code]?.second ?: "요청을 처리하지 못했습니다."),
             "request_id" to requestId,
         )
         val version = serverError?.get("current_version")
