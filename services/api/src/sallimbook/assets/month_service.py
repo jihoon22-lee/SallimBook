@@ -641,6 +641,51 @@ def _untouched_missing(value: AssetMonthValue) -> bool:
     )
 
 
+def release_blank_rows(session: Session, principal: Principal, asset_id: UUID) -> bool:
+    """Remove a mistaken asset's untouched blank rows from open months before it is deleted.
+
+    Returns False, removing nothing, when any month row keeps it: an entered value or a
+    confirmed month. The caller holds the asset scope lock.
+    """
+    rows = list(
+        session.execute(
+            select(AssetMonthValue, AssetMonthRevision)
+            .join(
+                AssetMonthRevision,
+                (AssetMonthRevision.id == AssetMonthValue.revision_id)
+                & (AssetMonthRevision.household_id == AssetMonthValue.household_id),
+            )
+            .where(
+                AssetMonthValue.household_id == principal.household_id,
+                AssetMonthValue.asset_id == asset_id,
+            )
+            .order_by(AssetMonthRevision.id)
+            .with_for_update()
+        )
+    )
+    if any(
+        revision.state == "confirmed" or not _untouched_missing(value) for value, revision in rows
+    ):
+        return False
+    for value, revision in rows:
+        before = revision.version
+        session.delete(value)
+        # The month's content changed: an older month version held elsewhere must reload.
+        revision.updated_at = utcnow()
+        session.flush()
+        record_event(
+            session,
+            principal,
+            entity_type="asset_month",
+            entity_id=revision.id,
+            action="sync_scope",
+            before_version=before,
+            after_version=revision.version,
+            changed_fields=("scope", "values"),
+        )
+    return True
+
+
 def carry_previous(
     session: Session,
     principal: Principal,
