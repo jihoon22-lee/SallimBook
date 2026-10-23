@@ -12,7 +12,8 @@ import okhttp3.Response
 internal fun exportHttpClient():OkHttpClient = documentHttpClient()
 
 /** Fixed native POST only. The response remains native and is verified before any provider write. */
-internal class NativeExportHttp(private val origin:String,private val client:OkHttpClient=exportHttpClient()) {
+internal class NativeExportHttp(private val origin:String,private val client:OkHttpClient=exportHttpClient(),
+    private val allocate:(Int)->ByteArray={ ByteArray(it) }) {
     fun create(selection:NativeExportSelection,token:String,gate:ForegroundRequest):NativeExportResponse {
         if(AuthPolicy.apiOrigin(origin)==null) throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)
         val path=NativeExportPolicy.PATH
@@ -44,12 +45,13 @@ internal class NativeExportHttp(private val origin:String,private val client:OkH
                 val checksum=single(response,"X-Export-SHA256")
                 var content:NativeExportBytes?=null
                 try {
-                    content=response.body.byteStream().use { stream -> NativeExportBytes.read(stream,size,checksum) { gate.checkHttp("POST",path) } }
+                    content=response.body.byteStream().use { stream -> NativeExportBytes.read(stream,size,checksum,allocate) { gate.checkHttp("POST",path) } }
                     gate.checkHttp("POST",path)
                     NativeExportResponse(archive=NativeExportArchive(id,content)).also { content=null }
                 } finally { content?.close() }
             }
         } catch(failure:AuthFailure) { throw failure }
+        catch(_:NativeExportTooLarge) { return NativeExportResponse(code="EXPORT_TOO_LARGE") }
         catch(_:IOException) { throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE) }
         catch(_:Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
         finally { bytes.fill(0); gate.releaseNetworkCancellation() }

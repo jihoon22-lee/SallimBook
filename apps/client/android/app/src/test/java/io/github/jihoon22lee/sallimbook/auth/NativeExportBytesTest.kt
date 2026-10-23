@@ -30,7 +30,7 @@ class NativeExportBytesTest {
             override fun read()=-1
             override fun read(b:ByteArray,off:Int,len:Int):Int { owned=b; data.copyInto(b,off); gate.cancel(); return data.size }
         }
-        bad { NativeExportBytes.read(stream,data.size.toLong(),checksum(data),gate::check) }
+        bad { NativeExportBytes.read(stream,data.size.toLong(),checksum(data),check=gate::check) }
         assertNotNull(owned); assertTrue(owned!!.all { it==0.toByte() })
     }
     @Test fun cancelBetweenProviderChunksStopsFurtherWritesAndLateSuccess() {

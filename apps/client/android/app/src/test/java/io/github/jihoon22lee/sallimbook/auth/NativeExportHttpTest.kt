@@ -24,8 +24,9 @@ class NativeExportHttpTest {
         return ForegroundRequest().also { it.bindAppLock(policy,policy.ticket(AppRequestKind.PROTECTED)) { true } }
     }
     private fun bad(action:()->Unit) { try { action(); fail("Unsafe export transport accepted") } catch(e:AuthFailure) { assertNull(e.message) } }
-    private fun transport(body:ByteArray=data,status:Int=200,change:(Response.Builder)->Unit={},inspect:(Request)->Unit={}):NativeExportHttp {
-        return NativeExportHttp("https://synthetic.invalid",exportHttpClient().newBuilder().addInterceptor { chain ->
+    private fun transport(body:ByteArray=data,status:Int=200,change:(Response.Builder)->Unit={},inspect:(Request)->Unit={},
+        allocate:(Int)->ByteArray={ ByteArray(it) }):NativeExportHttp {
+        return NativeExportHttp("https://synthetic.invalid",allocate=allocate,client=exportHttpClient().newBuilder().addInterceptor { chain ->
             inspect(chain.request())
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(status).message("synthetic")
                 .header("Content-Type",if(status==200) "application/zip" else "application/json")
@@ -34,6 +35,10 @@ class NativeExportHttpTest {
                 .header("Content-Disposition","attachment; filename=\"sallimbook-$id.zip\"")
                 .body(body.toResponseBody((if(status==200) "application/zip" else "application/json").toMediaType())).apply(change).build()
         }.build())
+    }
+    @Test fun anArchiveTooLargeForTheDeviceMemoryIsReportedAsTooLargeInsteadOfCrashing() {
+        val response=transport(allocate={ throw OutOfMemoryError() }).create(selection,"synthetic-token",gate())
+        assertEquals("EXPORT_TOO_LARGE",response.code); assertNull(response.archive)
     }
     @Test fun clientHasBoundedPrivateTransportWithoutCookiesCacheRedirectsRetriesOrAuthenticationFallback() {
         val client=exportHttpClient()
