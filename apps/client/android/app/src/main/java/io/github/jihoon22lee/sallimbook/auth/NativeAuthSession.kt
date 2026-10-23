@@ -45,6 +45,7 @@ internal class NativeAuthSession private constructor(context: Context) {
     }
 
     private val store by lazy { RefreshStore(app, origin.orEmpty()) }
+    private val installDevices by lazy { InstallDeviceStore(app, origin.orEmpty()) }
     private val http by lazy { NativeAuthHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     private val auditHttp by lazy { NativeAuditHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
     private val vaultHttp by lazy { NativeVaultHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE)) }
@@ -90,6 +91,11 @@ internal class NativeAuthSession private constructor(context: Context) {
     }
 
     private fun clearLocal() = dropSession(wipeVault = true)
+
+    /** The install's device key is a convenience: failing to keep it never fails the sign-in. */
+    private fun keepInstallDevice(sent: Map<String, String>?, body: Any?) {
+        try { NativeInstallDevice.accept(installDevices, sent, body) } catch (_: Exception) { }
+    }
 
     private fun acceptTokens(body: Any?, gate: ForegroundRequest) {
         val tokens = NativeTokens.parse(body)
@@ -220,12 +226,15 @@ internal class NativeAuthSession private constructor(context: Context) {
                 authorize(gate, AppRequestKind.LOGIN)
                 requireAvailable()
                 gate.check()
+                val install = try { NativeInstallDevice.claim(installDevices) } catch (_: Exception) { null }
                 payload = JSONObject().put("login_name", loginName).put("password", String(password))
                     .put("device_label", deviceLabel)
+                install?.let { payload.put("install", JSONObject(it)) }
                 password.fill('\u0000')
                 val response = http.send("POST", "/api/v1/auth/native/login", gate, body = payload)
                 if (response.status != 200) throw AuthFailure(AuthPolicy.credentialFailure(response.status))
                 acceptTokens(response.body, gate)
+                keepInstallDevice(install, response.body)
                 appLock.finishServerAuthentication(gate)
                 AuthOutcome.success(mapOf("status" to "authenticated"))
             } catch (failure: AuthFailure) {
@@ -820,6 +829,9 @@ internal class NativeAuthSession private constructor(context: Context) {
                 }
                 if (operation == PasskeyOperation.LOGIN) payload.put("device_binding", String(ceremony.binding
                     ?: throw AuthFailure(AuthCode.PASSKEY_FAILED)))
+                val install = if (operation != PasskeyOperation.LOGIN) null
+                    else try { NativeInstallDevice.claim(installDevices) } catch (_: Exception) { null }
+                install?.let { payload.put("install", JSONObject(it)) }
                 val access = if (operation == PasskeyOperation.LOGIN) null else access(gate)
                 val response = http.send("POST", path, gate, body = payload, accessToken = access)
                 val expected = if (registration) 201 else 200
@@ -830,6 +842,7 @@ internal class NativeAuthSession private constructor(context: Context) {
                         // A failed/cancelled replacement must not destroy the current session.
                         // acceptTokens publishes only inside the active gate after encrypted save.
                         acceptTokens(response.body, gate)
+                        keepInstallDevice(install, response.body)
                         appLock.finishServerAuthentication(gate)
                         AuthOutcome.success(mapOf("status" to "authenticated"))
                     }
@@ -877,6 +890,7 @@ internal class NativeAuthSession private constructor(context: Context) {
             finally {
                 payload?.remove("credential")
                 payload?.remove("device_binding")
+                payload?.remove("install")
                 credentialJson.fill('\u0000')
                 grant?.fill('\u0000')
                 ceremony.discard()
