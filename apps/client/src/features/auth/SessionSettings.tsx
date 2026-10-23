@@ -403,6 +403,80 @@ function DevicePanel() {
     clearSensitiveFields(form);
     void signOutOthers(password);
   }
+  const card = (device: Device) => (
+    <li className="device-card" key={device.id}>
+      <h3>
+        {device.label} {device.current && <span className="status-chip">현재 기기</span>}
+      </h3>
+      <p>
+        {device.platform === "android" ? "Android 앱" : "웹 브라우저"} ·{" "}
+        {device.status !== "active"
+          ? "연결 해제됨"
+          : device.login_state === "expired"
+            ? "만료"
+            : "연결됨"}
+      </p>
+      <p className="muted">
+        최근 사용: {formatSeoulDateTime(device.last_seen_at, { fallback: "확인되지 않음" })} (서울
+        기준)
+      </p>
+      {device.status === "active" &&
+        (confirming === device.id ? (
+          <div role="group" aria-label={`${device.label} 연결 해제 확인`}>
+            <p>
+              {device.current
+                ? "이 기기에서 로그아웃하고 연결을 해제할까요?"
+                : "이 기기의 로그인 연결을 해제할까요?"}
+            </p>
+            <div className="form-actions">
+              <button
+                type="button"
+                ref={confirmButton}
+                disabled={revoking || loading || Boolean(error)}
+                onClick={() => void revoke(device)}
+              >
+                {revoking ? "연결 해제 중…" : "연결 해제 확인"}
+              </button>
+              {(supportsWebAuthn() || isNativeAuth()) && (
+                <button
+                  type="button"
+                  disabled={revoking || loading || Boolean(error)}
+                  onClick={() => void revoke(device, true)}
+                >
+                  패스키로 확인하고 연결 해제
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  ceremony.cancel();
+                  if (!revoking) setConfirming(null);
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={revoking || loading || Boolean(error)}
+            aria-label={`${device.label} 연결 해제`}
+            onClick={() => {
+              setActionError(null);
+              setConfirming(device.id);
+            }}
+          >
+            연결 해제
+          </button>
+        ))}
+    </li>
+  );
+  // A device whose sign-in ran out is folded away so a new, unknown device stands out.
+  const expired = devices.filter(
+    (device) => device.status === "active" && device.login_state === "expired",
+  );
+  const listed = devices.filter((device) => !expired.includes(device));
   return (
     <section className="card" aria-labelledby="device-list-title">
       <h2 id="device-list-title">내 등록 기기</h2>
@@ -433,73 +507,17 @@ function DevicePanel() {
         </p>
       )}
       {!loading && !error && devices.length === 0 && <p>등록된 기기가 없어요.</p>}
-      <ul className="device-list">
-        {devices.map((device) => (
-          <li className="device-card" key={device.id}>
-            <h3>
-              {device.label} {device.current && <span className="status-chip">현재 기기</span>}
-            </h3>
-            <p>
-              {device.platform === "android" ? "Android 앱" : "웹 브라우저"} ·{" "}
-              {device.status === "active" ? "연결됨" : "연결 해제됨"}
-            </p>
-            <p className="muted">
-              최근 사용: {formatSeoulDateTime(device.last_seen_at, { fallback: "확인되지 않음" })}{" "}
-              (서울 기준)
-            </p>
-            {device.status === "active" &&
-              (confirming === device.id ? (
-                <div role="group" aria-label={`${device.label} 연결 해제 확인`}>
-                  <p>
-                    {device.current
-                      ? "이 기기에서 로그아웃하고 연결을 해제할까요?"
-                      : "이 기기의 로그인 연결을 해제할까요?"}
-                  </p>
-                  <div className="form-actions">
-                    <button
-                      type="button"
-                      ref={confirmButton}
-                      disabled={revoking || loading || Boolean(error)}
-                      onClick={() => void revoke(device)}
-                    >
-                      {revoking ? "연결 해제 중…" : "연결 해제 확인"}
-                    </button>
-                    {(supportsWebAuthn() || isNativeAuth()) && (
-                      <button
-                        type="button"
-                        disabled={revoking || loading || Boolean(error)}
-                        onClick={() => void revoke(device, true)}
-                      >
-                        패스키로 확인하고 연결 해제
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        ceremony.cancel();
-                        if (!revoking) setConfirming(null);
-                      }}
-                    >
-                      취소
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  disabled={revoking || loading || Boolean(error)}
-                  aria-label={`${device.label} 연결 해제`}
-                  onClick={() => {
-                    setActionError(null);
-                    setConfirming(device.id);
-                  }}
-                >
-                  연결 해제
-                </button>
-              ))}
-          </li>
-        ))}
-      </ul>
+      <ul className="device-list">{listed.map(card)}</ul>
+      {expired.length > 0 && (
+        <details className="secondary-actions">
+          <summary>만료된 기기 {expired.length}개</summary>
+          <p className="muted">
+            로그인이 만료된 기기예요. 다시 로그인하면 연결됨으로 바뀌고, 90일 동안 쓰지 않으면
+            목록에서 빠져요.
+          </p>
+          <ul className="device-list">{expired.map(card)}</ul>
+        </details>
+      )}
       {nextCursor && (
         <button type="button" disabled={loading || revoking} onClick={() => void load(nextCursor)}>
           기기 더 보기

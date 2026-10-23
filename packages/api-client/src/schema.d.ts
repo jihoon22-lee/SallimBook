@@ -4725,6 +4725,11 @@ export interface components {
              */
             last_seen_at: string;
             /**
+             * Login State
+             * @enum {string}
+             */
+            login_state: "active" | "expired" | "revoked";
+            /**
              * Platform
              * @enum {string}
              */

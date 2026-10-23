@@ -52,6 +52,9 @@ WEB_IDLE = timedelta(minutes=30)
 WEB_ABSOLUTE = timedelta(hours=12)
 ACCESS_LIFETIME = timedelta(minutes=10)
 REFRESH_LIFETIME = timedelta(days=30)
+# A device that nobody has used for this long is left out of the device list. Its row stays,
+# since sessions, passkeys and audit history refer to it; it can no longer sign in anyway.
+DEVICE_LIST_IDLE = timedelta(days=90)
 INVITATION_LIFETIME = timedelta(minutes=15)
 THROTTLE_WINDOW = timedelta(minutes=15)
 THROTTLE_CLEANUP_BATCH = 64
@@ -944,6 +947,15 @@ def reauthenticate(
     result = member_response(user, member)
     session.commit()
     return result
+
+
+def live_session(now: datetime):
+    """The SQL form of the session checks in validate_locked_session that depend on time."""
+    return (
+        AuthSession.revoked_at.is_(None)
+        & (AuthSession.expires_at > now)
+        & ((AuthSession.kind == "native") | (AuthSession.last_seen_at > now - WEB_IDLE))
+    )
 
 
 def issue_session(

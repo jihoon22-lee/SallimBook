@@ -1526,6 +1526,67 @@ class TestIdentityDatabase:
                 )
             assert refresh.value.status == 401
 
+    def _age_device(self, db_engine, device_id, age):
+        # Moves every session of a synthetic device into the past, as if it was last used then.
+        then = service.utcnow() - age
+        with Session(db_engine) as session:
+            device = session.get(RegisteredDevice, device_id)
+            device.last_seen_at = then
+            for row in session.scalars(
+                select(AuthSession).where(AuthSession.device_id == device_id)
+            ):
+                row.last_seen_at = then
+                row.authenticated_at = then
+                row.expires_at = min(row.expires_at, then + timedelta(hours=12))
+            session.commit()
+
+    def _devices(self, client, tokens):
+        response = client.get("/api/v1/devices", headers=bearer(tokens))
+        assert response.status_code == 200, response.text
+        return {row["label"]: row for row in response.json()["items"]}
+
+    def test_device_login_state_is_active_expired_or_revoked(
+        self, identity_app, db_engine, account
+    ):
+        with TestClient(identity_app, base_url="https://testserver") as browser:
+            web_login(browser, account)
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            devices = self._devices(client, tokens)
+            assert devices["합성 Android"]["login_state"] == "active"
+            assert devices["합성 PC"]["login_state"] == "active"
+            # A web session ends after the idle limit even before its absolute expiry.
+            self._age_device(db_engine, UUID(devices["합성 PC"]["id"]), timedelta(hours=1))
+            assert self._devices(client, tokens)["합성 PC"]["login_state"] == "expired"
+            pc = self._devices(client, tokens)["합성 PC"]
+            assert (
+                client.delete(
+                    "/api/v1/devices/" + pc["id"],
+                    headers={**bearer(tokens), "If-Match": f'"{pc["version"]}"'},
+                ).status_code
+                == 204
+            )
+            assert self._devices(client, tokens)["합성 PC"]["login_state"] == "revoked"
+
+    @pytest.mark.parametrize(("days", "listed"), [(89, True), (91, False)])
+    def test_devices_unused_for_90_days_are_left_out_of_the_list(
+        self, identity_app, db_engine, account, days, listed
+    ):
+        with TestClient(identity_app, base_url="https://testserver") as browser:
+            web_login(browser, account)
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            pc = self._devices(client, tokens)["합성 PC"]
+            self._age_device(db_engine, UUID(pc["id"]), timedelta(days=days))
+            devices = self._devices(client, tokens)
+            assert ("합성 PC" in devices) is listed
+            assert devices["합성 Android"]["login_state"] == "active"
+            if listed:
+                assert devices["합성 PC"]["login_state"] == "expired"
+        with Session(db_engine) as session:
+            # Hidden, not deleted: sessions and audit history keep referring to the row.
+            assert session.get(RegisteredDevice, UUID(pc["id"])) is not None
+
     def test_device_activity_comes_from_session_without_advancing_edit_version(
         self,
         identity_app,

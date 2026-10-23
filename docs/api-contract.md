@@ -65,7 +65,7 @@ native(전용 transport) 공용이다. 성공하면 200 `{"revoked_devices": n}`
 기존 `POST /auth/invitations/accept`는 긴 일회성 초대로 계정을 만들고 로그인은 별도로 수행한다.
 기존 API 계약은 유지하며 새 기본 시작/연결 경로만 등록과 로그인을 한 번에 완료한다.
 인증된 `GET /me`, `GET /household/members`, `POST /household/invitations`,
-`GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다.
+`GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다. 기기 행의 `login_state`는 `active`(유효한 로그인 세션이 있음)·`expired`(세션이 모두 끝남, 웹은 30분 유휴 포함)·`revoked`(기기 폐기)다. 응답 필드 이름에 "session"을 쓰지 않는 것은 네이티브 응답 검사가 자격증명 같은 이름을 거부하기 때문이다. 90일 넘게 쓰지 않은 연결 기기(기기·세션의 마지막 사용이 모두 90일 전)는 목록에서 빠진다. 행은 세션·패스키·감사 이력이 참조하므로 지우지 않는다.
 초대와 기기 폐기는 최근 5분 내 실제 로그인 또는 아래 목적·대상별 step-up 증명을 요구한다.
 기기 폐기 후에는 연결된 access/refresh 모두 기기 상태 검사에서 거부한다.
 일반 개인정보나 토큰 원문을 오류·서버 로그로 출력하지 않는다.

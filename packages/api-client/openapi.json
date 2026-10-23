@@ -5797,6 +5797,15 @@
             "title": "Last Seen At",
             "type": "string"
           },
+          "login_state": {
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ],
+            "title": "Login State",
+            "type": "string"
+          },
           "platform": {
             "enum": [
               "web",
@@ -5825,7 +5834,8 @@
           "status",
           "last_seen_at",
           "version",
-          "current"
+          "current",
+          "login_state"
         ],
         "title": "DeviceResponse",
         "type": "object"

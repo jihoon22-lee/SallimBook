@@ -125,6 +125,8 @@ class DeviceResponse(BaseModel):
     last_seen_at: datetime
     version: int
     current: bool
+    # Named without "session": native clients refuse credential-like response field names.
+    login_state: Literal["active", "expired", "revoked"]
 
 
 class DeviceListResponse(BaseModel):

@@ -166,6 +166,23 @@ class AuthPolicyTest {
         assertNull(AuthPolicy.metadataBody("DELETE", "/api/v1/devices/$uuid", 204, null))
     }
 
+    @Test fun deviceLoginStateReachesTheSettingsListWhenTheServerSendsIt() {
+        val device = mapOf("id" to uuid, "label" to "합성 Android", "platform" to "android",
+            "status" to "active", "last_seen_at" to "2026-10-17T00:00:00Z", "version" to 1, "current" to false)
+        for (state in listOf("active", "expired", "revoked")) {
+            val page = mapOf("items" to listOf(device + ("login_state" to state)), "next_cursor" to null)
+            assertEquals(page, AuthPolicy.metadataBody("GET", "/api/v1/devices", 200, page))
+        }
+        // An older server without the field still works; an unknown state is refused.
+        val older = mapOf("items" to listOf(device), "next_cursor" to null)
+        assertEquals(older, AuthPolicy.metadataBody("GET", "/api/v1/devices", 200, older))
+        try {
+            AuthPolicy.metadataBody("GET", "/api/v1/devices", 200,
+                mapOf("items" to listOf(device + ("login_state" to "unknown")), "next_cursor" to null))
+            fail("Unknown login state accepted")
+        } catch (failure: AuthFailure) { assertEquals(AuthCode.ACCESS_DENIED, failure.code) }
+    }
+
     @Test fun metadataProjectionRejectsAdditionalCredentialsUnknownFieldsAndWrongTypes() {
         val member = mapOf("user_id" to uuid, "member_id" to uuid, "household_id" to uuid,
             "display_name" to "합성 구성원", "role" to "owner")
