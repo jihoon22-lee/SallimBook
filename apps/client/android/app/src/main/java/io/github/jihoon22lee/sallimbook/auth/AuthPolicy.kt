@@ -231,10 +231,9 @@ internal object AuthPolicy {
         }
     }
 
-    /** Preserve only recognized server codes/correlation; messages are local constants. */
-    fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
-        if (requestId == null || !uuid.matches(requestId)) return null
-        val messages = mapOf(
+    // Built once: the server's safe Korean message per code, at the status it is sent with.
+    private val messages by lazy {
+        mapOf(
             "INVALID_CURSOR" to (400 to "페이지 기준을 다시 확인해 주세요."),
             "INVALID_AUDIT_FILTER" to (422 to "감사 조회 조건과 기간을 확인해 주세요."),
             "AUDIT_METADATA_INVALID" to (503 to "감사 기록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."),
@@ -357,10 +356,15 @@ internal object AuthPolicy {
             "FIELD_ENCRYPTION_UNAVAILABLE" to (503 to "계좌번호 보호 설정을 확인해 주세요."),
             "ACCOUNT_NUMBER_UNAVAILABLE" to (503 to "계좌번호를 열 수 없습니다."),
         ) + NativeDocumentPolicy.errorMessages
-        // Codes the server also returns at a second status, with the message for that status.
-        val alternates = mapOf(
-            ("INVALID_REVERSAL" to 422) to "반환일은 원본 날짜보다 빠를 수 없어요.",
-        )
+    }
+    // Codes the server also returns at a second status, with the message for that status.
+    private val alternates = mapOf(
+        ("INVALID_REVERSAL" to 422) to "반환일은 원본 날짜보다 빠를 수 없어요.",
+    )
+
+    /** Preserve only recognized server codes/correlation; messages are local constants. */
+    fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
+        if (requestId == null || !uuid.matches(requestId)) return null
         val serverError = (body as? Map<*, *>)?.get("error") as? Map<*, *>
         val suppliedCode = serverError?.get("code") as? String
         val knownCode = suppliedCode?.takeIf {
