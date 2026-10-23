@@ -251,6 +251,8 @@ test("real income card recurring and closure workflow preserves cash facts and i
   await page.getByRole("button", { name: "무효 처리 검토", exact: true }).click();
   await page.getByLabel("무효 사유", { exact: true }).fill("합성 반환 오등록 정정");
   await page.getByRole("button", { name: "사유와 함께 무효 처리", exact: true }).click();
+  // Follow the link only after the void is saved; otherwise the original is read too early.
+  await expect(page.getByText(/^무효 기록 · 버전 \d+$/)).toBeVisible();
   await page.getByRole("link", { name: "반환 원본 수입 확인", exact: true }).click();
   await expect(page.getByRole("link", { name: "수입 정정", exact: true })).toBeVisible();
   console.log("SAFE_PHASE=CASHFLOW_INCOME");

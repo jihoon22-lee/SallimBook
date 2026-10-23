@@ -245,10 +245,11 @@ Gradle `:app:testDebugUnitTest :app:compileReleaseKotlin --max-workers=2`는 **1
 
 ## 14. 고정 납부 규칙·회차·실제 납부 (SB-015/016)
 
-생성된 `fixed-costs` 계약의 18개 명령을 네이티브에 연결했다. 규칙 목록·생성·조회·적용 변경·종료,
+생성된 `fixed-costs` 계약의 19개 명령을 네이티브에 연결했다. 규칙 목록·생성·조회·적용 변경·종료·오등록 삭제,
 회차 생성·목록·요약·조회·이력·이동·건너뜀·복원·완료·재개, 실제 납부·납부 목록·납부 취소를
 각각 이름 있는 메서드로 호출한다. 모든 쓰기는 `idempotencyKey`, 기존 자원 변경은 강한 `ifMatch`가
-필요하다. 일반 HTTP 경로·임의 헤더·본문은 입력받지 않는다.
+필요하다. 일반 HTTP 경로·임의 헤더·본문은 입력받지 않는다. 규칙 삭제(`deleteRecurringRule`)는 본문 없이
+`ifMatch`와 `idempotencyKey`만 보내고 본문 없는 204만 받으며, `RULE_IN_USE` 409는 고정 한국어 안내로 전달한다.
 
 `RuleCreate`의 최초 종료일과 종료 사유는 한 쌍이며 시작일 뒤여야 한다. `RuleChange`는 부분 수정이
 아니라 새 적용일의 조건 전체와 사유를 요구한다. 규칙의 과거 적용본과 불변 `MutationReference`의

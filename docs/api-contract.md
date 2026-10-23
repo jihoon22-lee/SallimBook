@@ -128,7 +128,7 @@ step-up이나 refresh는 세션의 `authenticated_at`을 갱신하지 않는다.
 응답의 `household_share`는 정확한 십진 문자열이고 생성·수정 응답은 `ETag`, 생성은 `Location`도 반환한다.
 수정·종료·삭제는 `If-Match`가 필요하며 다른 가계의 자산/소유자는 404, 버전 충돌은 409다.
 생성 계약에도 `If-Match` 필수 여부와 `ETag`·`Location` 응답 헤더를 명시한다. 누락된 버전 헤더는 `400 VERSION_REQUIRED`로 반환한다.
-종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다.
+종료는 행과 과거 참조를 보존한다. 참조 중인 자산 삭제는 `409 ASSET_IN_USE`로 거부한다. 열린(작성 중·정정 중) 월 기록에 금액·기준일·사유 없이 만들어진 빈 행만 있으면 삭제할 때 그 행을 함께 지우고 해당 월 정정본 version을 올리며 `sync_scope` 감사를 남긴다. 값을 입력한 행이나 확정한 월에 있는 행은 삭제를 막는다(계좌 삭제도 같다).
 생성·수정·종료에서 보유 종료일은 서울 기준 오늘보다 늦을 수 없으며 `422 ASSET_END_IN_FUTURE`로 거부한다. 이미 저장된 미래 종료일은 그대로 읽고 다른 필드를 고칠 수 있으며, 종료일을 다른 날짜로 바꾸는 쓰기만 검사한다(비우기는 허용).
 metadata에는 잔액·평가액·가전 가격·미래 연금액 필드를 받지 않는다. 실제 월 평가액은 후속 API다.
 PATCH에서 생략한 필드는 유지한다. null로 지울 수 있는 필드는 `owner_member_id`, `ended_on`, `note`뿐이며
@@ -142,9 +142,9 @@ OpenAPI와 생성 TS 타입도 같은 선택 입력·null 규칙을 제공한다
 생성·상세·목록·수정 응답에는 `masked_number`, `has_number`와 연결 자산을 제공하며 번호 원문·암호문은 없다.
 번호는 생성/PATCH의 선택 입력이고 PATCH에서 명시적 null로 지울 수 있다. 키 설정이 없어도 번호 없는 metadata 조회·저장과 번호 제거는 가능하다.
 전체 보기는 서버 재인증 또는 해당 계좌 UUID에 바인딩한 `account.reveal` 증명을 요구하며, 감사 commit 후 원문과 `display_for_seconds=30`을 반환한다.
-계좌 PATCH에는 계좌 version의 `If-Match`를 사용한다. 자산 소유·종료 변경은 자산 API와 자산 version을 사용한다.
+계좌 PATCH에는 계좌 version의 `If-Match`를 사용한다. 자산 소유·종료 변경은 자산 API와 자산 version을 사용한다. 계좌 응답이 연결 자산을 함께 보여 주므로 연결 자산을 바꾸면 계좌 version도 올라가고(`financial_account` `update` 감사, 필드 `asset`) 그 전에 읽은 계좌 version의 수정·삭제는 409다.
 목록은 유형·소유자·active/closed/all 및 UUID cursor를 지원한다. 개설일과 자산 종료일을 양쪽 수정 경로에서 검증한다.
-`DELETE /accounts/{account_id}`는 계좌 version의 `If-Match`만 받아 오등록 계좌와 연결 자산을 한 트랜잭션에서 함께 지우고 204를 반환한다. 카드 결제계좌·수입·고정 납부·월 기록·문서·대출 규칙 같은 참조가 하나라도 있으면 둘 다 남기고 `409 ACCOUNT_IN_USE`를 반환한다. 재전송은 지울 행이 없어 404가 되며 다른 행을 지우지 않는다. 계좌·자산 각각 `delete` 감사가 남는다.
+`DELETE /accounts/{account_id}`는 계좌 version의 `If-Match`만 받아 오등록 계좌와 연결 자산을 한 트랜잭션에서 함께 지우고 204를 반환한다. 카드 결제계좌·수입·고정 납부·값이 있거나 확정한 월 기록·문서·대출 규칙 같은 참조가 하나라도 있으면 둘 다 남기고 `409 ACCOUNT_IN_USE`를 반환한다. 열린 월의 빈 행은 위 자산 삭제와 같이 함께 지운다. 재전송은 지울 행이 없어 404가 되며 다른 행을 지우지 않는다. 계좌·자산 각각 `delete` 감사가 남는다.
 금액·잔액은 받지 않으며 계좌의 종료일과 상태는 자산에서 파생한다. 웹 전용 번호 컴포넌트와 Android 네이티브 입력/전체 보기 화면을 연결했다. Android 실기기 보안 검증은 별도 출시 조건이다.
 
 ### 8) 월간 자산 확인·정정 (SB-012)
@@ -244,7 +244,7 @@ PAN·유효기간·CVC·암호문 필드는 일반 입력에서 거부한다. �
 
 ### 11) 반복 규칙·예상 회차·실제 납부 (SB-015/016)
 
-`/recurring-rules`의 생성·목록·상세·새 적용일 변경·종료, `/obligations/generate`, 월별 회차 목록/요약/상세/이력,
+`/recurring-rules`의 생성·목록·상세·새 적용일 변경·종료·오등록 삭제, `/obligations/generate`, 월별 회차 목록/요약/상세/이력,
 회차 날짜 변경·건너뛰기/복원·수동 완료/재개, 실제 납부 등록·목록·무효 API를 제공한다.
 정기 규칙/회차 mutation은 멱등키와 해당 자원의 If-Match를 사용하고, 납부 무효는 원본 cash version을 사용한다.
 규칙·회차 변경 응답은 최초 `id`/`version`의 불변 참조다. 납부 응답은 해당 cash 변경본을 포함하여 재전송으로 최신 상태가 섞이지 않는다.
@@ -252,7 +252,8 @@ PAN·유효기간·CVC·암호문 필드는 일반 입력에서 거부한다. �
 생성 기간은 명시적으로 최대 366일이며 같은 규칙/명목일은 중복 생성하지 않는다. 실패한 생성은 rollback하고 같은 키로 재시도할 수 있다.
 규칙 변경은 새 적용일의 기간 이력을 만들고 이미 요청한 생성 기간의 미래 미납 회차를 갱신한다. 과거·실납부·수동 예외 회차를 보존한다. 최초 등록 또는 종료 API로 미래 종료일을 정한 규칙도 마지막 적용 시작일 이후·오늘 이후(오늘 포함)·원래 종료일 이전에는 금액·결제수단·주기를 변경할 수 있다. 새 변경본은 기존 종료일을 유지하며 종료 사유도 보존한다. 종료일 연장이나 재개방은 지원하지 않는다.
 아직 시작하지 않은 예정 변경이 있으면 그 시작일과 같거나 앞선 날짜의 변경·종료가 같은 요청에서 그 예정 변경을 철회(`revoked_at`)한다. 기준 날짜는 오늘 이전에 시작한 마지막 버전(없으면 첫 버전)의 시작일보다 뒤여야 한다. 철회한 버전은 규칙 응답과 결제수단 연결 조회에서 빠지고, 이미 시작한 버전과 가장 이른 활성 버전은 철회하지 않는다. 철회할 버전의 회차에 실제 납부나 수동 예외가 있으면 `OBLIGATION_HAS_PAYMENT` 409다. 철회는 규칙의 기존 update/archive 감사에 `revoked_at` 변경 필드로 남는다.
-`manual_override`는 건너뛰기·수동 완료·예정일 변경이 실제로 남아 있을 때만 true다(DB CHECK). 되돌리거나 납부를 무효로 하면 이후 규칙 변경·종료를 다시 따른다.
+`manual_override`는 건너뛰기·수동 완료·예정일 변경이 실제로 남아 있을 때만 true다(DB CHECK). 되돌리거나 납부를 무효로 해 예외와 유효 납부가 모두 없어지면 그 자리에서 현재 규칙을 다시 따른다(오늘 이후 회차만; 종료 뒤면 `superseded`, 금액이 바뀌었으면 현재 규칙 금액, 이력 `regenerate`). 수동 완료는 다른 유효 납부가 남아 있는 동안 납부 무효로 풀리지 않고, 마지막 유효 납부를 무효로 하면 함께 풀린다.
+`DELETE /recurring-rules/{rule_id}`는 규칙 version의 `If-Match`와 멱등키를 받아 오등록 규칙을 그 버전·회차·회차 이력·규칙 단위 생성 기록과 함께 지우고 204를 반환한다. 같은 키 재전송은 다시 204이고, 다른 키 재전송은 404다. 회차에 납부(유효·무효 모두)가 있거나, 건너뛰기·예정일 변경·수동 완료 등 처리 이력이 있거나, 회차 달이 확정한 월 기록이거나, 보험료 연결이 있으면 `409 RULE_IN_USE`("보험료로 연결됐거나 납부 기록·확정된 월이 있는 규칙은 종료만 할 수 있어요.")이며 아무것도 지우지 않는다. 다른 가계의 규칙은 404다. 규칙 `delete` 감사가 남는다. 여러 규칙을 함께 만든 생성 기록은 남고 그 안의 이 규칙 회차 항목만 빠진다.
 회차 이력의 `action`은 `ObligationHistoryAction` 9개 값(create, regenerate, reschedule, skip, unskip, complete, reopen, settle, void_settlement) 중 하나다.
 최초 등록에는 종료일/사유 한 쌍으로 과거 종료 계약도 기록할 수 있다. 기존 과거 규칙을 뒤늦게 덮어쓰지는 않는다.
 실제 납부액은 분할 기록을 합산하며 예정액과 더하지 않는다. 미확인 예정액 null과 명시적 0은 다르며 0원 cash 이벤트는 만들지 않는다.
@@ -328,7 +329,7 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 비교 | GET /asset-comparison?from=...&to=... | 전체와 동일 범위 차이·경고 |
 | 수입 | GET /income?month=..., POST /income | 보험금 원본은 지급 API에서만 생성 |
 | 수입 정정 | PATCH /income/{id}, POST /income/{id}/void | 월확정 범위와 별개 감사 |
-| 고정비 | GET/POST /recurring-rules, PATCH /recurring-rules/{id} | 적용 시작일·새 version |
+| 고정비 | GET/POST /recurring-rules, PATCH/DELETE /recurring-rules/{id} | 적용 시작일·새 version, 오등록 삭제 |
 | 납부 회차 | GET /obligations?month=..., POST /obligations/generate | 반복 안전, 미래 회차 갱신 |
 | 납부 확인 | POST /obligations/{id}/settlements, /skip | actual 금액·수단·분할 |
 | 카드 | GET/POST /cards, GET/PATCH/DELETE /cards/{id} | metadata only, 영향 확인 |

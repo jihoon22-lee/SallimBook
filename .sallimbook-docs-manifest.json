@@ -62,16 +62,16 @@
       "git_sha1": "73402e2b2e77c705fe24639b7b3cea41e8f66118"
     },
     "docs/data-model.md": {
-      "sha256": "a74917ac2e78a089a46e3b3ae1e6cd32476578296629b4629f0e6c9c40433f8f",
-      "git_sha1": "26cdc5749deee91cfb5b08343e7d30ef1b2bb9c2"
+      "sha256": "3175623212b463b107148a565d8a71d7885ca685ee1e67716961ecd0cbd1358d",
+      "git_sha1": "3c7ff475ad098802720f24bab63edddf45a98e62"
     },
     "docs/api-contract.md": {
-      "sha256": "b8588740bd77a58ed07b2d0b2276af9373186a8388dc3b5d259d440c848d1a89",
-      "git_sha1": "e38f53c1e7b76d39ac54a34306bb96c9d741e9d8"
+      "sha256": "956b01bde86f11b913980d637b3e63351c24d023abd642df14abd4f6c9a507b1",
+      "git_sha1": "5646a6c14ed73786d3c46938662d55e557929d30"
     },
     "docs/screen-specifications.md": {
-      "sha256": "595075d8b2ffd640e5f8b6953393ce0c1520c8c3ee93c0071ec87b97e705c8a4",
-      "git_sha1": "f4e4f47cbd34dccb9f6b37bcf9f035bd16e7ff14"
+      "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
+      "git_sha1": "e6616c15a275ad01ef2eb9181b3ac400c6fccfbc"
     },
     "docs/security-authentication.md": {
       "sha256": "16e69db15e111d6a9d7aa59ee24866768af5e930181442c5dfebf038c051eb1b",
@@ -122,8 +122,8 @@
       "git_sha1": "4d927ddc17db103d9192bc15ad739a9078090c7f"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "7696676d7f781c1d32d9d7a7230461482723a29bddb3216fb4d9bca9e6188d12",
-      "git_sha1": "70f6da4693a0a690e4fbf7e7b721fdf459991958"
+      "sha256": "ce530da0f2ff8e0585edc0a6bc991cb1ebb9ac0b792e306bc28c7d8904933776",
+      "git_sha1": "2d2bd51b6e929c78ad40446daf0d2285cf316875"
     },
     "docs/README.md": {
       "sha256": "d025f6764d6f5c305019e0f12a9b7b05706d1eae170afde99b546638c57a8472",
@@ -242,8 +242,8 @@
       "git_sha1": "f07b1eb46c94ae67361845cdec929ec6f9f01791"
     },
     "docs/testing/monthly-assets-client.md": {
-      "sha256": "a7789ade8e16d5c23da32b3a508f257913fa476a9438e23ac5c7ca5b28044c83",
-      "git_sha1": "757a7352be57d7d3564476485a08bb816812bc06"
+      "sha256": "14fd3e289bf516f9f79488b669c63b088f4bdd0b6da74d8d442735184f39795e",
+      "git_sha1": "76e3aa469e5360ba83f0fa0c14c2e3cf62409715"
     },
     "docs/testing/assets-comparison-client.md": {
       "sha256": "3d7ace82877320270057c5a2547a85aa048b04261a1bfdac2b26066410b74da8",
@@ -274,8 +274,8 @@
       "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
     },
     "docs/operations-runbook.md": {
-      "sha256": "1d3fc59ba888034dae21bc722c645ead6eba20ef33554890d3af31d331073a9a",
-      "git_sha1": "9f2c2dd061ca8a24162e11258654f802832ac2f3"
+      "sha256": "ada24fcbc0a4d2041654a7465ff82b8ab429befbe07924458c0c18d172ca251e",
+      "git_sha1": "4944c8b4de1cb1379933e1750f5b43f44ae13ae6"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
