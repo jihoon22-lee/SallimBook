@@ -62,6 +62,7 @@ class NativePasskeyActivity : AppCompatActivity() {
     private val credentials by lazy { CredentialManager.create(applicationContext) }
     private val handler = Handler(Looper.getMainLooper())
     private var resumed = false
+    private var startedSignedIn = false
     private var mode = ""
     private var targetId: String? = null
     private var ifMatch: String? = null
@@ -95,6 +96,7 @@ class NativePasskeyActivity : AppCompatActivity() {
         super.onCreate(null)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setResult(Activity.RESULT_CANCELED)
+        startedSignedIn = auth.hasLocalSession()
         mode = intent.getStringExtra(NativeAuthActivity.EXTRA_MODE) ?: ""
         targetId = intent.getStringExtra(EXTRA_ID)
         ifMatch = intent.getStringExtra(EXTRA_VERSION)
@@ -202,6 +204,12 @@ class NativePasskeyActivity : AppCompatActivity() {
 
     private fun ready() = resumed && hasWindowFocus() && !keyguard.isDeviceLocked && !isFinishing && !isDestroyed
 
+    private fun closeIfSignedOut(current: Boolean) {
+        if (!NativeSessionEnd.ended(current, ready(), startedSignedIn, auth.hasLocalSession())) return
+        cancelPending()
+        NativeSessionEnd.close(this)
+    }
+
     private fun loadTarget() {
         if (!ready() || gate != null || targetLoaded || mode !in setOf(REVOKE, DEVICE, ACCOUNT)) return
         val request = ForegroundRequest().also { gate = it }
@@ -210,10 +218,14 @@ class NativePasskeyActivity : AppCompatActivity() {
     }
 
     private fun loadTargetPage(request: ForegroundRequest, pages: PasskeyTargetPages) {
-        if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return }
+        if (gate !== request || !request.isActive() || !ready()) {
+            request.cancel(); closeIfSignedOut(gate === request); return
+        }
         val path = pages.nextPath ?: return
         auth.request("GET", path, null, request) { outcome -> runOnUiThread {
-            if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
+            if (gate !== request || !request.isActive() || !ready()) {
+                request.cancel(); closeIfSignedOut(gate === request); return@runOnUiThread
+            }
             if (outcome.code != null || outcome.value?.get("status") != 200) {
                 gate = null
                 showFailure(outcome.code ?: AuthCode.ACCESS_DENIED)
@@ -240,7 +252,9 @@ class NativePasskeyActivity : AppCompatActivity() {
 
     private fun loadAccountTarget(request: ForegroundRequest) {
         auth.finance(FinanceOperation.GET_ACCOUNT, org.json.JSONObject().put("accountId", targetId), request) { outcome -> runOnUiThread {
-            if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
+            if (gate !== request || !request.isActive() || !ready()) {
+                request.cancel(); closeIfSignedOut(gate === request); return@runOnUiThread
+            }
             gate = null
             val row = outcome.value?.get("body") as? Map<*, *>
             if (outcome.code != null || outcome.value?.get("status") != 200 || row == null || row["has_number"] != true) {
@@ -276,7 +290,7 @@ class NativePasskeyActivity : AppCompatActivity() {
         val operation = when (mode) { LOGIN -> PasskeyOperation.LOGIN; REGISTER -> PasskeyOperation.REGISTER; INVITE -> PasskeyOperation.INVITE; ACCOUNT -> PasskeyOperation.ACCOUNT_REVEAL; else -> PasskeyOperation.DEVICE_REVOKE }
         auth.beginPasskey(operation, text, targetId, ifMatch, request) { result, pending -> runOnUiThread {
             if (gate !== request || !request.isActive() || !ready()) {
-                pending?.discard(); request.cancel(); return@runOnUiThread
+                pending?.discard(); request.cancel(); closeIfSignedOut(gate === request); return@runOnUiThread
             }
             if (result.code != null || pending == null) { cancelPending(); showFailure(result.code ?: AuthCode.PASSKEY_FAILED); return@runOnUiThread }
             ceremony = pending
@@ -362,7 +376,9 @@ class NativePasskeyActivity : AppCompatActivity() {
 
     private fun complete(request: ForegroundRequest, outcome: AuthOutcome, received: NativeInvitation?, number: NativeAccountNumber? = null) {
         try {
-            if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return }
+            if (gate !== request || !request.isActive() || !ready()) {
+                request.cancel(); closeIfSignedOut(gate === request); return
+            }
             cancelPending()
             if (outcome.code != null) { showFailure(outcome.code); return }
             if (mode == ACCOUNT) {
