@@ -54,6 +54,24 @@ test("a finished vault action keeps its message and the card section while the c
   expect(await handle!.evaluate((node) => node.isConnected)).toBe(true);
 });
 
+test("a finished vault action keeps its message when the card reload fails", async ({ page }) => {
+  const state = await mockVaultOverview(page, true);
+  await page.goto(`/cards/${uid(50)}`);
+  await expect(page.getByRole("region", { name: "카드 보관함", exact: true })).toBeVisible();
+  state.failRead = "getCard";
+  await page.getByRole("button", { name: "전체 번호·유효기간 열람", exact: true }).click();
+  const retry = page.getByRole("button", { name: "카드 다시 확인", exact: true });
+  await expect(retry).toBeVisible();
+  const message = page.getByText("보관함 작업을 마쳤어요. 현재 상태를 다시 확인해요.", {
+    exact: true,
+  });
+  await expect(message).toBeVisible();
+  state.failRead = "";
+  await retry.click();
+  await expect(retry).toHaveCount(0);
+  await expect(message).toBeVisible();
+});
+
 test("refreshing today's consumables keeps the list on screen and marks it busy", async ({
   page,
 }) => {

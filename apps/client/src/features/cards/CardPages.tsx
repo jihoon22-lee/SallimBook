@@ -325,49 +325,51 @@ function CardDetail({ id, edit }: { id: string; edit: boolean }) {
           현재 카드 정보를 불러오고 있어요.
         </p>
       )}
+      {/* A failed reload hides the stale card but keeps the vault section and its result. */}
       {card &&
-        !resource.error &&
         (edit ? (
-          <CardEditor initial={card} />
+          !resource.error && <CardEditor initial={card} />
         ) : (
           <>
-            <section className="card">
-              <h2>{card.alias || card.product_name}</h2>
-              <CardSummary card={card} members={members.members} />
-              {card.note && <p>메모: {card.note}</p>}
-              <MemberLoadError error={members.error} retry={members.retry} />
-              <p className="muted">
-                결제일은 카드 전체 명세나 실제 출금액을 뜻하지 않아요. 등록한 정기 결제는 고정
-                납부에서 확인해요.
-              </p>
-              <div className="form-actions">
-                <Link className="button-link" to={`/cards/${id}/edit`}>
-                  카드 정보 수정
-                </Link>
-                {card.status === "active" && (
+            {!resource.error && (
+              <section className="card">
+                <h2>{card.alias || card.product_name}</h2>
+                <CardSummary card={card} members={members.members} />
+                {card.note && <p>메모: {card.note}</p>}
+                <MemberLoadError error={members.error} retry={members.retry} />
+                <p className="muted">
+                  결제일은 카드 전체 명세나 실제 출금액을 뜻하지 않아요. 등록한 정기 결제는 고정
+                  납부에서 확인해요.
+                </p>
+                <div className="form-actions">
+                  <Link className="button-link" to={`/cards/${id}/edit`}>
+                    카드 정보 수정
+                  </Link>
+                  {card.status === "active" && (
+                    <button
+                      onClick={() => {
+                        setAction("close");
+                        setError(null);
+                      }}
+                    >
+                      카드 사용 종료
+                    </button>
+                  )}
                   <button
+                    className="danger-button"
                     onClick={() => {
-                      setAction("close");
+                      setAction("delete");
+                      setDeleteAck(false);
                       setError(null);
                     }}
                   >
-                    카드 사용 종료
+                    오등록 삭제 검토
                   </button>
-                )}
-                <button
-                  className="danger-button"
-                  onClick={() => {
-                    setAction("delete");
-                    setDeleteAck(false);
-                    setError(null);
-                  }}
-                >
-                  오등록 삭제 검토
-                </button>
-              </div>
-            </section>
+                </div>
+              </section>
+            )}
             <CardVaultActions cardId={id} onCompleted={() => void resource.reload()} />
-            {action && (
+            {action && !resource.error && (
               <section className="card">
                 <h2>{action === "close" ? "사용 종료 확인" : "오등록 삭제 확인"}</h2>
                 <form onSubmit={(event) => void submit(event)}>
