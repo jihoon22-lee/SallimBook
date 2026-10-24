@@ -15,7 +15,7 @@
     "url": "https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.4.6/clamav-1.4.6.linux.x86_64.deb",
     "sha256": "d3ee9e401974855a1edc1761b1425417d126de618d5f0c91cd51209f69f6fcc2"
   },
-  "api_uv_lock_sha256": "12e9621f16ce22b74e02ff474b51adae254e78300aa65b28cea2c3106aa1d5a7",
+  "api_uv_lock_sha256": "81f2dafedddd0d059136418c6bc6444b9eb99dbda4461f67ee30ffa8f4849bc9",
   "requirements_sha256": "b4403c20be456dd1ba72b3181297d784ede50d34d373353ab81e829cfbfc822a",
   "signature_database_policy": "Official signed CVD files fetched by FreshClam; reject databases older than 7 days; refresh explicitly when rebuilding."
 }
