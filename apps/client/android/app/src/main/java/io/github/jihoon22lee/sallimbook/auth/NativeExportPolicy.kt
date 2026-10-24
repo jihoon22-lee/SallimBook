@@ -1,28 +1,62 @@
 package io.github.jihoon22lee.sallimbook.auth
 
-internal class NativeExportSelection(val formats: List<String>, val documents: List<String>) {
-    fun body(): Map<String,Any?> = mapOf("formats" to formats.toList(),"document_ids" to documents.toList())
+internal class NativeReadableSelection(
+    val domains: List<String>, val from: String?, val through: String?, val year: Int?,
+) {
+    fun body(): Map<String,Any?> = buildMap {
+        put("domains", domains.toList())
+        from?.let { put("from_date", it) }; through?.let { put("through_date", it) }
+        year?.let { put("annual_year", it) }
+    }
+    override fun toString() = "NativeReadableSelection(redacted)"
+}
+internal class NativeExportSelection(val formats: List<String>, val documents: List<String>, val readable: NativeReadableSelection? = null) {
+    fun body(): Map<String,Any?> = buildMap {
+        put("formats", formats.toList()); put("document_ids", documents.toList())
+        readable?.let { put("readable", it.body()) }
+    }
     override fun toString() = "NativeExportSelection(redacted)"
 }
 
 internal object NativeExportPolicy {
     const val PATH="/api/v1/exports"
+    private fun invalid(): Nothing = throw AuthFailure(AuthCode.INVALID_REQUEST)
     fun arguments(value:Any?):NativeExportSelection {
-        val outer=value as? Map<*,*> ?: throw AuthFailure(AuthCode.INVALID_REQUEST)
-        if(outer.keys!=setOf("input")) throw AuthFailure(AuthCode.INVALID_REQUEST)
+        val outer=value as? Map<*,*> ?: invalid()
+        if(outer.keys!=setOf("input")) invalid()
         return selection(outer["input"])
     }
+    private fun date(value: Any?): String? {
+        if(value == null) return null
+        val text = value as? String ?: invalid()
+        if(!Regex("^(?!0000)[0-9]{4}-[0-9]{2}-[0-9]{2}$").matches(text)) invalid()
+        try { java.time.LocalDate.parse(text) } catch (_: Exception) { invalid() }
+        return text
+    }
+    private fun readable(value: Any): NativeReadableSelection {
+        val input=value as? Map<*,*> ?: invalid()
+        if(input.keys.any { it !in setOf("domains", "from_date", "through_date", "annual_year") }) invalid()
+        val domains=input["domains"] as? List<*> ?: invalid()
+        if(domains.size !in 1..7 || domains.toSet().size != domains.size || domains.any { it !in setOf("assets", "accounts", "cards", "income", "fixed", "insurance", "homecare") }) invalid()
+        val from=date(input["from_date"]); val through=date(input["through_date"])
+        if(from != null && through != null && from > through) invalid()
+        val year = input["annual_year"]?.let {
+            if(it !is Int && it !is Long) invalid()
+            val number=(it as Number).toLong()
+            if(number !in 1..9999 || "insurance" !in domains) invalid()
+            number.toInt()
+        }
+        return NativeReadableSelection(domains.map { it as String }, from, through, year)
+    }
     fun selection(value:Any?):NativeExportSelection {
-        val input=value as? Map<*,*> ?: throw AuthFailure(AuthCode.INVALID_REQUEST)
-        if(input.keys.any { it !in setOf("formats","document_ids") }) throw AuthFailure(AuthCode.INVALID_REQUEST)
-        val formats=(if(input.containsKey("formats")) input["formats"] else listOf("json","csv")) as? List<*>
-            ?: throw AuthFailure(AuthCode.INVALID_REQUEST)
-        val documents=(if(input.containsKey("document_ids")) input["document_ids"] else emptyList<String>()) as? List<*>
-            ?: throw AuthFailure(AuthCode.INVALID_REQUEST)
-        if(formats.size !in 1..2 || formats.any { it !in setOf("json","csv") } || formats.toSet().size!=formats.size ||
-            documents.size>10 || documents.any { it !is String || !PasskeyPolicy.uuid.matches(it) } || documents.toSet().size!=documents.size)
-            throw AuthFailure(AuthCode.INVALID_REQUEST)
-        return NativeExportSelection(formats.map { it as String },documents.map { it as String })
+        val input=value as? Map<*,*> ?: invalid()
+        if(input.keys.any { it !in setOf("formats","document_ids","readable") }) invalid()
+        val formats=(if(input.containsKey("formats")) input["formats"] else listOf("json","csv")) as? List<*> ?: invalid()
+        val documents=(if(input.containsKey("document_ids")) input["document_ids"] else emptyList<String>()) as? List<*> ?: invalid()
+        val readable=input["readable"]?.let { readable(it) }
+        if(formats.size > 2 || (formats.isEmpty() && readable == null) || formats.any { it !in setOf("json","csv") } || formats.toSet().size!=formats.size ||
+            documents.size>10 || documents.any { it !is String || !PasskeyPolicy.uuid.matches(it) } || documents.toSet().size!=documents.size) invalid()
+        return NativeExportSelection(formats.map { it as String },documents.map { it as String },readable)
     }
     val errors=mapOf(
         "REAUTHENTICATION_REQUIRED" to 403,"STEP_UP_REQUIRED" to 403,"NOT_FOUND" to 404,

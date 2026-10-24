@@ -64,6 +64,7 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 
 - [보관함 상태·카드 진입 화면 검증](testing/vault-overview.md) — 안전한 metadata와 플랫폼별 보호 화면 연결
 
+- [읽기용 자료·연간 가족별 참고 요약](testing/readable-reports.md) — 영역·기간 선택, 이름·관계·서울 시각, 실제 금전 정산
 - [사용자 내보내기 화면 검증](testing/exports-client.md) — JSON·CSV·선택 문서 ZIP과 플랫폼별 저장 경계
 
 설정과 감사 이력 화면·26개 경로 확인은 [설정·감사 UI 검증](testing/settings-audit.md)을 참고합니다.

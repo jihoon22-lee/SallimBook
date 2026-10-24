@@ -5607,6 +5607,7 @@ export interface components {
             document_ids?: string[];
             /** Formats */
             formats?: ("json" | "csv")[];
+            readable?: components["schemas"]["ReadableExport"] | null;
         };
         /** @enum {string} */
         FamilyRelation: "child" | "parent" | "other";
@@ -7619,6 +7620,17 @@ export interface components {
              * Format: date
              */
             through: string;
+        };
+        /** ReadableExport */
+        ReadableExport: {
+            /** Annual Year */
+            annual_year?: number | null;
+            /** Domains */
+            domains: ("assets" | "accounts" | "cards" | "income" | "fixed" | "insurance" | "homecare")[];
+            /** From Date */
+            from_date?: string | null;
+            /** Through Date */
+            through_date?: string | null;
         };
         /** ReauthenticationRequest */
         ReauthenticationRequest: {

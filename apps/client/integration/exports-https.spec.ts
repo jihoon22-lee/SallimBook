@@ -91,11 +91,12 @@ function inspectZip(bytes: Buffer) {
         "-c",
         `import sys,io,zipfile,json,hashlib,csv
 with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as archive:
- out={"names":archive.namelist(),"json":{},"csv":{},"hashes":{}}
+ out={"names":archive.namelist(),"json":{},"csv":{},"html":{},"hashes":{}}
  for name in archive.namelist():
   data=archive.read(name)
   out["hashes"][name]={"size":len(data),"sha256":hashlib.sha256(data).hexdigest()}
   if name.endswith(".json"):out["json"][name]=json.loads(data)
+  elif name.endswith(".html"):out["html"][name]=data.decode("utf8")
   elif name.endswith(".csv"):out["csv"][name]=list(csv.DictReader(io.StringIO(data.decode("utf8"))))
  print(json.dumps(out))`,
       ],
@@ -103,6 +104,7 @@ with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as archive:
     ).toString(),
   ) as {
     names: string[];
+    html: Record<string, string>;
     json: Record<string, any>;
     csv: Record<string, Record<string, string>[]>;
     hashes: Record<string, { size: number; sha256: string }>;
@@ -275,6 +277,26 @@ test("real authenticated ZIP preserves selected originals and excludes secret fi
       date_precision: "month",
       note: "=SYNTHETIC_FORMULA()",
     });
+    const medicalCase = await write<S["CaseResponse"]>(page, "/api/v1/insurance/cases", {
+      title: "합성 읽기용 의료 사건",
+      patient_member_id: member.member_id,
+      start_on: "2025-01-01",
+    });
+    const medicalNode = await write<S["MedicalNodeResponse"]>(
+      page,
+      `/api/v1/insurance/cases/${medicalCase.id}/nodes`,
+      {
+        kind: "outpatient",
+        label: "합성 읽기용 진료",
+        provider_name: "합성 의료기관",
+      },
+    );
+    await write(page, "/api/v1/insurance/medical-expenses", {
+      case_id: medicalCase.id,
+      node_id: medicalNode.id,
+      amount_krw: "2468",
+      occurred_on: "2025-01-02",
+    });
     foreignContext = await browser.newContext({ baseURL: process.env.SALLIMBOOK_HTTPS_ORIGIN });
     const foreign = await foreignContext.newPage();
     await login(foreign, true);
@@ -402,6 +424,42 @@ test("real authenticated ZIP preserves selected originals and excludes secret fi
     ).toBe(false);
     expect(downloads).toBe(3);
     console.log("SAFE_PHASE=EXPORT_RECENT_AUTH");
+    await page.getByLabel("JSON — 원래 값과 구조를 보존하는 교환용", { exact: true }).uncheck();
+    await page.getByLabel("읽기용 HTML 포함", { exact: true }).check();
+    const selectedDomains = page.getByRole("group", { name: "읽기용 영역", exact: true });
+    for (const name of ["자산", "계좌", "카드", "고정 납부", "가전·소모품"])
+      await selectedDomains.getByLabel(name, { exact: true }).uncheck();
+    await page.getByLabel("읽기용 시작일 (선택)", { exact: true }).fill("2025-01-01");
+    await page.getByLabel("읽기용 종료일 (선택)", { exact: true }).fill("2025-01-31");
+    await page.getByLabel("연간 가족별 참고 요약 포함", { exact: true }).check();
+    await page.getByLabel("요약 연도", { exact: true }).fill("2025");
+    const readable = await archive(page);
+    expect(readable.names.sort()).toEqual([
+      "manifest.json",
+      "readable/annual.html",
+      "readable/index.html",
+    ]);
+    expect(readable.html["readable/index.html"]).toContain("합성 읽기용 의료 사건");
+    expect(readable.html["readable/index.html"]).toContain("1,234,567원");
+    expect(readable.html["readable/index.html"]).not.toContain("FOREIGN_EXPORT_CANARY");
+    expect(readable.html["readable/index.html"]).not.toContain(member.member_id);
+    expect(readable.html["readable/annual.html"]).toContain("2,468원");
+    const reportPage = await browser.newPage();
+    try {
+      const requests: string[] = [];
+      reportPage.on("request", (request) => requests.push(request.url()));
+      await reportPage.setContent(readable.html["readable/annual.html"]!);
+      await expect(
+        reportPage.getByRole("heading", { name: "2025년 가족별 참고 요약", exact: true }),
+      ).toBeVisible();
+      await expect(reportPage.getByRole("table")).toHaveCount(2);
+      await expect(reportPage.getByRole("row", { name: /가계 전체/ })).toContainText("2,468원");
+      expect(requests).toEqual([]);
+    } finally {
+      await reportPage.close();
+    }
+    expect(downloads).toBe(4);
+    console.log("SAFE_PHASE=EXPORT_READABLE_ANNUAL");
     await page.evaluate(async () => {
       const csrf = await fetch("/api/v1/auth/web/csrf", { cache: "no-store" }).then((response) =>
         response.json(),
@@ -417,7 +475,7 @@ test("real authenticated ZIP preserves selected originals and excludes secret fi
     await expect(
       page.getByRole("heading", { name: "로그인이 필요해요", exact: true }),
     ).toBeVisible();
-    expect(downloads).toBe(3);
+    expect(downloads).toBe(4);
     expect(writes.every((row) => row.csrf && !row.idempotency)).toBe(true);
     expect(writes[0]!.input.document_ids).toEqual([document.id]);
     expect(

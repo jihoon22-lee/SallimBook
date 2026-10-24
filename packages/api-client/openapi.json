@@ -7691,9 +7691,18 @@
               "type": "string"
             },
             "maxItems": 2,
-            "minItems": 1,
             "title": "Formats",
             "type": "array"
+          },
+          "readable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadableExport"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "ExportRequest",
@@ -13249,6 +13258,71 @@
           "next_cursor"
         ],
         "title": "PurchasePlanResponse",
+        "type": "object"
+      },
+      "ReadableExport": {
+        "additionalProperties": false,
+        "properties": {
+          "annual_year": {
+            "anyOf": [
+              {
+                "maximum": 9999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Year"
+          },
+          "domains": {
+            "items": {
+              "enum": [
+                "assets",
+                "accounts",
+                "cards",
+                "income",
+                "fixed",
+                "insurance",
+                "homecare"
+              ],
+              "type": "string"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Domains",
+            "type": "array"
+          },
+          "from_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Date"
+          },
+          "through_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Through Date"
+          }
+        },
+        "required": [
+          "domains"
+        ],
+        "title": "ReadableExport",
         "type": "object"
       },
       "ReauthenticationRequest": {

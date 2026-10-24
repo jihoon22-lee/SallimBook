@@ -13,6 +13,7 @@ import { saveExport } from "./download";
 import type { ExportFile, ExportProgress } from "./download";
 import { byteLabel, exportable, EXPORT_TIMEOUT_MS, selectionProblem } from "./model";
 import type { ExportFormat } from "./model";
+import { ReadableOptions, initialReading, readingInput, readingProblem } from "./ReadableOptions";
 import { ReturnLoginLink } from "../auth/ReturnLoginLink";
 
 function ExportForm() {
@@ -29,7 +30,8 @@ function ExportForm() {
   const [error, setError] = useState<ApiError | null>(null),
     [notice, setNotice] = useState("");
   const [progress, setProgress] = useState<ExportProgress | null>(null);
-  const problem = selectionProblem(formats, selected);
+  const [reading, setReading] = useState(initialReading);
+  const problem = readingProblem(reading) ?? selectionProblem(formats, selected, reading.enabled);
   const total = selected.reduce((sum, row) => sum + row.size_bytes, 0);
   useEffect(() => {
     const cancel = () => controller.current?.abort();
@@ -108,6 +110,7 @@ function ExportForm() {
       const input = {
         formats: [...formats].sort() as ExportFormat[],
         document_ids: selected.map((row) => row.id),
+        ...(reading.enabled ? { readable: readingInput(reading) } : {}),
       };
       if (native) {
         const result = await api.nativeExport(input, current.signal);
@@ -151,11 +154,11 @@ function ExportForm() {
   return (
     <>
       <section className="card">
-        <h2>현재 가계의 업무 기록</h2>
+        <h2>전체 원본 자료</h2>
         <p>
           자산·계좌·카드 일반정보, 수입·고정 지출, 보험·진료·청구·지급, 가전·소모품·재고와 문서
-          목록·연결 이력을 ZIP으로 받아요. 화면에서 보고 있는 월이나 목록의 일부만 내보내는 기능은
-          아니에요.
+          목록·연결 이력을 ZIP으로 받아요. 아래 JSON/CSV는 전체 영역·전체 기간을 포함해요. 읽기용
+          영역·기간 선택은 원본 자료나 따로 선택한 문서 원본의 범위를 제한하지 않아요.
         </p>
         <p>
           월별 원본·정정 기록과 연결 ID를 유지해요. 이 파일은 사용자 자료이며 서버 전체를 복원하는
@@ -188,10 +191,19 @@ function ExportForm() {
           </p>
         )}
       </section>
+      <ReadableOptions
+        value={reading}
+        busy={busy}
+        changed={(next) => {
+          setReading(next);
+          setAck(false);
+          setNotice("");
+        }}
+      />
       <section className="card">
         <h2>문서 원본 포함 여부</h2>
         <p>
-          기본값은 원본 제외예요. 문서 목록과 연결 이력은 업무 기록에 포함되며, 아래에서 고른
+          기본값은 원본 제외예요. 문서 목록과 연결 이력은 JSON/CSV에 포함되며, 아래에서 고른
           PDF·사진 원본만 ZIP에 추가돼요.
         </p>
         <p aria-live="polite">
@@ -304,9 +316,9 @@ function ExportForm() {
           <ReturnLoginLink>계정 다시 인증</ReturnLoginLink>
         </div>
         <p className="muted">
-          최대 100,000행·업무 기록 16MiB·ZIP 64MiB까지 준비해요. 한도를 넘으면 일부 파일만 성공
-          처리하지 않아요. 준비는 최대 30초, 파일 전송은 최대 120초이며 실패하거나 중단한 요청을
-          자동으로 다시 보내지 않아요.
+          출력·이름 참조·집계 합산 최대 100,000행·업무 기록 16MiB·ZIP 64MiB까지 준비해요. 한도를
+          넘으면 일부 파일만 성공 처리하지 않아요. 준비는 최대 30초, 파일 전송은 최대 120초이며
+          실패하거나 중단한 요청을 자동으로 다시 보내지 않아요.
         </p>
       </section>
     </>

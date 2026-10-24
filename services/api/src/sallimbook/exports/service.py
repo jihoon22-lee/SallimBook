@@ -18,6 +18,7 @@ from sallimbook.documents.models import Document, DocumentLink
 from sallimbook.documents.storage import PrivateStore, load_keys
 from sallimbook.exports.archive import ArchiveBuilder, too_large
 from sallimbook.exports.catalog import PUBLIC_COLUMNS, validate_catalog
+from sallimbook.exports.readable import write_readable
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember, User
 from sallimbook.identity.passkeys.models import StepUpPurpose
@@ -152,6 +153,8 @@ def prepare(engine, principal, payload, token, settings, request_id, budget):
                         ),
                         payload.formats,
                     )
+                    if payload.readable is not None:
+                        write_readable(snapshot, builder, payload.readable)
                     total = 0
                     for identifier in sorted(payload.document_ids):
                         budget.check()

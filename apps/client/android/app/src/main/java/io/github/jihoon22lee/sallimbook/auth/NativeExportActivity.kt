@@ -101,7 +101,14 @@ class NativeExportActivity:AppCompatActivity() {
             setPadding(0,12.dp(),0,12.dp()); column.addView(this)
         }
         label("SallimBook · 가계 자료 내보내기").textSize=24f
-        label("${selection!!.formats.joinToString(" + ") { it.uppercase() }} · 선택한 문서 ${selection!!.documents.size}개 · ZIP 최대 64MiB")
+        label("${(selection!!.formats.map { it.uppercase() } + if(selection!!.readable != null) listOf("읽기용 HTML") else emptyList()).joinToString(" + ")} · 선택한 문서 ${selection!!.documents.size}개 · ZIP 최대 64MiB")
+        selection!!.readable?.let { reading ->
+            val labels=mapOf("assets" to "자산", "accounts" to "계좌", "cards" to "카드", "income" to "수입", "fixed" to "고정 납부", "insurance" to "보험·의료", "homecare" to "가전·소모품")
+            label("읽기용: ${reading.domains.joinToString(" · ") { labels[it] ?: it }}")
+            label("읽기용 기간: ${reading.from ?: "시작 제한 없음"} ~ ${reading.through ?: "종료 제한 없음"}. 기본정보·연결은 기간과 무관하게 포함해요.")
+            reading.year?.let { label("가족별 참고 요약: ${it}년 전체 실제 기록. 상세 자료 기간과 별개예요.") }
+            if(selection!!.formats.isNotEmpty()) label("JSON/CSV는 전체 영역·전체 기간의 원본 자료예요.")
+        }
         label("일반 가계 기록과 선택한 문서 원본을 암호화하지 않은 ZIP 사본으로 저장합니다. 진료 기록과 메모의 민감한 내용은 그대로 포함될 수 있어요. 카드 보관함·보안코드·인증 자료·전체 계좌/증권번호 전용 필드는 제외하지만, 메모나 문서 안의 번호를 자동으로 지우지는 않습니다.")
         label("사본은 앱 밖에 남으며 원격으로 회수하거나 만료시킬 수 없어요. 저장 위치와 공유 대상을 확인하세요. 중단되면 빈 파일이나 일부 내용이 남을 수 있습니다.")
         label("로그인 재인증 후 1분 안에 저장 위치를 선택하세요. 파일 처리 중 화면을 벗어나거나 잠그면 취소합니다.")

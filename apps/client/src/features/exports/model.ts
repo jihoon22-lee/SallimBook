@@ -9,8 +9,12 @@ export const EXPORT_TIMEOUT_MS = 150_000;
 export function exportable(row: Document) {
   return row.state === "ready" && row.active_link_count > 0;
 }
-export function selectionProblem(formats: ExportFormat[], documents: Document[]): string | null {
-  if (!formats.length) return "JSON 또는 CSV 형식을 하나 이상 선택해 주세요.";
+export function selectionProblem(
+  formats: ExportFormat[],
+  documents: Document[],
+  readable = false,
+): string | null {
+  if (!formats.length && !readable) return "JSON·CSV 또는 읽기용 HTML을 하나 이상 선택해 주세요.";
   if (documents.length > MAX_DOCUMENTS) return "문서 원본은 10개까지 선택할 수 있어요.";
   if (documents.some((row) => !exportable(row)))
     return "보관이 완료되고 현재 연결이 있는 문서만 내보낼 수 있어요.";
