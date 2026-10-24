@@ -640,3 +640,11 @@ POST는 이름·관계(child/parent/other)만 받고 Idempotency-Key를 요구�
   적용한 다음 페이지를 나눈다. 초안·철회도 현재 근거 연결로 계산한다. 필터만 적용하며
   목록 응답이나 금액 원본을 복제하지 않는다. 같은 비용의 복수 계약/청구 연결도 한 행이다.
   계약만 지정하고 `claimed`를 생략하면 연결 여부를 제한하지 않는다.
+
+
+### 일반 상세의 관련 기록 조회 (#158)
+
+- `GET /api/v1/income/{record_id}/insurance-source` (`getIncomeInsuranceSource`)는 현재 가계 수입 원본을 확인한 뒤 `record_id`, `payout_id`, `return_id`, `original_allocation_id`, `allocations[]`를 반환한다. 각 배분은 `id/case_id/case_title/amount_krw`이며 원래 입금의 모든 사건 배분을 보존한다. 반환 조회도 원래 입금 전체 배분과 해당 반환 대상 배분을 구분한다. 일반 수입은 원본 ID가 null이고 배분은 빈 목록이다. 무효 기록도 원본 연결을 유지한다. 읽기로 금액·버전·스냅샷을 변경하지 않는다.
+- `GET /api/v1/recurring-rules/{rule_id}/insurance-link` (`getRecurringRuleInsuranceLink`)는 `rule_id`와 nullable `link`를 반환한다. 한 규칙에 하나의 보험 계약만 연결되는 기존 DB 제약을 따른다. 연결에는 `id/policy_id/product_name/insurer/policy_status/active/ended_at`를 담아 종료된 연결도 확인한다. 보험증권 번호나 의료 메모를 포함하지 않는다.
+- 두 조회 모두 다른 가계 ID는 404, 미인증은 401이며 `Cache-Control: no-store`를 적용한다. Android도 생성 계약에 대응하는 전용 읽기 명령과 제한된 메타데이터 검증을 거친다.
+- 카드·계좌 일반 상세는 기존 `payment-links`를 서울 오늘 기준으로 끝까지 읽고 각 페이지의 digest·버전을 확인한 뒤 표시한다. 규칙 수는 적용기간별 응답의 `rule_id`를 중복 제거한 수이고 적용기간 수도 별도 표기한다. 출금·소비 합계로 재해석하지 않는다. 계좌의 수입 연결은 선택 월의 수입/반환 전체 페이지를 읽어 해당 계좌를 확인하며 무효 상태도 구분한다.

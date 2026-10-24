@@ -1,4 +1,5 @@
 import { TaskPanel } from "../../shared/TaskLayout";
+import { AssetAccountLink } from "../finance/RelatedRecords";
 import { DateInput } from "../../shared/DateInput";
 import { Icon } from "../../shared/Icon";
 import { DocumentPanel } from "../documents/DocumentPanel";
@@ -499,6 +500,7 @@ function AssetDetail({ id }: { id: string }) {
         </MisregistrationDelete>
       )}
       <DocumentPanel kind="asset" id={id} />
+      {asset.category === "financial" && <AssetAccountLink assetId={id} />}
       <AssetMonthlyData assetId={id} />
       {closing && (
         <TaskPanel label="자산 사용 종료">

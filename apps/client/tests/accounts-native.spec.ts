@@ -35,6 +35,8 @@ async function nativeFinanceMock(
                 "updateAsset",
                 "archiveAsset",
                 "deleteAsset",
+                "getAccountPaymentLinks",
+                "listIncome",
                 "listAccounts",
                 "getAccount",
                 "createAccount",
@@ -65,6 +67,22 @@ async function nativeFinanceMock(
             if (method === "request" && args.path === "/api/v1/me") return metadata(household[0]);
             if (method === "request" && args.path === "/api/v1/household/members")
               return metadata(household);
+            if (method === "listIncome") return metadata({ items: [], next_cursor: null });
+            if (method === "getAccountPaymentLinks")
+              return metadata({
+                resource_kind: "account",
+                resource_id: account.id,
+                resource_version: account.version,
+                asset_id: account.asset_id,
+                as_of_date: (args.query as { as_of_date: string }).as_of_date,
+                usage_digest: "0".repeat(64),
+                requires_confirmation: false,
+                coverage: "registered_recurring_only",
+                account_withdrawal_total_available: false,
+                rules: { items: [], total_count: 0, next_cursor: null },
+                obligations: { items: [], total_count: 0, next_cursor: null },
+                cards: { items: [], total_count: 0, next_cursor: null },
+              });
             if (method === "getAssetComparison") {
               const query = args.query as { from: string; to: string };
               const period = (month: string) => ({

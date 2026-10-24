@@ -73,6 +73,7 @@ internal object FixedCostPolicy {
     private val routes = mapOf(
         FinanceOperation.LIST_RECURRING_RULES to Route("GET", "/api/v1/recurring-rules", query = true),
         FinanceOperation.CREATE_RECURRING_RULE to Route("POST", "/api/v1/recurring-rules", status = 201),
+        FinanceOperation.GET_RECURRING_RULE_INSURANCE_LINK to Route("GET", "/api/v1/recurring-rules/{ruleId}/insurance-link"),
         FinanceOperation.GET_RECURRING_RULE to Route("GET", "/api/v1/recurring-rules/{ruleId}"),
         FinanceOperation.CHANGE_RECURRING_RULE to Route("PATCH", "/api/v1/recurring-rules/{ruleId}", version = true),
         FinanceOperation.END_RECURRING_RULE to Route("POST", "/api/v1/recurring-rules/{ruleId}/end", version = true),
@@ -236,6 +237,10 @@ internal object FixedCostPolicy {
         if (operation == FinanceOperation.DELETE_RECURRING_RULE) { if (value != null) invalid(); return null }
         val uri = URI(request.path); val target = uri.path.split('/').getOrNull(4)
         return when (operation) {
+            FinanceOperation.GET_RECURRING_RULE_INSURANCE_LINK -> shape(value, mapOf("rule_id" to id,
+                "link" to nullable { link -> shape(link, mapOf("id" to id, "policy_id" to id,
+                    "product_name" to text(120), "insurer" to text(120), "policy_status" to choice("active", "ended", "lapsed"),
+                    "active" to bool, "ended_at" to nullable(timestamp))); Unit })).also { if (it["rule_id"] != target) invalid() }
             FinanceOperation.LIST_RECURRING_RULES -> page(value, ::rule)
             FinanceOperation.GET_RECURRING_RULE -> rule(value).also { if (it["id"] != target) invalid() }
             FinanceOperation.GENERATE_OBLIGATIONS -> shape(value, mapOf("id" to id, "version" to { integer(it, 1, 1) }, "items" to records({ reference(it); Unit }, 2000)))

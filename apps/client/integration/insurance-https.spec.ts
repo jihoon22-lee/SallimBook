@@ -286,6 +286,10 @@ test("real insurance policies cases medical originals claims receipts correction
   await expect(
     page.getByRole("link", { name: "보험료 적용기간 변경", exact: true }),
   ).toHaveAttribute("href", `/fixed-payments/rules/${ruleId}/edit`);
+  await page.goto(`/fixed-payments/rules/${ruleId}`);
+  await expect(
+    page.getByRole("region", { name: "납부 규칙의 보험 계약" }).getByRole("link"),
+  ).toHaveAttribute("href", `/insurance/policies/${policyA}`);
   console.log("SAFE_PHASE=INSURANCE_POLICY");
   const caseA = await createCase(page, "합성 HTTPS 첫 사건");
   const caseB = await createCase(page, "합성 HTTPS 두 번째 사건");
@@ -389,7 +393,27 @@ test("real insurance policies cases medical originals claims receipts correction
   }, caseA);
   expect(balanced).toBe(true);
   console.log("SAFE_PHASE=INSURANCE_REFUND_RETURN");
-  await createPayout(page, caseA, policyA, "500000", "reimbursement", caseB);
+  const splitPayout = await createPayout(page, caseA, policyA, "500000", "reimbursement", caseB);
+  const splitCash = await page.evaluate(
+    async (id) =>
+      (await fetch(`/api/v1/insurance/payouts/${id}`).then((r) => r.json())).cash.id as string,
+    splitPayout,
+  );
+  await page.goto(`/income/${splitCash}`);
+  const sourceLinks = page.getByRole("region", { name: "보험금 원본과 배분 사건" });
+  await expect(
+    sourceLinks.getByRole("link", { name: "실제 입금 원본과 전체 배분" }),
+  ).toHaveAttribute("href", `/insurance/payouts/${splitPayout}`);
+  await expect(sourceLinks.getByRole("link", { name: "합성 HTTPS 첫 사건" })).toHaveAttribute(
+    "href",
+    `/insurance/cases/${caseA}`,
+  );
+  await expect(sourceLinks.getByRole("link", { name: "합성 HTTPS 두 번째 사건" })).toHaveAttribute(
+    "href",
+    `/insurance/cases/${caseB}`,
+  );
+  await expect(sourceLinks).toContainText("입금 배분 300,000원");
+  await expect(sourceLinks).toContainText("입금 배분 200,000원");
   await page.goto(`/insurance/cases/${caseA}`);
   await expect(
     page.getByRole("region", { name: "사건 실제 비용과 순부담", exact: true }),

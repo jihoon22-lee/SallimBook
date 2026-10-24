@@ -154,6 +154,8 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun listIncome(call: PluginCall) = finance(call, FinanceOperation.LIST_INCOME)
     @PluginMethod fun incomeSummary(call: PluginCall) = finance(call, FinanceOperation.INCOME_SUMMARY)
     @PluginMethod fun incomeDuplicateCandidates(call: PluginCall) = finance(call, FinanceOperation.INCOME_DUPLICATE_CANDIDATES)
+    @PluginMethod fun getIncomeInsuranceSource(call: PluginCall) = finance(call, FinanceOperation.GET_INCOME_INSURANCE_SOURCE)
+    @PluginMethod fun getRecurringRuleInsuranceLink(call: PluginCall) = finance(call, FinanceOperation.GET_RECURRING_RULE_INSURANCE_LINK)
     @PluginMethod fun getIncome(call: PluginCall) = finance(call, FinanceOperation.GET_INCOME)
     @PluginMethod fun incomeHistory(call: PluginCall) = finance(call, FinanceOperation.INCOME_HISTORY)
     @PluginMethod fun createIncome(call: PluginCall) = finance(call, FinanceOperation.CREATE_INCOME)

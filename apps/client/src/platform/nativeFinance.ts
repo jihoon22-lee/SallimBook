@@ -195,6 +195,11 @@ export const nativeFinance = {
   incomeDuplicateCandidates: (
     options: Parameters<SallimBookAuth["incomeDuplicateCandidates"]>[0],
   ) => metadata(() => plugin.incomeDuplicateCandidates(options)),
+  getIncomeInsuranceSource: (options: Parameters<SallimBookAuth["getIncomeInsuranceSource"]>[0]) =>
+    metadata(() => plugin.getIncomeInsuranceSource(options)),
+  getRecurringRuleInsuranceLink: (
+    options: Parameters<SallimBookAuth["getRecurringRuleInsuranceLink"]>[0],
+  ) => metadata(() => plugin.getRecurringRuleInsuranceLink(options)),
   getIncome: (options: Parameters<SallimBookAuth["getIncome"]>[0]) =>
     metadata(() => plugin.getIncome(options)),
   incomeHistory: (options: Parameters<SallimBookAuth["incomeHistory"]>[0]) =>

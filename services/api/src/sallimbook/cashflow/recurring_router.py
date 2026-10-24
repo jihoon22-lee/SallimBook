@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Query, Response
 
 from sallimbook.cashflow import recurring_service as service
+from sallimbook.cashflow import related_service
 from sallimbook.cashflow.recurring_schemas import (
     FixedSummaryResponse,
     GenerateObligations,
@@ -23,6 +24,7 @@ from sallimbook.cashflow.recurring_schemas import (
     SettlementListResponse,
     SettlementResponse,
 )
+from sallimbook.cashflow.related_schemas import RuleInsuranceLink
 from sallimbook.core.types import YearMonth
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
@@ -334,3 +336,12 @@ for _route in router.routes:
                 "schema": {"type": "string"},
             }
         _route.responses[_status] = {"headers": _headers}
+
+
+@router.get(
+    "/recurring-rules/{rule_id}/insurance-link",
+    response_model=RuleInsuranceLink,
+    operation_id="getRecurringRuleInsuranceLink",
+)
+def insurance_link(rule_id: UUID, principal: PrincipalDependency, session: SessionDependency):
+    return related_service.rule_insurance(session, principal, rule_id)

@@ -1,3 +1,4 @@
+import { PaymentConnections, NamedReference } from "../finance/RelatedRecords";
 import { FilterPanel } from "../../shared/TaskLayout";
 import { useCallback, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -66,9 +67,7 @@ export function CardSummary({
           <dt>결제계좌</dt>
           <dd>
             {card.settlement_account_id ? (
-              <Link to={`/accounts/${card.settlement_account_id}`}>
-                연결 계좌 확인{card.settlement_account_status === "closed" ? " · 사용 종료" : ""}
-              </Link>
+              <NamedReference kind="accounts" id={card.settlement_account_id} />
             ) : (
               "연결 안 함"
             )}
@@ -367,6 +366,9 @@ function CardDetail({ id, edit }: { id: string; edit: boolean }) {
                   </button>
                 </div>
               </section>
+            )}
+            {!resource.error && (
+              <PaymentConnections key={`links:${card.version}`} kind="card" id={id} />
             )}
             <CardVaultActions cardId={id} onCompleted={() => void resource.reload()} />
             {action && !resource.error && (

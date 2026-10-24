@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { NamedReference } from "../finance/RelatedRecords";
 import { dateLabel } from "../finance/dates";
 import { formatKrw } from "../assets/months/model";
 import { economicTypes, frequencies } from "./model";
@@ -40,9 +40,13 @@ export function RuleSummary({ terms }: { terms: RuleTerms }) {
         <dt>예정 납부수단</dt>
         <dd>
           {terms.card_id ? (
-            <Link to={`/cards/${terms.card_id}`}>연결 카드 · 승인 계획</Link>
+            <NamedReference kind="cards" id={terms.card_id} suffix=" · 연결 카드 · 승인 계획" />
           ) : terms.account_id ? (
-            <Link to={`/accounts/${terms.account_id}`}>연결 계좌 · 직접 납부 계획</Link>
+            <NamedReference
+              kind="accounts"
+              id={terms.account_id}
+              suffix=" · 연결 계좌 · 직접 납부 계획"
+            />
           ) : (
             "수단 연결 안 함"
           )}
@@ -52,7 +56,7 @@ export function RuleSummary({ terms }: { terms: RuleTerms }) {
         <div>
           <dt>연결 부채</dt>
           <dd>
-            <Link to={`/assets/${terms.loan_asset_id}`}>부채 항목 확인</Link>
+            <NamedReference kind="assets" id={terms.loan_asset_id} suffix=" · 부채 항목 확인" />
           </dd>
         </div>
       )}

@@ -1501,6 +1501,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/income/{record_id}/insurance-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Insurance Source */
+        get: operations["getIncomeInsuranceSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/income/{record_id}/returns": {
         parameters: {
             query?: never;
@@ -2473,6 +2490,23 @@ export interface paths {
         put?: never;
         /** End */
         post: operations["endRecurringRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recurring-rules/{rule_id}/insurance-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Insurance Link */
+        get: operations["getRecurringRuleInsuranceLink"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5433,6 +5467,23 @@ export interface components {
         };
         /** @enum {string} */
         InclusionStatus: "included" | "excluded";
+        /** IncomeAllocationLink */
+        IncomeAllocationLink: {
+            /** Amount Krw */
+            amount_krw: string;
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Case Title */
+            case_title: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
         /** IncomeConvert */
         IncomeConvert: {
             /** Reason */
@@ -5497,6 +5548,22 @@ export interface components {
             occurred_on?: string | null;
             /** Period Month */
             period_month: string;
+        };
+        /** IncomeInsuranceSource */
+        IncomeInsuranceSource: {
+            /** Allocations */
+            allocations: components["schemas"]["IncomeAllocationLink"][];
+            /** Original Allocation Id */
+            original_allocation_id: string | null;
+            /** Payout Id */
+            payout_id: string | null;
+            /**
+             * Record Id
+             * Format: uuid
+             */
+            record_id: string;
+            /** Return Id */
+            return_id: string | null;
         };
         /** @enum {string} */
         IncomeKind: "salary" | "bonus" | "other_income";
@@ -7613,12 +7680,47 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** RuleInsuranceLink */
+        RuleInsuranceLink: {
+            link: components["schemas"]["RulePolicyLink"] | null;
+            /**
+             * Rule Id
+             * Format: uuid
+             */
+            rule_id: string;
+        };
         /** RuleListResponse */
         RuleListResponse: {
             /** Items */
             items: components["schemas"]["RuleResponse"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** RulePolicyLink */
+        RulePolicyLink: {
+            /** Active */
+            active: boolean;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Insurer */
+            insurer: string;
+            /**
+             * Policy Id
+             * Format: uuid
+             */
+            policy_id: string;
+            /**
+             * Policy Status
+             * @enum {string}
+             */
+            policy_status: "active" | "ended" | "lapsed";
+            /** Product Name */
+            product_name: string;
         };
         /** RuleResponse */
         RuleResponse: {
@@ -20320,6 +20422,109 @@ export interface operations {
             };
         };
     };
+    getIncomeInsuranceSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomeInsuranceSource"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     returnIncome: {
         parameters: {
             query?: never;
@@ -28801,6 +29006,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MutationReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getRecurringRuleInsuranceLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleInsuranceLink"];
                 };
             };
             /** @description Bad Request */
