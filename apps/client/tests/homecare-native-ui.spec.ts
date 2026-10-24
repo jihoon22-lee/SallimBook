@@ -150,7 +150,9 @@ test("native dashboard uses status asset comparison and secondary source APIs wi
     "getAssetComparison",
     "incomeSummary",
     "fixedCostSummary",
-    "listInsuranceCases",
+    "listOverdueObligations",
+    "getAssetTrends",
+    "listMedicalExpenses",
     "listInsuranceClaims",
   ]);
   expect(
