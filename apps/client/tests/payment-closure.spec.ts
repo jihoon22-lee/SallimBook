@@ -1,3 +1,4 @@
+import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import { mockCashflow } from "./support/cashflow";
 import { uid } from "./support/finance";
@@ -40,8 +41,10 @@ for (const editing of [false, true])
     const state = await mockCashflow(page);
     state.linksRequired = true;
     await page.goto(`/assets/${uid(11)}${editing ? "/edit" : ""}`);
-    if (editing) await page.getByLabel("보유 종료일 (선택)", { exact: true }).fill("2025-02-20");
-    else {
+    if (editing) {
+      await openDisclosure(page, "자산 종료일·메모");
+      await page.getByLabel("보유 종료일 (선택)", { exact: true }).fill("2025-02-20");
+    } else {
       await page.getByRole("button", { name: "사용 종료하기", exact: true }).click();
       await page.getByLabel("종료일", { exact: true }).fill("2025-02-20");
     }

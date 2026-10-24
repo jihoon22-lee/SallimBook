@@ -1,3 +1,5 @@
+import { DateInput } from "../../shared/DateInput";
+import { OptionalFields } from "../../shared/OptionalFields";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
@@ -280,8 +282,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
             <div className="form-field">
               <label>
                 주기 기준일
-                <input
-                  type="date"
+                <DateInput
                   required
                   value={draft.anchor}
                   onChange={(event) => change("anchor", event.target.value)}
@@ -291,8 +292,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
             <div className="form-field">
               <label>
                 적용 시작일
-                <input
-                  type="date"
+                <DateInput
                   required
                   value={draft.from}
                   min={base ? todaySeoul() : undefined}
@@ -312,34 +312,6 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
                 </>
               )}
             </div>
-            {!base && (
-              <>
-                <div className="form-field">
-                  <label>
-                    처음 등록하는 종료 적용일 (선택)
-                    <input
-                      type="date"
-                      value={draft.until}
-                      min={draft.from || undefined}
-                      onChange={(event) => change("until", event.target.value)}
-                    />
-                  </label>
-                </div>
-                {draft.until && (
-                  <div className="form-field">
-                    <label>
-                      종료 사유
-                      <textarea
-                        maxLength={500}
-                        required
-                        value={draft.endReason}
-                        onChange={(event) => change("endReason", event.target.value)}
-                      />
-                    </label>
-                  </div>
-                )}
-              </>
-            )}
             <PaymentMethod
               method={draft.method}
               id={draft.methodId}
@@ -348,40 +320,79 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
                 setReviewAck(false);
               }}
             />
-            <div className="form-field">
-              <label>
-                외화 참고 통화 (선택)
-                <input
-                  maxLength={3}
-                  value={draft.currency}
-                  placeholder="USD"
-                  onChange={(event) => change("currency", event.target.value.toUpperCase())}
-                />
-              </label>
-            </div>
-            <div className="form-field">
-              <label>
-                외화 참고금액 (선택)
-                <input
-                  inputMode="decimal"
-                  maxLength={40}
-                  value={draft.foreignAmount}
-                  onChange={(event) => change("foreignAmount", event.target.value)}
-                />
-              </label>
-            </div>
-            <div className="form-field">
-              <label>
-                규칙 메모
-                <textarea
-                  value={draft.note}
-                  maxLength={2000}
-                  onChange={(event) => change("note", event.target.value)}
-                />
-              </label>
-            </div>
+            <OptionalFields
+              title="종료일·외화 참고·메모"
+              hasError={Boolean(validation)}
+              hasValues={Boolean(
+                draft.until ||
+                draft.endReason ||
+                draft.currency ||
+                draft.foreignAmount ||
+                draft.note,
+              )}
+            >
+              {!base && (
+                <>
+                  <div className="form-field">
+                    <label>
+                      처음 등록하는 종료 적용일 (선택)
+                      <DateInput
+                        value={draft.until}
+                        min={draft.from || undefined}
+                        onChange={(event) => change("until", event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  {draft.until && (
+                    <div className="form-field">
+                      <label>
+                        종료 사유
+                        <textarea
+                          maxLength={500}
+                          required
+                          value={draft.endReason}
+                          onChange={(event) => change("endReason", event.target.value)}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="form-field">
+                <label>
+                  외화 참고 통화 (선택)
+                  <input
+                    maxLength={3}
+                    value={draft.currency}
+                    placeholder="USD"
+                    onChange={(event) => change("currency", event.target.value.toUpperCase())}
+                  />
+                </label>
+              </div>
+              <div className="form-field">
+                <label>
+                  외화 참고금액 (선택)
+                  <input
+                    inputMode="decimal"
+                    maxLength={40}
+                    value={draft.foreignAmount}
+                    onChange={(event) => change("foreignAmount", event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="form-field">
+                <label>
+                  규칙 메모
+                  <textarea
+                    value={draft.note}
+                    maxLength={2000}
+                    onChange={(event) => change("note", event.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="muted">외화 참고금액은 원화 예정·실제 금액으로 자동 환산하지 않아요.</p>
+            </OptionalFields>
           </div>
-          <p className="muted">외화 참고금액은 원화 예정·실제 금액으로 자동 환산하지 않아요.</p>
           {base && (
             <>
               <div className="form-field">

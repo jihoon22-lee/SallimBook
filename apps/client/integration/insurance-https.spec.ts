@@ -19,6 +19,7 @@ async function createPolicy(page: Page, title: string) {
     .getByRole("combobox", { name: "보험 피보험자", exact: true })
     .selectOption({ label: "합성 HTTPS 구성원" });
   await page.getByLabel("보장 시작일", { exact: true }).fill("2025-01-01");
+  await openDisclosure(page, "계약 기간·수익자·평가액·메모");
   await page.getByLabel("계약 시작일", { exact: true }).fill("2024-12-01");
   await page.getByLabel("납입 종료일", { exact: true }).fill("2030-12-31");
   await page.getByRole("button", { name: "보험 계약 등록", exact: true }).click();

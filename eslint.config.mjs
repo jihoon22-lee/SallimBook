@@ -31,6 +31,7 @@ export default defineConfig([
     // React rules cover app code only: Playwright `test.use` and fixtures are not React hooks.
     files: ["apps/client/src/**/*.{ts,tsx}"],
     extends: [reactHooks.configs.flat.recommended, jsxA11y.flatConfigs.recommended],
+    settings: { "jsx-a11y": { components: { DateInput: "input" } } },
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",

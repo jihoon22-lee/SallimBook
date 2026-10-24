@@ -1,3 +1,5 @@
+import { TaskPanel } from "../../shared/TaskLayout";
+import { DateInput } from "../../shared/DateInput";
 import { Icon } from "../../shared/Icon";
 import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -315,9 +317,13 @@ function useAsset(id: string) {
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
+  const loadedId = useRef(id);
   useEffect(() => {
     let active = true;
-    setAsset(null);
+    if (loadedId.current !== id) {
+      setAsset(null);
+      loadedId.current = id;
+    }
     setError(null);
     setLoading(true);
     if (!isUuid(id)) {
@@ -395,7 +401,7 @@ function AssetDetail({ id }: { id: string }) {
       if (mounted.current) setBusy(false);
     }
   }
-  if (state.loading) return <p role="status">자산 정보를 불러오고 있어요.</p>;
+  if (state.loading && !state.asset) return <p role="status">자산 정보를 불러오고 있어요.</p>;
   if (!state.asset)
     return (
       <>
@@ -412,6 +418,13 @@ function AssetDetail({ id }: { id: string }) {
   return (
     <>
       {saved && <p role="status">자산 정보를 저장했어요.</p>}
+      {state.loading && <p role="status">기존 내용을 유지하며 자산 정보를 다시 확인하고 있어요.</p>}
+      <FinanceError error={state.error} />
+      {state.error && (
+        <button type="button" disabled={state.loading} onClick={state.reload}>
+          자산 다시 확인
+        </button>
+      )}
       <section className="card">
         <h2>{asset.name}</h2>
         <AssetSummary asset={asset} members={members.members} />
@@ -445,6 +458,7 @@ function AssetDetail({ id }: { id: string }) {
           <button
             type="button"
             className="danger-button"
+            disabled={state.loading || Boolean(state.error)}
             onClick={() => {
               setError(null);
               setClosing(false);
@@ -468,7 +482,10 @@ function AssetDetail({ id }: { id: string }) {
           remove={() => api.delete(asset.id, asset.version)}
           done={() => navigate("/assets", { replace: true, state: { deleted: "asset" } })}
           cancel={() => setDeleting(false)}
-          reload={state.reload}
+          reload={() => {
+            setDeleting(false);
+            state.reload();
+          }}
         >
           <p>
             월 기록·계좌·납부 규칙·문서에 연결되지 않은 오등록 자산만 실제로 삭제할 수 있어요. 사용
@@ -484,15 +501,14 @@ function AssetDetail({ id }: { id: string }) {
       <DocumentPanel kind="asset" id={id} />
       <AssetMonthlyData assetId={id} />
       {closing && (
-        <section className="card" aria-labelledby="asset-archive-title">
+        <TaskPanel label="자산 사용 종료">
           <h2 id="asset-archive-title">자산 사용 종료</h2>
           <p>자산 항목과 과거 연결 기록은 남겨두고 사용 종료 상태로 바꿔요.</p>
           <form className="finance-form" onSubmit={(event) => void archive(event)}>
             <div className="form-field">
               <label htmlFor="asset-ended-on">종료일</label>
-              <input
+              <DateInput
                 id="asset-ended-on"
-                type="date"
                 value={endedOn}
                 onChange={(event) => setEndedOn(event.target.value)}
                 min={asset.started_on}
@@ -532,7 +548,7 @@ function AssetDetail({ id }: { id: string }) {
               </button>
             </div>
           </form>
-        </section>
+        </TaskPanel>
       )}
     </>
   );
@@ -540,7 +556,7 @@ function AssetDetail({ id }: { id: string }) {
 
 function AssetEdit({ id }: { id: string }) {
   const state = useAsset(id);
-  if (state.loading) return <p role="status">수정할 자산을 불러오고 있어요.</p>;
+  if (state.loading && !state.asset) return <p role="status">수정할 자산을 불러오고 있어요.</p>;
   return state.asset ? (
     <AssetEditor key={state.asset.id} initial={state.asset} />
   ) : (

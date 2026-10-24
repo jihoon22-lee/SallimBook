@@ -30,15 +30,26 @@ export async function installAndroidBack(page: Page) {
         { name: "minimizeApp", rtype: "promise" },
       ],
     });
+    const listeners = new Map<string, Listener>();
+    let sequence = 0;
+    Object.assign(window, {
+      __androidBack: () => {
+        for (const listener of [...listeners.values()]) listener({ canGoBack: true });
+      },
+    });
     capacitor.nativeCallback = (plugin, method, args, listener) => {
       if (plugin === "App" && args.eventName === "backButton") {
-        Object.assign(window, { __androidBack: () => listener({ canGoBack: true }) });
-        return "synthetic-back-listener";
+        const id = `synthetic-back-listener-${++sequence}`;
+        listeners.set(id, listener);
+        return id;
       }
       return callback(plugin, method, args, listener);
     };
-    capacitor.nativePromise = (plugin, method, args) =>
-      plugin === "App" ? Promise.resolve() : promise(plugin, method, args);
+    capacitor.nativePromise = (plugin, method, args) => {
+      if (plugin !== "App") return promise(plugin, method, args);
+      if (method === "removeListener") listeners.delete(String(args?.callbackId));
+      return Promise.resolve();
+    };
   });
   return {
     press: () =>
