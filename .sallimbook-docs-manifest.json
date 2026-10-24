@@ -126,8 +126,8 @@
       "git_sha1": "607712120f84b13ce2391f5dcf60e12ab2a5e9fc"
     },
     "docs/README.md": {
-      "sha256": "8967b09dd9d25cc4410897c1e1267d4f19afed164a298ae0c95248b8b9cf49f1",
-      "git_sha1": "5349ed02497d4104fba0a2fb6e242167196b2f5b"
+      "sha256": "a32dabd93a33e8c55413cfbb49a99f852224d714ed4211fd88ef9c1674012ba6",
+      "git_sha1": "f01d77fdf5ac94deef8c5f396e7513d556761af0"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -274,8 +274,8 @@
       "git_sha1": "8884c470fba6e769560eb9c75e57cef33cb1405e"
     },
     "docs/operations-runbook.md": {
-      "sha256": "4fe5cd604ce226e6c2b251de87332c453a9534bed5347a18c6fb7e152c235d54",
-      "git_sha1": "65a7970689d124e56f6ac06f1854f067b320210e"
+      "sha256": "d8b574db4a15cdd90c417a5d462b6f82cbe07e83f1c5a0d45a7c1f26d8a62a59",
+      "git_sha1": "b19172222bf810a5e66c70bf5ce5bfee68ed280c"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
@@ -440,6 +440,10 @@
     "docs/testing/local-cvc-release.md": {
       "sha256": "a3daeaefd577c5b234e3d18bc148082adca0356564c1a79bf8d418e7f058dac9",
       "git_sha1": "9975154541ca1c79a593b9037c70b4f60d1dd064"
+    },
+    "docs/testing/current-upgrade-rehearsal.md": {
+      "sha256": "605129604595b7591e9530a6c165d492fbe40a36e26f49442ea549afa80fab33",
+      "git_sha1": "1115e1a985a2511ad47ac5afb40c90fb667bdabb"
     }
   }
 }

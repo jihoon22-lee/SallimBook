@@ -181,6 +181,29 @@ def snapshot_query(old_schema):
     )
 
 
+def application_services(rendered):
+    """Keep the actual old renderer's inspector dependency in upgrade and rollback."""
+    names = (
+        ("scanner", "inspector", "api") if "inspector" in rendered["services"]
+        else ("scanner", "api")
+    )
+    available = {"db", *names}
+    for name in names:
+        if set(rendered["services"][name].get("depends_on", ())) - available:
+            raise ValueError("Unsupported application dependency in upgrade rehearsal")
+    return names
+
+
+def same_with_empty_extensions(before, after, old_schema):
+    """Only known new empty tables are exempt; all existing rows/hashes stay exact."""
+    compared = dict(after)
+    if int(old_schema.split("_", 1)[0]) < 21 and "consumable_orders" not in before:
+        orders = compared.get("consumable_orders")
+        if orders is not None and orders[0] == 0:
+            del compared["consumable_orders"]
+    return before == compared
+
+
 def run(command, *, stdin=None, timeout=300):
     result = subprocess.run(
         command, check=False, input=stdin, capture_output=True, text=True, timeout=timeout
@@ -350,7 +373,9 @@ def main(old_image, new_image):
                 "command": command,
             }
 
-        old = services(old_render(old_revision, old_config), old_id, ("scanner", "api"))
+        old_rendered = old_render(old_revision, old_config)
+        old_names = application_services(old_rendered)
+        old = services(old_rendered, old_id, old_names)
         old["init"] = {
             "image": new_id,
             "user": "0:0",
@@ -443,7 +468,7 @@ def main(old_image, new_image):
                 """)
                 assert invalid.strip() == "0", "Member-person backfill differs"
                 right = {name: value for name, value in right.items() if name != "household_people"}
-            if left != right:
+            if not same_with_empty_extensions(left, right, old_schema):
                 # Synthetic table names and row counts only.
                 print({name: (left.get(name, ("-",))[0], right.get(name, ("-",))[0])
                        for name in set(left) | set(right) if left.get(name) != right.get(name)})
@@ -481,7 +506,7 @@ def main(old_image, new_image):
             assert before_overrides[seeded["released"]] == expected_override
 
             # Maintenance window: stop the old app, check, migrate, start the new image.
-            compose("old", "stop", "api", "scanner")
+            compose("old", "stop", *old_names)
             assert schema(new_id) == "upgrade-required"
             run(migration_command(network, admin_env, new_id, "upgrade", "head"))
             assert schema(new_id) == "current"
@@ -504,11 +529,11 @@ def main(old_image, new_image):
             # Documented loss: the stale override that 0015 cleared stays cleared.
             assert rolled_overrides == upgraded_overrides
             compose("old", "up", "-d", "--wait", "--wait-timeout", "120",
-                    "--remove-orphans", "scanner", "api")
-            healthy("old", ("api", "scanner", "db"))
+                    "--remove-orphans", *old_names)
+            healthy("old", (*old_names, "db"))
 
             # Upgrade again, then regenerate the open schedule.
-            compose("old", "stop", "api", "scanner")
+            compose("old", "stop", *old_names)
             run(migration_command(network, admin_env, new_id, "upgrade", "head"))
             assert schema(new_id) == "current"
             compose("new", "up", "-d", "--wait", "--wait-timeout", "180",

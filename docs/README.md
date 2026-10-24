@@ -92,3 +92,5 @@ GitHub KVM 계측의 조건·정제 근거는 [Android CI](testing/android-ci.md
 [SB-009 위협모델 설계 리뷰](testing/threat-model-review.md)에 추적합니다.
 
 - [Android 로컬 CVC 활성화·별도 보안 검토](testing/local-cvc-release.md) — 네이티브 동의·매회 인증·외부 경로 부재와 검증 수준
+
+- [현행 릴리스 업그레이드 리허설](testing/current-upgrade-rehearsal.md) — 이전 검사기 의존성, 가족 backfill·새 주문 표와 기존 행 보존
