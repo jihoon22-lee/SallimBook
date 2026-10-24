@@ -137,6 +137,10 @@ test("saving a medical node keeps the tree on screen while it is read again", as
   await expect(tree.getByRole("link", { name: "합성 첫 외래", exact: true })).toBeVisible();
   await expect(tree.getByText("전체 진료 연결을 불러오고 있어요.", { exact: true })).toHaveCount(0);
   hold.release();
-  await expect(tree.getByRole("link", { name: "합성 새 외래", exact: true })).toBeVisible();
+  await expect(
+    tree
+      .getByRole("navigation", { name: "같은 단계 진료" })
+      .getByRole("link", { name: "합성 새 외래", exact: true, current: "page" }),
+  ).toBeVisible();
   await expect(tree).toHaveAttribute("aria-busy", "false");
 });
