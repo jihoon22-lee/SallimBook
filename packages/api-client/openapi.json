@@ -4180,9 +4180,21 @@
             "title": "Id",
             "type": "string"
           },
+          "net_received_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Net Received Krw",
+            "type": "string"
+          },
           "policy_id": {
             "format": "uuid",
             "title": "Policy Id",
+            "type": "string"
+          },
+          "received_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Received Krw",
             "type": "string"
           },
           "requested_krw": {
@@ -4197,6 +4209,12 @@
               }
             ],
             "title": "Requested Krw"
+          },
+          "returned_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Returned Krw",
+            "type": "string"
           },
           "submitted_on": {
             "anyOf": [
@@ -4235,7 +4253,10 @@
           "version",
           "case_id",
           "policy_id",
-          "expense_count"
+          "expense_count",
+          "received_krw",
+          "returned_krw",
+          "net_received_krw"
         ],
         "title": "ClaimListItem",
         "type": "object"
@@ -4518,10 +4539,10 @@
           "case_id",
           "policy_id",
           "expense_count",
-          "expense_ids",
           "received_krw",
           "returned_krw",
-          "net_received_krw"
+          "net_received_krw",
+          "expense_ids"
         ],
         "title": "ClaimResponse",
         "type": "object"

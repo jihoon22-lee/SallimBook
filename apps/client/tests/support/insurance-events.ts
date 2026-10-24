@@ -390,6 +390,7 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
                 (c) =>
                   (!query.has("case_id") || c.case_id === query.get("case_id")) &&
                   (!query.has("policy_id") || c.policy_id === query.get("policy_id")) &&
+                  (!query.has("claim_state") || c.claim_state === query.get("claim_state")) &&
                   (!query.has("expense_id") || c.expense_ids.includes(query.get("expense_id")!)),
               ),
               query,
@@ -522,6 +523,23 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
       });
       parent.version++;
       rememberAllocation(a, body.reason);
+      for (const claim of state.claims) {
+        const parts = state.payouts
+          .filter((p) => p.cash.state === "active")
+          .flatMap((p) => p.allocations.filter((x) => x.claim_id === claim.id));
+        const received = parts.reduce((sum, x) => sum + BigInt(x.amount_krw), 0n);
+        const returned = state.returns
+          .filter(
+            (r) =>
+              r.cash.state === "active" && parts.some((x) => x.id === r.original_allocation_id),
+          )
+          .reduce((sum, r) => sum + BigInt(r.cash.amount_krw), 0n);
+        Object.assign(claim, {
+          received_krw: String(received),
+          returned_krw: String(returned),
+          net_received_krw: String(received - returned),
+        });
+      }
       return finish(a, 200);
     }
     if (!id && collection === "medical-expenses") return finish(createExpense(body));

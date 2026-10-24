@@ -165,14 +165,14 @@ class ClaimListItem(ClaimFields, EntityResponse):
     case_id: UUID
     policy_id: UUID
     expense_count: int = Field(ge=0)
-
-
-class ClaimResponse(ClaimListItem):
-    expense_ids: list[UUID]
     # Active deposits allocated to this claim, their active returns, and the difference.
     received_krw: KrwString
     returned_krw: KrwString
     net_received_krw: KrwString
+
+
+class ClaimResponse(ClaimListItem):
+    expense_ids: list[UUID]
 
 
 class ClaimListResponse(BaseModel):

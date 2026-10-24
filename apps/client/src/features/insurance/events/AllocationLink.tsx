@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { needsCompare } from "./model";
 import type { FormEvent } from "react";
 import { toApiError } from "../../../platform/api";
@@ -60,17 +60,33 @@ export function AllocationHistory({ id }: { id: string }) {
 }
 export function AllocationLink({
   initial,
+  targetClaim,
   saved,
   cancel,
 }: {
   initial: Schema["AllocationResponse"];
+  targetClaim?: Schema["ClaimResponse"];
   saved: () => void;
   cancel: () => void;
 }) {
   const api = useInsuranceEventsApi();
   const command = useMonthCommand();
   const [base, setBase] = useState(initial);
-  const [draft, setDraft] = useState(() => allocationDraft(initial));
+  const [draft, setDraft] = useState(() => ({
+    ...allocationDraft(initial),
+    ...(targetClaim ? { policyId: targetClaim.policy_id, claimId: targetClaim.id } : {}),
+  }));
+  const [ack, setAck] = useState(false);
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    panel.current?.focus({ preventScroll: true });
+    panel.current?.scrollIntoView({ block: "start" });
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected)
+        opener.focus({ preventScroll: true });
+    };
+  }, []);
   const [reason, setReason] = useState("");
   const [latest, setLatest] = useState<Schema["AllocationResponse"] | null>(null);
   const [message, setMessage] = useState("");
@@ -84,7 +100,10 @@ export function AllocationLink({
   const input = { ...changes, reason: reason.trim() };
   const key = useIdempotencyKey(JSON.stringify([base.id, base.version, input]));
   const ready =
-    !!reason.trim() && Object.keys(changes).length > 0 && (!draft.claimId || !!draft.policyId);
+    !!reason.trim() &&
+    Object.keys(changes).length > 0 &&
+    (!draft.claimId || !!draft.policyId) &&
+    (!targetClaim || ack);
   async function submit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
     event.preventDefault();
@@ -116,7 +135,7 @@ export function AllocationLink({
     }
   }
   return (
-    <section className="review-panel">
+    <section ref={panel} tabIndex={-1} className="review-panel" aria-label="기존 배분 연결 검토">
       <h3>같은 입금의 청구 연결 정정</h3>
       <p>사건·금액·급부유형은 유지하며 계약·청구 연결만 바꿔요. 새 보험금 입금을 만들지 않아요.</p>
       <form
@@ -126,13 +145,33 @@ export function AllocationLink({
         }}
         onSubmit={(e) => void submit(e)}
       >
-        <AllocationFields
-          value={draft}
-          onChange={setDraft}
-          fixedCase
-          showMoney={false}
-          disabled={command.busy}
-        />
+        {targetClaim ? (
+          <>
+            <h4>현재 배분 연결</h4>
+            <AllocationSummary row={base} />
+            <h4>변경할 청구</h4>
+            <p>{targetClaim.claim_reference || "접수번호 미입력"}</p>
+            <p>현재 계약이나 다른 청구에 연결되어 있다면 이 청구의 계약·청구로 바뀌어요.</p>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                required
+                checked={ack}
+                disabled={command.busy}
+                onChange={(e) => setAck(e.target.checked)}
+              />
+              기존 연결과 변경할 청구를 확인했어요.
+            </label>
+          </>
+        ) : (
+          <AllocationFields
+            value={draft}
+            onChange={setDraft}
+            fixedCase
+            showMoney={false}
+            disabled={command.busy}
+          />
+        )}
         <div className="form-field">
           <label>
             배분 연결 정정 사유
@@ -158,8 +197,17 @@ export function AllocationLink({
             <button
               type="button"
               onClick={() => {
-                setDraft(preserveDraft(allocationDraft(base), draft, allocationDraft(latest)));
+                setDraft(
+                  targetClaim
+                    ? {
+                        ...allocationDraft(latest),
+                        policyId: targetClaim.policy_id,
+                        claimId: targetClaim.id,
+                      }
+                    : preserveDraft(allocationDraft(base), draft, allocationDraft(latest)),
+                );
                 setBase(latest);
+                setAck(false);
                 setLatest(null);
                 command.setError(null);
               }}

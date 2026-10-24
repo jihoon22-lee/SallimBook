@@ -1408,7 +1408,7 @@ class TestInsuranceEventBoundaries:
             claimed = api_pages(client, actor, BASE + "/claims", case_id=case["id"])
             assert ids(claimed) == pairs(claims[::-1])
 
-    def test_claim_detail_counts_only_its_own_allocations_and_returns(self, app, actors):
+    def test_claim_detail_counts_only_its_own_allocations_and_returns(self, app, actors, db_engine):
         actor = actors[0]
         with TestClient(app) as client:
             case, other, policy = (
@@ -1448,7 +1448,49 @@ class TestInsuranceEventBoundaries:
                 "550",
             )
             listed = read(client, actor, f"/claims?case_id={case['id']}")["items"][0]
-            assert "received_krw" not in listed
+            assert (listed["received_krw"], listed["returned_krw"], listed["net_received_krw"]) == (
+                "600",
+                "50",
+                "550",
+            )
+            assert "expense_ids" not in listed
+
+            # Adding claims does not multiply reads or spread one deposit across claims.
+            for target in (case, other):
+                create_metadata(
+                    client,
+                    actor,
+                    "/claims",
+                    {
+                        "case_id": target["id"],
+                        "policy_id": policy["id"],
+                        "claim_state": "documents_required",
+                    },
+                )
+
+            def counted(limit):
+                queries = []
+
+                def capture(conn, cursor, statement, *args):
+                    if statement.startswith("SELECT"):
+                        queries.append(statement)
+
+                event.listen(db_engine, "before_cursor_execute", capture)
+                try:
+                    items = read(client, actor, f"/claims?limit={limit}")["items"]
+                finally:
+                    event.remove(db_engine, "before_cursor_execute", capture)
+                return items, len(queries)
+
+            all_claims, many = counted(50)
+            _, one = counted(1)
+            assert many == one
+            assert len(all_claims) == 3
+            assert sum(int(row["received_krw"]) for row in all_claims) == 600
+            assert sum(int(row["returned_krw"]) for row in all_claims) == 50
+            tasks = read(client, actor, "/claims?claim_state=documents_required")["items"]
+            assert len(tasks) == 2
+            assert all(row["received_krw"] == "0" for row in tasks)
 
     def test_case_list_shows_each_case_net_burden_with_constant_queries(
         self, app, actors, db_engine

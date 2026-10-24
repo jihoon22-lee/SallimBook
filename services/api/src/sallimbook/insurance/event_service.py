@@ -621,18 +621,16 @@ def _claim_responses(session, principal, rows, *, detail=False):
             evidence[link.claim_id].append(link.expense_id)
     schema = ClaimResponse if detail else ClaimListItem
     balances = {}
-    if detail and rows:
+    if rows:
         # Claim allocations must share the claim's case (CLAIM_ALLOCATION_MISMATCH).
         payouts, returns = _payout_sources(session, principal, {row.case_id for row in rows})
         balances = _summary([], payouts, [], returns).claims
     money = ("received_krw", "returned_krw", "net_received_krw")
 
     def amounts(row):
-        if not detail:
-            return {}
         balance = balances.get(str(row.id), calc.ClaimBalance(0, 0, 0))
         return {
-            "expense_ids": evidence[row.id],
+            **({"expense_ids": evidence[row.id]} if detail else {}),
             **{name: krw_string(getattr(balance, name)) for name in money},
         }
 

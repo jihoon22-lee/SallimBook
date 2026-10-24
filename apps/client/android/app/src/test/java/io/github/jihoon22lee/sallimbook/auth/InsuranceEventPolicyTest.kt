@@ -79,7 +79,7 @@ class InsuranceEventPolicyTest {
             val body: Any = when (op) {
                 FinanceOperation.MEDICAL_NODE_SUMMARY -> mapOf("case_id" to other, "node_id" to child, "subtree_node_count" to 2, "medical_paid_krw" to "100", "medical_refunded_krw" to "0", "net_medical_krw" to "100")
                 FinanceOperation.INSURANCE_CASE_SUMMARY -> summary()
-                FinanceOperation.LIST_INSURANCE_CLAIMS -> page(claim() - "expense_ids" - claimMoney)
+                FinanceOperation.LIST_INSURANCE_CLAIMS -> page(claim() - "expense_ids")
                 FinanceOperation.CREATE_INSURANCE_CLAIM, FinanceOperation.GET_INSURANCE_CLAIM, FinanceOperation.UPDATE_INSURANCE_CLAIM -> claim()
                 FinanceOperation.INSURANCE_CLAIM_HISTORY -> page(claimRevision())
                 FinanceOperation.LIST_MEDICAL_EXPENSES -> page(expense() - "lines")
@@ -198,6 +198,12 @@ class InsuranceEventPolicyTest {
         response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim())
         assertEquals(claim(), response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), withAddedFields(claim())))
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim() + mapOf("net_received_krw" to "551")) }
+    }
+    @Test fun claimListKeepsExactMoneyAndRejectsMissingOrMismatchedAmounts() {
+        val item = claim() - "expense_ids"
+        assertEquals(page(item), response(FinanceOperation.LIST_INSURANCE_CLAIMS, emptyMap(), page(item)))
+        bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_INSURANCE_CLAIMS, emptyMap(), page(item - "received_krw")) }
+        bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.LIST_INSURANCE_CLAIMS, emptyMap(), page(item + mapOf("net_received_krw" to "551"))) }
     }
     @Test fun responseDefaultsAndImmutableHistoryFieldsCannotBeOmittedOrChanged() {
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.GET_INSURANCE_CLAIM, mapOf("claimId" to id), claim() - "claim_state") }
