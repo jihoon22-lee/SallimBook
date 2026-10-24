@@ -780,3 +780,49 @@ def delete_node(session, principal, case_id, node_id, if_match):
                 "MEDICAL_NODE_IN_USE", "연결 기록이 있는 진료 항목입니다.", 409
             ) from None
         raise
+
+
+def _delete_misregistration(
+    session, principal, model, identifier, if_match, entity_type, error_code
+):
+    lock_asset_scope(session, principal)
+    row = scoped_entity(session, model, identifier, principal, for_update=True)
+    require_version(row, if_match)
+    if row.version != 1 or (
+        isinstance(row, InsurancePolicy) and row.valuation_asset_id is not None
+    ):
+        raise DomainError(error_code, "변경 이력이나 연결 기록이 있어 삭제할 수 없습니다.", 409)
+    _audit(session, principal, row, entity_type, "delete", before=row.version)
+    try:
+        session.delete(row)
+        session.flush()
+        session.commit()
+    except IntegrityError as error:
+        session.rollback()
+        if getattr(error.orig, "sqlstate", None) in {"23001", "23503"}:
+            raise DomainError(error_code, "연결 기록이 있어 삭제할 수 없습니다.", 409) from None
+        raise
+
+
+def delete_policy(session, principal, policy_id, if_match):
+    _delete_misregistration(
+        session,
+        principal,
+        InsurancePolicy,
+        policy_id,
+        if_match,
+        "insurance_policy",
+        "INSURANCE_POLICY_IN_USE",
+    )
+
+
+def delete_case(session, principal, case_id, if_match):
+    _delete_misregistration(
+        session,
+        principal,
+        InsuranceCase,
+        case_id,
+        if_match,
+        "insurance_case",
+        "INSURANCE_CASE_IN_USE",
+    )

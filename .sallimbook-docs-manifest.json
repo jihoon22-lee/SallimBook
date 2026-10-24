@@ -62,12 +62,12 @@
       "git_sha1": "73402e2b2e77c705fe24639b7b3cea41e8f66118"
     },
     "docs/data-model.md": {
-      "sha256": "592e65ce05c2500cab97310e7d8cc17c3204b9bd3d098b7fdf951b5a36f4935d",
-      "git_sha1": "cf6e169a91995aa6b1a5122847a3f811b999d075"
+      "sha256": "132c2eb2ac192256c7e2df116d4381e0cf3b47a1a5c2958ecc510760696743e3",
+      "git_sha1": "9f36f5ae87a99e4ff7a6eeda0650e4d4be1b7b27"
     },
     "docs/api-contract.md": {
-      "sha256": "6614b38c1460e2aab5d378fd45e08bae1e93186655bf350a0bff42887c63d9ea",
-      "git_sha1": "8a6efa57d2ea9ff64deb1182405a8bbcaa5d8af4"
+      "sha256": "52fd1e8fb2fe93ef971f4bff7972547526d5daf244921e949b88832656f871ab",
+      "git_sha1": "3fb06d9dd11b13dd3acb48f2c6f9ea2e1cfeb613"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -82,8 +82,8 @@
       "git_sha1": "7e9827ebf39404d2d5cb7db850a7bfec0cf53d64"
     },
     "docs/insurance-workflows.md": {
-      "sha256": "b20912401fb5d12d67955a02c594e594b72966238d758331fd4d539672db7388",
-      "git_sha1": "64f13c7ce690ea0c835e3cf85abd853fce933929"
+      "sha256": "25d86a6c14562ef9c0dde133365fdc12f128d4e16c50a6bb17d5bc994c5c4aa6",
+      "git_sha1": "7ec31a72a5c7124be684b73b699d1534ce6c3d16"
     },
     "docs/development-environment.md": {
       "sha256": "108d9079245e6867b1135458da2816b1d8294dd9898273778bb8fb731cde0df9",
@@ -270,8 +270,8 @@
       "git_sha1": "3ee8330ea99693bea87ed5d29398cc5d96910274"
     },
     "docs/testing/insurance-client.md": {
-      "sha256": "3eb38eb3037a003f086545f704f15211ead0846cf42e946c41ad264127cae89a",
-      "git_sha1": "2425eb005d1189874ddf7cb9c4a81e9dc1655491"
+      "sha256": "88e7735825bd74e0d6b8b1c353a5c9375d7ba8576c116fb2516ec006352e1125",
+      "git_sha1": "8884c470fba6e769560eb9c75e57cef33cb1405e"
     },
     "docs/operations-runbook.md": {
       "sha256": "4fe5cd604ce226e6c2b251de87332c453a9534bed5347a18c6fb7e152c235d54",
@@ -408,6 +408,10 @@
     "docs/adr/household-people.md": {
       "sha256": "a7ab38d319cd9ddfc27f4fbb6f0e878b888800c52d145e0155115d952791a0ff",
       "git_sha1": "603d746d066d503983685be0b12f9b49eea6091d"
+    },
+    "docs/adr/insurance-misregistration.md": {
+      "sha256": "c516a989823429cce0917f930cc890876a9b1f5b389bf8a8dbd13d5669f73faa",
+      "git_sha1": "98f2328fe55bff61e200eaa20fae8c3d0874def1"
     }
   }
 }

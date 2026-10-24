@@ -327,7 +327,16 @@ def get_expense(session, principal, expense_id):
 
 
 def list_expenses(
-    session, principal, *, case_id=None, node_id=None, state=None, cursor=None, limit=50
+    session,
+    principal,
+    *,
+    case_id=None,
+    node_id=None,
+    state=None,
+    claim_policy_id=None,
+    claimed=None,
+    cursor=None,
+    limit=50,
 ):
     cash.lock_cash_household(session, principal)
     query = select(MedicalExpense).where(MedicalExpense.household_id == principal.household_id)
@@ -339,6 +348,27 @@ def list_expenses(
         if case_id is not None and node.case_id != case_id:
             raise DomainError("NOT_FOUND", "같은 사건의 진료 항목을 선택해 주세요.", 404)
         query = query.where(MedicalExpense.node_id == node_id)
+    if claimed is not None and claim_policy_id is None:
+        raise DomainError(
+            "INVALID_INSURANCE_INPUT", "청구 연결 여부를 확인할 계약을 선택해 주세요.", 422
+        )
+    if claim_policy_id is not None:
+        scoped_entity(session, InsurancePolicy, claim_policy_id, principal)
+        if claimed is not None:
+            # EXISTS preserves one expense even when several claims cite it. All claim
+            # states count as a current evidence link; this says nothing about payment.
+            linked = (
+                select(ClaimExpense.claim_id)
+                .join(InsuranceClaim, InsuranceClaim.id == ClaimExpense.claim_id)
+                .where(
+                    ClaimExpense.household_id == principal.household_id,
+                    ClaimExpense.expense_id == MedicalExpense.id,
+                    InsuranceClaim.household_id == principal.household_id,
+                    InsuranceClaim.policy_id == claim_policy_id,
+                )
+                .exists()
+            )
+            query = query.where(linked if claimed else ~linked)
     if state is not None:
         query = query.join(CashRecord, CashRecord.id == MedicalExpense.cash_record_id).where(
             CashRecord.state == state

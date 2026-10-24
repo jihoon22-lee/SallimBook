@@ -6,7 +6,7 @@ import { formatKrw, parseKrw } from "../../assets/months/model";
 import { useIdempotencyKey, useMonthCommand } from "../../assets/months/useMonthCommand";
 import { RecordedMoneyNotice, SaveControls } from "../../finance/FinancialFeedback";
 import { allPages, useResource } from "../../finance/queries";
-import { isUuid } from "../../finance/dates";
+import { dateLabel, isUuid } from "../../finance/dates";
 import { useInsuranceApi } from "../api";
 import { InsuranceError } from "../InsuranceSupport";
 import { ancestors, optional, preserveDraft } from "../model";
@@ -98,6 +98,7 @@ export function ExpenseEditor({
   const navigate = useNavigate();
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() => draftOf(initial, caseId, nodeId));
+  const [providerTouched, setProviderTouched] = useState(false);
   const [reason, setReason] = useState("");
   const [ack, setAck] = useState(false);
   const [latest, setLatest] = useState<Schema["ExpenseResponse"] | null>(null);
@@ -113,7 +114,8 @@ export function ExpenseEditor({
     ),
   );
   const selected = nodes.data?.find((n) => n.id === draft.nodeId);
-  const input = expenseInput(draft);
+  const provider = base || providerTouched ? draft.provider : (selected?.provider_name ?? "");
+  const input = expenseInput({ ...draft, provider });
   const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, input, reason.trim()]));
   const ready =
     !!input &&
@@ -217,6 +219,41 @@ export function ExpenseEditor({
             )}
           </div>
         </fieldset>
+        <div className="form-field">
+          <label>
+            지불 의료기관 (선택)
+            <input
+              maxLength={120}
+              value={provider}
+              disabled={command.busy}
+              onChange={(e) => {
+                setProviderTouched(true);
+                change("provider", e.target.value);
+              }}
+            />
+          </label>
+          {!base && !providerTouched && selected?.provider_name && (
+            <p className="muted">
+              선택한 진료의 의료기관을 이어받았어요. 영수증과 다르면 수정해 주세요.
+            </p>
+          )}
+        </div>
+        {!base && selected?.start_on && (
+          <p>
+            진료 시작일 {dateLabel(selected.start_on)}은 지불일의 참고값이에요. 실제 지불일은
+            영수증에서 확인해 주세요.
+            <button
+              type="button"
+              disabled={command.busy || nodes.loading || !!nodes.error}
+              onClick={() => {
+                change("actual", { ...draft.actual, date: selected.start_on! });
+                setDirty(true);
+              }}
+            >
+              진료 시작일을 실제 지불일로 사용
+            </button>
+          </p>
+        )}
         <ActualFields
           title="의료비 지불"
           draft={draft.actual}
@@ -243,16 +280,6 @@ export function ExpenseEditor({
           <summary>영수증 참고 정보 (선택)</summary>
           <fieldset disabled={command.busy}>
             <legend className="sr-only">영수증 참고 정보</legend>
-            <div className="form-field">
-              <label>
-                지불 의료기관 (선택)
-                <input
-                  maxLength={120}
-                  value={draft.provider}
-                  onChange={(e) => change("provider", e.target.value)}
-                />
-              </label>
-            </div>
             <div className="form-field">
               <label>
                 영수증 참고번호 (선택)

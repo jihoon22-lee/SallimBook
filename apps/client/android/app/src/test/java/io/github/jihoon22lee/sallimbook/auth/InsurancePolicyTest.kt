@@ -25,7 +25,7 @@ class InsurancePolicyTest {
     }
     private fun response(op: FinanceOperation, args: Map<String, Any?>, value: Any?, status: Int = 200): Any? = FinancePolicy.response(op, request(op, args), status, value)
 
-    @Test fun twentyNamedOperationsRetainOnlyFixedRoutesAndStrongVersions() {
+    @Test fun twentyTwoNamedOperationsRetainOnlyFixedRoutesAndStrongVersions() {
         val p = mapOf("policyId" to id); val c = mapOf("caseId" to id)
         val commands = listOf(
             FinanceOperation.LIST_INSURANCE_POLICIES to mapOf("query" to mapOf("status" to "active", "limit" to 200)),
@@ -42,8 +42,10 @@ class InsurancePolicyTest {
             FinanceOperation.LIST_MEDICAL_NODES to c, FinanceOperation.CREATE_MEDICAL_NODE to (c + input(node())),
             FinanceOperation.GET_MEDICAL_NODE to (c + mapOf("nodeId" to child)),
             FinanceOperation.UPDATE_MEDICAL_NODE to (c + mapOf("nodeId" to child, "ifMatch" to tag) + input(mapOf("parent_id" to other))),
+            FinanceOperation.DELETE_INSURANCE_CASE to (c + mapOf("ifMatch" to tag)),
+            FinanceOperation.DELETE_INSURANCE_POLICY to (p + mapOf("ifMatch" to tag)),
             FinanceOperation.DELETE_MEDICAL_NODE to (c + mapOf("nodeId" to child, "ifMatch" to tag)))
-        assertEquals(20, commands.size)
+        assertEquals(22, commands.size)
         for ((op, args) in commands) {
             val r = request(op, args)
             assertTrue(op.name, FinancePolicy.metadataHttpAllowed(r.method, r.path, r.body, r.ifMatch))
@@ -193,7 +195,7 @@ class InsurancePolicyTest {
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.CREATE_POLICY_PREMIUM_LINK, args, link + mapOf("active" to false), 201) }
     }
     @Test fun knownInsuranceErrorsProjectOnlySafeCodeAndMessage() {
-        for ((code, status) in listOf("MEDICAL_NODE_CYCLE" to 422, "MEDICAL_NODE_IN_USE" to 409, "PREMIUM_RULE_ALREADY_LINKED" to 409, "POLICY_NUMBER_UNAVAILABLE" to 503, "INSURANCE_ASSET_REQUIRED" to 422)) {
+        for ((code, status) in listOf("INSURANCE_CASE_IN_USE" to 409, "INSURANCE_POLICY_IN_USE" to 409, "MEDICAL_NODE_CYCLE" to 422, "MEDICAL_NODE_IN_USE" to 409, "PREMIUM_RULE_ALREADY_LINKED" to 409, "POLICY_NUMBER_UNAVAILABLE" to 503, "INSURANCE_ASSET_REQUIRED" to 422)) {
             val safe = AuthPolicy.safeError(status, mapOf("error" to mapOf("code" to code, "message" to "synthetic sensitive text", "policy_number" to "SYNTHETIC123")), id)!!
             assertEquals(code, (safe["error"] as Map<*, *>)["code"])
             assertFalse(safe.toString().contains("SYNTHETIC123")); assertFalse(safe.toString().contains("synthetic sensitive text"))

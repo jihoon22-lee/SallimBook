@@ -343,3 +343,12 @@ relation(member/child/parent/other), archived_at, 생성/수정 member ID와 공
 보험계약 insured와 사건·사건 revision patient의 세 FK만 이 테이블을 참조한다.
 로그인 구성원·계약자·actor·금융 소유자 관계는 바꾸지 않는다.
 상세 근거와 downgrade 제약은 [가족 모델 ADR](adr/household-people.md)을 따른다.
+
+
+### 0020 보험 오등록 삭제
+
+`insurance_case_revisions`의 사건 FK만 CASCADE이며, 변경 불가 트리거가 부모가 이미
+삭제된 version 1의 생성 스냅샷 제거만 허용한다. 부모가 존재하는 이력 DELETE와 모든
+UPDATE는 금지한다. `insurance_cases` / `insurance_policies`에는 version > 1의 DELETE를
+거부하는 트리거를 둔다. 비용·청구·지급·진료·보장·보험료·문서 참조의 RESTRICT는 유지한다.
+[설계 결정](adr/insurance-misregistration.md)에 삭제와 감사 보존 범위를 기록한다.

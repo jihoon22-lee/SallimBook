@@ -43,6 +43,18 @@ class InsuranceEventPolicyTest {
     private fun create(input: Map<String, Any?>) = mapOf("input" to input, "idempotencyKey" to "synthetic:1")
     private fun change(input: Map<String, Any?>, resource: String = id) = create(input) + mapOf("resourceId" to resource, "ifMatch" to tag)
 
+    @Test fun policyScopedExpenseConnectionFilterKeepsBooleanWireType() {
+        val op = FinanceOperation.LIST_MEDICAL_EXPENSES
+        for (linked in listOf(true, false)) {
+            val query = mapOf("query" to mapOf("claim_policy_id" to id, "claimed" to linked))
+            val req = request(op, query)
+            assertTrue(req.path.contains("claimed=$linked"))
+            assertTrue(InsuranceEventPolicy.httpAllowed("GET", req.path, null, null, null))
+        }
+        bad { request(op, mapOf("query" to mapOf("claimed" to "false"))) }
+        assertFalse(InsuranceEventPolicy.httpAllowed("GET", "/api/v1/insurance/medical-expenses?claimed=0", null, null, null))
+    }
+
     @Test fun allThirtyFourOperationsHaveFixedRoutesAndExactHeaderRequirements() {
         val commands = commands()
         assertEquals(34, commands.size)

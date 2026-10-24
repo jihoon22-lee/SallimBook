@@ -180,7 +180,12 @@ class InsuranceCase(CaseFields, ActorFields, EntityMixin, Base):
 class InsuranceCaseRevision(CaseFields, Base):
     __tablename__ = "insurance_case_revisions"
     __table_args__ = (
-        household_fk("insurance_case_revisions", "case_id", "insurance_cases"),
+        ForeignKeyConstraint(
+            ["household_id", "case_id"],
+            ["insurance_cases.household_id", "insurance_cases.id"],
+            ondelete="CASCADE",
+            name="fk_insurance_case_revisions_case_id",
+        ),
         household_fk("insurance_case_revisions", "changed_by_member_id", "household_members"),
         *case_constraints("insurance_case_revisions"),
         CheckConstraint("version > 0", name="positive_version"),

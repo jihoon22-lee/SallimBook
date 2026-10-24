@@ -65,7 +65,7 @@ internal object InsuranceEventPolicy {
         FinanceOperation.GET_INSURANCE_CLAIM to Route("GET", "/api/v1/insurance/claims/{claimId}", "", "ClaimResponse", mapOf(), false, false, 200),
         FinanceOperation.UPDATE_INSURANCE_CLAIM to Route("PATCH", "/api/v1/insurance/claims/{claimId}", "ClaimPatch", "ClaimResponse", mapOf(), true, false, 200),
         FinanceOperation.INSURANCE_CLAIM_HISTORY to Route("GET", "/api/v1/insurance/claims/{claimId}/history", "", "ClaimHistoryResponse", mapOf("cursor" to nullable(integer(1L, 9007199254740991L)), "limit" to integer(1L, 200L)), false, false, 200),
-        FinanceOperation.LIST_MEDICAL_EXPENSES to Route("GET", "/api/v1/insurance/medical-expenses", "", "ExpenseListResponse", mapOf("case_id" to nullable(id), "node_id" to nullable(id), "state" to nullable(choice("active", "void")), "cursor" to nullable(id), "limit" to integer(1L, 200L)), false, false, 200),
+        FinanceOperation.LIST_MEDICAL_EXPENSES to Route("GET", "/api/v1/insurance/medical-expenses", "", "ExpenseListResponse", mapOf("case_id" to nullable(id), "node_id" to nullable(id), "claim_policy_id" to nullable(id), "claimed" to nullable(bool), "state" to nullable(choice("active", "void")), "cursor" to nullable(id), "limit" to integer(1L, 200L)), false, false, 200),
         FinanceOperation.CREATE_MEDICAL_EXPENSE to Route("POST", "/api/v1/insurance/medical-expenses", "ExpenseCreate", "EventReference", mapOf(), false, true, 201),
         FinanceOperation.GET_MEDICAL_EXPENSE to Route("GET", "/api/v1/insurance/medical-expenses/{resourceId}", "", "ExpenseResponse", mapOf(), false, false, 200),
         FinanceOperation.CORRECT_MEDICAL_EXPENSE to Route("POST", "/api/v1/insurance/medical-expenses/{resourceId}/correct", "ExpenseCorrection", "EventReference", mapOf(), true, true, 201),
@@ -563,7 +563,7 @@ internal object InsuranceEventPolicy {
             raw.split('&').forEach { part ->
                 val pair = part.split('=', limit = 2)
                 if (pair.size != 2 || pair[0] in values) invalid()
-                values[pair[0]] = if (pair[0] == "limit" || pair[0] == "cursor" && route.output.endsWith("HistoryResponse")) pair[1].toLongOrNull() ?: invalid() else pair[1]
+                values[pair[0]] = if (pair[0] == "claimed") when (pair[1]) { "true" -> true; "false" -> false; else -> invalid() } else if (pair[0] == "limit" || pair[0] == "cursor" && route.output.endsWith("HistoryResponse")) pair[1].toLongOrNull() ?: invalid() else pair[1]
             }
         }
         return query(route, values)

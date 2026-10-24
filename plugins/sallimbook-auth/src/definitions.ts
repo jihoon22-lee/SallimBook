@@ -795,6 +795,14 @@ export interface SallimBookAuth {
   }): Promise<
     NativeAuthResult<NativeFinanceResponse<components["schemas"]["MedicalNodeResponse"]>>
   >;
+  deleteInsuranceCase(options: {
+    caseId: string;
+    ifMatch: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  deleteInsurancePolicy(options: {
+    policyId: string;
+    ifMatch: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
   deleteMedicalNode(options: {
     caseId: string;
     nodeId: string;

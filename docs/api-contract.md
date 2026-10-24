@@ -625,3 +625,18 @@ POST는 이름·관계(child/parent/other)만 받고 Idempotency-Key를 요구�
 구 native 감사 목록은 0.1.9의 어휘로 SQL 필터링하며 cursor도 모드에 묶인다.
 [구버전의 표시 제한과 배포 순서](adr/household-people.md)를 함께 확인한다.
 내보내기는 household_people의 모든 가계 행과 가족 감사 이벤트를 포함한다.
+
+
+### 보험 진료 작업 보완 (#155)
+
+- `DELETE /insurance/policies/{policy_id}`, `DELETE /insurance/cases/{case_id}`:
+  필수 `If-Match`, 성공 204. 다른 가계·없는 대상 404, 버전 불일치 409.
+  최초 등록 version 1이고 참조가 없는 오등록만 삭제한다. 수정 이력 또는
+  보존된 연결이 있으면 `409 INSURANCE_POLICY_IN_USE` / `INSURANCE_CASE_IN_USE`다.
+  생성·삭제 감사는 유지한다. [삭제 결정과 migration](adr/insurance-misregistration.md)을 따른다.
+- `GET /insurance/medical-expenses`는 선택적 `claim_policy_id`(UUID), `claimed`(boolean)를 받는다.
+  `claimed`가 있으면 계약이 필수이며 없으면 422 `INVALID_INSURANCE_INPUT`다.
+  다른 가계 계약은 404다. 현재 ClaimExpense 연결에 대해 계약별 EXISTS/NOT EXISTS를
+  적용한 다음 페이지를 나눈다. 초안·철회도 현재 근거 연결로 계산한다. 필터만 적용하며
+  목록 응답이나 금액 원본을 복제하지 않는다. 같은 비용의 복수 계약/청구 연결도 한 행이다.
+  계약만 지정하고 `claimed`를 생략하면 연결 여부를 제한하지 않는다.

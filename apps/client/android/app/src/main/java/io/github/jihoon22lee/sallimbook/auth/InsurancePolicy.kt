@@ -57,6 +57,8 @@ internal object InsurancePolicy {
         FinanceOperation.CREATE_INSURANCE_CASE to Route("POST", "/api/v1/insurance/cases", "CaseInput", "CaseResponse", false, false, 201),
         FinanceOperation.GET_INSURANCE_CASE to Route("GET", "/api/v1/insurance/cases/{caseId}", "", "CaseResponse", false, false, 200),
         FinanceOperation.UPDATE_INSURANCE_CASE to Route("PATCH", "/api/v1/insurance/cases/{caseId}", "CasePatch", "CaseResponse", false, true, 200),
+        FinanceOperation.DELETE_INSURANCE_CASE to Route("DELETE", "/api/v1/insurance/cases/{caseId}", "", "", false, true, 204),
+        FinanceOperation.DELETE_INSURANCE_POLICY to Route("DELETE", "/api/v1/insurance/policies/{policyId}", "", "", false, true, 204),
         FinanceOperation.INSURANCE_CASE_HISTORY to Route("GET", "/api/v1/insurance/cases/{caseId}/history", "", "CaseHistoryResponse", true, false, 200),
         FinanceOperation.LIST_MEDICAL_NODES to Route("GET", "/api/v1/insurance/cases/{caseId}/nodes", "", "MedicalNodeListResponse", true, false, 200),
         FinanceOperation.CREATE_MEDICAL_NODE to Route("POST", "/api/v1/insurance/cases/{caseId}/nodes", "MedicalNodeInput", "MedicalNodeResponse", false, false, 201),

@@ -1,3 +1,5 @@
+import { FilterPanel } from "../../../shared/TaskLayout";
+import { useUrlFilters } from "../../finance/useUrlFilters";
 import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
@@ -8,7 +10,7 @@ import { usePagedList, useResource } from "../../finance/queries";
 import { InsuranceError, InsurancePage } from "../InsuranceSupport";
 import type { Schema } from "../model";
 import { AllocationHistory, AllocationLink } from "./AllocationLink";
-import { CashSummary, ExpenseSummary } from "./EventSupport";
+import { CashSummary, ExpenseSummary, PolicySelect } from "./EventSupport";
 import { AllocationSummary, PayoutEditor } from "./PayoutEditor";
 import { ExpenseEditor } from "./ExpenseEditor";
 import { ReturnEditor } from "./ReturnEditor";
@@ -18,6 +20,10 @@ import type { EventKind, EventRow } from "./model";
 import { useInsuranceEventsApi } from "./api";
 export function ExpenseList({ caseId, nodeId }: { caseId: string; nodeId?: string }) {
   const api = useInsuranceEventsApi();
+  const { params, filter } = useUrlFilters();
+  const policy = params.get("expense_policy") ?? "";
+  const linked = params.get("expense_link") ?? "";
+  const filtered = isUuid(policy) && ["yes", "no"].includes(linked);
   const list = usePagedList(
     useCallback(
       (cursor?: string) =>
@@ -25,15 +31,16 @@ export function ExpenseList({ caseId, nodeId }: { caseId: string; nodeId?: strin
           query: {
             case_id: caseId,
             ...(nodeId ? { node_id: nodeId } : {}),
+            ...(filtered ? { claim_policy_id: policy, claimed: linked === "yes" } : {}),
             limit: 50,
             ...(cursor ? { cursor } : {}),
           },
         }),
-      [api, caseId, nodeId],
+      [api, caseId, nodeId, filtered, policy, linked],
     ),
   );
   return (
-    <section className="card">
+    <section className="card" aria-label={nodeId ? "이 진료의 비용 원본" : "사건의 의료비 원본"}>
       <h2>{nodeId ? "이 진료의 비용 원본" : "사건의 의료비 원본"}</h2>
       <Link
         className="button-link secondary-button"
@@ -41,9 +48,49 @@ export function ExpenseList({ caseId, nodeId }: { caseId: string; nodeId?: strin
       >
         실제 의료비 추가
       </Link>
+      <FilterPanel title="비용 청구 연결 확인" activeCount={filtered ? 1 : 0}>
+        <PolicySelect
+          label="비용 청구 확인 계약"
+          value={policy}
+          onChange={(value) => filter("expense_policy", value)}
+        />
+        <label>
+          선택 계약의 청구 연결
+          <select
+            value={linked}
+            disabled={!isUuid(policy)}
+            onChange={(e) => filter("expense_link", e.target.value)}
+          >
+            <option value="">모든 비용</option>
+            <option value="yes">청구에 연결됨</option>
+            <option value="no">청구에 연결 안 됨</option>
+          </select>
+        </label>
+        <p>
+          초안·철회를 포함해 현재 청구 근거에 연결된 비용을 확인해요. 연결 여부는 지급 완료나 다른
+          계약의 청구 여부를 뜻하지 않아요.
+        </p>
+        <button
+          onClick={() => {
+            filter("expense_policy", "");
+            filter("expense_link", "");
+          }}
+        >
+          비용 청구 필터 초기화
+        </button>
+      </FilterPanel>
+      {filtered && (
+        <p role="status">
+          선택 계약의 청구에 {linked === "yes" ? "연결된" : "연결되지 않은"} 비용만 표시해요.
+        </p>
+      )}
       <InsuranceError error={list.error} />
       {list.error && <button onClick={() => void list.reload()}>의료비 목록 다시 확인</button>}
-      {!list.loading && !list.error && !list.items.length && <p>아직 실제 의료비가 없어요.</p>}
+      {!list.loading && !list.error && !list.items.length && (
+        <p>
+          {filtered ? "선택한 청구 연결 조건에 맞는 비용이 없어요." : "아직 실제 의료비가 없어요."}
+        </p>
+      )}
       <ul className="finance-list">
         {list.items.map((row) => (
           <li key={row.id}>

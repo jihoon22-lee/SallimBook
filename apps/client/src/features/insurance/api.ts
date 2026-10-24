@@ -6,6 +6,22 @@ export function useInsuranceApi() {
   const { domainApi } = useAuth();
   return useMemo(
     () => ({
+      deletePolicy: (policyId: string, version: number) =>
+        domainApi.write(
+          (c) =>
+            c.DELETE("/api/v1/insurance/policies/{policy_id}", {
+              params: { path: { policy_id: policyId }, header: { "If-Match": `"${version}"` } },
+            }),
+          () => nativeFinance.deleteInsurancePolicy({ policyId, ifMatch: `"${version}"` }),
+        ),
+      deleteCase: (caseId: string, version: number) =>
+        domainApi.write(
+          (c) =>
+            c.DELETE("/api/v1/insurance/cases/{case_id}", {
+              params: { path: { case_id: caseId }, header: { "If-Match": `"${version}"` } },
+            }),
+          () => nativeFinance.deleteInsuranceCase({ caseId, ifMatch: `"${version}"` }),
+        ),
       policies: (query: PolicyQuery = {}) =>
         domainApi.read(
           (c) => c.GET("/api/v1/insurance/policies", { params: { query } }),

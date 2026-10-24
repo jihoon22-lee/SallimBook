@@ -325,3 +325,26 @@ test("native cancelled late receipt retains the operation key and never applies 
   expect(state.writes[0]!.key).toBe(state.writes[1]!.key);
   expect(native.http).toEqual([]);
 });
+
+test("native pristine case deletion sends a named command and a strong version without web HTTP", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.core.nodes = [];
+  state.expenses = [];
+  state.claims = [];
+  state.payouts = [];
+  const native = await mockNativeInsurance(page, state);
+  await page.goto(`/insurance/cases/${uid(90)}`);
+  await page.getByRole("button", { name: "오등록 사건 삭제 검토", exact: true }).click();
+  await page
+    .getByLabel("연결 기록과 변경 이력이 없는 오등록 항목임을 확인했어요.", { exact: true })
+    .check();
+  await page.getByRole("button", { name: "오등록 사건 삭제", exact: true }).click();
+  await expect(page).toHaveURL("/insurance/cases");
+  await called(native, ["deleteInsuranceCase"]);
+  expect(native.calls.find((c) => c.method === "deleteInsuranceCase")?.args).toMatchObject({
+    caseId: uid(90),
+    ifMatch: '"1"',
+  });
+});

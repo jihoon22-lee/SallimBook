@@ -53,6 +53,7 @@ async function createNode(
     .click();
   await page.getByRole("combobox", { name: "진료 종류", exact: true }).selectOption(kind);
   await page.getByLabel("진료 이름", { exact: true }).fill(label);
+  await page.getByLabel("의료기관·약국 이름", { exact: true }).fill("합성 HTTPS 의료기관");
   await page.getByLabel("진료 시작일", { exact: true }).fill("2025-02-10");
   await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click();
   await expect(page.getByRole("region", { name: "선택한 진료", exact: true })).toContainText(label);
@@ -68,6 +69,14 @@ async function createExpense(
 ) {
   await page.goto(`/insurance/expenses/new?case=${caseId}&node=${nodeId}`);
   await page.getByLabel("의료비 지불 금액 (원)", { exact: true }).fill(amount);
+  await expect(page.getByLabel("지불 의료기관 (선택)", { exact: true })).toHaveValue(
+    "합성 HTTPS 의료기관",
+  );
+  const suggestion = page.getByRole("button", {
+    name: "진료 시작일을 실제 지불일로 사용",
+    exact: true,
+  });
+  if (await suggestion.count()) await suggestion.click();
   await page.getByLabel("의료비 지불 실제 날짜", { exact: true }).fill("2025-02-10");
   await openDisclosure(page, "영수증 참고 정보 (선택)");
   await page.getByLabel("지불 의료기관 (선택)", { exact: true }).fill("합성 HTTPS 의료기관");
@@ -232,6 +241,17 @@ test("real insurance policies cases medical originals claims receipts correction
       ]),
     };
   });
+  for (const kind of ["policy", "case"]) {
+    if (kind === "policy") await createPolicy(page, "합성 HTTPS 오등록 계약");
+    else await createCase(page, "합성 HTTPS 오등록 사건");
+    const noun = kind === "policy" ? "계약" : "사건";
+    await page.getByRole("button", { name: `오등록 ${noun} 삭제 검토`, exact: true }).click();
+    await page
+      .getByLabel("연결 기록과 변경 이력이 없는 오등록 항목임을 확인했어요.", { exact: true })
+      .check();
+    await page.getByRole("button", { name: `오등록 ${noun} 삭제`, exact: true }).click();
+    await expect(page).toHaveURL(kind === "policy" ? "/insurance/policies" : "/insurance/cases");
+  }
   const policyA = await createPolicy(page, "합성 HTTPS 실손 계약");
   await page.getByRole("button", { name: "증권번호 등록·변경", exact: true }).click();
   await page.getByLabel("새 증권번호", { exact: true }).fill("SYNTHETIC-HTTPS-POLICY");
@@ -276,7 +296,16 @@ test("real insurance policies cases medical originals claims receipts correction
   await createNode(page, caseA, "surgery", "합성 HTTPS 수술 설명", inpatient);
   const follow = await createNode(page, caseA, "group", "합성 HTTPS 재진");
   const followA = await createNode(page, caseA, "follow_up", "합성 HTTPS 재진 1", follow);
-  const followB = await createNode(page, caseA, "follow_up", "합성 HTTPS 재진 2", follow);
+  await page.getByRole("button", { name: "같은 단계 진료 추가", exact: true }).click();
+  await page.getByLabel("진료 이름", { exact: true }).fill("합성 HTTPS 재진 2");
+  await page.getByRole("button", { name: "저장하고 같은 단계 진료 추가", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("합성 HTTPS 재진 2 진료를 저장했어요");
+  const savedVisit = page.getByRole("link", { name: "방금 저장한 진료 보기", exact: true });
+  const followB = (await savedVisit.getAttribute("href"))!.split("/").at(-1)!;
+  await savedVisit.click();
+  await expect(page.getByRole("navigation", { name: "같은 단계 진료", exact: true })).toContainText(
+    "합성 HTTPS 재진 1",
+  );
   await page.setViewportSize({ width: 412, height: 915 });
   const nodes = [outpatient, inpatient, pharmacy, followA, followB];
   const expenseIds: string[] = [];
@@ -292,6 +321,12 @@ test("real insurance policies cases medical originals claims receipts correction
       ),
     );
   const claimA = await createClaim(page, caseA, policyA, "HTTPS-CLAIM-A");
+  await page.goto(`/insurance/cases/${caseA}?expense_policy=${policyA}&expense_link=yes`);
+  const expenseList = page.getByRole("region", { name: "사건의 의료비 원본", exact: true });
+  await expect(expenseList.getByRole("listitem")).toHaveCount(1);
+  await expect(expenseList).toContainText("HTTPS-INPATIENT");
+  await page.goto(`/insurance/cases/${caseA}?expense_policy=${policyB}&expense_link=no`);
+  await expect(expenseList.getByRole("listitem")).toHaveCount(5);
   await createClaim(page, caseA, policyB, "HTTPS-CLAIM-B");
   const costs = await page.evaluate(async (id) => {
     const r = await fetch(`/api/v1/insurance/cases/${id}/summary`).then((r) => r.json());

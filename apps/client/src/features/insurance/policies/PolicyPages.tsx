@@ -1,12 +1,13 @@
+import { MisregistrationDelete } from "../../assets/MisregistrationDelete";
 import { FilterPanel } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
-import { useCallback } from "react";
-import { Link, useParams } from "react-router";
+import { useCallback, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import { ApiError } from "../../../platform/api";
-import { isUuid } from "../../finance/dates";
+import { dateLabel, isUuid } from "../../finance/dates";
 import { usePagedList, useResource } from "../../finance/queries";
 import { useUrlFilters } from "../../finance/useUrlFilters";
-import { PersonSelect } from "../../household/people";
+import { PersonSelect, useHouseholdPeople } from "../../household/people";
 import { useInsuranceApi } from "../api";
 import { policyStatuses } from "../model";
 import type { PolicyQuery } from "../model";
@@ -18,6 +19,7 @@ import { ClaimsList } from "../claims/ClaimPages";
 import { PremiumLinks } from "./PremiumLinks";
 function PolicyList() {
   const api = useInsuranceApi();
+  const people = useHouseholdPeople();
   const { params, filter, reset } = useUrlFilters();
   const status = params.get("status") ?? "";
   const insured = params.get("insured") ?? "";
@@ -78,6 +80,10 @@ function PolicyList() {
         </div>
         <button onClick={reset}>보험 계약 필터 초기화</button>
       </FilterPanel>
+      <InsuranceError error={people.error} />
+      {people.error && (
+        <button onClick={() => void people.reload()}>피보험자 이름 다시 확인</button>
+      )}
       <InsuranceError error={list.error} />
       {list.error && <button onClick={() => void list.reload()}>보험 계약 다시 확인</button>}
       {list.loading && (
@@ -96,6 +102,16 @@ function PolicyList() {
               {row.insurer} · {policyStatuses[row.status]} ·{" "}
               {row.masked_number ?? "증권번호 미등록"}
             </p>
+            <p>
+              피보험자{" "}
+              {people.people.find((p) => p.id === row.insured_member_id)?.display_name ??
+                (row.insured_member_id ? "이름 확인 중" : "미지정")}
+            </p>
+            <p>
+              납입 종료 {dateLabel(row.payment_end ?? null)} · 계약 만기{" "}
+              {dateLabel(row.contract_end ?? null)} · 보장 종료{" "}
+              {dateLabel(row.coverage_end ?? null)}
+            </p>
           </li>
         ))}
       </ul>
@@ -108,6 +124,8 @@ function PolicyList() {
   );
 }
 function PolicyDetail({ id, edit }: { id: string; edit: boolean }) {
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
   const api = useInsuranceApi();
   const resource = useResource(
     useCallback(
@@ -139,6 +157,30 @@ function PolicyDetail({ id, edit }: { id: string; edit: boolean }) {
               <PolicySummary row={row} />
               <Link to={`/insurance/policies/${id}/edit`}>보험 계약 수정</Link>
             </section>
+            <button className="danger-button" onClick={() => setDeleting(true)}>
+              오등록 계약 삭제 검토
+            </button>
+            {deleting && (
+              <MisregistrationDelete
+                id={id}
+                title="오등록 계약 삭제"
+                ackLabel="연결 기록과 변경 이력이 없는 오등록 항목임을 확인했어요."
+                actionLabel="오등록 계약 삭제"
+                inUseCode="INSURANCE_POLICY_IN_USE"
+                remove={() => api.deletePolicy(id, row.version)}
+                done={() => navigate("/insurance/policies", { replace: true })}
+                cancel={() => setDeleting(false)}
+                reload={() => {
+                  setDeleting(false);
+                  void resource.reload();
+                }}
+              >
+                <p>
+                  {row.product_name} · 등록 후 수정하거나 다른 기록에 연결한 계약은 삭제할 수
+                  없어요. 삭제한 항목의 생성·삭제 감사 기록은 남아요.
+                </p>
+              </MisregistrationDelete>
+            )}
             <DocumentPanel kind="policy" id={id} />
             <PolicyNumber policy={row} refresh={() => void resource.reload()} />
             <Coverages policyId={id} />
