@@ -1,3 +1,4 @@
+import { RecordActor } from "../../shared/RecordActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { PaymentConnections, AccountIncomeLinks } from "../finance/RelatedRecords";
 import { DateInput } from "../../shared/DateInput";
@@ -383,6 +384,7 @@ function AccountDetail({ id }: { id: string }) {
           <Link to="/accounts">계좌 목록</Link>
         </div>
       </section>
+      <RecordActor memberId={account.updated_by_member_id} at={account.updated_at} />
       <AccountNumber key={account.id} account={account} refresh={state.reload} />
       <section className="card">
         <h2>연결된 금융 자산</h2>

@@ -114,4 +114,22 @@ class NativeAuditWireTest {
             assertEquals("INTERNAL_ERROR",(AuthPolicy.safeError(500,raw,f.resource)!!["error"] as Map<*,*>)["code"])
         }
     }
+
+    @Test fun activityUsesFixedReadRouteAndProjectsOnlyPublicNamesAndKnownLocalLinks() {
+        val request=NativeAuditWire.prepare(mapOf("activity" to true,"query" to mapOf("limit" to 2,"actor_member_id" to f.member)))
+        assertTrue(request.path.startsWith("/api/v1/activity-events?"))
+        assertTrue(NativeAuditWire.httpAllowed("GET",request.path,null,null,null,null))
+        val named=row()+mapOf("target_name" to "합성 공동 기록","target_path" to "/assets/${f.cardId}")
+        assertEquals("합성 공동 기록",((NativeAuditWire.response(request,200,page(named))["items"] as List<*>)[0] as Map<*,*>)["target_name"])
+        NativeAuditWire.response(request,200,page(named+mapOf("target_name" to null,"target_path" to null)))
+        for(path in listOf("https://synthetic.invalid", "//synthetic.invalid", "/assets/../vault", "/assets/${f.cardId}?token=synthetic", "/vault", "/settings/auth"))
+            bad(AuthCode.ACCESS_DENIED) { NativeAuditWire.response(request,200,page(named+mapOf("target_path" to path))) }
+        bad(AuthCode.ACCESS_DENIED) { NativeAuditWire.response(request,200,page(named+mapOf("target_name" to null))) }
+        bad(AuthCode.ACCESS_DENIED) { NativeAuditWire.response(request,200,page(named+mapOf("safe_diff" to emptyMap<String,Any>()))) }
+        bad(AuthCode.ACCESS_DENIED) { NativeAuditWire.response(request,200,page(named+mapOf("entity_type" to "vault"))) }
+        bad(AuthCode.ACCESS_DENIED) { NativeAuditWire.response(request,200,page(named+mapOf("action" to "reveal"))) }
+        bad { NativeAuditWire.prepare(mapOf("activity" to "true")) }
+        assertFalse(NativeAuditWire.httpAllowed("GET",request.path+"&activity=true",null,null,null,null))
+        assertFalse(NativeAuditWire.httpAllowed("POST",request.path,null,null,null,null))
+    }
 }

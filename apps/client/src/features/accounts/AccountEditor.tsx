@@ -1,3 +1,4 @@
+import { RecordActor } from "../../shared/RecordActor";
 import { DateInput } from "../../shared/DateInput";
 import { OptionalFields } from "../../shared/OptionalFields";
 import { useEffect, useRef, useState } from "react";
@@ -331,6 +332,7 @@ export function AccountEditor({ initial }: { initial?: Account }) {
             </button>
             {latest && (
               <>
+                <RecordActor memberId={latest.updated_by_member_id} at={latest.updated_at} />
                 <div
                   className="table-scroll"
                   tabIndex={0}

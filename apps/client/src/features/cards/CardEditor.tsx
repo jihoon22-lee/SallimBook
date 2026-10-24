@@ -1,3 +1,4 @@
+import { RecordActor } from "../../shared/RecordActor";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
@@ -272,6 +273,8 @@ export function CardEditor({ initial }: { initial?: Card }) {
             </button>
             {latest && (
               <>
+                <RecordActor memberId={latest.updated_by_member_id} at={latest.updated_at} />
+
                 <dl className="metadata-grid">
                   <div>
                     <dt>현재 카드사·카드명</dt>

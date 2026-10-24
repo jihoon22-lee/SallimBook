@@ -1,3 +1,4 @@
+import { LastModified } from "../../../shared/RecordActor";
 import { DateInput } from "../../../shared/DateInput";
 import { OptionalFields } from "../../../shared/OptionalFields";
 import { useCallback, useState } from "react";
@@ -87,6 +88,7 @@ export function PolicySummary({ row }: { row: Policy }) {
           <dt>메모</dt>
           <dd>{row.note || "미입력"}</dd>
         </div>
+        <LastModified record={row} />
       </dl>
       <p className="muted">
         납입 보험료 누계로 자산 평가액을 만들지 않아요. 확인한 환급·적립액만 별도 자산에 기록해요.

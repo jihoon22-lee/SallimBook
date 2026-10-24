@@ -173,6 +173,45 @@ test("real audit UI paginates metadata filters current household and rejects exp
     expect(cross.status).toBe(404);
     expect(Object.hasOwn(cross.body, "items")).toBe(false);
     console.log("SAFE_PHASE=AUDIT_FILTERS_HOUSEHOLD");
+    await page.goto("/activity");
+    const activity = page.getByRole("region", { name: "최근 작업 목록", exact: true });
+    await expect(activity.getByRole("listitem")).toHaveCount(50);
+    await page.getByRole("button", { name: "이전 작업 더 보기", exact: true }).click();
+    await expect(activity.getByRole("listitem")).toHaveCount(52);
+    await expect(
+      activity.getByRole("link", { name: "SYNTHETIC_PRIVATE_AUDIT_VALUE", exact: true }),
+    ).toHaveCount(52);
+    for (const hidden of [
+      "SYNTHETIC_PRIVATE_AUDIT_NOTE",
+      "SYNTHETIC_PRIVATE_AUDIT_UPDATED",
+      "FOREIGN_AUDIT_VALUE",
+    ])
+      await expect(activity.getByText(hidden, { exact: true })).toHaveCount(0);
+    const activityData = await read<S["ActivityListResponse"]>(
+      page,
+      "/api/v1/activity-events?limit=200",
+    );
+    expect(activityData.items).toHaveLength(52);
+    expect(
+      activityData.items.every(
+        (row) =>
+          row.actor_member_id === member.member_id &&
+          own.includes(row.entity_id) &&
+          row.target_path === `/appliances/${row.entity_id}`,
+      ),
+    ).toBe(true);
+    const recent = activityData.items[0]!;
+    await activity.getByRole("link").first().click();
+    await expect(page).toHaveURL(new RegExp(`/appliances/${recent.entity_id}$`));
+    await expect(page.getByText(new RegExp(`수정자: ${member.display_name}`))).toBeVisible();
+    await page.goto("/settings/audit");
+    await page.getByLabel("대상 종류", { exact: true }).selectOption("appliance");
+    await page.getByLabel("작업 종류", { exact: true }).selectOption("update");
+    await page.getByLabel("대상 ID (선택)").fill(own[0]!);
+    await page.getByRole("button", { name: "조건 적용", exact: true }).click();
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    console.log("SAFE_PHASE=ACTIVITY_CURRENT_NAMES_AND_LINKS");
+
     expect(
       await page.evaluate(
         async (control) =>

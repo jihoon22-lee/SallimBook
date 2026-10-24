@@ -1,3 +1,4 @@
+import { LastModified } from "../../shared/RecordActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { TaskNavigation } from "../../shared/TaskLayout";
 import { Icon } from "../../shared/Icon";
@@ -67,6 +68,7 @@ export function ConsumableSummary({ row }: { row: Consumable }) {
           <dt>소모품 메모</dt>
           <dd>{row.note || "미입력"}</dd>
         </div>
+        <LastModified record={row} />
       </dl>
       <p className="muted">
         여러 기기가 같은 재고를 사용해요. 재고 부족 표시가 없어도 한 번 교체할 수량보다 적으면

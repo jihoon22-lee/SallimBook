@@ -20,3 +20,13 @@ class AuditEventResponse(BaseModel):
 class AuditListResponse(BaseModel):
     items: list[AuditEventResponse]
     next_cursor: str | None
+
+
+class ActivityEventResponse(AuditEventResponse):
+    target_name: str | None
+    target_path: str | None
+
+
+class ActivityListResponse(BaseModel):
+    items: list[ActivityEventResponse]
+    next_cursor: str | None

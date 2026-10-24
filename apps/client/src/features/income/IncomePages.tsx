@@ -1,3 +1,5 @@
+import { formatSeoulDateTime } from "../../shared/format";
+import { RecordActor } from "../../shared/RecordActor";
 import { IncomeInsuranceLinks } from "../finance/RelatedRecords";
 import { FilterPanel, TaskNotice, TaskPanel } from "../../shared/TaskLayout";
 import { useCallback, useRef, useState } from "react";
@@ -22,7 +24,7 @@ import type { Income, IncomeQuery } from "./model";
 import { IncomeEditor } from "./IncomeEditor";
 import { IncomeCommand } from "./IncomeCommands";
 import { RetryFailed, retriesCombined } from "../../shared/RetryFailed";
-import { formatSeoulDateTime } from "../../shared/format";
+
 function useIncomeSummary() {
   const api = useIncomeApi();
   const { month } = useMonth();
@@ -389,7 +391,9 @@ function IncomeHistory({ id }: { id: string }) {
               {row.date_precision === "month" ? "월합계" : dateLabel(row.occurred_on)}
             </p>
             {row.reason && <p>사유: {row.reason}</p>}
-            <p>{formatSeoulDateTime(row.updated_at)} · 서울</p>
+            <p>
+              <RecordActor memberId={row.updated_by_member_id} at={row.updated_at} />
+            </p>
           </li>
         ))}
       </ol>
@@ -437,6 +441,7 @@ function IncomeDetail({ id, edit }: { id: string; edit: boolean }) {
               members={members.members}
               accounts={accounts.data ?? []}
             />
+            <RecordActor memberId={row.updated_by_member_id} at={row.updated_at} />
             {row.note && <p>메모: {row.note}</p>}
             {row.reason && <p>변경 사유: {row.reason}</p>}
             {row.reverses_id && <Link to={`/income/${row.reverses_id}`}>반환 원본 수입 확인</Link>}

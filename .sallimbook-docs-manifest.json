@@ -66,8 +66,8 @@
       "git_sha1": "9f36f5ae87a99e4ff7a6eeda0650e4d4be1b7b27"
     },
     "docs/api-contract.md": {
-      "sha256": "a83b5b9cf745ee6910bf9c5e4d17dfc28f1b5951d09d56f4cf117f30c53e0e27",
-      "git_sha1": "ac0464c53e3e82f33fcc4c306e8e91d6052f4c98"
+      "sha256": "4b706446e5a6632a2ab02b0bdf80d88336c3873b75fdc690a92396660a11ae81",
+      "git_sha1": "ec6453e3e27de692f9a0d80232c6422f7ecdf7dd"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -412,6 +412,10 @@
     "docs/adr/insurance-misregistration.md": {
       "sha256": "c516a989823429cce0917f930cc890876a9b1f5b389bf8a8dbd13d5669f73faa",
       "git_sha1": "98f2328fe55bff61e200eaa20fae8c3d0874def1"
+    },
+    "docs/testing/shared-activity.md": {
+      "sha256": "6210a6055c1e819befce2f5db35ed0a9ef81f967ff2574506fae11337f2bf5d4",
+      "git_sha1": "b1c94fb4b16f6ed4f00907a2e7cf46b0a9ad11f0"
     }
   }
 }

@@ -7,7 +7,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.Base64
 
-internal class NativeAuditRequest(val path:String,val limit:Int,val query:Map<String,Any>)
+internal class NativeAuditRequest(val path:String,val limit:Int,val query:Map<String,Any>,val activity:Boolean=false)
 
 /** Security projection of generated audit DTOs; values, raw safe_diff and arbitrary URLs are excluded. */
 internal object NativeAuditWire {
@@ -50,7 +50,8 @@ internal object NativeAuditWire {
     }
     fun prepare(value:Any?):NativeAuditRequest {
         val arguments=value as? Map<*,*> ?: invalid()
-        if(arguments.keys.any { it!="query" }) invalid()
+        if(arguments.keys.any { it!="query" && it!="activity" }) invalid()
+        val activity=arguments["activity"]?.let { if(it!=true) invalid(); true } ?: false
         val input=if(arguments.containsKey("query")) arguments["query"] as? Map<*,*> ?: invalid() else emptyMap<Any,Any>()
         if(input.keys.any { it !in queryFields }) invalid()
         val limit=if(input.containsKey("limit")) integer(input["limit"],200).toInt() else 50
@@ -66,12 +67,12 @@ internal object NativeAuditWire {
             query[key]=value
         }
         if(query["since"]!=null && query["until"]!=null && time(query["since"])>=time(query["until"])) invalid()
-        val path="/api/v1/audit-events?"+query.entries.joinToString("&") { (key,item) -> "$key="+URLEncoder.encode(item.toString(),Charsets.UTF_8.name()).replace("+","%20") }
-        return NativeAuditRequest(path,limit,query.toMap())
+        val path=(if(activity) "/api/v1/activity-events?" else "/api/v1/audit-events?")+query.entries.joinToString("&") { (key,item) -> "$key="+URLEncoder.encode(item.toString(),Charsets.UTF_8.name()).replace("+","%20") }
+        return NativeAuditRequest(path,limit,query.toMap(),activity)
     }
     fun httpAllowed(method:String,path:String,body:Any?,ifMatch:String?,idempotencyKey:String?,stepUp:String?):Boolean=try {
         if(method!="GET" || body!=null || ifMatch!=null || idempotencyKey!=null || stepUp!=null ||
-            !path.startsWith("/api/v1/audit-events?") || path.length>2048) false
+            !(path.startsWith("/api/v1/audit-events?") || path.startsWith("/api/v1/activity-events?")) || path.length>2048) false
         else {
             val query=linkedMapOf<String,Any>()
             for(part in path.substringAfter('?').split('&')) {
@@ -83,7 +84,7 @@ internal object NativeAuditWire {
                     value.toInt()
                 } else value
             }
-            prepare(mapOf("query" to query)).path==path
+            prepare(if(path.startsWith("/api/v1/activity-events?")) mapOf("query" to query,"activity" to true) else mapOf("query" to query)).path==path
         }
     } catch(_:Exception) { false }
     /** Current identity is fetched through the existing /me security projection, never supplied by JS. */
@@ -98,7 +99,7 @@ internal object NativeAuditWire {
         if(raw.size>request.limit) invalid()
         val seen=mutableSetOf<String>(); var previous:Pair<Instant,String>?=request.query["cursor"]?.let(::cursor)
         val items=raw.map { entry ->
-            val row=record(entry,rowFields); val identifier=id(row["id"]); val actor=id(row["actor_member_id"]); val entity=id(row["entity_id"])
+            val row=record(entry,if(request.activity) rowFields+setOf("target_name","target_path") else rowFields); val identifier=id(row["id"]); val actor=id(row["actor_member_id"]); val entity=id(row["entity_id"])
             if(!seen.add(identifier) || row["entity_type"] !in entityTypes || row["action"] !in actions) invalid()
             for(key in listOf("entity_type","entity_id","actor_member_id","action")) if(request.query[key]!=null && request.query[key]!=row[key]) invalid()
             val occurred=time(row["occurred_at"],true)
@@ -112,14 +113,33 @@ internal object NativeAuditWire {
             if(fields.size>64 || fields.any { it !in knownFields }) invalid()
             @Suppress("UNCHECKED_CAST") val names=fields as List<String>
             if(names!=names.distinct().sorted()) invalid()
-            mapOf("id" to identifier,"actor_member_id" to actor,"entity_type" to row["entity_type"],"entity_id" to entity,
+            val projected=mapOf("id" to identifier,"actor_member_id" to actor,"entity_type" to row["entity_type"],"entity_id" to entity,
                 "action" to row["action"],"request_id" to correlation,"before_version" to before,"after_version" to after,
                 "occurred_at" to row["occurred_at"],"changed_fields" to names.toList())
+            if(request.activity) {
+                if(row["entity_type"] !in businessTypes || row["action"]=="reveal") invalid()
+                val name=row["target_name"]?.let { (it as? String)?.takeIf { text -> text.length in 1..500 && text.none { c -> c.code<32 || c.code==127 } } ?: invalid() }
+                val path=row["target_path"]?.let { (it as? String)?.takeIf(::activityPath) ?: invalid() }
+                if(name==null && path!=null) invalid()
+                projected+mapOf("target_name" to name,"target_path" to path)
+            } else projected
         }
         val next=page["next_cursor"]
         if(next!=null && (items.size!=request.limit || cursor(next)!=previous)) invalid()
         mapOf("items" to items,"next_cursor" to next)
     } catch(_:Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+
+    private val businessTypes=setOf("asset","financial_account","card","insurance_policy","insurance_coverage","policy_premium_link","insurance_case","medical_node","medical_expense","medical_refund","insurance_claim","insurance_payout","insurance_return","payout_allocation","appliance","consumable","appliance_consumable","stock_movement","consumable_replacement","obligation","fixed_settlement","asset_month","recurring_rule","cash_record","income_conversion","household_person")
+    private fun activityPath(path:String):Boolean {
+        val id=uuid.pattern
+        return path=="/settings/people" || path=="/income" || listOf(
+            "/(assets|accounts|cards|appliances|consumables|appliance-consumables|income|fixed-payments)/$id",
+            "/fixed-payments/rules/$id", "/insurance/(policies|cases|expenses|refunds|claims|payouts|returns)/$id",
+            "/insurance/cases/$id/nodes/$id", "/consumables/$id/stock/$id",
+            "/appliance-consumables/$id/replacements/$id",
+            "/assets/months/[0-9]{4}-(0[1-9]|1[0-2])\\?revision=[1-9][0-9]*"
+        ).any { Regex(it).matches(path) }
+    }
 
     // Exact reviewed server metadata names, not values. Source: core/audit.py and audit/service.py.
     val entityTypes=setOf(

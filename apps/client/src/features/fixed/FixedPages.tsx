@@ -1,3 +1,4 @@
+import { LastAuditActor } from "../audit/LastAuditActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { RuleInsuranceLink, NamedReference } from "../finance/RelatedRecords";
 import { TaskNotice, TaskPanel, useTaskPanelRelease } from "../../shared/TaskLayout";
@@ -233,7 +234,13 @@ function GenerateForm({ month, onSaved }: { month: string; onSaved: () => void }
     </section>
   );
 }
-export function ObligationSummary({ row }: { row: Obligation }) {
+export function ObligationSummary({
+  row,
+  showActor = false,
+}: {
+  row: Obligation;
+  showActor?: boolean;
+}) {
   return (
     <>
       <dl className="metadata-grid">
@@ -303,6 +310,7 @@ export function ObligationSummary({ row }: { row: Obligation }) {
           </div>
         )}
       </dl>
+      {showActor && <LastAuditActor kind="obligation" id={row.id} version={row.version} />}
       {row.note && <p>메모: {row.note}</p>}
     </>
   );
@@ -657,6 +665,7 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
               {latest.ended_on ? `종료 ${dateLabel(latest.ended_on)}` : "계속 적용"}
             </p>
             <RuleSummary terms={displayedTerms(latest)} />
+            <LastAuditActor kind="recurring_rule" id={latest.id} version={latest.version} />
             <button
               type="button"
               disabled={!!latest.ended_on && latest.ended_on <= todaySeoul()}
@@ -712,6 +721,7 @@ function RuleDetail({ id, edit }: { id: string; edit: boolean }) {
             <section className="card">
               <h2>{displayedTerms(row).title}</h2>
               <RuleSummary terms={displayedTerms(row)} />
+              <LastAuditActor kind="recurring_rule" id={row.id} version={row.version} />
               <p>
                 규칙 버전 {row.version}
                 {row.ended_on ? ` · 종료 적용일 ${dateLabel(row.ended_on)}` : ""}
@@ -1089,7 +1099,7 @@ function ObligationDetail({ id }: { id: string }) {
                   ))}
               </div>
             </details>
-            <ObligationSummary row={row} />
+            <ObligationSummary row={row} showActor />
             <RecordedMoneyNotice />
           </section>
           {currentAction && (

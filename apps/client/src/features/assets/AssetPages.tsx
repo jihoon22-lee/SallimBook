@@ -1,3 +1,4 @@
+import { LastModified } from "../../shared/RecordActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { TaskPanel } from "../../shared/TaskLayout";
 import { AssetAccountLink } from "../finance/RelatedRecords";
@@ -77,6 +78,7 @@ export function AssetSummary({ asset, members }: { asset: Asset; members: Househ
         <dt>보유 종료일</dt>
         <dd>{dateLabel(asset.ended_on ?? null)}</dd>
       </div>
+      <LastModified record={asset} />
     </dl>
   );
 }

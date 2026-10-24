@@ -1,3 +1,4 @@
+import { LastAuditActor } from "../audit/LastAuditActor";
 import { DateInput } from "../../shared/DateInput";
 import { OptionalFields } from "../../shared/OptionalFields";
 import { useState } from "react";
@@ -444,6 +445,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
               <>
                 <h4>{displayedTerms(latest).title}</h4>
                 <RuleSummary terms={displayedTerms(latest)} />
+                <LastAuditActor kind="recurring_rule" id={latest.id} version={latest.version} />
                 {pendingVersions(latest).map((row) => (
                   <div key={row.id}>
                     <h5>{dateLabel(row.effective_from)}부터 적용 예정</h5>

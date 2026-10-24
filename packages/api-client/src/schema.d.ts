@@ -75,6 +75,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/activity-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Activity Events */
+        get: operations["listActivityEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appliance-consumables": {
         parameters: {
             query?: never;
@@ -2948,6 +2965,52 @@ export interface components {
         AccountStatus: "active" | "closed";
         /** @enum {string} */
         AccountType: "checking" | "savings" | "term_deposit" | "brokerage" | "pension_savings" | "irp" | "dc_pension" | "isa" | "cma" | "other";
+        /** ActivityEventResponse */
+        ActivityEventResponse: {
+            /** Action */
+            action: string;
+            /**
+             * Actor Member Id
+             * Format: uuid
+             */
+            actor_member_id: string;
+            /** After Version */
+            after_version: number | null;
+            /** Before Version */
+            before_version: number | null;
+            /** Changed Fields */
+            changed_fields: string[];
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Request Id */
+            request_id: string | null;
+            /** Target Name */
+            target_name: string | null;
+            /** Target Path */
+            target_path: string | null;
+        };
+        /** ActivityListResponse */
+        ActivityListResponse: {
+            /** Items */
+            items: components["schemas"]["ActivityEventResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** AllocationHistoryResponse */
         AllocationHistoryResponse: {
             /** Items */
@@ -8950,6 +9013,119 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentLinksResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listActivityEvents: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                entity_type?: string | null;
+                entity_id?: string | null;
+                actor_member_id?: string | null;
+                action?: string | null;
+                since?: string | null;
+                until?: string | null;
+            };
+            header?: {
+                /** @description 가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다. */
+                "X-SallimBook-People"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityListResponse"];
                 };
             };
             /** @description Bad Request */

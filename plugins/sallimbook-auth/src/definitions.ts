@@ -74,8 +74,15 @@ export interface SallimBookAuth {
   /** Generated connection code is displayed only on the native protected screen. */
   createConnectionCode(): Promise<NativeAuthResult<{ status: "created" | "cancelled" }>>;
   listAuditEvents(options: {
+    activity?: true;
     query?: NonNullable<operations["listAuditEvents"]["parameters"]["query"]>;
-  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AuditListResponse"]>>>;
+  }): Promise<
+    NativeAuthResult<
+      NativeFinanceResponse<
+        components["schemas"]["AuditListResponse"] | components["schemas"]["ActivityListResponse"]
+      >
+    >
+  >;
   openVaultUI(
     options: NativeVaultEntry,
   ): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;

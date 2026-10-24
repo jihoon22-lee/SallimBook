@@ -18,12 +18,15 @@ function object(value: unknown): value is Record<string, unknown> {
     Object.getPrototypeOf(value) === Object.prototype
   );
 }
-function request(options: { query?: NativeAuditQuery }): { query?: NativeAuditQuery } {
+type AuditOptions = { query?: NativeAuditQuery; activity?: true };
+function request(options: AuditOptions): AuditOptions {
   const invalid = () => {
     throw new ApiError(422, "VALIDATION_ERROR");
   };
-  if (!object(options) || Object.keys(options).some((key) => key !== "query")) return invalid();
-  if (!Object.hasOwn(options, "query")) return {};
+  if (!object(options) || Object.keys(options).some((key) => key !== "query" && key !== "activity"))
+    return invalid();
+  if (options.activity !== undefined && options.activity !== true) return invalid();
+  if (!Object.hasOwn(options, "query")) return options.activity ? { activity: true } : {};
   const query = options.query;
   if (
     !object(query) ||
@@ -70,12 +73,19 @@ function request(options: { query?: NativeAuditQuery }): { query?: NativeAuditQu
     )
       return invalid();
   }
-  return { query: { ...query } };
+  return { query: { ...query }, ...(options.activity ? { activity: true } : {}) };
 }
 
 /** Current-household metadata only. The native module owns bearer tokens and the fixed URL. */
 export const nativeAudit = {
-  async list(options: { query?: NativeAuditQuery } = {}): Promise<NativeAuditPage> {
+  async activity(
+    options: { query?: NonNullable<operations["listActivityEvents"]["parameters"]["query"]> } = {},
+  ): Promise<components["schemas"]["ActivityListResponse"]> {
+    return this.list({ ...options, activity: true }) as Promise<
+      components["schemas"]["ActivityListResponse"]
+    >;
+  },
+  async list(options: AuditOptions = {}): Promise<NativeAuditPage> {
     const safe = request(options);
     if (!hasNativeAuth()) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
     let result: NativeAuthResult<NativeFinanceResponse<NativeAuditPage>>;

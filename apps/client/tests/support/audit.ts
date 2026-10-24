@@ -90,7 +90,7 @@ export async function mockAudit(page: Page, native = false) {
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
     return { status, body };
   }
-  await page.route("**/api/v1/audit-events**", async (route) => {
+  await page.route(/\/api\/v1\/(?:audit|activity)-events(?:\?|$)/, async (route) => {
     if (state.failure === "network") {
       state.queries.push(Object.fromEntries(new URL(route.request().url()).searchParams));
       return route.abort("failed").catch(() => {});

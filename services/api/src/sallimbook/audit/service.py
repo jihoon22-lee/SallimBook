@@ -130,6 +130,7 @@ def list_events(
     since=None,
     until=None,
     legacy_native=False,
+    activity=False,
 ):
     auth, devices = identity.lock_session_devices(session, principal)
     lock_asset_scope(session, principal)
@@ -162,8 +163,28 @@ def list_events(
         since.astimezone(UTC).isoformat() if since else None,
         until.astimezone(UTC).isoformat() if until else None,
     ]
+    if activity:
+        filters.append("activity")
     binding = hashlib.sha256(json.dumps(filters).encode()).hexdigest()
     query = projection(principal.household_id)
+    if activity:
+        from sallimbook.audit.activity import BUSINESS_TYPES
+        from sallimbook.cashflow.models import INCOME_KINDS, CashRecord
+
+        query = query.where(
+            AuditEvent.entity_type.in_(BUSINESS_TYPES), AuditEvent.action != "reveal"
+        )
+        query = query.where(
+            or_(
+                AuditEvent.entity_type != "cash_record",
+                AuditEvent.entity_id.in_(
+                    select(CashRecord.id).where(
+                        CashRecord.household_id == principal.household_id,
+                        CashRecord.kind.in_((*INCOME_KINDS, "income_return")),
+                    )
+                ),
+            )
+        )
     if legacy_native:
         from sallimbook.audit import legacy_native as vocabulary
 
@@ -204,6 +225,11 @@ def list_events(
     if len(rows) > limit:
         last = items[-1]
         next_cursor = _encode([last.occurred_at.astimezone(UTC).isoformat(), str(last.id), binding])
+    result = AuditListResponse(items=items, next_cursor=next_cursor)
+    if activity:
+        from sallimbook.audit.activity import project_activity
+
+        result = project_activity(session, principal.household_id, items, next_cursor)
     identity.validate_locked_session(principal, auth, devices[principal.device_id])
     session.commit()
-    return AuditListResponse(items=items, next_cursor=next_cursor)
+    return result

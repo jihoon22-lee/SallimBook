@@ -16,7 +16,7 @@ import { CancelStock, StockSummary } from "./StockPages";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { useHomecareReturn, type StockOutcome } from "./HomecareOutcome";
-import { formatSeoulDateTime } from "../../shared/format";
+import { RecordActor } from "../../shared/RecordActor";
 type Context = { link: DeviceLink; appliance: Appliance; consumable: Consumable };
 export function ReplacementEditor({
   initial,
@@ -287,7 +287,9 @@ function ReplacementSummary({ row, unit }: { row: Replacement; unit: string }) {
           <dd>{row.note || "미입력"}</dd>
         </div>
       </dl>
-      <p className="muted">작성 시각 {formatSeoulDateTime(row.created_at)}</p>
+      <p className="muted">
+        <RecordActor memberId={row.created_by_member_id} at={row.created_at} label="기록자" />
+      </p>
       <p>
         <Link to={`/consumables/${row.consumable_id}/stock/${row.stock_movement_id}`}>
           연결 재고 사용 원본
