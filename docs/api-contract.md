@@ -46,6 +46,7 @@ RATE_LIMITED와 달리 실패 횟수를 늘리지 않으며 클라이언트는 �
 네이티브는 `POST /auth/native/login`, `/refresh`, `/logout`으로 분리한다. native 전용 transport는
 `X-SallimBook-Native: 1`을 요구하고 Cookie/Origin을 거부한다. 이 헤더를 기기 신뢰 증거로 사용하지 않는다.
 native access/refresh 응답은 Kotlin 인증 adapter에서만 처리한다. refresh 회전 재사용은 세션을 폐기한다.
+native 로그인(`POST /auth/native/login`·`/auth/native/passkeys/verify`)은 선택 필드 `install`을 받는다. 설치의 첫 로그인은 `{}`를 보내고, 응답의 `install: {device_id, key}`를 받는다. 서버는 `key`의 SHA-256만 기기 행에 둔다. 다음 로그인에서 `{device_id, key}`를 보내면 key가 맞고 같은 사용자·가계이며 해지되지 않은 Android 기기 행일 때 그 행을 다시 쓰고(라벨·마지막 사용·version 갱신, 그 기기의 이전 세션 종료) 응답은 `install: {device_id}`뿐이다. 그 밖의 모든 경우는 오류 없이 새 행과 새 key를 준다. `device_id`와 `key`는 함께 보내야 하며 아니면 422다. `install`을 보내지 않은 요청의 응답은 이전과 같은 필드만 담고, 웹 로그인과 `/auth/native/refresh`는 이 필드를 받지도 돌려주지도 않는다.
 
 로그인 상태에서 `POST /auth/web/reauthenticate` 또는 `POST /auth/native/reauthenticate`에
 `{"password":"..."}`를 보내 현재 계정의 비밀번호를 확인한다. 응답은 `MemberResponse`이며 웹은 CSRF,
@@ -65,7 +66,7 @@ native(전용 transport) 공용이다. 성공하면 200 `{"revoked_devices": n}`
 기존 `POST /auth/invitations/accept`는 긴 일회성 초대로 계정을 만들고 로그인은 별도로 수행한다.
 기존 API 계약은 유지하며 새 기본 시작/연결 경로만 등록과 로그인을 한 번에 완료한다.
 인증된 `GET /me`, `GET /household/members`, `POST /household/invitations`,
-`GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다.
+`GET /devices`, `DELETE /devices/{device_id}`를 제공한다. 기기 폐기에는 `If-Match`가 필요하다. 기기 행의 `login_state`는 `active`(유효한 로그인 세션이 있음)·`expired`(세션이 모두 끝남, 웹은 30분 유휴 포함)·`revoked`(기기 폐기)다. 응답 필드 이름에 "session"을 쓰지 않는 것은 네이티브 응답 검사가 자격증명 같은 이름을 거부하기 때문이다. 90일 넘게 쓰지 않은 연결 기기(기기·세션의 마지막 사용이 모두 90일 전)는 목록에서 빠진다. 행은 세션·패스키·감사 이력이 참조하므로 지우지 않는다.
 초대와 기기 폐기는 최근 5분 내 실제 로그인 또는 아래 목적·대상별 step-up 증명을 요구한다.
 기기 폐기 후에는 연결된 access/refresh 모두 기기 상태 검사에서 거부한다.
 일반 개인정보나 토큰 원문을 오류·서버 로그로 출력하지 않는다.

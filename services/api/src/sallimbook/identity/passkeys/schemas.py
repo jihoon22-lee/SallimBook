@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import Field, SecretStr, StringConstraints
 
 from sallimbook.identity.passkeys.models import StepUpPurpose
-from sallimbook.identity.schemas import DisplayName, InputModel, LoginName
+from sallimbook.identity.schemas import DisplayName, InputModel, InstallClaim, LoginName
 
 Base64UrlId = Annotated[
     str, StringConstraints(min_length=1, max_length=1364, pattern=r"^[A-Za-z0-9_-]+$")
@@ -79,6 +79,8 @@ class AssertionVerification(InputModel):
 
 class NativeLoginVerification(AssertionVerification):
     device_binding: SecretStr = Field(min_length=32, max_length=128)
+    # Opt-in, so an older app that never sends it keeps the old response.
+    install: InstallClaim | None = None
 
 
 class StepUpOptionsRequest(InputModel):

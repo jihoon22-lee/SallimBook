@@ -49,6 +49,7 @@ from sallimbook.identity.passkeys.schemas import (
     AssertionVerification,
     AuthenticationCredential,
     LoginOptionsRequest,
+    NativeLoginVerification,
     RegisterOptionsRequest,
     RegisterVerification,
     RegistrationCredential,
@@ -705,7 +706,8 @@ class TestPasskeyDatabase:
                     label=f"합성 기기 {n}",
                     platform="android",
                     status="active",
-                    last_seen_at=datetime(2026, 1, day, tzinfo=UTC),
+                    # Recently used, so the 90-day idle rule keeps them in the list.
+                    last_seen_at=datetime.now(UTC),
                     created_at=datetime(2026, 1, day, tzinfo=UTC),
                 )
                 for n, day in enumerate(days[:4])
@@ -1649,6 +1651,112 @@ class TestPasskeyDatabase:
             assert challenge.binding_hash == identity.token_hash(
                 "passkey-device-binding", options["device_binding"]
             )
+
+    def test_native_passkey_login_reuses_the_install_device_row(
+        self,
+        passkey_app,
+        db_engine,
+        passkey_account,
+        enrolled,
+    ):
+        authenticator, _ = enrolled
+        with TestClient(passkey_app, base_url="https://testserver") as client:
+
+            def sign_in(install):
+                options = native_options(client, passkey_account)
+                payload = native_verification(options, authenticator, passkey_account)
+                response = client.post(
+                    "/api/v1/auth/native/passkeys/verify",
+                    headers=NATIVE_HEADERS,
+                    json={**payload, "install": install},
+                )
+                assert response.status_code == 200
+                return options, response.json()
+
+            _, first = sign_in({})
+            claim = first["install"]
+            options, second = sign_in(claim)
+            assert second["install"] == {"device_id": claim["device_id"]}
+            assert (
+                client.get(
+                    "/api/v1/me", headers={"Authorization": "Bearer " + first["access_token"]}
+                ).status_code
+                == 401
+            )
+        with Session(db_engine) as session:
+            challenge = session.get(AuthChallenge, UUID(options["challenge_id"]))
+            assert session.get(RegisteredDevice, challenge.pending_device_id) is None
+            device = session.get(RegisteredDevice, UUID(claim["device_id"]))
+            assert (device.user_id, device.version) == (passkey_account.user_id, 2)
+
+    def test_native_passkey_install_claim_never_waits_for_a_busy_device(
+        self,
+        passkey_app,
+        db_engine,
+        passkey_account,
+        enrolled,
+    ):
+        authenticator, _ = enrolled
+        with TestClient(passkey_app, base_url="https://testserver") as client:
+            options = native_options(client, passkey_account)
+            proof = native_verification(options, authenticator, passkey_account)
+            first = client.post(
+                "/api/v1/auth/native/passkeys/verify",
+                headers=NATIVE_HEADERS,
+                json={**proof, "install": {}},
+            ).json()
+            options = native_options(client, passkey_account)
+        payload = NativeLoginVerification.model_validate(
+            {
+                **native_verification(options, authenticator, passkey_account),
+                "install": first["install"],
+            }
+        )
+        device_id = UUID(first["install"]["device_id"])
+        # Before the proof the claim names a row the caller may not own. It is taken only when
+        # free (never waited on, so its activity shows nothing) and before the credential, the
+        # order step-up uses. A busy row is treated as no claim: the sign-in gets a fresh row.
+        with Session(db_engine) as holder:
+            holder.scalars(
+                select(RegisteredDevice).where(RegisteredDevice.id == device_id).with_for_update()
+            ).all()
+            try:
+                with db_engine.connect() as connection:
+                    connection.execute(text("SET lock_timeout = '1s'"))
+                    with Session(bind=connection) as session:
+                        result = service.verify_login(
+                            session,
+                            payload,
+                            NATIVE_POLICY,
+                            payload.device_binding.get_secret_value(),
+                            "synthetic-claim",
+                        )
+            finally:
+                holder.rollback()
+        assert result.install.device_id != device_id and result.install.key
+
+    def test_native_passkey_sign_in_without_install_keeps_the_old_response(
+        self,
+        passkey_app,
+        passkey_account,
+        enrolled,
+    ):
+        authenticator, _ = enrolled
+        with TestClient(passkey_app, base_url="https://testserver") as client:
+            options = native_options(client, passkey_account)
+            response = client.post(
+                "/api/v1/auth/native/passkeys/verify",
+                headers=NATIVE_HEADERS,
+                json=native_verification(options, authenticator, passkey_account),
+            )
+        assert response.status_code == 200
+        assert set(response.json()) == {
+            "access_token",
+            "refresh_token",
+            "token_type",
+            "expires_in",
+            "refresh_expires_at",
+        }
 
     def test_web_login_binding_cookie_cannot_be_replaced_by_client_boolean(
         self,

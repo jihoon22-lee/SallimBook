@@ -32,7 +32,7 @@ from sallimbook.identity.passkeys.schemas import (
     StepUpOptionsRequest,
     StepUpResponse,
 )
-from sallimbook.identity.schemas import NativeTokenResponse, WebLoginResponse
+from sallimbook.identity.schemas import NativeLoginResponse, WebLoginResponse
 
 BINDING_COOKIE = "__Host-sallimbook_passkey"
 router = APIRouter(prefix="/api/v1", tags=["passkeys"])
@@ -154,7 +154,9 @@ def native_login_options(
 
 @router.post(
     "/auth/native/passkeys/verify",
-    response_model=NativeTokenResponse,
+    response_model=NativeLoginResponse,
+    # Without an install claim the body keeps exactly the fields older apps expect.
+    response_model_exclude_none=True,
     dependencies=[Depends(require_native_transport)],
     operation_id="loginWithNativePasskey",
 )
@@ -162,9 +164,10 @@ def native_login_verify(
     payload: NativeLoginVerification, request: Request, session: SessionDependency
 ):
     policy = service.policy_from_settings(request.app.state.settings, "native", None)
-    return service.verify_login(
+    result = service.verify_login(
         session, payload, policy, payload.device_binding.get_secret_value(), request_source(request)
-    ).native_tokens
+    )
+    return NativeLoginResponse(**result.native_tokens.model_dump(), install=result.install)
 
 
 @router.post(

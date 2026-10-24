@@ -10,12 +10,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from argon2.low_level import Type
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -36,11 +36,14 @@ from sallimbook.identity.models import Household
 from sallimbook.identity.schemas import (
     ConnectionCodeResponse,
     ConnectionRequest,
+    InstallClaim,
+    InstallDevice,
     InvitationAcceptance,
     InvitationRequest,
     InvitationResponse,
     LoginRequest,
     MemberResponse,
+    NativeLoginRequest,
     NativeTokenResponse,
     PasswordChangeRequest,
     ReauthenticationRequest,
@@ -52,9 +55,15 @@ WEB_IDLE = timedelta(minutes=30)
 WEB_ABSOLUTE = timedelta(hours=12)
 ACCESS_LIFETIME = timedelta(minutes=10)
 REFRESH_LIFETIME = timedelta(days=30)
+# A device that nobody has used for this long is left out of the device list. Its row stays,
+# since sessions, passkeys and audit history refer to it; it can no longer sign in anyway.
+DEVICE_LIST_IDLE = timedelta(days=90)
 INVITATION_LIFETIME = timedelta(minutes=15)
+INSTALL_KEY = "install-device"
 THROTTLE_WINDOW = timedelta(minutes=15)
 THROTTLE_CLEANUP_BATCH = 64
+# Refreshes per device per THROTTLE_WINDOW; a 10-minute access token needs about two.
+REFRESH_DEVICE_LIMIT = 10
 PASSWORD_HASHER = PasswordHasher(
     time_cost=3,
     memory_cost=65536,
@@ -102,7 +111,7 @@ def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: dateti
     if expired:
         session.execute(delete(LoginThrottle).where(LoginThrottle.key_hash.in_(expired)))
     session.commit()
-    blocked = False
+    counters = []
     for key, limit in sorted(buckets):
         digest = token_hash("throttle", key)
         session.execute(
@@ -126,9 +135,11 @@ def _admit_attempt(session: Session, buckets: list[tuple[str, int]], now: dateti
         if now - counter.window_started_at >= THROTTLE_WINDOW:
             counter.window_started_at = now
             counter.attempts = 0
-        if counter.attempts >= limit:
-            blocked = True
-        else:
+        counters.append((counter, limit))
+    # A refused attempt counts nowhere, so one exhausted bucket cannot drain the others.
+    blocked = any(counter.attempts >= limit for counter, limit in counters)
+    if not blocked:
+        for counter, _ in counters:
             counter.attempts += 1
     session.commit()
     if blocked:
@@ -250,6 +261,11 @@ def _active_identity(
             RegisteredDevice.id == auth.device_id,
             RegisteredDevice.status == "active",
             RegisteredDevice.revoked_at.is_(None),
+            # An install row admits only the session of its latest sign-in.
+            or_(
+                RegisteredDevice.install_session_id.is_(None),
+                RegisteredDevice.install_session_id == auth.id,
+            ),
         )
     ).one_or_none()
     if row is None:
@@ -712,8 +728,11 @@ def accept_invitation(
     session: Session, request: InvitationAcceptance, source: str
 ) -> MemberResponse:
     now = utcnow()
-    _admit_attempt(session, [(f"invite-source:{source}", 30)], now)
-    user, member = _accept_invitation_locked(session, request, connection=False)
+    buckets = [(f"invite-source:{source}", 30)]
+    _admit_attempt(session, buckets, now)
+    user, member = _refund_busy(
+        session, buckets, lambda: _accept_invitation_locked(session, request, connection=False)
+    )
     result = member_response(user, member)
     session.commit()
     return result
@@ -817,6 +836,7 @@ class LoginResult:
     token: str = field(repr=False)
     csrf_token: str | None = field(default=None, repr=False)
     native_tokens: NativeTokenResponse | None = field(default=None, repr=False)
+    install: InstallDevice | None = field(default=None, repr=False)
 
 
 def login(
@@ -842,7 +862,14 @@ def login(
     if not verified or user is None or user.disabled_at is not None or member is None:
         raise _unauthenticated()
     # Creating a device is backed by this actual password verification, never a client flag.
-    result = issue_session(session, user, member, request.device_label, transport)
+    result = issue_session(
+        session,
+        user,
+        member,
+        request.device_label,
+        transport,
+        install=request.install if isinstance(request, NativeLoginRequest) else None,
+    )
     # issue_session locked and reloaded the users row. A hash that changed after our
     # verification is rechecked: a same-password rehash passes, an old password does not.
     if user.password_hash != encoded and not _verify_password(user.password_hash, password):
@@ -866,7 +893,8 @@ def setup_household(
     session: Session, request: SetupRequest, source: str, transport: Literal["web", "native"]
 ) -> LoginResult:
     """Enroll once after the route verifies the private proxy's owner identity."""
-    _admit_attempt(session, [(f"setup-source:{source}", 5)], utcnow())
+    buckets = [(f"setup-source:{source}", 5)]
+    _admit_attempt(session, buckets, utcnow())
     # Same installation lock as both operator CLI paths; household lock also
     # serializes acceptance of a previously issued operator invitation.
     session.execute(select(func.pg_advisory_xact_lock(0x53414C4C494D)))
@@ -887,11 +915,11 @@ def setup_household(
         )
         .values(revoked_at=now, version=Invitation.version + 1)
     )
-    user = User(
-        login_name="owner",
-        display_name=request.display_name,
-        password_hash=hash_password(request.password.get_secret_value()),
+    # A busy server never checked anything, so the attempt is returned (as for login).
+    encoded = _refund_busy(
+        session, buckets, lambda: hash_password(request.password.get_secret_value())
     )
+    user = User(login_name="owner", display_name=request.display_name, password_hash=encoded)
     session.add(user)
     try:
         session.flush()
@@ -913,10 +941,13 @@ def connect_household(
 ) -> LoginResult:
     # Five guesses per installation/15 minutes, regardless of claimed or actual
     # source address. Reissuing a code does not reset the guessing budget.
-    _admit_attempt(
-        session, [("connection-global", 5), (f"connection-source:{source}", 5)], utcnow()
+    buckets = [("connection-global", 5), (f"connection-source:{source}", 5)]
+    _admit_attempt(session, buckets, utcnow())
+    # Password hashing starts only after the code was found valid, so a refund never helps
+    # a guesser.
+    user, member = _refund_busy(
+        session, buckets, lambda: _accept_invitation_locked(session, request, connection=True)
     )
-    user, member = _accept_invitation_locked(session, request, connection=True)
     result = issue_session(session, user, member, request.device_label, transport)
     session.commit()
     return result
@@ -946,6 +977,54 @@ def reauthenticate(
     return result
 
 
+def live_session(now: datetime):
+    """The SQL form of the session checks that depend on time or on a later install sign-in."""
+    superseded = (
+        select(RegisteredDevice.id)
+        .where(
+            RegisteredDevice.id == AuthSession.device_id,
+            RegisteredDevice.install_session_id != AuthSession.id,
+        )
+        .exists()
+    )
+    return (
+        AuthSession.revoked_at.is_(None)
+        & (AuthSession.expires_at > now)
+        & ((AuthSession.kind == "native") | (AuthSession.last_seen_at > now - WEB_IDLE))
+        & ~superseded
+    )
+
+
+def lock_install_device(
+    session: Session,
+    install: InstallClaim | None,
+    user_id: UUID | None,
+    household_id: UUID | None,
+    *,
+    skip_locked: bool = False,
+) -> RegisteredDevice | None:
+    """Lock the device row an install claim names, only if it is this user's Android row.
+
+    Devices come before the users row and before credentials, the order password change,
+    revocation and step-up use. After a password check the user is known, so another member's
+    row is never locked. Before a passkey proof the user is only claimed: `skip_locked` takes
+    the row only when free, so a claim never waits on it or learns whether it is busy.
+    """
+    if install is None or install.device_id is None or user_id is None or household_id is None:
+        return None
+    return session.scalar(
+        select(RegisteredDevice)
+        .where(
+            RegisteredDevice.id == install.device_id,
+            RegisteredDevice.user_id == user_id,
+            RegisteredDevice.household_id == household_id,
+            RegisteredDevice.platform == "android",
+        )
+        .with_for_update(skip_locked=skip_locked)
+        .execution_options(populate_existing=True)
+    )
+
+
 def issue_session(
     session: Session,
     user: User,
@@ -954,16 +1033,22 @@ def issue_session(
     transport: Literal["web", "native"],
     *,
     device_id: UUID | None = None,
+    install: InstallClaim | None = None,
 ) -> LoginResult:
     """Issue credentials after server verification; caller owns the atomic commit.
 
     This is an internal service, not an authentication bypass endpoint. The optional device
-    ID must come from server ceremony state, never from a client's device identifier.
+    ID must come from server ceremony state. A client's device id counts only inside an
+    install claim whose key matches the stored hash for the same user and household; any
+    other claim gets a new row, so a claim reveals nothing about other devices.
     Locks the users row so password changes and sign-out of other devices serialize with
     new sessions.
     """
     if transport not in {"web", "native"}:
         raise ValueError("Unsupported authentication transport")
+    if install is not None and transport != "native":
+        raise ValueError("Only native sign-in presents an install claim")
+    claimed = lock_install_device(session, install, user.id, member.household_id)
     active = session.execute(
         select(User, HouseholdMember)
         .select_from(User)
@@ -982,21 +1067,39 @@ def issue_session(
         raise _unauthenticated()
     user, member = active
     now = utcnow()
-    device = RegisteredDevice(
-        household_id=member.household_id,
-        user_id=user.id,
-        label=device_label,
-        platform="web" if transport == "web" else "android",
-        status="active",
-        last_seen_at=now,
-    )
-    if device_id is not None:
-        device.id = device_id
-    session.add(device)
+    install_key = None
+    session_id = uuid4()
+    if claimed is not None and _install_matches(claimed, install, user, member):
+        device = claimed
+        before_version = device.version
+        device.label = device_label
+        device.last_seen_at = now
+        device.version += 1
+        # One session per install: what this install signed in with before ends here, at the
+        # device row. Writing those session rows would invert the session -> device lock order.
+        device.install_session_id = session_id
+    else:
+        before_version = None
+        device = RegisteredDevice(
+            household_id=member.household_id,
+            user_id=user.id,
+            label=device_label,
+            platform="web" if transport == "web" else "android",
+            status="active",
+            last_seen_at=now,
+        )
+        if device_id is not None:
+            device.id = device_id
+        if install is not None:
+            install_key = secrets.token_urlsafe(32)
+            device.install_key_hash = token_hash(INSTALL_KEY, install_key)
+            device.install_session_id = session_id
+        session.add(device)
     session.flush()
     token = secrets.token_urlsafe(32)
     csrf = secrets.token_urlsafe(32) if transport == "web" else None
     auth = AuthSession(
+        id=session_id,
         household_id=member.household_id,
         user_id=user.id,
         device_id=device.id,
@@ -1042,7 +1145,7 @@ def issue_session(
         entity_type="registered_device",
         entity_id=device.id,
         action="login",
-        before_version=None,
+        before_version=before_version,
         after_version=device.version,
     )
     return LoginResult(
@@ -1051,12 +1154,41 @@ def issue_session(
         token=token,
         csrf_token=csrf,
         native_tokens=native_tokens,
+        install=None if install is None else InstallDevice(device_id=device.id, key=install_key),
+    )
+
+
+def _install_matches(
+    device: RegisteredDevice, install: InstallClaim, user: User, member: HouseholdMember
+) -> bool:
+    key = install.key.get_secret_value() if install.key else ""
+    return (
+        device.install_key_hash is not None
+        and hmac.compare_digest(device.install_key_hash, token_hash(INSTALL_KEY, key))
+        and device.user_id == user.id
+        and device.household_id == member.household_id
+        and device.platform == "android"
+        and device.status == "active"
+        and device.revoked_at is None
     )
 
 
 def rotate_refresh(session: Session, token: str, source: str) -> NativeTokenResponse:
     now = utcnow()
-    _admit_attempt(session, [(f"refresh-source:{source}", 30)], now)
+    # Every device reaches the API through the same proxy peer, so the source bucket is shared
+    # by the whole installation. A device over its own limit is refused before it can use it up.
+    buckets = [(f"refresh-source:{source}", 30)]
+    if _valid_token(token):
+        device_id = session.scalar(
+            select(AuthSession.device_id).where(
+                AuthSession.id == RefreshToken.session_id,
+                AuthSession.household_id == RefreshToken.household_id,
+                RefreshToken.token_hash == token_hash("refresh", token),
+            )
+        )
+        if device_id is not None:
+            buckets.append((f"refresh-device:{device_id}", REFRESH_DEVICE_LIMIT))
+    _admit_attempt(session, buckets, now)
     if not _valid_token(token):
         raise _unauthenticated()
     # Look up family before locking; every rotation locks session then token in that order.
@@ -1135,7 +1267,8 @@ def revoke_device(session: Session, principal: Principal, device: RegisteredDevi
     now = utcnow()
     before = device.version
     device.status = "revoked"
-    device.revoked_at = now
+    # Revoking again keeps the time of the first revocation.
+    device.revoked_at = device.revoked_at or now
     session.flush()
     record_event(
         session,

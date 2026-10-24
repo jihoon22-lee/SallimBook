@@ -30,6 +30,8 @@ async function mockIdentity(page: Page, loggedIn = false) {
     loginAttempts: 0,
     reauthAttempts: 0,
     rejectReauth: false,
+    expireReauth: false,
+    abortPassword: false,
     validReauthShape: false,
     logoutAttempts: 0,
     invitationAttempts: 0,
@@ -54,6 +56,7 @@ async function mockIdentity(page: Page, loggedIn = false) {
         last_seen_at: "2026-10-17T00:00:00Z",
         current: false,
         version: 1,
+        login_state: "active",
       },
       {
         id: "00000000-0000-4000-8000-000000000005",
@@ -63,6 +66,7 @@ async function mockIdentity(page: Page, loggedIn = false) {
         last_seen_at: "2026-10-17T00:00:00Z",
         current: true,
         version: 1,
+        login_state: "active",
       },
     ] as components["schemas"]["DeviceResponse"][],
   };
@@ -165,11 +169,16 @@ async function mockIdentity(page: Page, loggedIn = false) {
       if (await csrfRejected(route)) return;
       state.validReauthShape = Object.keys(route.request().postDataJSON()).join(",") === "password";
       if (state.rejectReauth) return failure(route, 403, "REAUTHENTICATION_FAILED");
+      if (state.expireReauth) {
+        state.loggedIn = false;
+        return failure(route, 401, "UNAUTHENTICATED");
+      }
       return route.fulfill({ json: member });
     }
     if (path === "/api/v1/auth/password" && method === "POST") {
       state.passwordChanges += 1;
       if (await csrfRejected(route)) return;
+      if (state.abortPassword) return route.abort("failed");
       const body = route.request().postDataJSON();
       state.validPasswordShape =
         Object.keys(body).sort().join(",") === "current_password,new_password" &&
@@ -280,6 +289,37 @@ test("current web account reauthenticates without another login or changing devi
   expect(api.reauthAttempts).toBe(2);
   expect(api.loginAttempts).toBe(0);
   await expectNoPersistence(page);
+});
+
+test("an expired session during re-authentication asks to sign in again", async ({ page }) => {
+  const api = await mockIdentity(page, true);
+  api.expireReauth = true;
+  await page.goto("/settings/auth");
+  await page.getByRole("link", { name: "패스키 관리 전 다시 로그인", exact: true }).click();
+  await page.getByLabel("비밀번호", { exact: true }).fill(`synthetic-only-${crypto.randomUUID()}`);
+  await page.getByRole("button", { name: "다시 인증", exact: true }).click();
+  await expect(page.getByText(/다시 로그인해 주세요/).first()).toBeVisible();
+  await expect(page.getByText("로그인 이름이나 비밀번호를 확인해 주세요.")).toHaveCount(0);
+});
+
+test("a lost password-change response points to re-authenticating with the new password", async ({
+  page,
+}) => {
+  const api = await mockIdentity(page, true);
+  api.abortPassword = true;
+  await page.goto("/settings/auth");
+  const next = `synthetic-new-${crypto.randomUUID()}`;
+  await page
+    .getByLabel("현재 비밀번호", { exact: true })
+    .fill(`synthetic-old-${crypto.randomUUID()}`);
+  await page.getByLabel("새 비밀번호", { exact: true }).fill(next);
+  await page.getByLabel("새 비밀번호 확인", { exact: true }).fill(next);
+  await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
+  await expect(page.getByText(/새 비밀번호로 다시 인증/)).toBeVisible();
+  await expect(page.getByText(/현재 비밀번호 칸에 새 비밀번호/)).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "새 비밀번호로 다시 인증", exact: true }),
+  ).toHaveAttribute("href", "/login");
 });
 
 test("return path accepts only same-app paths", () => {
@@ -397,6 +437,32 @@ test("device revoke confirmation takes focus when it opens", async ({ page }) =>
   await page.goto("/settings/auth");
   await page.getByRole("button", { name: "합성 다른 기기 연결 해제", exact: true }).click();
   await expect(page.getByRole("button", { name: "연결 해제 확인", exact: true })).toBeFocused();
+});
+
+test("expired devices are labelled and folded below the connected ones", async ({ page }) => {
+  const api = await mockIdentity(page, true);
+  api.devices.unshift(
+    ...["합성 지난 PC", "합성 지난 노트북"].map((label, index) => ({
+      id: `00000000-0000-4000-8000-00000000001${index}`,
+      label,
+      platform: "web" as const,
+      status: "active" as const,
+      last_seen_at: "2026-09-01T00:00:00Z",
+      current: false,
+      version: 1,
+      login_state: "expired" as const,
+    })),
+  );
+  await page.goto("/settings/auth");
+  const folded = page.locator("details").filter({ hasText: "만료된 기기 2개" });
+  await expect(folded).toHaveCount(1);
+  await expect(folded.getByText("합성 지난 PC")).toBeHidden();
+  await expect(page.getByText("합성 현재 기기")).toBeVisible();
+  await folded.locator("summary").click();
+  await expect(folded.getByText("웹 브라우저 · 만료", { exact: true }).first()).toBeVisible();
+  await expect(
+    folded.getByRole("button", { name: "합성 지난 PC 연결 해제", exact: true }),
+  ).toBeVisible();
 });
 
 test("device version conflict preserves the row and requires an explicit refetch before retry", async ({
