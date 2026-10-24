@@ -15,9 +15,17 @@ import { DeviceStatus } from "./DeviceLinks";
 import { CancelStock, StockSummary } from "./StockPages";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
+import { useHomecareReturn, type StockOutcome } from "./HomecareOutcome";
 import { formatSeoulDateTime } from "../../shared/format";
 type Context = { link: DeviceLink; appliance: Appliance; consumable: Consumable };
-export function ReplacementEditor({ initial, saved }: { initial: Context; saved: () => void }) {
+export function ReplacementEditor({
+  initial,
+  saved,
+}: {
+  initial: Context;
+  saved: (result: StockOutcome) => void;
+}) {
+  const returnTo = useHomecareReturn();
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
@@ -76,7 +84,7 @@ export function ReplacementEditor({ initial, saved }: { initial: Context; saved:
     );
     if (result.ok && command.mounted.current) {
       guard.release();
-      saved();
+      saved({ ...result.value, linkId: base.link.id });
     }
   }
   async function compare() {
@@ -213,7 +221,7 @@ export function ReplacementEditor({ initial, saved }: { initial: Context; saved:
         )}
         <FormError message={message} />
         <SaveControls
-          backTo={`/appliance-consumables/${base.link.id}`}
+          backTo={returnTo ?? `/appliance-consumables/${base.link.id}`}
           busy={command.busy}
           cancel={command.cancel}
           label="실제 교체·재고 사용 저장"

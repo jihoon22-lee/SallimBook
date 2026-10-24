@@ -194,6 +194,53 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
   expect(unknown.next_check_on).toBeNull();
   expect(unknown.replacement_due).toBeNull();
   expect(unknown.stock_quantity).toBe(0);
+  // Empty setup creates metadata once, then an ordinary versioned initial-stock event.
+  const setupAppliance = await appliance(page, "합성 HTTPS 첫 설정 가전");
+  await page.getByRole("button", { name: "소모품 연결 이어서 설정" }).click();
+  await page
+    .getByRole("combobox", { name: "기기별 확인 주기", exact: true })
+    .selectOption("months");
+  await page.getByLabel("주기 간격", { exact: true }).fill("3");
+  await page.getByRole("button", { name: "새 소모품 만들어 연결" }).click();
+  await page.getByLabel("소모품 이름", { exact: true }).fill("합성 HTTPS 초기 재고 필터");
+  await page.getByRole("button", { name: "소모품 등록", exact: true }).click();
+  await page.getByLabel("현재 보유 총수량").fill("3");
+  await page.getByRole("button", { name: "현재 보유 재고 저장" }).click();
+  await expect(page.getByLabel("주기 간격", { exact: true })).toHaveValue("3");
+  await page.getByRole("button", { name: "기기별 소모품 설정 저장" }).click();
+  await expect(
+    page.getByRole("link", { name: "합성 HTTPS 초기 재고 필터", exact: true }),
+  ).toBeVisible();
+  const setupLinks = await read<S["ApplianceConsumableListResponse"]>(
+    page,
+    `/api/v1/appliance-consumables?appliance_id=${setupAppliance}`,
+  );
+  const setupLink = setupLinks.items[0]!;
+  const setupSku = setupLink.consumable_id;
+  expect(setupLink.stock_quantity).toBe(3);
+  expect(setupLink.next_check_on).toBeNull();
+  await page.goto(`/consumables/${setupSku}`);
+  await page.getByRole("link", { name: "입고·재고 조정 기록", exact: true }).click();
+  await page.getByLabel("입고·반품 수량").fill("2");
+  await page.getByRole("button", { name: "재고 변화 저장", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/consumables/${setupSku}$`));
+  await expect(page.getByLabel("재고 저장 결과")).toContainText("공용 재고 3 → 5개");
+  const setupEvents = await read<S["StockMovementListResponse"]>(
+    page,
+    `/api/v1/consumables/${setupSku}/stock-movements`,
+  );
+  expect(setupEvents.items).toHaveLength(2);
+  expect(setupEvents.items.find((event) => event.kind === "adjustment")?.quantity_delta).toBe(3);
+  expect(await read<S["MonthResponse"]>(page, "/api/v1/asset-months/2025-02")).toEqual(snapshot);
+  await page.goto(`/appliances/${setupAppliance}/edit`);
+  await page.getByLabel("가전 사용 종료일").fill(setupLink.as_of);
+  await page
+    .getByLabel("종료 후 새 교체 기록이 제한되고 오늘 관리 목록에서 제외됨을 확인했어요")
+    .check();
+  await page.getByRole("button", { name: "가전 수정 저장", exact: true }).click();
+  await expect(
+    page.getByText(`사용 종료 · ${setupLink.as_of.replaceAll("-", ".")}`, { exact: true }),
+  ).toBeVisible();
   console.log("SAFE_PHASE=HOMECARE_METADATA");
   await movement(page, sku, "receipt", "1", "2025-01-01");
   await replace(page, linkA, "2025-01-01");

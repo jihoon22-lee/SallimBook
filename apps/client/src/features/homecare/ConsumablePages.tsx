@@ -26,9 +26,11 @@ import {
 } from "./HomecareSupport";
 import { DeleteHomecare } from "./DeleteHomecare";
 import { DeviceLinks } from "./DeviceLinks";
-import { StockMovements } from "./StockPages";
+import { StockEditor, StockMovements } from "./StockPages";
 import { TodayConsumables } from "./TodayConsumables";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { stateFlag, useRouteNotice } from "../../shared/routeNotice";
+import { useHomecareOrigin } from "./HomecareOutcome";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 export function ConsumableSummary({ row }: { row: Consumable }) {
   return (
@@ -72,7 +74,15 @@ export function ConsumableSummary({ row }: { row: Consumable }) {
     </>
   );
 }
-function ConsumableEditor({ initial }: { initial?: Consumable }) {
+export function ConsumableEditor({
+  initial,
+  onSaved,
+  onCancel,
+}: {
+  initial?: Consumable;
+  onSaved?: (row: Consumable) => void;
+  onCancel?: () => void;
+}) {
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
@@ -122,7 +132,12 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
     );
     if (row && command.mounted.current) {
       guard.release();
-      navigate(`/consumables/${row.id}`, { replace: true });
+      if (onSaved) onSaved(row);
+      else
+        navigate(`/consumables/${row.id}`, {
+          replace: true,
+          state: !base ? { consumableCreated: true } : null,
+        });
     }
   }
   async function compare() {
@@ -240,11 +255,24 @@ function ConsumableEditor({ initial }: { initial?: Consumable }) {
         >
           {base ? "소모품 수정 저장" : "소모품 등록"}
         </button>
+        {onCancel && (
+          <button
+            type="button"
+            disabled={command.busy}
+            onClick={() => {
+              guard.release();
+              onCancel();
+            }}
+          >
+            소모품 등록 취소
+          </button>
+        )}
       </form>
     </section>
   );
 }
 function ConsumableList() {
+  const origin = useHomecareOrigin();
   const api = useHomecareApi();
   const [params, setParams] = useSearchParams();
   const status =
@@ -310,6 +338,7 @@ function ConsumableList() {
                   <Link
                     className="button-link secondary-button"
                     to={`/consumables/${row.id}/stock/new`}
+                    state={origin}
                   >
                     입고·재고 조정 기록
                   </Link>
@@ -359,6 +388,9 @@ export function ConsumableNewPage() {
   );
 }
 function ConsumableDetail({ id, edit }: { id: string; edit: boolean }) {
+  const origin = useHomecareOrigin();
+  const created = useRouteNotice(stateFlag("consumableCreated"));
+  const [setupDone, setSetupDone] = useState(false);
   const api = useHomecareApi();
   const navigate = useNavigate();
   const resource = useResource(
@@ -385,7 +417,7 @@ function ConsumableDetail({ id, edit }: { id: string; edit: boolean }) {
               <h2>{row.name}</h2>
               <div className="primary-action-row">
                 {row.status === "active" && (
-                  <Link className="button-link" to={`/consumables/${id}/stock/new`}>
+                  <Link className="button-link" to={`/consumables/${id}/stock/new`} state={origin}>
                     입고·재고 조정 기록
                   </Link>
                 )}
@@ -405,6 +437,17 @@ function ConsumableDetail({ id, edit }: { id: string; edit: boolean }) {
                 listPath="/consumables?status=all"
               />
             </section>
+            {created && !setupDone && (
+              <StockEditor
+                initial={row}
+                initialSetup
+                onSaved={() => {
+                  setSetupDone(true);
+                  void resource.reload();
+                }}
+                onCancel={() => setSetupDone(true)}
+              />
+            )}
             <DeviceLinks consumable={row} />
             <StockMovements consumable={row} />
           </>

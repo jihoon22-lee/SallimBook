@@ -1,3 +1,4 @@
+import { HomecareOutcome } from "./HomecareOutcome";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
@@ -27,7 +28,14 @@ export function HomecarePage({
         <p>{description}</p>
       </div>
       {navigation}
-      {state.status === "authenticated" ? children : <SessionStatus />}
+      {state.status === "authenticated" ? (
+        <>
+          <HomecareOutcome />
+          {children}
+        </>
+      ) : (
+        <SessionStatus />
+      )}
     </>
   );
 }

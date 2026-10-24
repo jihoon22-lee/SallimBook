@@ -401,7 +401,8 @@ test("stock is the first consumable workspace and a replacement consumes one uni
   await page.getByLabel("실제 교체일", { exact: true }).fill("2025-02-28");
   await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
   await page.getByRole("button", { name: "실제 교체·재고 사용 저장", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/appliance-consumables/${uid(300)}$`));
+  await expect(page).toHaveURL(new RegExp(`/consumables/${uid(200)}$`));
+  await expect(page.getByLabel("재고 저장 결과")).toContainText("공용 재고 3 → 2개");
   expect(state.consumables[0]!.stock_quantity).toBe(2);
   expect(state.replacements).toHaveLength(2);
 });

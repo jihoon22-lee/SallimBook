@@ -135,7 +135,10 @@ export function ApplianceEditor({ initial }: { initial?: Appliance }) {
     );
     if (row && command.mounted.current) {
       guard.release();
-      navigate(`/appliances/${row.id}`, { replace: true });
+      navigate(`/appliances/${row.id}${base ? "" : "#device-consumables"}`, {
+        replace: true,
+        state: !base ? { applianceCreated: true } : null,
+      });
     }
   }
   async function compare() {

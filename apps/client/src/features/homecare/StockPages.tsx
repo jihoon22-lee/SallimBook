@@ -9,13 +9,14 @@ import { MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport"
 import { dateLabel, isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 import { usePagedList, useResource } from "../finance/queries";
 import { useHomecareApi } from "./api";
-import { etag, movementInput, movementLabels, purchaseUrl } from "./model";
+import { etag, movementInput, movementLabels, purchaseUrl, quantity } from "./model";
 import type { Consumable, Movement, MovementDraft, Replacement } from "./model";
 import { HomecareError, HomecarePage, ListFeedback, ResourceFeedback } from "./HomecareSupport";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { AmountField } from "../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { krwFieldError } from "../../shared/krw";
+import { useHomecareReturn, type StockOutcome } from "./HomecareOutcome";
 import { formatSeoulDateTime } from "../../shared/format";
 export function StockSummary({ row }: { row: Consumable }) {
   return (
@@ -137,26 +138,42 @@ export function StockMovements({ consumable }: { consumable: Consumable }) {
     </section>
   );
 }
-function StockEditor({ initial }: { initial: Consumable }) {
+export function StockEditor({
+  initial,
+  initialSetup = false,
+  onSaved,
+  onCancel,
+}: {
+  initial: Consumable;
+  initialSetup?: boolean;
+  onSaved?: (result: StockOutcome) => void;
+  onCancel?: () => void;
+}) {
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const api = useHomecareApi();
   const navigate = useNavigate();
   const command = useMonthCommand();
+  const returnTo = useHomecareReturn();
   const [stock, setStock] = useState(initial);
   const [latest, setLatest] = useState<Consumable | null>(null);
   const [draft, setDraft] = useState<MovementDraft>({
-    kind: "receipt",
+    kind: initialSetup ? "adjustment" : "receipt",
     quantity: "",
     date: todaySeoul(),
     price: "",
     url: "",
-    reason: "",
+    reason: initialSetup ? "처음 확인한 보유 재고" : "",
     note: "",
   });
   const [message, setMessage] = useState("");
   const attempt = useSubmitAttempt();
-  const input = movementInput(draft);
+  const targetQuantity = quantity(draft.quantity);
+  const input = initialSetup
+    ? targetQuantity === null
+      ? null
+      : movementInput({ ...draft, quantity: String(targetQuantity - stock.stock_quantity) })
+    : movementInput(draft);
   const key = useIdempotencyKey(JSON.stringify({ stock: stock.id, version: stock.version, input }));
   const change = <K extends keyof MovementDraft>(field: K, value: MovementDraft[K]) =>
     setDraft((old) => ({ ...old, [field]: value }));
@@ -165,7 +182,11 @@ function StockEditor({ initial }: { initial: Consumable }) {
     e.preventDefault();
     if (stock.status !== "active" || command.error?.status === 409) return;
     if (!input) {
-      setMessage("수량·날짜·가격·구매 링크를 확인해 주세요. 재고 조정에는 사유가 필요해요.");
+      setMessage(
+        initialSetup && targetQuantity === stock.stock_quantity
+          ? "현재 재고와 같아요. 추가 조정 없이 ‘재고 설정 건너뛰고 계속’을 선택해 주세요."
+          : "수량·날짜·가격·구매 링크를 확인해 주세요. 재고 조정에는 사유가 필요해요.",
+      );
       attempt.reject(form);
       return;
     }
@@ -177,7 +198,12 @@ function StockEditor({ initial }: { initial: Consumable }) {
     );
     if (result.ok && command.mounted.current) {
       guard.release();
-      navigate(`/consumables/${stock.id}/stock/${result.value.id}`, { replace: true });
+      if (onSaved) onSaved(result.value);
+      else
+        navigate(returnTo ?? `/consumables/${stock.id}/stock/${result.value.id}`, {
+          replace: true,
+          state: { homecareOutcome: result.value },
+        });
     }
   }
   async function compare() {
@@ -190,9 +216,13 @@ function StockEditor({ initial }: { initial: Consumable }) {
   }
   return (
     <section className="card">
-      <h2>입고·반품·재고 조정</h2>
+      <h2>{initialSetup ? "현재 보유 재고 설정" : "입고·반품·재고 조정"}</h2>
       <StockSummary row={stock} />
-      <p>구매한 날짜와 수량을 기록해요. 교체·재고 사용은 기기별 교체 화면에서 기록해 주세요.</p>
+      <p>
+        {initialSetup
+          ? "지금 실제로 보유한 총수량을 입력하면 현재 재고와의 차이를 사유 있는 조정으로 기록해요. 기기 교체일은 바뀌지 않아요. 재고 설정은 나중에 해도 돼요."
+          : "구매한 날짜와 수량을 기록해요. 교체·재고 사용은 기기별 교체 화면에서 기록해 주세요."}
+      </p>
       <form
         onInput={() => {
           setDirty(true);
@@ -208,6 +238,7 @@ function StockEditor({ initial }: { initial: Consumable }) {
                 재고 기록 종류
                 <select
                   value={draft.kind}
+                  disabled={initialSetup}
                   onChange={(e) => change("kind", e.target.value as MovementDraft["kind"])}
                 >
                   {(["receipt", "return_in", "return_out", "adjustment"] as const).map((kind) => (
@@ -220,9 +251,11 @@ function StockEditor({ initial }: { initial: Consumable }) {
             </div>
             <div className="form-field">
               <label>
-                {draft.kind === "adjustment"
-                  ? "재고 조정 수량 (증가 양수·감소 음수)"
-                  : "입고·반품 수량"}
+                {initialSetup
+                  ? "현재 보유 총수량"
+                  : draft.kind === "adjustment"
+                    ? "재고 조정 수량 (증가 양수·감소 음수)"
+                    : "입고·반품 수량"}
                 <input
                   required
                   inputMode={draft.kind === "adjustment" ? "text" : "numeric"}
@@ -231,11 +264,13 @@ function StockEditor({ initial }: { initial: Consumable }) {
                 />
               </label>
               <p className="muted">
-                {draft.kind === "return_out"
-                  ? "양수로 입력한 수량을 재고에서 빼요."
-                  : draft.kind === "adjustment"
-                    ? "현재 총재고가 아니라 차이를 입력해요. 예: 누락 2개는 -2."
-                    : "입력한 수량을 공용 재고에 더해요."}
+                {initialSetup
+                  ? `현재 ${stock.stock_quantity}${stock.unit}에서 입력한 총수량으로 맞춰요.`
+                  : draft.kind === "return_out"
+                    ? "양수로 입력한 수량을 재고에서 빼요."
+                    : draft.kind === "adjustment"
+                      ? "현재 총재고가 아니라 차이를 입력해요. 예: 누락 2개는 -2."
+                      : "입력한 수량을 공용 재고에 더해요."}
               </p>
             </div>
             <div className="form-field">
@@ -321,12 +356,24 @@ function StockEditor({ initial }: { initial: Consumable }) {
           </section>
         )}
         <SaveControls
-          backTo={`/consumables/${stock.id}`}
+          backTo={onCancel ? undefined : (returnTo ?? `/consumables/${stock.id}`)}
           busy={command.busy}
           cancel={command.cancel}
-          label="재고 변화 저장"
+          label={initialSetup ? "현재 보유 재고 저장" : "재고 변화 저장"}
           disabled={stock.status !== "active" || command.error?.status === 409}
         />
+        {onCancel && (
+          <button
+            type="button"
+            disabled={command.busy}
+            onClick={() => {
+              guard.release();
+              onCancel();
+            }}
+          >
+            재고 설정 건너뛰고 계속
+          </button>
+        )}
       </form>
     </section>
   );
