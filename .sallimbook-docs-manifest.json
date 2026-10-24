@@ -42,8 +42,8 @@
       "git_sha1": "e9a38f5ee6fed120d1a0d0ae69eb9e6084fcc510"
     },
     "README.md": {
-      "sha256": "8c08ab44cf0d2133e80a305795f3c7fbcff4fa3156d2be22455b2265605e6fc5",
-      "git_sha1": "2f73ef787562206307fb2d46a06ae5b60dfad329"
+      "sha256": "2dbd4b3909e2138b9272b8f99026fa3de25ca4e28911a2e46dff2ddff22df6d2",
+      "git_sha1": "6ab465b7fd2fff32d6cb5900cc49574e2ea2c3a1"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
@@ -258,8 +258,8 @@
       "git_sha1": "5109f60a63723b43951c6996bad493fa3c4d41a2"
     },
     "infra/documents/README.md": {
-      "sha256": "489e8b1864f12fd1ec588a738ebc088309f82a0c4cb3c8919e50751343c8f519",
-      "git_sha1": "799a3f4c103a23aa3536db4d3515c09b9c2fe995"
+      "sha256": "9cc10526c233dceb9c7e873320e63ad3603e1b29a754b376baa90c91ce5f44ab",
+      "git_sha1": "5b233aed1a0c5774d16a6f018d3d4becc47ef67b"
     },
     "scripts/cleanup_documents.py": {
       "sha256": "514c471e081b56d2dc7fcdbc5f00d4b352a729b2c7b1f1997594606218eb527f",
@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "57a006721d7680f44d1ff9314bace4c6ac6175cc05c671498674bebd14958d3e",
-      "git_sha1": "9ff4eea6f2c5a66d1580cb9ce1cbfe79cf22b149"
+      "sha256": "cc9c40f0f7e8630e987c98822d029b6a0600e873b56f3542d73eeee4511cc765",
+      "git_sha1": "226c1bd0f5c840d3f8c8abaae1d8110e084712d3"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",

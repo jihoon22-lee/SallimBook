@@ -15,7 +15,7 @@ R-13/R-15/R-20의 PDF/JPEG/PNG 검사 경계를 실제 도구로 재현하는 �
 | Tesseract | `tesseract-ocr=5.5.0-1+b1`; [Debian 패키지](https://packages.debian.org/trixie/tesseract-ocr) |
 | OCR 언어 | eng/kor `1:4.1.0-2`; [영어](https://packages.debian.org/trixie/tesseract-ocr-eng), [한국어](https://packages.debian.org/trixie/tesseract-ocr-kor) |
 | 합성 한글 폰트 | `fonts-noto-cjk=1:20240730+repack1-1`; [Debian 패키지](https://packages.debian.org/trixie/fonts-noto-cjk) |
-| Python 라이브러리 | API `uv.lock`에서 해시와 함께 내보낸 `requirements.txt`; Pillow 13.0.0, pypdf 6.21.1 포함 |
+| Python 라이브러리 | API `uv.lock`에서 해시와 함께 내보낸 `requirements.txt`; Pillow 13.0.0, pypdf 6.21.2 포함 |
 
 `toolchain.lock.json`은 위 입력과 API lockfile/내보낸 requirements의 해시를 기록한다.
 API 의존성이 변경되면 공식 버전·호환성을 검토한 뒤 다음 명령으로 내보내고 두 해시를 갱신한다.
@@ -96,8 +96,25 @@ Pillow verify/load와 PNG/JPEG 구조 종료를 대조하고, PDF strict parse �
   Python 3.14.7, Pillow 13.0.0, pypdf 6.21.1과 공식 ClamAV 1.4.6을 사용했다.
 - API 권한·암호화·DB 제약과 실제 Android 다운로드 동작은 이 도구 시험과 별도 검증이다.
 
+## 2026-10-24 보안 패치 검증
+
+pypdf를 6.21.2로 고정했다. 반복된 누락 객체 참조, 잘못된 cross-reference 항목,
+큰 xref 헤더로 인한 과도한 실행 시간 문제의 수정 버전이다.
+[공식 릴리스](https://github.com/py-pdf/pypdf/releases/tag/6.21.2)와
+[누락 객체 참조 공지](https://github.com/py-pdf/pypdf/security/advisories/GHSA-6c7f-9265-g8fw),
+[xref 항목 공지](https://github.com/py-pdf/pypdf/security/advisories/GHSA-jr96-gvgh-j3r4),
+[xref 헤더 공지](https://github.com/py-pdf/pypdf/security/advisories/GHSA-gmh7-3g9r-mjh5)를 확인했다.
+
+Dependabot 변경은 API lockfile과 requirements를 바꿨으나 `toolchain.lock.json`의 검토 해시를
+갱신하지 않아 실제 검사기 실행 전에 CI가 중단됐다. frozen export를 다시 확인하고 두 해시만
+갱신했으며 검증을 건너뛰거나 검사 기준을 낮추지 않았다.
+
+문서·PDF 단위 테스트 218개와 격리 도구 시험 33개가 통과했다. 실제 도구 출력에서 pypdf 6.21.2를
+확인했으며 정상 한글 PDF/이미지와 잘못된 문서·악성코드 거부, 페이지·크기·실행 자원 제한을 검사했다.
+이 결과는 합성 데이터의 호환 시험이며 운영 반영·실제 기기 시험과 구분한다.
+
 관련 공식 문서: [ClamAV 프로토콜](https://docs.clamav.net/manual/Usage/ClamdProtocol.html),
 [서명 갱신](https://docs.clamav.net/manual/Usage/SignatureManagement.html),
 [Pillow 보안](https://pillow.readthedocs.io/en/stable/handbook/security.html),
-[pypdf Configuration](https://pypdf.readthedocs.io/en/6.21.1/modules/configuration.html),
+[pypdf Configuration](https://pypdf.readthedocs.io/en/6.21.2/modules/configuration.html),
 [Tesseract CLI](https://github.com/tesseract-ocr/tesseract/blob/main/doc/tesseract.1.asc).
