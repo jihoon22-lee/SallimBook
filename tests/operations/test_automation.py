@@ -85,7 +85,8 @@ class Boundaries(unittest.TestCase):
         self.assertEqual(target.read_text(), "unchanged")
 
     def test_candidate_manifest_is_accepted_by_the_deployed_backup_policy(self):
-        value = {**deployment_config(), "api_image": "sha256:" + "f" * 64}
+        value = {**deployment_config(), "api_image": "sha256:" + "f" * 64,
+                 "app_funnel_enabled": True}
         path = private(self.root / "candidate.json", value)
         job = {"app_source_commit": value["source_commit"]}
         self.assertEqual(
@@ -766,6 +767,7 @@ class RuntimeBoundaries(unittest.TestCase):
 
     def test_successful_cvd_keeps_web_apk_and_app_source_binding(self):
         item = self.make_runtime()
+        item.manifest["app_funnel_enabled"] = True
         with self.prepared_cvd(item) as compose, patch.object(item, "services", return_value={}):
             result = item.cvd_refresh()
         candidate = compose.call_args.kwargs["binding"]["manifest"]
@@ -777,6 +779,9 @@ class RuntimeBoundaries(unittest.TestCase):
         self.assertEqual(result["status"], "scanner-refresh-promoted")
         self.assertTrue(result["web_and_apk_unchanged"])
         self.assertEqual(compose.call_args.args[-3:], ("scanner", "inspector", "api"))
+        directory = Path(compose.call_args.kwargs["binding"]["directory"])
+        serve = json.loads((directory / "node/serve.json").read_text())
+        self.assertTrue(serve["AllowFunnel"][item.manifest["fqdn"] + ":8443"])
 
     def test_service_set_requires_the_document_inspector(self):
         item = self.make_runtime()

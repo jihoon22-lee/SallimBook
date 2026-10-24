@@ -101,6 +101,47 @@ class DeploymentTests(unittest.TestCase):
                          "android-public.json"):
                 self.assertEqual(enabled[name], disabled[name])
 
+    def test_app_funnel_opt_in_keeps_the_same_isolated_upstreams_and_app_identity(self):
+        private = deploy.render(config())
+        public = deploy.render({**config(), "app_funnel_enabled": True})
+        self.assertEqual(public["node/serve.json"]["AllowFunnel"], {
+            config()["fqdn"] + ":443": True,
+            config()["fqdn"] + ":8443": True,
+        })
+        self.assertEqual(public["node/serve.json"]["Web"], private["node/serve.json"]["Web"])
+        # No host port can be taken from PointBook, FamilyCare or another project.
+        self.assertEqual(public["compose.json"], private["compose.json"])
+        for service in public["compose.json"]["services"].values():
+            self.assertNotIn("ports", service)
+            self.assertNotEqual(service.get("network_mode"), "host")
+        for name in ("android-public.json", "public.Caddyfile", "private.Caddyfile"):
+            self.assertEqual(public[name], private[name])
+
+    def test_app_funnel_defaults_private_and_requires_a_boolean_without_self_setup(self):
+        private = deploy.render(config())
+        explicit = deploy.render({**config(), "app_funnel_enabled": False})
+        self.assertEqual(explicit["node/serve.json"], private["node/serve.json"])
+        for value in (None, 0, 1, "true", "false", [], {}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                deploy.render({**config(), "app_funnel_enabled": value})
+        with self.assertRaises(ValueError):
+            deploy.render({**config(), "app_funnel_enabled": True,
+                           "setup_identity_sha256": "a" * 64})
+
+    def test_unapproved_app_funnel_change_fails_preflight_before_runtime_access(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "rendered"
+            deploy.write_config(config(), output)
+            path = output / "node/serve.json"
+            serve = json.loads(path.read_text())
+            serve["AllowFunnel"][config()["fqdn"] + ":8443"] = True
+            path.write_text(json.dumps(serve))
+            with patch.object(preflight, "private_file") as secret_read, self.assertRaisesRegex(
+                backup.OperationError, "configuration drift"
+            ):
+                preflight.check(output)
+            secret_read.assert_not_called()
+
     def test_self_setup_rejects_invalid_identity_and_proxy_override(self):
         for value in (None, True, 123, [], "", "a" * 63, "a" * 65, "g" * 64,
                       "a" * 64 + "\n", " " + "a" * 64):
