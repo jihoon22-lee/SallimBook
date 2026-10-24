@@ -74,7 +74,7 @@ internal object NativeHomecarePolicy {
     private data class Route(val method: String, val path: String, val input: String, val output: String,
         val query: Map<String, HomecareField>, val version: Boolean, val idem: Boolean, val status: Int)
     private val pageQuery = mapOf("cursor" to nullable(id), "limit" to integer(1, 200))
-    private val statusQuery = pageQuery + mapOf("status" to choice("active", "ended", "all"))
+    private val statusQuery = pageQuery + mapOf("q" to nullable(NameSearchQuery::validate), "status" to choice("active", "ended", "all"))
     private val linkQuery = pageQuery + mapOf("appliance_id" to nullable(id), "consumable_id" to nullable(id))
     private val routes = mapOf(
         FinanceOperation.DELETE_APPLIANCE to Route("DELETE", "/api/v1/appliances/{applianceId}", "", "", emptyMap(), true, false, 204),
@@ -177,7 +177,7 @@ internal object NativeHomecarePolicy {
         var path = route.path
         ids.forEach { path = path.replace("{$it}", FinancePolicy.id(args[it]).lowercase()) }
         val values = query(route, args["query"])
-        if (values.isNotEmpty()) path += "?" + values.toSortedMap().entries.joinToString("&") { "${it.key}=${if (it.value is String) (it.value as String).lowercase() else it.value}" }
+        if (values.isNotEmpty()) path += "?" + values.toSortedMap().entries.joinToString("&") { "${it.key}=${if (it.key == "q") NameSearchQuery.encode(it.value) else if (it.value is String) (it.value as String).lowercase() else it.value}" }
         return FinanceRequest(route.method, path, if (route.input.isEmpty()) null else input(route.input, args["input"]),
             if (route.version) tag(args["ifMatch"]) else null, if (route.idem) key(args["idempotencyKey"]) else null)
     }
@@ -191,6 +191,7 @@ internal object NativeHomecarePolicy {
                 values[pair[0]] = when (pair[0]) {
                     "limit" -> pair[1].toLongOrNull() ?: invalid()
                     "active" -> when (pair[1]) { "true" -> true; "false" -> false; else -> invalid() }
+                    "q" -> NameSearchQuery.decode(pair[1])
                     else -> pair[1]
                 }
             }
@@ -199,7 +200,7 @@ internal object NativeHomecarePolicy {
     }
     fun httpAllowed(method: String, path: String, body: Any?, ifMatch: String?, idempotencyKey: String?): Boolean = try {
         val uri = URI(path)
-        if (path.length > 2048 || uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) invalid()
+        if (path.length > 2048 || uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in uri.rawPath || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) invalid()
         val parts = uri.rawPath.split('/')
         val entry = routes.entries.firstOrNull { (_, route) ->
             val pattern = route.path.split('/')

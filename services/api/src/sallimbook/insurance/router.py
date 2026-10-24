@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response
 
+from sallimbook.core.name_search import NameQuery
 from sallimbook.identity.dependencies import (
     PeopleCapability,
     PrincipalDependency,
@@ -89,6 +90,7 @@ def list_policies(
     status: PolicyStatus | None = None,
     insured_member_id: UUID | None = None,
     policyholder_member_id: UUID | None = None,
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
@@ -98,6 +100,7 @@ def list_policies(
         status=status,
         insured_member_id=insured_member_id,
         policyholder_member_id=policyholder_member_id,
+        q=q,
         cursor=cursor,
         limit=limit,
     )
@@ -309,6 +312,7 @@ def list_cases(
     patient_member_id: UUID | None = None,
     treatment_state: TreatmentState | None = None,
     financial_state: FinancialState | None = None,
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
@@ -318,6 +322,7 @@ def list_cases(
         patient_member_id=patient_member_id,
         treatment_state=treatment_state,
         financial_state=financial_state,
+        q=q,
         cursor=cursor,
         limit=limit,
     )

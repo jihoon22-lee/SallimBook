@@ -648,3 +648,27 @@ POST는 이름·관계(child/parent/other)만 받고 Idempotency-Key를 요구�
 - `GET /api/v1/recurring-rules/{rule_id}/insurance-link` (`getRecurringRuleInsuranceLink`)는 `rule_id`와 nullable `link`를 반환한다. 한 규칙에 하나의 보험 계약만 연결되는 기존 DB 제약을 따른다. 연결에는 `id/policy_id/product_name/insurer/policy_status/active/ended_at`를 담아 종료된 연결도 확인한다. 보험증권 번호나 의료 메모를 포함하지 않는다.
 - 두 조회 모두 다른 가계 ID는 404, 미인증은 401이며 `Cache-Control: no-store`를 적용한다. Android도 생성 계약에 대응하는 전용 읽기 명령과 제한된 메타데이터 검증을 거친다.
 - 카드·계좌 일반 상세는 기존 `payment-links`를 서울 오늘 기준으로 끝까지 읽고 각 페이지의 digest·버전을 확인한 뒤 표시한다. 규칙 수는 적용기간별 응답의 `rule_id`를 중복 제거한 수이고 적용기간 수도 별도 표기한다. 출금·소비 합계로 재해석하지 않는다. 계좌의 수입 연결은 선택 월의 수입/반환 전체 페이지를 읽어 해당 계좌를 확인하며 무효 상태도 구분한다.
+
+### 이름 검색 (P11, #161)
+
+다음 GET 목록은 선택 쿼리 `q`를 받는다. 최대 120 Unicode code point이며 제어문자(U+0000~001F, U+007F)는
+422로 거부한다. 앞뒤 공백을 제거한 값이 비어 있으면 검색 제한이 없고, 그 외에는 대소문자를 구분하지
+않는 부분 문자열 검색이다. `%`, `_`, `\`는 SQL 와일드카드가 아닌 입력 문자 그대로 찾는다.
+
+| GET 경로 | 검색하는 일반정보 |
+|---|---|
+| `/api/v1/assets` | 자산 이름 |
+| `/api/v1/accounts` | 연결 자산 이름, 금융기관 |
+| `/api/v1/cards` | 별칭, 상품명, 카드사 |
+| `/api/v1/insurance/policies` | 상품명, 보험사 |
+| `/api/v1/insurance/cases` | 사건 이름 |
+| `/api/v1/appliances` | 이름, 모델, 제조사, 설치 장소 |
+| `/api/v1/consumables` | 이름, 규격 |
+| `/api/v1/recurring-rules` | 취소되지 않은 적용기간 이력의 규칙 이름 |
+
+가계 범위와 기존 상태·구성원·분류 조건에 AND로 결합하고, cursor 페이지를 자르기 전에 적용한다.
+응답 schema와 정렬·cursor·no-store 정책은 동일하다. 규칙 이력에 이름이 여러 번 나와도 규칙은 한 번만
+반환한다. 과거 또는 미래 적용기간의 제목으로 찾은 규칙은 상세에서 해당 기간을 확인할 수 있다.
+계좌·증권번호 원문, 카드 비밀, 진단 원문, 사용자 메모는 검색 대상이 아니다. 다른 가계 cursor는 404다.
+Android는 동일한 생성 계약을 사용하고 `q` 값만 UTF-8 form URL encoding한다. 경로의 인코딩·중복 쿼리·
+알 수 없는 필드는 기존 허용 목록에서 거부하며, 일반 목록 요청에 새 비밀 입력 경로를 만들지 않는다.

@@ -241,6 +241,30 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
   await expect(
     page.getByText(`사용 종료 · ${setupLink.as_of.replaceAll("-", ".")}`, { exact: true }),
   ).toBeVisible();
+  await page.goto("/appliances?status=all");
+  const applianceSearch = page.getByRole("search", { name: "가전 이름·모델·장소 검색" });
+  await applianceSearch.getByRole("searchbox").fill("첫 설정");
+  await applianceSearch.getByRole("button", { name: "이름 검색", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "합성 HTTPS 첫 설정 가전", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "합성 HTTPS 거실 청정기", exact: true })).toHaveCount(
+    0,
+  );
+  expect(new URL(page.url()).searchParams.get("status")).toBe("all");
+  await page.goto("/consumables");
+  const stockSearch = page.getByRole("search", { name: "소모품 이름·규격 검색" });
+  await stockSearch.getByRole("searchbox").fill("초기 재고");
+  await stockSearch.getByRole("button", { name: "이름 검색", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "합성 HTTPS 초기 재고 필터", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: skuName, exact: true })).toHaveCount(0);
+  await page.goto("/accounts");
+  const accountSearch = page.getByRole("search", { name: "계좌 이름·금융기관 검색" });
+  await accountSearch.getByRole("searchbox").fill("독립 잔액");
+  await accountSearch.getByRole("button", { name: "이름 검색", exact: true }).click();
+  await expect(page.getByRole("link", { name: "합성 가전 독립 잔액", exact: true })).toBeVisible();
   console.log("SAFE_PHASE=HOMECARE_METADATA");
   await movement(page, sku, "receipt", "1", "2025-01-01");
   await replace(page, linkA, "2025-01-01");

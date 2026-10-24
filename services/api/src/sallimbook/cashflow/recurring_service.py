@@ -41,6 +41,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.name_search import search_names
 from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, decimal_krw, krw_string, month_start
 from sallimbook.identity.service import utcnow
@@ -527,9 +528,19 @@ def get_rule(session, principal, rule_id):
     return response
 
 
-def list_rules(session, principal, *, cursor=None, limit=50):
+def list_rules(session, principal, *, q=None, cursor=None, limit=50):
     cash.lock_cash_household(session, principal)
     query = select(RecurringRule).where(RecurringRule.household_id == principal.household_id)
+    if q is not None:
+        matching = search_names(
+            select(RecurringRuleVersion.rule_id).where(
+                RecurringRuleVersion.household_id == principal.household_id,
+                RecurringRuleVersion.revoked_at.is_(None),
+            ),
+            q,
+            RecurringRuleVersion.title,
+        )
+        query = query.where(RecurringRule.id.in_(matching))
     rows, next_cursor = keyset_page(
         session,
         query,

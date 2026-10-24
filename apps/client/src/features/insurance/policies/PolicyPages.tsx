@@ -1,3 +1,4 @@
+import { NameSearch } from "../../../shared/NameSearch";
 import { MisregistrationDelete } from "../../assets/MisregistrationDelete";
 import { FilterPanel } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
@@ -24,6 +25,7 @@ function PolicyList() {
   const status = params.get("status") ?? "";
   const insured = params.get("insured") ?? "";
   const holder = params.get("holder") ?? "";
+  const q = params.get("q") ?? "";
   const list = usePagedList(
     useCallback(
       (cursor?: string) =>
@@ -34,15 +36,17 @@ function PolicyList() {
           ...(isUuid(insured) ? { insured_member_id: insured } : {}),
           ...(isUuid(holder) ? { policyholder_member_id: holder } : {}),
           limit: 50,
+          ...(q ? { q } : {}),
           ...(cursor ? { cursor } : {}),
         }),
-      [api, status, insured, holder],
+      [api, status, insured, holder, q],
     ),
     undefined,
     "insurance-policies",
   );
   return (
     <>
+      <NameSearch label="보험 계약 이름·보험사 검색" />
       <Link className="button-link" to="/insurance/policies/new">
         보험 계약 등록
       </Link>

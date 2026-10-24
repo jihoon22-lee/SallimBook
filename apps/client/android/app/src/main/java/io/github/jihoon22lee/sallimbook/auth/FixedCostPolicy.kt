@@ -137,9 +137,9 @@ internal object FixedCostPolicy {
         if (value == null) { if (monthRequired) invalid(); return "" }
         val fields = if (operation == FinanceOperation.FIXED_COST_SUMMARY) mapOf("month" to month) else
             mapOf("cursor" to nullable(if (operation == FinanceOperation.OBLIGATION_HISTORY) positive else id), "limit" to { item: Any? -> integer(item, 1, 200) }) +
-                if (monthRequired) mapOf("month" to month) else emptyMap()
+                if (monthRequired) mapOf("month" to month) else if (operation == FinanceOperation.LIST_RECURRING_RULES) mapOf("q" to nullable(NameSearchQuery::validate)) else emptyMap()
         val row = shape(value, fields, if (monthRequired) setOf("month") else emptySet()).filterValues { it != null }
-        return if (row.isEmpty()) "" else "?" + row.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }
+        return if (row.isEmpty()) "" else "?" + row.toSortedMap().entries.joinToString("&") { "${it.key}=${NameSearchQuery.value(it.key, it.value)}" }
     }
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
         val route = routes[operation] ?: invalid()
@@ -163,14 +163,14 @@ internal object FixedCostPolicy {
         for (part in raw.split('&')) {
             val pair = part.split('=', limit = 2)
             if (pair.size != 2 || pair[0] in result) invalid()
-            result[pair[0]] = if (pair[0] == "limit" || pair[0] == "cursor" && operation == FinanceOperation.OBLIGATION_HISTORY) pair[1].toLongOrNull() ?: invalid() else pair[1]
+            result[pair[0]] = if (pair[0] == "limit" || pair[0] == "cursor" && operation == FinanceOperation.OBLIGATION_HISTORY) pair[1].toLongOrNull() ?: invalid() else if (pair[0] == "q") NameSearchQuery.decode(pair[1]) else pair[1]
         }
         return result
     }
     fun httpAllowed(method: String, path: String, body: Any?, ifMatch: String?, idempotencyKey: String?): Boolean {
         try {
             val uri = URI(path)
-            if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) return false
+            if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in uri.rawPath || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) return false
             for ((operation, route) in routes) {
                 if (route.method != method) continue
                 val template = route.path.split('/'); val segments = uri.rawPath.split('/')

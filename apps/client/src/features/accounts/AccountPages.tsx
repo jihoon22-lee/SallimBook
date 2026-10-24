@@ -1,3 +1,4 @@
+import { NameSearch } from "../../shared/NameSearch";
 import { PaymentConnections, AccountIncomeLinks } from "../finance/RelatedRecords";
 import { DateInput } from "../../shared/DateInput";
 import { FilterPanel, TaskPanel } from "../../shared/TaskLayout";
@@ -44,14 +45,16 @@ function AccountList() {
   const status = ["active", "closed", "all"].includes(params.get("status") ?? "")
     ? params.get("status")!
     : "active";
+  const q = params.get("q") ?? "";
   const query = useMemo<AccountQuery>(
     () => ({
       limit: 50,
+      ...(q ? { q } : {}),
       status: status as AccountQuery["status"],
       ...(type ? { account_type: type as Account["account_type"] } : {}),
       ...(owner ? { owner_member_id: owner } : {}),
     }),
-    [type, owner, status],
+    [type, owner, status, q],
   );
   const { items, cursor, loading, error, reload, more } = usePagedList(
     useCallback(
@@ -70,6 +73,7 @@ function AccountList() {
   }
   return (
     <>
+      <NameSearch label="계좌 이름·금융기관 검색" />
       <Link className="button-link" to="/accounts/new">
         계좌 등록
       </Link>

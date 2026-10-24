@@ -512,7 +512,7 @@ test("a card closed after the payment date can still record that payment", async
     status: "closed",
   });
   const closed = page.getByRole("option", {
-    name: "합성 종료 카드 · •••• 2222 · 2025.02.15 사용 종료",
+    name: "합성 종료 카드 · •••• 2222 · 합성 카드사 · 합성 구성원 하나 · 시작 2024.01.01 · 2025.02.15 사용 종료",
     exact: true,
   });
   await page.goto(`/fixed-payments/${uid(70)}`);

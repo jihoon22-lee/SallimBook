@@ -1,7 +1,8 @@
+import { SearchableSelect } from "../../../shared/SearchableSelect";
 import { useCallback, useId } from "react";
 import { Link } from "react-router";
 import type { Schema } from "../model";
-import { benefits, policyStatuses } from "../model";
+import { benefits, policyStatuses, treatments, finances } from "../model";
 import { InsuranceError } from "../InsuranceSupport";
 import { useInsuranceApi } from "../api";
 import { useInsuranceEventsApi } from "./api";
@@ -142,26 +143,24 @@ export function PolicySelect({
   const inactive = selected && selected.status !== "active" ? policyStatuses[selected.status] : "";
   return (
     <div className="form-field">
-      <label>
-        {label}
-        <select
-          required={required}
-          disabled={disabled || rows.loading}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          aria-describedby={inactive ? noteId : undefined}
-        >
-          <option value="">{required ? "계약 선택" : "계약 미지정"}</option>
-          {rows.data?.map((row) => (
-            <option key={row.id} value={row.id}>
-              {row.insurer} · {row.product_name} ·{" "}
-              {people.people.find((p) => p.id === row.insured_member_id)?.display_name ??
-                "가족 확인 필요"}
-              {row.status === "active" ? "" : ` · ${policyStatuses[row.status]}`}
-            </option>
-          ))}
-        </select>
-      </label>
+      <SearchableSelect
+        label={label}
+        value={value}
+        onChange={onChange}
+        required={required}
+        placeholder={required ? "계약 선택" : "계약 미지정"}
+        disabled={disabled || rows.loading || !!rows.error}
+        describedBy={inactive ? noteId : undefined}
+        options={[
+          ...(rows.data ?? []).map((row) => ({
+            value: row.id,
+            label: `${row.insurer} · ${row.product_name} · ${people.people.find((p) => p.id === row.insured_member_id)?.display_name ?? "가족 확인 필요"} · ${row.contract_start ? `계약 시작 ${dateLabel(row.contract_start)}` : "계약 시작 미입력"} · ${policyStatuses[row.status]}`,
+          })),
+          ...(value && !rows.data?.some((row) => row.id === value)
+            ? [{ value, label: "현재 연결 계약 · 다시 확인 필요", disabled: true }]
+            : []),
+        ]}
+      />
       {inactive && (
         <p className="muted" id={noteId}>
           선택한 계약은 {inactive} 상태예요. 종료 전 진료에 대한 청구·보험금은 나중에도 기록할 수
@@ -198,25 +197,23 @@ export function CaseSelect({
   );
   return (
     <div className="form-field">
-      <label>
-        {label}
-        <select
-          required
-          disabled={disabled || rows.loading}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          <option value="">사건 선택</option>
-          {rows.data?.map((row) => (
-            <option key={row.id} value={row.id}>
-              {row.title} ·{" "}
-              {people.people.find((p) => p.id === row.patient_member_id)?.display_name ??
-                "가족 확인 필요"}{" "}
-              · 진료 시작 {dateLabel(row.start_on)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <SearchableSelect
+        label={label}
+        value={value}
+        onChange={onChange}
+        required
+        placeholder="사건 선택"
+        disabled={disabled || rows.loading || !!rows.error}
+        options={[
+          ...(rows.data ?? []).map((row) => ({
+            value: row.id,
+            label: `${row.title} · ${people.people.find((p) => p.id === row.patient_member_id)?.display_name ?? "가족 확인 필요"} · 진료 시작 ${dateLabel(row.start_on)} · ${treatments[row.treatment_state]} · ${finances[row.financial_state]}`,
+          })),
+          ...(value && !rows.data?.some((row) => row.id === value)
+            ? [{ value, label: "현재 연결 사건 · 다시 확인 필요", disabled: true }]
+            : []),
+        ]}
+      />
       <InsuranceError error={rows.error} />
       {rows.error && (
         <button type="button" onClick={() => void rows.reload()}>

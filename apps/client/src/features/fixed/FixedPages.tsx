@@ -1,3 +1,4 @@
+import { NameSearch } from "../../shared/NameSearch";
 import { RuleInsuranceLink, NamedReference } from "../finance/RelatedRecords";
 import { TaskNotice, TaskPanel, useTaskPanelRelease } from "../../shared/TaskLayout";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -485,16 +486,23 @@ function FixedMonthList({ month }: { month: string }) {
 }
 function RuleList() {
   const api = useFixedApi();
+  const [params] = useSearchParams();
+  const q = params.get("q") ?? "";
   const list = usePagedList(
     useCallback(
-      (cursor?: string) => api.rules({ limit: 50, ...(cursor ? { cursor } : {}) }),
-      [api],
+      (cursor?: string) =>
+        api.rules({ limit: 50, ...(q ? { q } : {}), ...(cursor ? { cursor } : {}) }),
+      [api, q],
     ),
     undefined,
     "fixed-rules",
   );
   return (
     <>
+      <NameSearch
+        label="납부 규칙 이름·변경 이력 검색"
+        hint="과거·예정 적용기간의 이름도 함께 찾아요."
+      />
       <div className="form-actions">
         <Link className="button-link" to="/fixed-payments/rules/new">
           납부 규칙 등록

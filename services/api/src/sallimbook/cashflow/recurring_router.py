@@ -25,6 +25,7 @@ from sallimbook.cashflow.recurring_schemas import (
     SettlementResponse,
 )
 from sallimbook.cashflow.related_schemas import RuleInsuranceLink
+from sallimbook.core.name_search import NameQuery
 from sallimbook.core.types import YearMonth
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
@@ -43,10 +44,11 @@ def _etag(response, result):
 def rules(
     principal: PrincipalDependency,
     session: SessionDependency,
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
-    return service.list_rules(session, principal, cursor=cursor, limit=limit)
+    return service.list_rules(session, principal, q=q, cursor=cursor, limit=limit)
 
 
 @router.post(

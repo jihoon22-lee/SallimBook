@@ -8288,6 +8288,7 @@ export interface operations {
     listAccounts: {
         parameters: {
             query?: {
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
                 account_type?: components["schemas"]["AccountType"] | null;
@@ -10006,6 +10007,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: "active" | "ended" | "all";
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };
@@ -11759,6 +11761,7 @@ export interface operations {
     listAssets: {
         parameters: {
             query?: {
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
                 kind?: components["schemas"]["AssetKind"] | null;
@@ -15026,6 +15029,7 @@ export interface operations {
                 card_type?: components["schemas"]["CardType"] | null;
                 settlement_account_id?: string | null;
                 status?: "active" | "closed" | "all";
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };
@@ -16098,6 +16102,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: "active" | "ended" | "all";
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };
@@ -20757,6 +20762,7 @@ export interface operations {
                 patient_member_id?: string | null;
                 treatment_state?: components["schemas"]["TreatmentState"] | null;
                 financial_state?: components["schemas"]["FinancialState"] | null;
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };
@@ -25203,6 +25209,7 @@ export interface operations {
                 status?: components["schemas"]["PolicyStatus"] | null;
                 insured_member_id?: string | null;
                 policyholder_member_id?: string | null;
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };
@@ -28446,6 +28453,7 @@ export interface operations {
     listRecurringRules: {
         parameters: {
             query?: {
+                q?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };

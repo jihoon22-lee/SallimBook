@@ -1,3 +1,4 @@
+import { NameSearch } from "../../shared/NameSearch";
 import { TaskPanel } from "../../shared/TaskLayout";
 import { AssetAccountLink } from "../finance/RelatedRecords";
 import { DateInput } from "../../shared/DateInput";
@@ -99,9 +100,11 @@ function AssetList() {
   const status = ["active", "archived", "all"].includes(params.get("status") ?? "")
     ? params.get("status")!
     : "active";
+  const q = params.get("q") ?? "";
   const query = useMemo<AssetQuery>(
     () => ({
       limit: 50,
+      ...(q ? { q } : {}),
       status: status as AssetQuery["status"],
       ...(kind ? { kind: kind as AssetQuery["kind"] } : {}),
       ...(category ? { category: category as AssetQuery["category"] } : {}),
@@ -112,7 +115,7 @@ function AssetList() {
           : {}),
       ...(inclusion ? { inclusion_status: inclusion as AssetQuery["inclusion_status"] } : {}),
     }),
-    [kind, category, owner, inclusion, status],
+    [kind, category, owner, inclusion, status, q],
   );
   const { items, cursor, loading, error, reload, more } = usePagedList(
     useCallback(
@@ -139,6 +142,7 @@ function AssetList() {
   ].filter(Boolean).length;
   return (
     <>
+      <NameSearch label="자산·부채 이름 검색" />
       <div className="form-actions">
         <Link className="button-link" to="/assets/new">
           자산·부채 등록
