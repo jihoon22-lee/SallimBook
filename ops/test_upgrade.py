@@ -173,7 +173,9 @@ ORDER BY c.relname
 
 def snapshot_query(old_schema):
     number = int(old_schema.split("_", 1)[0])
-    ignored = tuple(name for added, names in ADDED_COLUMNS.items() if added > number for name in names)
+    ignored = tuple(
+        name for added, names in ADDED_COLUMNS.items() if added > number for name in names
+    )
     return SNAPSHOT_TEMPLATE.replace("{ignored}", " - %L" * len(ignored)).replace(
         "{names}", "".join(f", '{name}'" for name in ignored)
     )
@@ -475,7 +477,8 @@ def main(old_image, new_image):
                                  "-d", database, "-At", "-c",
                                  "SELECT version_num FROM alembic_version").strip()
             before, before_overrides = snapshot()
-            assert before_overrides[seeded["released"]] == ("t" if old_schema == "0014_vault" else "f")
+            expected_override = "t" if old_schema == "0014_vault" else "f"
+            assert before_overrides[seeded["released"]] == expected_override
 
             # Maintenance window: stop the old app, check, migrate, start the new image.
             compose("old", "stop", "api", "scanner")
