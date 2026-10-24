@@ -1045,6 +1045,20 @@
       "retry_amount_krw": "600000",
       "expected_http_status": 409,
       "expected_cash_record_count": 1
+    },
+    "shared_purchase_plan": {
+      "demand_quantities": [
+        1,
+        1
+      ],
+      "stock_quantity": 1,
+      "planned_quantity": 0,
+      "ordered_quantity": 0,
+      "expected": {
+        "demand_quantity": 2,
+        "shortage_quantity": 1,
+        "additional_quantity": 1
+      }
     }
   }
 }

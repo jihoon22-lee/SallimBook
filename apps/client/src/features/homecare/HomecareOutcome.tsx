@@ -17,7 +17,10 @@ export function useHomecareReturn(): string | null {
   if (typeof value !== "string" || value.includes("\\") || /[\r\n]/.test(value)) return null;
   const path = value.split(/[?#]/, 1)[0] ?? "";
   return path === "/" ||
-    /^\/(?:consumables|appliances|appliance-consumables)(?:\/[0-9a-f-]{36})?$/.test(path)
+    path === "/purchase-plan" ||
+    /^\/(?:consumables|appliances|appliance-consumables|consumable-orders)(?:\/[0-9a-f-]{36})?$/.test(
+      path,
+    )
     ? value
     : null;
 }

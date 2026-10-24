@@ -58,16 +58,16 @@
       "git_sha1": "f7e85825fb1dbc259cfbb7a2b9865cd06c1435fd"
     },
     "docs/domain-and-calculation-rules.md": {
-      "sha256": "f42f501d3d89d1f6494ebff042082ea7b21bc5655258a8037fd40a68af0fd4c3",
-      "git_sha1": "2e755312eb2268b7f3f5c70006c69f128d4f4ddf"
+      "sha256": "9f48fd0554e3e39b83aeb3031012202525cec6c26109486fabbc13250a22b40d",
+      "git_sha1": "1ff11ecbbaf4d0649fd687bd0027168e85d6af01"
     },
     "docs/data-model.md": {
-      "sha256": "132c2eb2ac192256c7e2df116d4381e0cf3b47a1a5c2958ecc510760696743e3",
-      "git_sha1": "9f36f5ae87a99e4ff7a6eeda0650e4d4be1b7b27"
+      "sha256": "d2058291ed9fb53963dc3a7f24d0be2109f9cddd524770e0d130d96c79c10b1f",
+      "git_sha1": "a5615891a49b648616fd7feef7faacae72fbf40e"
     },
     "docs/api-contract.md": {
-      "sha256": "ce0f5d898203a66c4f9df14e38467f7e056d5eb3702923c14685d42e3e731209",
-      "git_sha1": "8259bf5e88697c0e067cb2e6da5ac9403c79ba05"
+      "sha256": "3e9788dc867cb6a9a81b2641a51916cf11e98d6007e43f9388f3692bfe5bca4c",
+      "git_sha1": "d6775d941d8b458cc746ef3f037c153a39d59c93"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -210,8 +210,8 @@
       "git_sha1": "101f25d2f5ca681c37a4dcf04e8e174041e3a1a8"
     },
     "packages/test-fixtures/README.md": {
-      "sha256": "5864b90d1a56bbc02aa47937c576073d65093ec40b45233452e7ed56e0a63e6f",
-      "git_sha1": "69ed9222ed3245867e43ff5bc75d7e01d2ed64b7"
+      "sha256": "8e6198374ee179ab20a0793d39dd4a5b8da97c29b83996311364127bcb24d50e",
+      "git_sha1": "36c156e2c32b93e73b7c53bff369936e5b519a8e"
     },
     "scripts/test_android_runtime_config.py": {
       "sha256": "dd8de566a7a18cf61bfe6cfad86e7c3cd02a556d189840120ae7e278f543606a",
@@ -424,6 +424,10 @@
     "docs/testing/desktop-finish.md": {
       "sha256": "16eaa53234c59c7ff17e3e1adcec25f46a20c07891147bb2d69f0c2eabebf601",
       "git_sha1": "96a8a1411752e046277653fe57aef5801d64dd1c"
+    },
+    "docs/testing/consumable-orders.md": {
+      "sha256": "7707607cb8de14f2e1050a27fd71525c63127a3fdec93a36d23ba7d407eb6303",
+      "git_sha1": "96b6fbf57ed1c63371d3163125525429d158a29a"
     }
   }
 }

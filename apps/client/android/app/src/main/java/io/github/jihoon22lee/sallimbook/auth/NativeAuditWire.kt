@@ -129,11 +129,11 @@ internal object NativeAuditWire {
         mapOf("items" to items,"next_cursor" to next)
     } catch(_:Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
 
-    private val businessTypes=setOf("asset","financial_account","card","insurance_policy","insurance_coverage","policy_premium_link","insurance_case","medical_node","medical_expense","medical_refund","insurance_claim","insurance_payout","insurance_return","payout_allocation","appliance","consumable","appliance_consumable","stock_movement","consumable_replacement","obligation","fixed_settlement","asset_month","recurring_rule","cash_record","income_conversion","household_person")
+    private val businessTypes=setOf("asset","financial_account","card","insurance_policy","insurance_coverage","policy_premium_link","insurance_case","medical_node","medical_expense","medical_refund","insurance_claim","insurance_payout","insurance_return","payout_allocation","appliance","consumable","appliance_consumable","stock_movement","consumable_replacement","consumable_order","obligation","fixed_settlement","asset_month","recurring_rule","cash_record","income_conversion","household_person")
     private fun activityPath(path:String):Boolean {
         val id=uuid.pattern
         return path=="/settings/people" || path=="/income" || listOf(
-            "/(assets|accounts|cards|appliances|consumables|appliance-consumables|income|fixed-payments)/$id",
+            "/(assets|accounts|cards|appliances|consumables|appliance-consumables|consumable-orders|income|fixed-payments)/$id",
             "/fixed-payments/rules/$id", "/insurance/(policies|cases|expenses|refunds|claims|payouts|returns)/$id",
             "/insurance/cases/$id/nodes/$id", "/consumables/$id/stock/$id",
             "/appliance-consumables/$id/replacements/$id",
@@ -145,7 +145,7 @@ internal object NativeAuditWire {
     val entityTypes=setOf(
         "household_person",
         "appliance","appliance_consumable","asset","asset_month","card","card_secret_envelope",
-        "cash_record","consumable","consumable_replacement","document","document_link","financial_account",
+        "cash_record","consumable","consumable_replacement","consumable_order","document","document_link","financial_account",
         "fixed_settlement","income_conversion","insurance_case","insurance_claim","insurance_coverage","insurance_payout",
         "insurance_policy","insurance_return","medical_expense","medical_node","medical_refund","obligation",
         "payout_allocation","policy_premium_link","recurring_rule","stock_movement","user_export","vault",
@@ -159,6 +159,7 @@ internal object NativeAuditWire {
         "void_settlement","login","revoke","accept",
     )
     val knownFields=setOf(
+        "ordered_on","ordered_by_member_id","received_on","received_by_member_id","cancel_reason",
         "relation",
         "aaguid","aborted_at","access_expires_at","account_id","account_number","account_number_ciphertext",
         "account_type","acknowledge_non_month_end_dates","acknowledge_scope_change","action","activated_at","active",

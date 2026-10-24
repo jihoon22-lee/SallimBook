@@ -10,6 +10,12 @@ from sallimbook.core.database import Base
 # Explicit public label columns. Never load whole entities, medical prose, numbers or secrets.
 # (root table, parent joins (local foreign key, table), name column, path template)
 TARGETS = {
+    "consumable_order": (
+        "consumable_orders",
+        (("consumable_id", "consumables"),),
+        "name",
+        "/consumable-orders/{id}",
+    ),
     "asset": ("assets", (), "name", "/assets/{id}"),
     "financial_account": (
         "financial_accounts",

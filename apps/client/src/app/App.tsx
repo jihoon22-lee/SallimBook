@@ -1,3 +1,9 @@
+import { PurchasePlanPage } from "../features/homecare/orders/PurchasePlanPage";
+import {
+  OrderListPage,
+  OrderNewPage,
+  OrderDetailPage,
+} from "../features/homecare/orders/OrderPages";
 import { ActivityPage } from "../features/audit/ActivityPage";
 import { RecordActorsProvider } from "../shared/RecordActor";
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -144,6 +150,38 @@ const screens = [
     parent: { to: "/appliances", label: "가전 목록" },
     live: true,
     element: <ApplianceDetailPage edit />,
+  },
+  {
+    path: "/purchase-plan",
+    title: "공용 소모품 구매 계획",
+    group: "more" as NavigationGroup,
+    parent: { to: "/consumables", label: "공용 재고" },
+    live: true,
+    element: <PurchasePlanPage />,
+  },
+  {
+    path: "/consumable-orders",
+    title: "구매 예정·주문 목록",
+    group: "more" as NavigationGroup,
+    parent: { to: "/purchase-plan", label: "구매 계획" },
+    live: true,
+    element: <OrderListPage />,
+  },
+  {
+    path: "/consumable-orders/new",
+    title: "구매 예정 추가",
+    group: "more" as NavigationGroup,
+    parent: { to: "/purchase-plan", label: "구매 계획" },
+    live: true,
+    element: <OrderNewPage />,
+  },
+  {
+    path: "/consumable-orders/:id",
+    title: "소모품 주문 상세",
+    group: "more" as NavigationGroup,
+    parent: { to: "/consumable-orders", label: "구매·주문 목록" },
+    live: true,
+    element: <OrderDetailPage />,
   },
   {
     path: "/consumables",
@@ -748,6 +786,7 @@ const navigation: {
     children: [
       { to: "/appliances", label: "가전" },
       { to: "/consumables", label: "소모품" },
+      { to: "/purchase-plan", label: "소모품 구매 계획·주문" },
       { to: "/vault", label: "보관함" },
       { to: "/settings", label: "설정" },
     ],
@@ -830,11 +869,14 @@ function ShellFrame() {
   const parent = current?.parent.to ?? "/";
   const title = current?.title ?? "페이지를 찾을 수 없어요";
   const authPage = location.pathname === "/login" || location.pathname.startsWith("/onboarding");
-  const domain = /^\/(appliances|consumables|appliance-consumables)/.test(location.pathname)
-    ? "homecare"
-    : location.pathname.startsWith("/insurance") || location.pathname.includes("audit")
-      ? "records"
-      : "finance";
+  const domain =
+    /^\/(appliances|consumables|appliance-consumables|consumable-orders|purchase-plan)/.test(
+      location.pathname,
+    )
+      ? "homecare"
+      : location.pathname.startsWith("/insurance") || location.pathname.includes("audit")
+        ? "records"
+        : "finance";
 
   function goBack() {
     if (canGoBackWithinApp(window.history.state)) navigate(-1);

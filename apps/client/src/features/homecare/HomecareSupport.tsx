@@ -43,8 +43,10 @@ export function HomecareError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
     APPLIANCE_IN_USE:
       "연결 소모품이나 사용·문서 이력이 있는 가전은 삭제할 수 없어요. 사용 종료로 기록을 보존해 주세요.",
+    CONSUMABLE_ORDER_STATE_CONFLICT:
+      "다른 기기에서 주문 상태를 바꿨거나 이미 완료된 기록이에요. 현재 상태를 비교해 주세요.",
     CONSUMABLE_IN_USE:
-      "기기 연결이나 재고·문서 이력이 있는 소모품은 삭제할 수 없어요. 사용 종료로 기록을 보존해 주세요.",
+      "기기 연결이나 재고·문서 이력, 구매·주문 기록이 있는 소모품은 삭제할 수 없어요. 사용 종료로 기록을 보존해 주세요.",
     APPLIANCE_CONSUMABLE_IN_USE:
       "교체 이력이 있는 기기 연결은 삭제할 수 없어요. 연결 사용을 중지하면 과거 기록을 보존할 수 있어요.",
     REQUEST_CANCELLED:
@@ -58,7 +60,8 @@ export function HomecareError({ error }: { error: ApiError | null }) {
     APPLIANCE_CONSUMABLE_UNAVAILABLE:
       "중지된 기기 연결이에요. 주기 설정에서 연결을 다시 사용한 뒤 교체해 주세요.",
     CONSUMABLE_SKU_EXISTS: "이미 등록한 규격이에요. 기존 소모품의 공용 재고를 확인해 주세요.",
-    CONSUMABLE_UNIT_IN_USE: "재고 이력이 있어 단위를 바꿀 수 없어요. 기존 단위를 유지해 주세요.",
+    CONSUMABLE_UNIT_IN_USE:
+      "재고·주문 이력이 있어 단위를 바꿀 수 없어요. 기존 단위를 유지해 주세요.",
     APPLIANCE_CONSUMABLE_EXISTS:
       "이미 연결한 소모품이에요. 중지된 연결도 목록에서 다시 사용할 수 있어요.",
     INSUFFICIENT_STOCK:

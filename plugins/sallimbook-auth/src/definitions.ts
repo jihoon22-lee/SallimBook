@@ -273,6 +273,58 @@ export interface SallimBookAuth {
   }): Promise<
     NativeAuthResult<NativeFinanceResponse<components["schemas"]["StockMutationReference"]>>
   >;
+  getPurchasePlan(options: {
+    query?: NonNullable<operations["getPurchasePlan"]["parameters"]["query"]>;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["PurchasePlanResponse"]>>
+  >;
+  listConsumableOrders(options: {
+    query?: NonNullable<operations["listConsumableOrders"]["parameters"]["query"]>;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableOrderListResponse"]>>
+  >;
+  createConsumableOrder(options: {
+    input: components["schemas"]["ConsumableOrderCreate"];
+    idempotencyKey: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableOrderReference"]>>
+  >;
+  getConsumableOrder(options: {
+    orderId: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableOrderResponse"]>>
+  >;
+  updateConsumableOrder(options: {
+    orderId: string;
+    input: components["schemas"]["ConsumableOrderPatch"];
+    ifMatch: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableOrderResponse"]>>
+  >;
+  submitConsumableOrder(options: {
+    orderId: string;
+    input: components["schemas"]["ConsumableOrderSubmit"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableOrderReference"]>>
+  >;
+  receiveConsumableOrder(options: {
+    orderId: string;
+    input: components["schemas"]["ConsumableOrderReceive"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableOrderReference"]>>
+  >;
+  cancelConsumableOrder(options: {
+    orderId: string;
+    input: components["schemas"]["ConsumableOrderCancel"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["ConsumableOrderReference"]>>
+  >;
   getHomecareStatus(options: {
     query?: NonNullable<operations["getHomecareStatus"]["parameters"]["query"]>;
   }): Promise<

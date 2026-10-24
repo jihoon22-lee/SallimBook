@@ -253,3 +253,64 @@ class ConsumableReplacement(ImmutableFields, Base):
     note: Mapped[str | None] = mapped_column(String(2000))
     cleared_next_check_override: Mapped[date | None]
     cleared_link_version: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class ConsumableOrder(ActorFields, EntityMixin, Base):
+    __tablename__ = "consumable_orders"
+    __table_args__ = (
+        UniqueConstraint("household_id", "id"),
+        UniqueConstraint("household_id", "stock_movement_id", name="uq_consumable_orders_receipt"),
+        *actor_constraints("consumable_orders"),
+        household_fk("consumable_orders", "consumable_id", "consumables"),
+        household_fk("consumable_orders", "ordered_by_member_id", "household_members"),
+        household_fk("consumable_orders", "received_by_member_id", "household_members"),
+        ForeignKeyConstraint(
+            ["household_id", "consumable_id", "stock_movement_id"],
+            ["stock_movements.household_id", "stock_movements.consumable_id", "stock_movements.id"],
+            ondelete="RESTRICT",
+            name="fk_consumable_orders_receipt_stock",
+        ),
+        CheckConstraint("state IN ('planned','ordered','received','cancelled')", name="state"),
+        CheckConstraint(f"quantity BETWEEN 1 AND {MAX_QUANTITY}", name="quantity_bounds"),
+        CheckConstraint(
+            "unit_cost_krw IS NULL OR unit_cost_krw >= 0", name="nonnegative_unit_cost"
+        ),
+        CheckConstraint(
+            "(ordered_on IS NULL) = (ordered_by_member_id IS NULL) AND "
+            "(state <> 'planned' OR ordered_on IS NULL) AND "
+            "(state NOT IN ('ordered','received') OR ordered_on IS NOT NULL)",
+            name="order_shape",
+        ),
+        CheckConstraint(
+            "(state = 'received' AND received_on IS NOT NULL AND received_by_member_id IS NOT NULL "
+            "AND stock_movement_id IS NOT NULL AND received_on >= ordered_on) OR "
+            "(state <> 'received' AND received_on IS NULL AND received_by_member_id IS NULL "
+            "AND stock_movement_id IS NULL)",
+            name="receipt_shape",
+        ),
+        CheckConstraint(
+            "(state = 'cancelled' AND cancel_reason IS NOT NULL "
+            "AND char_length(btrim(cancel_reason)) > 0) OR "
+            "(state <> 'cancelled' AND cancel_reason IS NULL)",
+            name="cancellation_shape",
+        ),
+        Index(
+            "ix_consumable_orders_household_state_created_id",
+            "household_id",
+            "state",
+            "created_at",
+            "id",
+        ),
+    )
+    consumable_id: Mapped[UUID]
+    state: Mapped[str] = mapped_column(String(9))
+    quantity: Mapped[int] = mapped_column(BigInteger)
+    unit_cost_krw: Mapped[Decimal | None] = mapped_column(KrwNumeric())
+    purchase_url: Mapped[str | None] = mapped_column(String(2048))
+    note: Mapped[str | None] = mapped_column(String(2000))
+    ordered_on: Mapped[date | None]
+    ordered_by_member_id: Mapped[UUID | None]
+    received_on: Mapped[date | None]
+    received_by_member_id: Mapped[UUID | None]
+    stock_movement_id: Mapped[UUID | None]
+    cancel_reason: Mapped[str | None] = mapped_column(String(500))
