@@ -26,11 +26,13 @@ from sallimbook.core.audit import AuditEvent
 from sallimbook.core.errors import DomainError
 from sallimbook.core.http import install_http_contract
 from sallimbook.core.types import SEOUL
+from sallimbook.documents.models import Document, DocumentLink
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import AuthSession, HouseholdMember, RegisteredDevice
 from sallimbook.identity.models import Household
 from sallimbook.insurance import service
 from sallimbook.insurance.models import (
+    InsuranceCase,
     InsuranceCaseRevision,
     InsurancePolicy,
     MedicalNode,
@@ -90,7 +92,7 @@ def test_insurance_openapi_versions_and_list_privacy():
     app = FastAPI()
     app.include_router(router)
     schema = app.openapi()
-    assert sum(len(v) for v in schema["paths"].values()) == 21
+    assert sum(len(v) for v in schema["paths"].values()) == 23
     for path, operations in schema["paths"].items():
         for method, operation in operations.items():
             if method in {"patch", "delete"}:
@@ -576,7 +578,7 @@ class TestInsuranceCase:
             assert [r["version"] for r in first["items"] + second["items"]] == [4, 3, 2, 1]
             assert first["items"][0]["diagnosis_note"] == "합성 진료 설명"
             assert second["items"][1]["treatment_state"] == "ongoing"
-            assert client.delete(path, headers=vheaders(actor, 4)).status_code == 405
+            assert client.delete(path, headers=vheaders(actor, 4)).status_code == 409
         with Session(db_engine) as session:
             for command in (
                 update(InsuranceCaseRevision).values(title="합성 변조"),
@@ -1132,3 +1134,175 @@ class TestPolicyDisclosure:
                 )
                 == 0
             )
+
+
+@pytest.mark.database
+class TestInsuranceMisregistration:
+    @pytest.mark.parametrize("kind", ["policies", "cases"])
+    def test_pristine_delete_is_household_scoped_versioned_and_audited(
+        self, app, actors, db_engine, kind
+    ):
+        actor, spouse, foreign = actors
+        with TestClient(app) as client:
+            body = policy_payload() if kind == "policies" else case_payload(actor)
+            row = create(client, actor, f"/{kind}", body)
+            path = f"{BASE}/{kind}/{row['id']}"
+            assert client.delete(path, headers=vheaders(foreign)).status_code == 404
+            assert client.delete(path, headers=actor.headers).status_code == 400
+            assert client.delete(path, headers=vheaders(actor, 2)).status_code == 409
+            result = client.delete(path, headers=vheaders(spouse))
+            assert result.status_code == 204, result.text
+            assert client.get(path, headers=actor.headers).status_code == 404
+            assert client.delete(path, headers=vheaders(actor)).status_code == 404
+            assert client.get(f"{BASE}/{kind}", headers=actor.headers).json()["items"] == []
+        with Session(db_engine) as session:
+            audit = list(
+                session.scalars(select(AuditEvent).where(AuditEvent.entity_id == UUID(row["id"])))
+            )
+            assert {event.action for event in audit} == {"create", "delete"}
+            if kind == "cases":
+                assert (
+                    session.scalar(
+                        select(InsuranceCaseRevision).where(
+                            InsuranceCaseRevision.case_id == UUID(row["id"])
+                        )
+                    )
+                    is None
+                )
+
+    @pytest.mark.parametrize(
+        "kind,model", [("policies", InsurancePolicy), ("cases", InsuranceCase)]
+    )
+    def test_modified_records_survive_api_and_direct_database_delete(
+        self, app, actors, db_engine, kind, model
+    ):
+        actor = actors[0]
+        with TestClient(app) as client:
+            row = create(
+                client,
+                actor,
+                f"/{kind}",
+                policy_payload() if kind == "policies" else case_payload(actor),
+            )
+            path = f"{BASE}/{kind}/{row['id']}"
+            patch = (
+                {"product_name": "합성 수정"}
+                if kind == "policies"
+                else {"title": "합성 수정", "reason": "합성 보완"}
+            )
+            assert client.patch(path, headers=vheaders(actor), json=patch).status_code == 200
+            result = client.delete(path, headers=vheaders(actor, 2))
+            assert result.status_code == 409
+            assert result.json()["error"]["code"] == (
+                "INSURANCE_POLICY_IN_USE" if kind == "policies" else "INSURANCE_CASE_IN_USE"
+            )
+        with Session(db_engine) as session:
+            with pytest.raises(IntegrityError):
+                session.execute(delete(model).where(model.id == UUID(row["id"])))
+            session.rollback()
+            assert session.get(model, UUID(row["id"])).version == 2
+            if kind == "cases":
+                assert (
+                    len(
+                        list(
+                            session.scalars(
+                                select(InsuranceCaseRevision).where(
+                                    InsuranceCaseRevision.case_id == UUID(row["id"])
+                                )
+                            )
+                        )
+                    )
+                    == 2
+                )
+
+    def test_nodes_coverages_and_inactive_premium_links_prevent_deletion(self, app, actors):
+        actor = actors[0]
+        with TestClient(app) as client:
+            case = create(client, actor, "/cases", case_payload(actor))
+            create(
+                client,
+                actor,
+                f"/cases/{case['id']}/nodes",
+                {"kind": "outpatient", "label": "합성 진료"},
+            )
+            assert (
+                client.delete(f"{BASE}/cases/{case['id']}", headers=vheaders(actor)).status_code
+                == 409
+            )
+            policy = create(client, actor, "/policies", policy_payload())
+            create(
+                client,
+                actor,
+                f"/policies/{policy['id']}/coverages",
+                {"name": "합성 보장", "benefit_type": "fixed", "active": False},
+            )
+            assert (
+                client.delete(
+                    f"{BASE}/policies/{policy['id']}", headers=vheaders(actor)
+                ).status_code
+                == 409
+            )
+            other = create(client, actor, "/policies", policy_payload())
+            rule = post_rule(client, actor)
+            link = create(
+                client, actor, f"/policies/{other['id']}/premium-links", {"rule_id": rule["id"]}
+            )
+            assert (
+                client.patch(
+                    f"{BASE}/policies/{other['id']}/premium-links/{link['id']}",
+                    headers=vheaders(actor),
+                    json={"active": False},
+                ).status_code
+                == 200
+            )
+            assert (
+                client.delete(f"{BASE}/policies/{other['id']}", headers=vheaders(actor)).status_code
+                == 409
+            )
+
+
+@pytest.mark.database
+@pytest.mark.parametrize("kind", ["case", "policy"])
+def test_ended_document_link_preserves_insurance_target(app, actors, db_engine, kind):
+    actor = actors[0]
+    collection = "cases" if kind == "case" else "policies"
+    with TestClient(app) as client:
+        row = create(
+            client,
+            actor,
+            f"/{collection}",
+            case_payload(actor) if kind == "case" else policy_payload(),
+        )
+        with Session(db_engine) as session:
+            who = dict(
+                household_id=actor.household_id,
+                created_by_member_id=actor.member_id,
+                updated_by_member_id=actor.member_id,
+            )
+            document = Document(
+                **who,
+                original_name="합성.pdf",
+                mime_type="application/pdf",
+                size_bytes=100,
+                checksum_sha256="0" * 64,
+                state="pending",
+                pending_expires_at=identity.utcnow() + timedelta(hours=1),
+            )
+            session.add(document)
+            session.flush()
+            link = DocumentLink(
+                **who,
+                document_id=document.id,
+                **{kind + "_id": UUID(row["id"])},
+                active=True,
+            )
+            session.add(link)
+            session.flush()
+            link.active = False
+            link.ended_at = identity.utcnow()
+            link.end_reason = "합성 연결 해제"
+            link.version += 1
+            session.commit()
+        response = client.delete(f"{BASE}/{collection}/{row['id']}", headers=vheaders(actor))
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == f"INSURANCE_{kind.upper()}_IN_USE"

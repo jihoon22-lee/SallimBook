@@ -1,6 +1,6 @@
 import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
-import { mockInsurance, nodeRow } from "./support/insurance";
+import { mockInsurance, nodeRow, caseRow, policyRow } from "./support/insurance";
 import { uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
@@ -308,3 +308,80 @@ test("case list shows each case's net cash burden including negative values", as
       .filter({ has: page.getByRole("link", { name: state.cases[0]!.title, exact: true }) }),
   ).toContainText("순현금부담 -50,000원");
 });
+
+test("successive sibling visits preserve their parent and provider without copying a diagnosis or date", async ({
+  page,
+}) => {
+  const state = await mockInsurance(page);
+  await page.goto(`/insurance/cases/${uid(90)}/nodes/${uid(93)}`);
+  await page.getByRole("button", { name: "같은 단계 진료 추가", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "상위 진료", exact: true })).toHaveValue(uid(92));
+  await expect(page.getByLabel("의료기관·약국 이름", { exact: true })).toHaveValue("합성 약국기관");
+  await expect(page.getByLabel("진료 시작일", { exact: true })).toHaveValue("");
+  await page.getByLabel("진료 이름", { exact: true }).fill("합성 다음 조제");
+  await page.getByRole("button", { name: "저장하고 같은 단계 진료 추가", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("합성 다음 조제 진료를 저장했어요");
+  await expect(page.getByLabel("진료 이름", { exact: true })).toHaveValue("");
+  await expect(page.getByRole("combobox", { name: "상위 진료", exact: true })).toHaveValue(uid(92));
+  await expect(page.getByLabel("의료기관·약국 이름", { exact: true })).toHaveValue("합성 약국기관");
+  await page.getByLabel("진료 이름", { exact: true }).fill("합성 세 번째 조제");
+  await page.getByRole("button", { name: "진료 기록 저장", exact: true }).click();
+  const navigation = page.getByRole("navigation", { name: "같은 단계 진료", exact: true });
+  await expect(navigation.getByRole("link", { name: "합성 세 번째 조제" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await navigation.getByRole("link", { name: "합성 다음 조제" }).click();
+  await expect(page.getByRole("region", { name: "선택한 진료", exact: true })).toContainText(
+    "합성 다음 조제",
+  );
+  expect(state.nodes.slice(-2).map((n) => [n.parent_id, n.sort_order, n.start_on])).toEqual([
+    [uid(92), 10, null],
+    [uid(92), 20, null],
+  ]);
+  expect(state.cashflow.writes).toHaveLength(0);
+});
+test("policy list distinguishes insured person payment end contract maturity and coverage end", async ({
+  page,
+}) => {
+  await mockInsurance(page);
+  await page.goto("/insurance/policies");
+  const row = page.getByRole("listitem").filter({ hasText: "합성 실손 계약" });
+  await expect(row).toContainText("피보험자 합성 구성원 둘");
+  await expect(row).toContainText("납입 종료 2028.12.31");
+  await expect(row).toContainText("계약 만기 2030.12.31");
+  await expect(row).toContainText("보장 종료 2030.11.30");
+});
+
+for (const kind of ["case", "policy"] as const) {
+  test(`${kind} misregistration deletion requires review and preserves referenced rows`, async ({
+    page,
+  }) => {
+    const state = await mockInsurance(page);
+    const noun = kind === "case" ? "사건" : "계약";
+    const collection = kind === "case" ? "cases" : "policies";
+    await page.goto(`/insurance/${collection}/${uid(kind === "case" ? 90 : 80)}`);
+    await page.getByRole("button", { name: `오등록 ${noun} 삭제 검토`, exact: true }).click();
+    const remove = page.getByRole("button", { name: `오등록 ${noun} 삭제`, exact: true });
+    await expect(remove).toBeDisabled();
+    await page
+      .getByLabel("연결 기록과 변경 이력이 없는 오등록 항목임을 확인했어요.", { exact: true })
+      .check();
+    await remove.click();
+    await expect(page.getByRole("alert")).toContainText("삭제할 수 없어요");
+    await expect(remove).toBeDisabled();
+    const row = kind === "case" ? caseRow(180) : policyRow(180);
+    if (kind === "case") {
+      state.cases.push(row as ReturnType<typeof caseRow>);
+      state.histories.set(row.id, []);
+    } else state.policies.push(row as ReturnType<typeof policyRow>);
+    await page.goto(`/insurance/${collection}/${uid(180)}`);
+    await page.getByRole("button", { name: `오등록 ${noun} 삭제 검토`, exact: true }).click();
+    await page
+      .getByLabel("연결 기록과 변경 이력이 없는 오등록 항목임을 확인했어요.", { exact: true })
+      .check();
+    await remove.click();
+    await expect(page).toHaveURL(`/insurance/${collection}`);
+    expect(state[collection].some((r) => r.id === uid(180))).toBe(false);
+  });
+}

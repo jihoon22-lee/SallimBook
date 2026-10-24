@@ -210,6 +210,18 @@ export function insuranceFixture() {
       }
       const row = state.policies.find((p) => p.id === id);
       if (!row) return error("NOT_FOUND", 404);
+      if (!child && method === "DELETE") {
+        if (headers["if-match"] !== `"${row.version}"`) return error("VERSION_CONFLICT", 409);
+        if (
+          row.version !== 1 ||
+          row.valuation_asset_id ||
+          state.coverages.some((c) => c.policy_id === id) ||
+          state.premiums.some((p) => p.policy_id === id)
+        )
+          return error("INSURANCE_POLICY_IN_USE", 409);
+        state.policies = state.policies.filter((p) => p.id !== id);
+        return response(null, 204);
+      }
       if (child === "reveal") {
         state.revealCalls++;
         if (state.revealDelay)
@@ -330,6 +342,14 @@ export function insuranceFixture() {
       }
       const row = state.cases.find((c) => c.id === id);
       if (!row) return error("NOT_FOUND", 404);
+      if (!child && method === "DELETE") {
+        if (headers["if-match"] !== `"${row.version}"`) return error("VERSION_CONFLICT", 409);
+        if (row.version !== 1 || state.nodes.some((n) => n.case_id === id))
+          return error("INSURANCE_CASE_IN_USE", 409);
+        state.cases = state.cases.filter((c) => c.id !== id);
+        state.histories.delete(row.id);
+        return response(null, 204);
+      }
       if (child === "summary")
         return response({
           case_id: id,

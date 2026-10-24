@@ -25,6 +25,8 @@ const methods = [
   "getMedicalNode",
   "updateMedicalNode",
   "deleteMedicalNode",
+  "deleteInsuranceCase",
+  "deleteInsurancePolicy",
   "editInsurancePolicyNumberUI",
   "showInsurancePolicyNumberUI",
 ];
@@ -72,7 +74,7 @@ async function setup(page: Page, scenario = "success") {
                 ok: true,
                 value: { status: method.startsWith("edit") ? "saved" : "completed" },
               };
-            if (method === "deleteMedicalNode")
+            if (method.startsWith("delete"))
               return { ok: true, value: { status: 204, body: null } };
             return {
               ok: true,
@@ -101,7 +103,7 @@ async function setup(page: Page, scenario = "success") {
   await page.goto("/__insurance-bridge");
 }
 
-test("20 insurance metadata commands retain generated DTOs and never use web HTTP", async ({
+test("22 insurance metadata commands retain generated DTOs and never use web HTTP", async ({
   page,
 }) => {
   await setup(page);
@@ -191,6 +193,8 @@ test("20 insurance metadata commands retain generated DTOs and never use web HTT
           "updateMedicalNode",
           { caseId: id, nodeId: child, input: { parent_id: null }, ifMatch: '"7"' },
         ],
+        ["deleteInsuranceCase", { caseId: id, ifMatch: '"7"' }],
+        ["deleteInsurancePolicy", { policyId: id, ifMatch: '"7"' }],
         ["deleteMedicalNode", { caseId: id, nodeId: child, ifMatch: '"7"' }],
       ];
       const values = [];
@@ -208,13 +212,13 @@ test("20 insurance metadata commands retain generated DTOs and never use web HTT
     { id, child },
   );
   expect(result.calls).toEqual(result.expected);
-  expect(result.calls).toHaveLength(20);
+  expect(result.calls).toHaveLength(22);
   expect(result.values[5]).toMatchObject({
     insured_amount_krw: "99999999999999999999",
     missing: null,
     zero: "0",
   });
-  expect(result.values[19]).toBeNull();
+  expect(result.values.slice(-3)).toEqual([null, null, null]);
   expect(result.http).toBe(0);
   expect(result.storage).toBe(0);
 });

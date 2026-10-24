@@ -50,6 +50,16 @@ const mapping: Record<string, { method: string; path: string; fields: Record<str
       case_id: "caseId",
     },
   },
+  deleteInsuranceCase: {
+    method: "DELETE",
+    path: "/api/v1/insurance/cases/{case_id}",
+    fields: { case_id: "caseId" },
+  },
+  deleteInsurancePolicy: {
+    method: "DELETE",
+    path: "/api/v1/insurance/policies/{policy_id}",
+    fields: { policy_id: "policyId" },
+  },
   deleteMedicalNode: {
     method: "DELETE",
     path: "/api/v1/insurance/cases/{case_id}/nodes/{node_id}",

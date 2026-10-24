@@ -1,4 +1,4 @@
-import { TaskPanel, useTaskPanelRelease } from "../../../shared/TaskLayout";
+import { TaskNotice, TaskPanel, useTaskPanelRelease } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -111,6 +111,7 @@ function NodeSummary({ row }: { row: MedicalNode }) {
 function NodeEditor({
   caseId,
   initial,
+  seed,
   parent,
   nodes,
   saved,
@@ -118,16 +119,20 @@ function NodeEditor({
 }: {
   caseId: string;
   initial?: MedicalNode;
+  seed?: MedicalNode;
   parent: string;
   nodes: MedicalNode[];
-  saved: (id: string) => void;
+  saved: (row: MedicalNode, next: boolean) => void;
   cancel: () => void;
 }) {
   const api = useInsuranceApi();
   const command = useMetadataCommand();
   const release = useTaskPanelRelease();
   const [base, setBase] = useState(initial);
-  const [draft, setDraft] = useState(() => draftOf(initial, parent, nodes));
+  const [draft, setDraft] = useState(() => ({
+    ...draftOf(initial, parent, nodes),
+    ...(!initial && seed ? { provider: seed.provider_name ?? "", kind: seed.kind } : {}),
+  }));
   const [latest, setLatest] = useState<MedicalNode | null>(null);
   const [message, setMessage] = useState("");
   const attempt = useSubmitAttempt();
@@ -148,6 +153,8 @@ function NodeEditor({
     });
   async function submit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
+    const next =
+      !base && (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "next";
     event.preventDefault();
     if (conflicted) return;
     if (!input || !valid) {
@@ -168,7 +175,7 @@ function NodeEditor({
     );
     if (result && command.mounted.current) {
       release();
-      saved(result.id);
+      saved(result, next);
     }
   }
   async function compare() {
@@ -190,6 +197,9 @@ function NodeEditor({
   return (
     <section className="card">
       <h3>{base ? "진료 내용·위치 수정" : "진료·약국 추가"}</h3>
+      {!base && seed && (
+        <p>이전 진료의 의료기관과 종류를 이어받았어요. 새 진료 이름과 실제 날짜를 확인해 주세요.</p>
+      )}
       <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
         <fieldset disabled={command.busy}>
           <legend>진료 내용</legend>
@@ -261,6 +271,12 @@ function NodeEditor({
                 />
               </label>
             </div>
+            {!base && seed?.start_on && (
+              <p>
+                이전 진료일 {dateLabel(seed.start_on)}은 참고값이에요. 새 진료의 실제 날짜를 입력해
+                주세요.
+              </p>
+            )}
             <div className="form-field">
               <label>
                 진료 종료일
@@ -318,6 +334,16 @@ function NodeEditor({
           <button type="submit" disabled={command.busy || command.uncertain || conflicted}>
             진료 기록 저장
           </button>
+          {!base && (
+            <button
+              type="submit"
+              name="afterSave"
+              value="next"
+              disabled={command.busy || command.uncertain || conflicted}
+            >
+              저장하고 같은 단계 진료 추가
+            </button>
+          )}
           <button type="button" onClick={cancel} disabled={command.busy}>
             입력 취소
           </button>
@@ -376,11 +402,17 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
   const list = useResource(
     useCallback(() => allPages((cursor) => api.nodes(caseId, cursor)), [api, caseId]),
   );
-  const [editing, setEditing] = useState<{ row?: MedicalNode; parent: string } | null>(null);
+  const [editing, setEditing] = useState<{
+    row?: MedicalNode;
+    seed?: MedicalNode;
+    parent: string;
+    saved?: boolean;
+  } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [ack, setAck] = useState(false);
   const nodes = list.data ?? [];
   const selected = nodes.find((n) => n.id === selectedId);
+  const siblings = selected ? nodes.filter((n) => n.parent_id === selected.parent_id) : [];
   const roots = nodes.filter((n) => (selected ? n.parent_id === selected.id : !n.parent_id));
   async function remove() {
     if (!selected || !ack) return;
@@ -439,6 +471,19 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
                   ))}
                 </nav>
                 <h3>{selected.label}</h3>
+                {siblings.length > 1 && (
+                  <nav className="form-actions" aria-label="같은 단계 진료">
+                    {siblings.map((node) => (
+                      <Link
+                        key={node.id}
+                        aria-current={node.id === selected.id ? "page" : undefined}
+                        to={`/insurance/cases/${caseId}/nodes/${node.id}`}
+                      >
+                        {node.label}
+                      </Link>
+                    ))}
+                  </nav>
+                )}
                 <NodeSummary row={selected} />
                 <DocumentPanel key={selected.id} kind="medical_node" id={selected.id} />
                 <NodeMoneySummary caseId={caseId} nodeId={selected.id} />
@@ -453,6 +498,14 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
                     }}
                   >
                     이 진료 아래 추가
+                  </button>
+                  <button
+                    onClick={(event) => {
+                      editorTrigger.current = event.currentTarget;
+                      setEditing({ parent: selected.parent_id ?? "", seed: selected });
+                    }}
+                  >
+                    같은 단계 진료 추가
                   </button>
                   <button
                     onClick={(event) => {
@@ -481,20 +534,38 @@ export function MedicalTree({ caseId, selectedId }: { caseId: string; selectedId
             </TaskPanel>
           )}
           {editing && (
-            <TaskPanel key={`${editing.row?.id ?? "new"}:${editing.parent}`} label="진료·약국 입력">
+            <TaskPanel
+              key={`${editing.row?.id ?? "new"}:${editing.parent}:${editing.seed?.id ?? ""}`}
+              label="진료·약국 입력"
+            >
+              {editing.saved && (
+                <TaskNotice
+                  message={`${editing.seed!.label} 진료를 저장했어요. 다음 진료를 입력할 수 있어요.`}
+                />
+              )}
+              {editing.saved && (
+                <Link to={`/insurance/cases/${caseId}/nodes/${editing.seed!.id}`}>
+                  방금 저장한 진료 보기
+                </Link>
+              )}
               <NodeEditor
                 caseId={caseId}
                 initial={editing.row}
+                seed={editing.seed}
                 parent={editing.parent}
-                nodes={nodes}
+                nodes={
+                  editing.seed && !nodes.some((n) => n.id === editing.seed!.id)
+                    ? [...nodes, editing.seed]
+                    : nodes
+                }
                 cancel={() => {
                   setEditing(null);
                   editorTrigger.current?.focus();
                 }}
-                saved={(id) => {
-                  setEditing(null);
+                saved={(row, next) => {
+                  setEditing(next ? { parent: row.parent_id ?? "", seed: row, saved: true } : null);
                   void list.reload();
-                  navigate(`/insurance/cases/${caseId}/nodes/${id}`);
+                  if (!next) navigate(`/insurance/cases/${caseId}/nodes/${row.id}`);
                 }}
               />
             </TaskPanel>

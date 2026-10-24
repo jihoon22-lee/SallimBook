@@ -459,3 +459,19 @@ def delete_node(
 ):
     service.delete_node(session, principal, case_id, node_id, if_match)
     return Response(status_code=204)
+
+
+@router.delete("/policies/{policy_id}", status_code=204, operation_id="deleteInsurancePolicy")
+def delete_policy(
+    policy_id: UUID, principal: PrincipalDependency, session: SessionDependency, if_match: IfMatch
+):
+    service.delete_policy(session, principal, policy_id, if_match)
+    return Response(status_code=204)
+
+
+@router.delete("/cases/{case_id}", status_code=204, operation_id="deleteInsuranceCase")
+def delete_case(
+    case_id: UUID, principal: PrincipalDependency, session: SessionDependency, if_match: IfMatch
+):
+    service.delete_case(session, principal, case_id, if_match)
+    return Response(status_code=204)

@@ -1,7 +1,8 @@
+import { MisregistrationDelete } from "../../assets/MisregistrationDelete";
 import { FilterPanel, TaskNavigation } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
-import { useCallback } from "react";
-import { Link, useParams } from "react-router";
+import { useCallback, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import { ApiError } from "../../../platform/api";
 import { isUuid, dateLabel } from "../../finance/dates";
 import { formatKrw } from "../../assets/months/model";
@@ -180,6 +181,8 @@ function CaseList() {
 }
 function CaseDetail({ id, edit, nodeId }: { id: string; edit: boolean; nodeId?: string }) {
   const people = useHouseholdPeople();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
   const api = useInsuranceApi();
   const record = useResource(
     useCallback(
@@ -225,6 +228,30 @@ function CaseDetail({ id, edit, nodeId }: { id: string; edit: boolean; nodeId?: 
                 <CaseSummary row={row} members={people.people} />
               </details>
             </section>
+            <button className="danger-button" onClick={() => setDeleting(true)}>
+              오등록 사건 삭제 검토
+            </button>
+            {deleting && (
+              <MisregistrationDelete
+                id={id}
+                title="오등록 사건 삭제"
+                ackLabel="연결 기록과 변경 이력이 없는 오등록 항목임을 확인했어요."
+                actionLabel="오등록 사건 삭제"
+                inUseCode="INSURANCE_CASE_IN_USE"
+                remove={() => api.deleteCase(id, row.version)}
+                done={() => navigate("/insurance/cases", { replace: true })}
+                cancel={() => setDeleting(false)}
+                reload={() => {
+                  setDeleting(false);
+                  void record.reload();
+                }}
+              >
+                <p>
+                  {row.title} · 등록 후 수정하거나 다른 기록에 연결한 사건은 삭제할 수 없어요.
+                  삭제한 항목의 생성·삭제 감사 기록은 남아요.
+                </p>
+              </MisregistrationDelete>
+            )}
             <TaskNavigation
               label="사건 작업 바로가기"
               sections={[

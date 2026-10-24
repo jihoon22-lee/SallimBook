@@ -344,6 +344,8 @@ internal object AuthPolicy {
             "PREMIUM_RULE_ALREADY_LINKED" to (409 to "이미 보험계약에 연결된 납부 규칙입니다."),
             "INVALID_MEDICAL_DATES" to (422 to "실제 진료 날짜를 확인해 주세요."),
             "MEDICAL_NODE_CYCLE" to (422 to "진료 항목의 상위 관계를 확인해 주세요."),
+            "INSURANCE_CASE_IN_USE" to (409 to "변경 이력이나 연결 기록이 있는 사건입니다."),
+            "INSURANCE_POLICY_IN_USE" to (409 to "변경 이력이나 연결 기록이 있는 계약입니다."),
             "MEDICAL_NODE_IN_USE" to (409 to "연결된 기록이 있는 진료 항목입니다."),
             "INSURANCE_ASSET_REQUIRED" to (422 to "보험 평가액에 연결된 금융 자산은 종류를 바꿀 수 없습니다."),
             "INVALID_ASSET" to (422 to "자산 입력 항목을 확인해 주세요."),

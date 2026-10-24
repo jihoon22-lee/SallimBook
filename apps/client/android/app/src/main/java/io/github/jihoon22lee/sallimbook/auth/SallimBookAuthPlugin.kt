@@ -239,6 +239,8 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun insuranceCaseHistory(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_CASE_HISTORY)
     @PluginMethod fun listMedicalNodes(call: PluginCall) = finance(call, FinanceOperation.LIST_MEDICAL_NODES)
     @PluginMethod fun createMedicalNode(call: PluginCall) = finance(call, FinanceOperation.CREATE_MEDICAL_NODE)
+    @PluginMethod fun deleteInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.DELETE_INSURANCE_CASE)
+    @PluginMethod fun deleteInsurancePolicy(call: PluginCall) = finance(call, FinanceOperation.DELETE_INSURANCE_POLICY)
     @PluginMethod fun deleteMedicalNode(call: PluginCall) = finance(call, FinanceOperation.DELETE_MEDICAL_NODE)
     @PluginMethod fun getMedicalNode(call: PluginCall) = finance(call, FinanceOperation.GET_MEDICAL_NODE)
     @PluginMethod fun updateMedicalNode(call: PluginCall) = finance(call, FinanceOperation.UPDATE_MEDICAL_NODE)

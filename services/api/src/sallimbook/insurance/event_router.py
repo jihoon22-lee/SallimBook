@@ -235,6 +235,8 @@ def list_expenses(
     case_id: UUID | None = None,
     node_id: UUID | None = None,
     state: Literal["active", "void"] | None = None,
+    claim_policy_id: UUID | None = None,
+    claimed: bool | None = None,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
@@ -244,6 +246,8 @@ def list_expenses(
         case_id=case_id,
         node_id=node_id,
         state=state,
+        claim_policy_id=claim_policy_id,
+        claimed=claimed,
         cursor=cursor,
         limit=limit,
     )

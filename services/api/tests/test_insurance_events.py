@@ -601,6 +601,70 @@ class TestInsuranceEventFixtures:
 
 @pytest.mark.database
 class TestInsuranceEventCorrections:
+    def test_expense_claim_filter_is_policy_scoped_and_preserves_one_original(self, app, actors):
+        actor, _, foreign = actors
+        with TestClient(app) as client:
+            case = new_case(client, actor)
+            policy, second, hidden = (
+                new_policy(client, actor),
+                new_policy(client, actor),
+                new_policy(client, foreign),
+            )
+            node = new_node(client, actor, case)
+            cited, other = (
+                new_expense(client, actor, case, node),
+                new_expense(client, actor, case, node),
+            )
+            for state in ("draft", "withdrawn"):
+                create_metadata(
+                    client,
+                    actor,
+                    "/claims",
+                    {
+                        "case_id": case["id"],
+                        "policy_id": policy["id"],
+                        "expense_ids": [cited["id"]],
+                        "claim_state": state,
+                    },
+                )
+            path = f"/medical-expenses?case_id={case['id']}&claim_policy_id={policy['id']}"
+            assert [r["id"] for r in read(client, actor, path + "&claimed=true")["items"]] == [
+                cited["id"]
+            ]
+            assert [r["id"] for r in read(client, actor, path + "&claimed=false")["items"]] == [
+                other["id"]
+            ]
+            second_path = f"/medical-expenses?case_id={case['id']}&claim_policy_id={second['id']}"
+            assert read(client, actor, second_path + "&claimed=true")["items"] == []
+            assert len(read(client, actor, second_path + "&claimed=false")["items"]) == 2
+            create_metadata(
+                client,
+                actor,
+                "/claims",
+                {"case_id": case["id"], "policy_id": second["id"], "expense_ids": [cited["id"]]},
+            )
+            assert read(client, actor, f"/cases/{case['id']}/summary")["medical_paid_krw"] == "200"
+            assert (
+                client.get(
+                    f"{BASE}/medical-expenses?claimed=false", headers=actor.headers
+                ).status_code
+                == 422
+            )
+            assert (
+                client.get(
+                    f"{BASE}/medical-expenses?claim_policy_id={hidden['id']}&claimed=false",
+                    headers=actor.headers,
+                ).status_code
+                == 404
+            )
+            assert (
+                client.get(
+                    f"{BASE}/medical-expenses?claim_policy_id={policy['id']}&claimed=true",
+                    headers=foreign.headers,
+                ).status_code
+                == 404
+            )
+
     def test_claims_can_be_listed_by_cited_expense(self, app, actors):
         actor, _, foreign = actors
         with TestClient(app) as client:
@@ -1958,3 +2022,39 @@ class TestInsuranceEventBoundaries:
                 month_service.get_month(session, actor.principal, "2026-01").model_dump(mode="json")
                 == before
             )
+
+
+@pytest.mark.database
+@pytest.mark.parametrize("reference", ["claim", "payout"])
+def test_even_withdrawn_claims_and_void_payouts_keep_case_and_policy(app, actors, reference):
+    actor = actors[0]
+    with TestClient(app) as client:
+        case, policy = new_case(client, actor), new_policy(client, actor)
+        if reference == "claim":
+            create_metadata(
+                client,
+                actor,
+                "/claims",
+                {"case_id": case["id"], "policy_id": policy["id"], "claim_state": "withdrawn"},
+            )
+        else:
+            payout = money(
+                client,
+                actor,
+                "/payouts",
+                payout_payload(allocations=[allocation(case["id"], policy_id=policy["id"])]),
+            )
+            money(
+                client,
+                actor,
+                f"/payouts/{payout['id']}/void",
+                {"reason": "합성 오등록"},
+                version=1,
+                status=200,
+            )
+        for kind, row in (("cases", case), ("policies", policy)):
+            response = client.delete(
+                f"{BASE}/{kind}/{row['id']}", headers={**actor.headers, "If-Match": '"1"'}
+            )
+            assert response.status_code == 409, response.text
+            assert read(client, actor, f"/{kind}/{row['id']}")["version"] == 1

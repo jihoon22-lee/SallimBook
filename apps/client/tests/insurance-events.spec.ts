@@ -532,3 +532,63 @@ test("medical expense accepts grouped amounts and sends digits only", async ({ p
   await expect(page.getByRole("heading", { name: "의료비 상세", exact: true })).toBeVisible();
   expect(state.expenses[0]!.cash.amount_krw).toBe("30000");
 });
+
+test("new expense inherits its visit provider but uses the visit date only after explicit selection", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  await newExpense(page);
+  await expect(page.getByLabel("지불 의료기관 (선택)", { exact: true })).toHaveValue(
+    "합성 의료기관",
+  );
+  await expect(page.getByLabel("의료비 지불 실제 날짜", { exact: true })).toHaveValue("2025-02-20");
+  await page.getByRole("button", { name: "진료 시작일을 실제 지불일로 사용", exact: true }).click();
+  await expect(page.getByLabel("의료비 지불 실제 날짜", { exact: true })).toHaveValue("2025-02-01");
+  await page.getByLabel("지불 의료기관 (선택)", { exact: true }).fill("합성 직접 확인한 기관");
+  await page.getByRole("combobox", { name: "비용 귀속 진료", exact: true }).selectOption(uid(93));
+  await expect(page.getByLabel("지불 의료기관 (선택)", { exact: true })).toHaveValue(
+    "합성 직접 확인한 기관",
+  );
+  await page.getByRole("button", { name: "실제 의료비 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "의료비 상세", exact: true })).toBeVisible();
+  expect(state.expenses.at(-1)).toMatchObject({
+    provider_name: "합성 직접 확인한 기관",
+    node_id: uid(93),
+    cash: { occurred_on: "2025-02-01", amount_krw: "30000" },
+  });
+});
+
+test("expense connection filter is explicit about its contract and persists through navigation", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  state.core.policies.push({ ...policyRow(84), product_name: "합성 정액 계약" });
+  state.claims.push({ ...claimRow(), expense_ids: [uid(1001)] });
+  await page.goto(`/insurance/cases/${uid(90)}`);
+  const list = page.getByRole("region", { name: "사건의 의료비 원본", exact: true });
+  await list.locator("summary").filter({ hasText: "비용 청구 연결 확인" }).click();
+  const dialog = page.getByRole("dialog", { name: "비용 청구 연결 확인", exact: true });
+  await expect(
+    dialog.getByRole("combobox", { name: "선택 계약의 청구 연결", exact: true }),
+  ).toBeDisabled();
+  await dialog
+    .getByRole("combobox", { name: "비용 청구 확인 계약", exact: true })
+    .selectOption(uid(80));
+  await dialog
+    .getByRole("combobox", { name: "선택 계약의 청구 연결", exact: true })
+    .selectOption("no");
+  await dialog.getByRole("button", { name: "필터 닫기", exact: true }).click();
+  await expect(list.getByText("영수증 SYNTHETIC-RECEIPT-1001", { exact: true })).toHaveCount(0);
+  await expect(list.getByRole("listitem")).toHaveCount(4);
+  await expect(page).toHaveURL(/expense_link=no/);
+  await list.locator("summary").filter({ hasText: "비용 청구 연결 확인" }).click();
+  await dialog
+    .getByRole("combobox", { name: "비용 청구 확인 계약", exact: true })
+    .selectOption(uid(84));
+  await dialog.getByRole("button", { name: "필터 닫기", exact: true }).click();
+  await expect(list.getByRole("listitem")).toHaveCount(5);
+  await page.reload();
+  await expect(list.getByRole("listitem")).toHaveCount(5);
+  expect(state.expenses).toHaveLength(5);
+  expect(state.writes).toHaveLength(0);
+});
