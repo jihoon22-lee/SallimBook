@@ -313,12 +313,16 @@ def test_migration_preserves_immutable_revisions_backfills_revoked_and_refuses_f
         people = client.get(BASE, headers=first.headers).json()["items"]
         assert not next(p for p in people if p["id"] == str(spouse.member_id))["active"]
         family(client, first)
+        with db_engine.connect() as connection:
+            before_failed_downgrade = connection.scalar(
+                text("SELECT version_num FROM alembic_version")
+            )
         with pytest.raises(DBAPIError, match="Household family data exists"):
             migrate("downgrade", "0018_install_device")
         with db_engine.connect() as connection:
             assert (
                 connection.scalar(text("SELECT version_num FROM alembic_version"))
-                == "0019_household_people"
+                == before_failed_downgrade
             )
             assert (
                 connection.scalar(
