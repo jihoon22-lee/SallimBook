@@ -372,3 +372,60 @@ test("native carry-previous keeps the revision version and one key across an amb
   expect(writes[0]!.args.idempotencyKey).toBeTruthy();
   expect(native.http).toEqual([]);
 });
+
+test("native batch confirmation and save-next preserve versions and unchanged values", async ({
+  page,
+}) => {
+  const state = await mockMonths(page);
+  const source = state.record!.values[0]!;
+  state.record!.values = [
+    source,
+    { ...source, id: uid(510), asset_id: uid(610), name: "합성 다음 자산" },
+    { ...source, id: uid(511), asset_id: uid(611), name: "합성 마지막 자산" },
+  ];
+  const native = await bridge(page, ({ method, args }) => {
+    if (method === "getAssetMonth") return ok(state.record);
+    if (method === "listAssetMonthRevisions") return ok({ items: [], next_cursor: null });
+    if (method === "updateAssetMonthValue") {
+      const row = state.record!.values.find((row) => row.asset_id === args.assetId)!;
+      expect(args.ifMatch).toBe(`"${row.version}"`);
+      expect(args.input.revision_id).toBe(state.record!.revision_id);
+      expect(args.input.value_id).toBe(row.id);
+      if (!args.input.unchanged) row.input_amount_krw = args.input.input_amount_krw;
+      row.verification_state = "verified";
+      row.as_of_date = args.input.as_of_date;
+      row.version++;
+      state.record!.version++;
+      state.record!.totals = total(state.record!.values);
+      return ok({
+        value: row,
+        revision_version: state.record!.version,
+        totals: state.record!.totals,
+      });
+    }
+    return fail("INVALID_REQUEST");
+  });
+  await page.goto("/assets/months/2025-02");
+  await page.getByRole("button", { name: "선택한 항목 변동 없음 확인", exact: true }).click();
+  const panel = page.getByRole("region", { name: "선택한 항목 변동 없음", exact: true });
+  await panel.getByLabel("합성 공동 주택 선택", { exact: true }).check();
+  await panel.getByLabel("공통 실제 확인 기준일", { exact: true }).fill("2025-02-28");
+  await panel
+    .getByLabel("선택한 금액이 기준일에도 같음을 직접 확인했어요.", { exact: true })
+    .check();
+  await panel.getByRole("button", { name: "선택한 금액 확인 저장", exact: true }).click();
+  await expect(panel.getByRole("status")).toContainText("1 / 1개 저장 완료");
+  const batch = native.calls.find((call) => call.method === "updateAssetMonthValue")!;
+  expect(batch.args.input).toMatchObject({ unchanged: true, as_of_date: "2025-02-28" });
+  expect(batch.args.input).not.toHaveProperty("input_amount_krw");
+  await panel.getByRole("button", { name: "결과 확인하고 닫기" }).click();
+  await page.getByRole("button", { name: "미확인 항목 확인하기", exact: true }).click();
+  await page.getByLabel("실제 확인 기준일", { exact: true }).fill("2025-02-28");
+  await page.getByRole("button", { name: "저장 후 다음 미확인 항목", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "합성 마지막 자산 금액 확인", exact: true }),
+  ).toBeVisible();
+  expect(native.calls.filter((call) => call.method === "updateAssetMonthValue")).toHaveLength(2);
+  expect(native.http).toEqual([]);
+  expect(state.writes).toEqual([]);
+});
