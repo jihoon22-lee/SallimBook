@@ -66,8 +66,8 @@
       "git_sha1": "23c106b30d0acffff269c7486adc408bd3681d05"
     },
     "docs/api-contract.md": {
-      "sha256": "fe36a66703ab036b206a3b1a9d0df91955a92fe0f8202f05677b26fc30173853",
-      "git_sha1": "f816508b23a611bdc5430d72ffab9311f0368ee1"
+      "sha256": "6feaa1ab06d1b2019e3a76a86a4bf50ab1366f37a1b9d15618968f988494009d",
+      "git_sha1": "35e0bb22e48f4cb86539a86aa3262f511d502852"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -310,8 +310,8 @@
       "git_sha1": "0ac25fc89f7972988d47af8f42a62bebdb6082a9"
     },
     "docs/testing/vault-server.md": {
-      "sha256": "3a745029c31d11afe5eaa28fd17a51b0cdaf90e68ad45472813d77a503a11e4e",
-      "git_sha1": "cf2aaea53031c656128669b3562f632b49caa399"
+      "sha256": "4bb86e31d2a7e60bef3a70f04298c0e36acc62728547b8ff467eb34b5e373e95",
+      "git_sha1": "96aeab1a04c03ec1ea8d206d74173320f028e2f7"
     },
     "scripts/generate_vault_vectors.py": {
       "sha256": "1c562545fc2d1dc8ec3e863ccfa632395b8d8fdfd8527a1092a1f948241a0913",

@@ -13,6 +13,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.pagination import check_limit, keyset_page
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import AuthSession, HouseholdMember, RegisteredDevice, User
 from sallimbook.identity.passkeys.models import StepUpGrant, StepUpPurpose
@@ -660,25 +661,31 @@ def create_share(session, principal, payload, if_match, idempotency_key, *, step
 
 
 def list_shares(session, principal, *, cursor=None, limit=50):
-    if type(limit) is not int or not 1 <= limit <= 200:
-        raise DomainError("INVALID_PAGE_SIZE", "조회 건수를 확인해 주세요.", 422)
+    check_limit(limit)
     context = _lock(session, principal)
+    participant = or_(
+        VaultShareOffer.source_member_id == principal.member_id,
+        VaultShareOffer.target_member_id == principal.member_id,
+    )
     query = select(VaultShareOffer).where(
         VaultShareOffer.household_id == principal.household_id,
-        or_(
-            VaultShareOffer.source_member_id == principal.member_id,
-            VaultShareOffer.target_member_id == principal.member_id,
-        ),
+        participant,
     )
-    if cursor is not None:
-        query = query.where(VaultShareOffer.id < cursor)
-    rows = list(session.scalars(query.order_by(VaultShareOffer.id.desc()).limit(limit + 1)))
-    items = rows[:limit]
+    items, next_cursor = keyset_page(
+        session,
+        query,
+        model=VaultShareOffer,
+        household_id=principal.household_id,
+        keys=(VaultShareOffer.created_at,),
+        cursor=cursor,
+        limit=limit,
+        cursor_where=(participant,),
+    )
     return _read(
         context,
         VaultShareListResponse(
             items=[_share_response(row) for row in items],
-            next_cursor=items[-1].id if len(rows) > limit else None,
+            next_cursor=next_cursor,
         ),
     )
 

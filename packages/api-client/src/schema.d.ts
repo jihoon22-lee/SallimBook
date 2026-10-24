@@ -2660,7 +2660,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Shares */
+        /**
+         * List Shares
+         * @description 본인 관련 공유 이력을 생성 시각·ID 내림차순으로 조회합니다. cursor는 직전 페이지 마지막 공유 ID이며 현재 가계와 참여자 범위에서 확인합니다.
+         */
         get: operations["listVaultShares"];
         put?: never;
         /**

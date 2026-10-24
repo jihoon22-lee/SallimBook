@@ -1079,3 +1079,63 @@ def test_rotation_metadata_batches_source_and_prepared_cards_without_ciphertexts
         assert len(result["cards"]) == 6
         assert sum(row["prepared"] for row in result["cards"]) == 2
         assert {row["card_id"] for row in result["cards"]} == {row["id"] for row in rows}
+
+
+def test_share_pages_use_created_time_with_uuid_ties_and_scope_cursor(vault_app, actors):
+    first, partner, foreign = actors
+    path = "/api/v1/vault/shares"
+    with TestClient(vault_app) as client:
+        initialize(client, first)
+        latest = identity.utcnow() - timedelta(days=1)
+        ordered_ids = [UUID(f"00000000-0000-4000-8000-{index:012d}") for index in range(1, 6)]
+        remaining = iter((4, 0, 3, 1, 2))
+
+        def synthetic_order(_mapper, _connection, row):
+            # Set immutable evidence before INSERT; never disable protection or rewrite history.
+            index = next(remaining)
+            row.id = ordered_ids[index]
+            row.created_at = latest - timedelta(days=0 if index < 3 else 1)
+
+        event.listen(VaultShareOffer, "before_insert", synthetic_order)
+        try:
+            for index in range(5):
+                offer = share(client, first, partner, seed=100 + index)
+                cancelled = client.post(
+                    f"{path}/{offer['id']}/cancel",
+                    json={},
+                    headers=headers(first, version=offer["version"]),
+                )
+                assert cancelled.status_code == 200, cancelled.text
+        finally:
+            event.remove(VaultShareOffer, "before_insert", synthetic_order)
+        expected = [ordered_ids[index] for index in (2, 1, 0, 4, 3)]
+        for actor in (first, partner):
+            found, cursor = [], None
+            for page_number in range(3):
+                query = {"limit": 2} | ({"cursor": cursor} if cursor else {})
+                response = client.get(path, params=query, headers=actor.headers)
+                assert response.status_code == 200, response.text
+                data = response.json()
+                found.extend(UUID(row["id"]) for row in data["items"])
+                cursor = data["next_cursor"]
+                assert set(data) == {"items", "next_cursor"}
+                assert all(
+                    "wrapping_id" not in row and "ciphertext" not in row for row in data["items"]
+                )
+                if page_number < 2:
+                    assert cursor == data["items"][-1]["id"]
+                else:
+                    assert cursor is None
+            assert found == expected
+        # A real cursor from another household must not become a position oracle.
+        response = client.get(path, params={"cursor": str(expected[0])}, headers=foreign.headers)
+        assert response.status_code == 404
+        assert client.get(path, headers=foreign.headers).json()["items"] == []
+        missing = "00000000-0000-4000-8000-999999999999"
+        assert (
+            client.get(path, params={"cursor": missing}, headers=first.headers).status_code == 404
+        )
+        for limit in (0, 201):
+            assert (
+                client.get(path, params={"limit": limit}, headers=first.headers).status_code == 422
+            )
