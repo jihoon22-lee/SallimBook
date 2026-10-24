@@ -24,8 +24,17 @@ from ops.preflight import database_report, verify_database_command, verify_image
 
 ROOT = Path(__file__).resolve().parent.parent
 PASSWORD = "Synthetic upgrade password only 2026!"
-# Columns added by 0015/0016 are left out so snapshots compare across the downgrade.
-NEW_COLUMNS = ("revoked_at", "cleared_link_version", "cleared_next_check_override")
+# Columns added after 0014 are left out so snapshots compare across the downgrade
+# (0015 revoked_at, 0016 the two cleared_* columns, 0018 the two install_* columns), and
+# manual_override, which 0015 normalizes.
+NEW_COLUMNS = (
+    "revoked_at",
+    "cleared_link_version",
+    "cleared_next_check_override",
+    "install_key_hash",
+    "install_session_id",
+)
+IGNORED_COLUMNS = ("manual_override", *NEW_COLUMNS)
 
 CLIENT = """
 import json, urllib.error, urllib.request
@@ -159,13 +168,14 @@ SELECT c.relname,
      'SELECT count(*) AS n FROM public.%I', c.relname), false, true, '')))[1]::text,
   (xpath('/row/h/text()', query_to_xml(format(
      'SELECT md5(coalesce(string_agg(x, %L ORDER BY x), %L)) AS h FROM ('
-     'SELECT (to_jsonb(t) - %L - %L - %L - %L)::text AS x FROM public.%I t) s',
-     ',', '', 'manual_override', 'revoked_at', 'cleared_link_version',
-     'cleared_next_check_override', c.relname), false, true, '')))[1]::text
+     'SELECT (to_jsonb(t){ignored})::text AS x FROM public.%I t) s',
+     ',', '', {names}, c.relname), false, true, '')))[1]::text
 FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
   AND c.relname <> 'alembic_version'
 ORDER BY c.relname
-"""
+""".replace("{ignored}", " - %L" * len(IGNORED_COLUMNS)).replace(
+    "{names}", ", ".join(f"'{name}'" for name in IGNORED_COLUMNS)
+)
 
 
 def run(command, *, stdin=None, timeout=300):

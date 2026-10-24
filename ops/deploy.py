@@ -58,7 +58,7 @@ REQUIRED = {
     "version_name",
     "source_commit",
 }
-OPTIONAL = {"setup_identity_sha256"}
+OPTIONAL = {"setup_identity_sha256", "app_funnel_enabled"}
 
 
 def validate(config):
@@ -105,6 +105,10 @@ def validate(config):
         or not re.fullmatch(r"[0-9a-fA-F]{64}", config["setup_identity_sha256"])
     ):
         raise ValueError("Self-setup identity requires a SHA-256 hex digest")
+    if "app_funnel_enabled" in config and type(config["app_funnel_enabled"]) is not bool:
+        raise ValueError("App Funnel opt-in must be a boolean")
+    if config.get("app_funnel_enabled", False) and "setup_identity_sha256" in config:
+        raise ValueError("Public app access requires self-setup to be disabled")
     return config
 
 
@@ -221,6 +225,10 @@ http://:8080 {{
         },
         "AllowFunnel": {fqdn + ":443": True},
     }
+    if c.get("app_funnel_enabled", False):
+        # This node has its own network namespace and tailnet identity. Publishing
+        # its existing app listener never binds or reconfigures a host port.
+        serve["AllowFunnel"][fqdn + ":8443"] = True
     common = {
         "restart": "unless-stopped",
         "security_opt": ["no-new-privileges:true"],

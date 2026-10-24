@@ -84,7 +84,8 @@ React Query 캐시는 메모리 중심이며 민감한 응답은 영구 브라�
 상시 운영 호스트에 Caddy + API + PostgreSQL + 파일 volume을 배치한다.
 사용자는 현재 PC의 WSL 운영을 선택했다. PC/WSL 중단 시 서비스도 중단되는 제약을 운영 문서에 남긴다.
 기존 서비스에 영향을 주지 않는 별도 Compose 프로젝트와 전용 Tailscale 노드를 사용한다.
-앱/API는 사설 HTTPS, 외부 공개는 패스키 검증 정적 파일만 허용한다.
+앱/API는 기본 사설 HTTPS이며, 명시적으로 선택한 배포는 전용 노드의 8443을 Funnel로 공개한다.
+443은 패스키 검증 정적 파일만 제공한다. 공개 모드는 신규 가계 생성을 끄고 기존 계정 인증을 유지한다.
 [운영·앱 식별자 결정](adr/private-network-and-app-identity.md)에 따라 기존 호스트의 Serve/Funnel 설정을 변경하지 않는다.
 Android API origin과 PC web origin은 명시적 allowlist로 설정한다. CORS는 인증 대체 수단이 아니다.
 

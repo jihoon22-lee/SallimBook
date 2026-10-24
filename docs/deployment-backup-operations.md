@@ -7,7 +7,9 @@
 PostgreSQL/파일 저장소는 내부 네트워크에서 접근한다. 호스트 포트와 기존 Tailscale 설정을 재사용하지 않는다.
 사용자 결정에 따라 현재 PC의 WSL에서 기존 서비스와 분리한 Compose 프로젝트로 운영한다.
 기존 컨테이너·DB·포트·호스트 Tailscale 설정은 변경하지 않는다.
-전용 Tailscale 노드의 Serve 8443은 앱/API, Funnel 443은 검증 정적 파일만 제공한다.
+전용 Tailscale 노드의 8443은 앱/API, Funnel 443은 검증 정적 파일만 제공한다.
+8443은 기본 사설이며 manifest의 `app_funnel_enabled: true`로 명시적으로 공개할 수 있다.
+공개 모드에는 처음 시작 identity 설정을 함께 넣지 않고 기존 가계 로그인·배우자 연결을 사용한다.
 PC 절전/종료·WSL 중단 시 이용이 중단되므로 자동 복귀와 상태 점검을 운영 인수에 포함한다.
 실제 노드 FQDN·비밀은 운영 단계에 주입하며 가상 값을 운영 주소로 표시하지 않는다.
 사설 Caddy는 `ops/deploy.py`의 `PRIVATE_WEB_HEADERS`로 CSP·X-Frame-Options·HSTS·nosniff·Referrer-Policy를
