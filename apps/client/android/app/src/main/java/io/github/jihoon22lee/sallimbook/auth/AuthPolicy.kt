@@ -25,7 +25,8 @@ internal object AuthPolicy {
     private val longestForbidden = forbiddenFields.maxOf { it.length }
     // Invisible format characters join a word instead of splitting it.
     private val fieldSeparator = Regex("[^\\p{L}\\p{N}\\p{Cf}]+")
-    private val wordBoundary = Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{L})(?=\\p{N})|(?<=\\p{N})(?=\\p{L})")
+    // camelCase, an uppercase run before a capitalised word (IDToken), and letter/digit edges.
+    private val wordBoundary = Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})|(?<=\\p{L})(?=\\p{N})|(?<=\\p{N})(?=\\p{L})")
 
     fun apiOrigin(value: String): String? = try {
         if (value.isEmpty() || value.length > 512 || value.any { it.isWhitespace() || it.code < 32 } ||

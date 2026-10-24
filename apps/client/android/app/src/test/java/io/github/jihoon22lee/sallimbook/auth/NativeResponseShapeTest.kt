@@ -44,6 +44,9 @@ class NativeResponseShapeTest {
         rejected { NativeResponseShape.fields(reply + ("refresh_token" to "synthetic"), known, invalid) }
         rejected { NativeResponseShape.fields(mapOf(1 to "a", "id" to "a", "note" to "n"), known, invalid) }
         rejected { NativeResponseShape.fields(listOf("id"), known, invalid) }
+        // Like the metadata objects, a reply keeps a bounded number of keys.
+        rejected { NativeResponseShape.fields(mapOf("id" to "a", "note" to "n") + (1..23).associate { "added_$it" to it }, known, invalid) }
+        NativeResponseShape.fields(mapOf("id" to "a", "note" to "n") + (1..22).associate { "added_$it" to it }, known, invalid)
     }
 
     @Test fun addedFieldsNamedLikeSecretsAreRefused() {
