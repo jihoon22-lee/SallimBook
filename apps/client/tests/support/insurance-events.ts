@@ -347,6 +347,8 @@ export function insuranceEventsFixture(core: ReturnType<typeof insuranceFixture>
                   (!query.has("case_id") || e.case_id === query.get("case_id")) &&
                   (!query.has("node_id") || e.node_id === query.get("node_id")) &&
                   (!query.has("state") || e.cash.state === query.get("state")) &&
+                  (query.get("unclaimed_any_policy") !== "true" ||
+                    !state.claims.some((c) => c.expense_ids.includes(e.id))) &&
                   (!query.has("claimed") ||
                     state.claims.some(
                       (c) =>

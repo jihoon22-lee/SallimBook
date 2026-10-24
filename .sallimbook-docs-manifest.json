@@ -66,8 +66,8 @@
       "git_sha1": "9f36f5ae87a99e4ff7a6eeda0650e4d4be1b7b27"
     },
     "docs/api-contract.md": {
-      "sha256": "4b706446e5a6632a2ab02b0bdf80d88336c3873b75fdc690a92396660a11ae81",
-      "git_sha1": "ec6453e3e27de692f9a0d80232c6422f7ecdf7dd"
+      "sha256": "ce0f5d898203a66c4f9df14e38467f7e056d5eb3702923c14685d42e3e731209",
+      "git_sha1": "8259bf5e88697c0e067cb2e6da5ac9403c79ba05"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -416,6 +416,10 @@
     "docs/testing/shared-activity.md": {
       "sha256": "6210a6055c1e819befce2f5db35ed0a9ef81f967ff2574506fae11337f2bf5d4",
       "git_sha1": "b1c94fb4b16f6ed4f00907a2e7cf46b0a9ad11f0"
+    },
+    "docs/testing/home-attention.md": {
+      "sha256": "0b573b231ddf9445bbe8aeffd07d12dd55fcdb5c2dc131a2adeb9e445a513a01",
+      "git_sha1": "bc7532abd9898540f0bf5cf3fa361152887e74ac"
     }
   }
 }

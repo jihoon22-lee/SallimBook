@@ -169,6 +169,9 @@ const mapping: Record<string, { method: string; path: string; fields: Record<str
     path: "/api/v1/homecare/status",
     fields: {},
   },
+  listOverdueObligations: { method: "GET", path: "/api/v1/obligations/overdue", fields: {} },
+  listMedicalExpenses: { method: "GET", path: "/api/v1/insurance/medical-expenses", fields: {} },
+  getAssetTrends: { method: "GET", path: "/api/v1/asset-trends", fields: {} },
   incomeSummary: {
     method: "GET",
     path: "/api/v1/income/summary",
@@ -213,6 +216,8 @@ export async function mockNativeHomecare(page: Page, state: State) {
     if (control.failure && (!control.method || control.method === method))
       return { ok: false, code: control.failure };
     if (method === "getAssetComparison") return metadata(homeComparison(args.query.to));
+    if (method === "getAssetTrends")
+      return metadata(state.trendResponse(new URLSearchParams(args.query)));
     const route = mapping[method];
     if (!route) return { ok: false, code: "INVALID_REQUEST" };
     let path = route.path;

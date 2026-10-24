@@ -141,6 +141,7 @@ export function homecareFixture() {
     pageSize: 200,
     nextId: 2000,
     asOf: "2026-10-17",
+    previousMonthState: "confirmed" as "confirmed" | "draft" | "reopened" | "missing",
     failure: "" as "" | "before" | "after",
     conflict: "",
     statusRace: false,
@@ -524,6 +525,35 @@ export async function mockHomecare(page: Page) {
   const insurance = await mockInsuranceEvents(page);
   insurance.claims.push(claimRow(), claimRow(1201));
   const state = homecareFixture();
+  const trendResponse = (query: URLSearchParams): S["AssetTrendResponse"] => {
+    const month = query.get("from")!;
+    const period = homeComparison(month).current;
+    const missing = state.previousMonthState === "missing";
+    return {
+      from_month: month,
+      to_month: query.get("to")!,
+      filters: {},
+      series_kind: "household_net_assets",
+      points: [
+        {
+          month,
+          state: state.previousMonthState,
+          revision: missing ? null : period.revision,
+          totals: missing ? null : period.totals,
+          value_state: missing ? "missing_month" : "unconfirmed",
+          observed_amount_krw: missing ? null : "4000000",
+          confirmed_amount_krw: state.previousMonthState === "confirmed" ? "4000000" : null,
+          included_in_total: missing ? null : true,
+          as_of_date: null,
+          dates: period.dates,
+        },
+      ],
+    };
+  };
+  await page.route("**/api/v1/asset-trends?*", (route) =>
+    route.fulfill({ json: trendResponse(new URL(route.request().url()).searchParams) }),
+  );
+
   await page.route("**/api/v1/asset-comparison?*", (route) => {
     const query = new URL(route.request().url()).searchParams;
     state.reads.push({ path: "/api/v1/asset-comparison", query });
@@ -543,7 +573,7 @@ export async function mockHomecare(page: Page) {
     if (result.status === 204) return route.fulfill({ status: 204 });
     return route.fulfill({ status: result.status, json: result.body });
   });
-  return Object.assign(state, { insurance, cashflow: insurance.cashflow });
+  return Object.assign(state, { insurance, cashflow: insurance.cashflow, trendResponse });
 }
 export function homeComparison(month: string): S["AssetComparisonResponse"] {
   const dates = {

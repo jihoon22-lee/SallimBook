@@ -11,6 +11,7 @@ export async function mockNativeCashflow(
   const calls: { method: string; args: Args }[] = [];
   const http: string[] = [];
   const mapping: Record<string, { method: string; path: (args: Args) => string }> = {
+    listOverdueObligations: { method: "GET", path: () => "/obligations/overdue" },
     listIncome: { method: "GET", path: () => "/income" },
     incomeSummary: { method: "GET", path: () => "/income/summary" },
     incomeDuplicateCandidates: { method: "GET", path: () => "/income/duplicates" },

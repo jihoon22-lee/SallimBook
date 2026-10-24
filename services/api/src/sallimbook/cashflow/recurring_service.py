@@ -3,7 +3,7 @@
 import calendar
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import delete, or_, select, text
+from sqlalchemy import and_, delete, func, or_, select, text
 
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.models import Asset
@@ -28,6 +28,7 @@ from sallimbook.cashflow.recurring_schemas import (
     ObligationHistoryResponse,
     ObligationListResponse,
     ObligationResponse,
+    OverdueObligationListResponse,
     RuleListResponse,
     RuleResponse,
     RuleVersionResponse,
@@ -877,6 +878,64 @@ def list_obligations(session, principal, month, *, cursor=None, limit=50):
     )
     session.commit()
     return response
+
+
+def list_overdue_obligations(session, principal, *, cursor=None, limit=50):
+    """All earlier dates, with the same paid/partial rules as the ordinary monthly response."""
+    cash.lock_cash_household(session, principal)
+    as_of = today()
+    paid = (
+        select(FixedSettlement.obligation_id, func.sum(CashRecord.amount_krw).label("actual"))
+        .join(
+            CashRecord,
+            and_(
+                CashRecord.id == FixedSettlement.cash_record_id,
+                CashRecord.household_id == FixedSettlement.household_id,
+            ),
+        )
+        .where(FixedSettlement.household_id == principal.household_id, CashRecord.state == "active")
+        .group_by(FixedSettlement.obligation_id)
+        .subquery()
+    )
+    actual = func.coalesce(paid.c.actual, 0)
+    query = (
+        select(ScheduledObligation)
+        .outerjoin(paid, paid.c.obligation_id == ScheduledObligation.id)
+        .where(
+            ScheduledObligation.household_id == principal.household_id,
+            ScheduledObligation.scheduled_date < as_of,
+            ScheduledObligation.schedule_state == "active",
+            ScheduledObligation.skipped.is_(False),
+            ScheduledObligation.manually_completed.is_(False),
+            or_(
+                actual == 0,
+                and_(
+                    ScheduledObligation.expected_amount_krw.is_not(None),
+                    actual < ScheduledObligation.expected_amount_krw,
+                ),
+            ),
+        )
+    )
+    rows, next_cursor = keyset_page(
+        session,
+        query,
+        model=ScheduledObligation,
+        household_id=principal.household_id,
+        keys=(ScheduledObligation.scheduled_date, ScheduledObligation.created_at),
+        cursor=cursor,
+        limit=limit,
+        descending=False,
+    )
+    actuals = _active_settlements_by_obligation(session, principal, [row.id for row in rows])
+    result = OverdueObligationListResponse(
+        as_of=as_of,
+        items=[
+            _obligation_response(session, principal, row, actuals=actuals[row.id]) for row in rows
+        ],
+        next_cursor=next_cursor,
+    )
+    session.commit()
+    return result
 
 
 def obligation_action(session, principal, obligation_id, payload, if_match, key, *, action):

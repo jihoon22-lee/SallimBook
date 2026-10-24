@@ -118,6 +118,13 @@ export function useFixedApi() {
               nativeFinance.generateObligations({ input, idempotencyKey: key }),
             ),
         ),
+      overdue: (
+        query: NonNullable<operations["listOverdueObligations"]["parameters"]["query"]> = {},
+      ) =>
+        domainApi.read(
+          (client) => client.GET("/api/v1/obligations/overdue", { params: { query } }),
+          () => nativeFinance.listOverdueObligations({ query }),
+        ),
       obligations: (query: operations["listObligations"]["parameters"]["query"]) =>
         domainApi.read(
           (client) => client.GET("/api/v1/obligations", { params: { query } }),

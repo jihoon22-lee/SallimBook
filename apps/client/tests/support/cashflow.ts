@@ -214,6 +214,7 @@ export async function mockCashflow(page: Page) {
     ruleInUse: false,
     staleReceipt: false,
     pageSize: 50,
+    overdueAsOf: "2025-02-20",
     nextId: 300,
     linksRequired: false,
     linksVersion: 1,
@@ -550,6 +551,21 @@ export async function mockCashflow(page: Page) {
         return row ? response(row) : error("NOT_FOUND", 404);
       }
       if (domain === "obligations") {
+        if (id === "overdue")
+          return response({
+            as_of: state.overdueAsOf,
+            ...pageRows(
+              state.obligations.filter(
+                (row) =>
+                  row.scheduled_date < state.overdueAsOf &&
+                  ["unpaid", "partial"].includes(row.status) &&
+                  row.schedule_state === "active" &&
+                  !row.skipped &&
+                  !row.manually_completed,
+              ),
+              query,
+            ),
+          });
         if (id === "summary") {
           const expected = state.obligations.filter(
             (r) =>

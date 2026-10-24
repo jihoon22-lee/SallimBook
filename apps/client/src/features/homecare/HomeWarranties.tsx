@@ -20,9 +20,26 @@ export function HomeWarranties() {
   );
   useSeoulDayRefresh(resource.reload);
   const rows = [...(resource.data ?? [])].sort(compareWarranty);
+  const ready = !!resource.data && !resource.loading && !resource.error;
+  const soon = rows.filter(
+    (row) =>
+      row.warranty_status === "active" &&
+      row.warranty_until &&
+      row.warranty_until >= row.as_of &&
+      Date.parse(`${row.warranty_until}T00:00:00+09:00`) -
+        Date.parse(`${row.as_of}T00:00:00+09:00`) <=
+        30 * 86_400_000,
+  );
   return (
     <details className="home-warranties">
-      <summary>가전 보증 기한 확인</summary>
+      <summary>
+        <span>가전 보증 기한 확인</span>
+        {ready && soon.length > 0 && (
+          <span className="status-chip warranty-soon">30일 내 보증 만료 {soon.length}개</span>
+        )}
+        {resource.loading && <span className="muted"> 확인 중</span>}
+        {resource.error && <span className="status-chip">조회 실패</span>}
+      </summary>
       <ResourceFeedback resource={resource} />
       {resource.data && !resource.loading && !resource.error && (
         <>

@@ -165,9 +165,7 @@ test("first confirmed home offers its record and distinguishes no income from ze
     "/assets/months/2025-02",
   );
   await expect(page.locator(".home-assets")).toContainText("서로 다른 기준일");
-  const income = page
-    .locator(".summary-tile")
-    .filter({ has: page.getByRole("heading", { name: "등록 수입", exact: true }) });
+  const income = page.getByRole("region", { name: "홈 등록 수입 요약", exact: true });
   await expect(income).toContainText("이 달에 등록한 수입 기록이 없어요");
   await expect(income).not.toContainText("0원");
 });

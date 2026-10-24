@@ -270,4 +270,17 @@ class FixedCostPolicyTest {
         assertEquals("INVALID_PAYMENT_SPLIT", (safe["error"] as Map<*, *>)["code"])
         assertFalse(safe.toString().contains("synthetic"))
     }
+
+    @Test fun overdueReadNeedsNoMonthAndRejectsTodayOrResolvedRowsAndUnexpectedFilters() {
+        val op=FinanceOperation.LIST_OVERDUE_OBLIGATIONS
+        val prepared=request(op,mapOf("query" to mapOf("limit" to 2)))
+        assertEquals("/api/v1/obligations/overdue?limit=2",prepared.path)
+        assertTrue(FinancePolicy.metadataHttpAllowed("GET",prepared.path,null,null,null))
+        bad { request(op,mapOf("query" to mapOf("month" to "2026-01"))) }
+        val unpaid=obligation()+mapOf("status" to "unpaid","actual_amount_krw" to "0","difference_krw" to "-33000","consumption_krw" to "0")
+        val value=mapOf("as_of" to "2026-02-01","items" to listOf(unpaid),"next_cursor" to null)
+        assertEquals(value,FinancePolicy.response(op,prepared,200,value))
+        for(patch in listOf(mapOf("status" to "paid"),mapOf("scheduled_date" to "2026-02-01"),mapOf("scheduled_date" to "2026-02-02"),mapOf("skipped" to true),mapOf("manually_completed" to true),mapOf("schedule_state" to "superseded")))
+            bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op,prepared,200,value+mapOf("items" to listOf(unpaid+patch))) }
+    }
 }
