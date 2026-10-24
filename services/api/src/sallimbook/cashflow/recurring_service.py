@@ -809,8 +809,7 @@ def _obligation_response(session, principal, row, *, actuals=None):
         status = "skipped"
     elif row.manually_completed or (
         totals.actual_krw > 0
-        and totals.expected_krw is not None
-        and totals.actual_krw >= totals.expected_krw
+        and (totals.expected_krw is None or totals.actual_krw >= totals.expected_krw)
     ):
         status = "paid"
     elif totals.actual_krw > 0:

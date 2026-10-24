@@ -193,3 +193,22 @@ pnpm --filter @sallimbook/client exec playwright test tests/fixed.spec.ts tests/
 uv run --project services/api python scripts/test_web_auth.py --cashflow
 uv run --project services/api python scripts/test_web_auth.py --insurance
 ```
+
+## Issue #144 · 변동액 납부 확인과 재조회
+
+예정액 미정(null) 회차도 유효한 실제 납부가 있으면 `paid`(납부 확인)다.
+예정액과 차액은 null 그대로이며 추가 납부는 기존 추가 확인을 거친다.
+마지막 유효 납부를 무효로 하면 다시 `unpaid`다. 0원 실제 납부 이벤트를 만들지 않으며
+0원 예정의 수동 완료, 건너뛰기·대체 회차의 우선순위는 유지한다.
+
+화면의 unpaid는 예정일이 미래면 '납부 예정', 오늘이면 '오늘 예정 · 납부 확인 전',
+과거면 '예정일 지남 · 확인 필요'다. 미기록만으로 실제 연체라고 단정하지 않는다.
+월 요약·목록·달력·회차 상세를 재조회하는 동안 기존 내용과 갱신 상태를 함께 표시한다.
+월이 달라지면 요약·달력 조회 상태를 새로 시작하여 이전 월의 값을 새 월 제목 아래
+표시하지 않는다. 재조회 중 새 상세 작업은 잠시 비활성화하며 열려 있는 입력을 지우지 않는다.
+
+`test_variable_unknown_zero_skip_complete_reopen`은 미정액의 분할 납부·수동 완료/재개·
+각 납부 무효 후 상태와 null 차액을 검증한다. `fixed-status.spec.ts`는 웹/native 모의의
+예정일별 문구·추가 납부 확인과 재조회 중 DOM 유지·월 구분을 검사한다.
+`FixedCostPolicyTest`는 미정 예정액·null 차액의 paid와 무효 후 unpaid 응답을 받으며,
+예정액 미정인데 차액만 0인 잘못된 응답은 거부한다. 실행 결과는 PR에 기록한다.

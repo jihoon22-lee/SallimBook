@@ -4,24 +4,32 @@ import { formatMonth } from "../../shared/MonthContext";
 import { formatKrw, monthEnd } from "../assets/months/model";
 import { CashflowError } from "../finance/FinancialFeedback";
 import { allPages, useResource } from "../finance/queries";
+import { useRefreshOnChange } from "./useRefreshOnChange";
 import { useFixedApi } from "./api";
-import { obligationStates } from "./model";
+import { obligationStatusLabel } from "./model";
 
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-export function ObligationCalendar({ month, refresh }: { month: string; refresh: number }) {
+export function ObligationCalendar(props: { month: string; refresh: number }) {
+  return <CalendarContent key={props.month} {...props} />;
+}
+function CalendarContent({ month, refresh }: { month: string; refresh: number }) {
   const api = useFixedApi();
   const resource = useResource(
     useCallback(
       () =>
         allPages((cursor) => api.obligations({ month, limit: 200, ...(cursor ? { cursor } : {}) })),
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` is a reload trigger; a new value must re-run the read.
-      [api, month, refresh],
+      [api, month],
     ),
   );
+  useRefreshOnChange(resource.reload, refresh);
   const firstWeekday = new Date(`${month}-01T00:00:00Z`).getUTCDay();
   const days = Number(monthEnd(month).slice(-2));
   return (
-    <section className="card" aria-label="월 납부 달력">
+    <section
+      className="card"
+      aria-label="월 납부 달력"
+      aria-busy={resource.loading && Boolean(resource.data)}
+    >
       <h2>{formatMonth(month)} 예정일 달력</h2>
       <p>
         생성된 회차의 예정일 기준이에요. 각 회차의 실제 납부 합계는 납부일과 관계없이 표시하며, 선택
@@ -36,7 +44,8 @@ export function ObligationCalendar({ month, refresh }: { month: string; refresh:
           이 달의 전체 회차를 확인하고 있어요.
         </p>
       )}
-      {resource.data && !resource.loading && !resource.error && (
+      {resource.error && resource.data && <p>아래는 마지막으로 확인한 달력이에요.</p>}
+      {resource.data && (
         <>
           <p>이 달의 생성된 회차 {resource.data.length}개</p>
           <div className="payment-calendar-weekdays" aria-hidden="true">
@@ -69,7 +78,7 @@ export function ObligationCalendar({ month, refresh }: { month: string; refresh:
                         <li key={row.id}>
                           <Link to={`/fixed-payments/${row.id}`}>{row.title}</Link>
                           <span>
-                            {obligationStates[row.status]}
+                            {obligationStatusLabel(row)}
                             {row.manual_override ? " · 수동 예외" : ""}
                           </span>
                           <span>

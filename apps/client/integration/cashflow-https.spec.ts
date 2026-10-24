@@ -343,6 +343,19 @@ test("real income card recurring and closure workflow preserves cash facts and i
   const pensionObligation = await generate(page, pensionRule, "합성 HTTPS 자산 이동");
   await settle(page, pensionObligation, "5000");
   await expect(page.getByText("0원 / 0원 / 5,000원", { exact: true })).toBeVisible();
+  await expect(page.locator(".status-chip")).toHaveText("납부 확인 · 예정액 미정");
+  const variablePaid = await page.evaluate(
+    async (id) => fetch(`/api/v1/obligations/${id}`).then((r) => r.json()),
+    pensionObligation,
+  );
+  expect(variablePaid.status).toBe("paid");
+  expect(variablePaid.expected_amount_krw).toBeNull();
+  expect(variablePaid.difference_krw).toBeNull();
+  await page.getByRole("button", { name: "추가 납부 기록", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "추가 납부 입력 계속", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "납부 작업 닫기", exact: true }).click();
   for (const action of ["수동 납부 완료", "수동 완료 재개"]) {
     await openDisclosure(page, "예정일 변경·회차 관리");
     await page.getByRole("button", { name: action, exact: true }).click();
@@ -354,6 +367,12 @@ test("real income card recurring and closure workflow preserves cash facts and i
   await page.getByLabel("납부 무효 사유", { exact: true }).fill("합성 납부 오등록");
   await page.getByRole("button", { name: "사유와 함께 납부 무효 처리", exact: true }).click();
   await expect(page.getByText("0원 / 0원 / 0원", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      async (id) => (await fetch(`/api/v1/obligations/${id}`).then((r) => r.json())).status,
+      pensionObligation,
+    ),
+  ).toBe("unpaid");
   const invariant = await page.evaluate(
     async ({ snapshot, rule, cutoff: expectedCutoff }) => {
       const read = (path: string) => fetch(path).then((r) => r.json());

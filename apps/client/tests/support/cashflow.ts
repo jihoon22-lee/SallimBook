@@ -322,8 +322,8 @@ export async function mockCashflow(page: Page) {
           ? "skipped"
           : row.manually_completed ||
               (BigInt(row.actual_amount_krw) > 0n &&
-                row.expected_amount_krw !== null &&
-                BigInt(row.actual_amount_krw) >= BigInt(row.expected_amount_krw))
+                (row.expected_amount_krw === null ||
+                  BigInt(row.actual_amount_krw) >= BigInt(row.expected_amount_krw)))
             ? "paid"
             : row.actual_amount_krw !== "0"
               ? "partial"

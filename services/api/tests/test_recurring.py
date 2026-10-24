@@ -1320,7 +1320,7 @@ class TestRecurringDatabase:
             payment = settle(
                 client, actor, obligation_for(client, actor, "2026-01"), amount="10"
             ).json()
-            assert obligation_for(client, actor, "2026-01")["status"] == "partial"
+            assert obligation_for(client, actor, "2026-01")["status"] == "paid"
             assert (
                 client.post(
                     path + "/complete", headers=headers(actor, version=4), json={"reason": "합성"}
@@ -1334,10 +1334,24 @@ class TestRecurringDatabase:
                 ).status_code
                 == 200
             )
-            assert obligation_for(client, actor, "2026-01")["status"] == "partial"
+            assert obligation_for(client, actor, "2026-01")["status"] == "paid"
+            second = settle(
+                client, actor, obligation_for(client, actor, "2026-01"), amount="5"
+            ).json()
+            paid = obligation_for(client, actor, "2026-01")
+            assert paid["actual_amount_krw"] == "15" and paid["difference_krw"] is None
             assert (
                 client.post(
                     f"/api/v1/settlements/{payment['id']}/void",
+                    headers=headers(actor, version=1),
+                    json={"reason": "합성"},
+                ).status_code
+                == 200
+            )
+            assert obligation_for(client, actor, "2026-01")["status"] == "paid"
+            assert (
+                client.post(
+                    f"/api/v1/settlements/{second['id']}/void",
                     headers=headers(actor, version=1),
                     json={"reason": "합성"},
                 ).status_code

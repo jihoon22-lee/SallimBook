@@ -18,13 +18,14 @@ import {
 } from "../finance/FinancialFeedback";
 import { dateLabel, isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 import { allPages, usePagedList, useResource } from "../finance/queries";
+import { useRefreshOnChange } from "./useRefreshOnChange";
 import { useFixedApi } from "./api";
 import {
   displayedTerms,
   economicTypes,
   generationValid,
   historyLabel,
-  obligationStates,
+  obligationStatusLabel,
   settlementEntry,
   withdrawalPlan,
 } from "./model";
@@ -44,21 +45,35 @@ import type { ObligationAction } from "./ObligationCommands";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 export function FixedSummaryPanel({ refresh = 0 }: { refresh?: number }) {
-  const api = useFixedApi();
   const { month } = useMonth();
-  const summary = useResource(
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` is a reload trigger; a new value must re-run the read.
-    useCallback(() => api.summary(month), [api, month, refresh]),
-  );
+  return <FixedSummaryContent key={month} month={month} refresh={refresh} />;
+}
+function FixedSummaryContent({ month, refresh }: { month: string; refresh: number }) {
+  const api = useFixedApi();
+  const summary = useResource(useCallback(() => api.summary(month), [api, month]));
+  useRefreshOnChange(summary.reload, refresh);
   return (
-    <section className="card task-summary" aria-label="고정 납부 월 요약">
+    <section
+      className="card task-summary"
+      aria-label="고정 납부 월 요약"
+      aria-busy={summary.loading && Boolean(summary.data)}
+    >
       <h2>{formatMonth(month)} 고정 납부</h2>
       <CashflowError error={summary.error} />
       {summary.error && (
         <button onClick={() => void summary.reload()}>고정 납부 요약 다시 확인</button>
       )}
-      {summary.loading && <p role="status">예정과 실제 납부를 확인하고 있어요.</p>}
-      {summary.data && !summary.loading && !summary.error && (
+      {summary.loading && (
+        <p role="status">
+          {summary.data
+            ? "고정 납부 합계를 다시 확인하고 있어요."
+            : "예정과 실제 납부를 확인하고 있어요."}
+        </p>
+      )}
+      {summary.error && summary.data && (
+        <p>아래는 마지막으로 확인한 합계예요. 다시 확인해 주세요.</p>
+      )}
+      {summary.data && (
         <>
           <dl className="metadata-grid compact-metadata">
             <div>
@@ -249,7 +264,7 @@ export function ObligationSummary({ row }: { row: Obligation }) {
         <div>
           <dt>처리 상태</dt>
           <dd>
-            {obligationStates[row.status]}
+            {obligationStatusLabel(row)}
             {row.manually_completed ? " · 수동 완료" : ""}
           </dd>
         </div>
@@ -298,12 +313,15 @@ function FixedList() {
   const list = usePagedList(
     useCallback(
       (cursor?: string) => api.obligations({ month, limit: 50, ...(cursor ? { cursor } : {}) }),
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- `refresh` is a reload trigger; a new value must re-run the read.
-      [api, month, refresh],
+      [api, month],
     ),
     undefined,
     "fixed-obligations",
   );
+  function reload() {
+    void list.reload();
+    setRefresh((value) => value + 1);
+  }
   return (
     <>
       <MonthPicker />
@@ -320,7 +338,7 @@ function FixedList() {
       </div>
       {showGenerate && (
         <TaskPanel key={month} label="예정 회차 생성 입력">
-          <GenerateForm month={month} onSaved={() => setRefresh((value) => value + 1)} />
+          <GenerateForm month={month} onSaved={reload} />
         </TaskPanel>
       )}
       <FixedSummaryPanel refresh={refresh} />
@@ -336,11 +354,7 @@ function FixedList() {
             달력 보기
           </button>
         </div>
-        <button
-          className="secondary-button"
-          disabled={list.loading}
-          onClick={() => setRefresh((value) => value + 1)}
-        >
+        <button className="secondary-button" disabled={list.loading} onClick={reload}>
           월 납부 목록 다시 확인
         </button>
       </div>
@@ -367,7 +381,7 @@ function FixedList() {
               <li key={row.id} className="card">
                 <div className="record-main">
                   <div>
-                    <span className="status-chip">{obligationStates[row.status]}</span>
+                    <span className="status-chip">{obligationStatusLabel(row)}</span>
                     <h2>
                       <Link to={`/fixed-payments/${row.id}`}>{row.title}</Link>
                     </h2>
@@ -887,15 +901,18 @@ function ObligationDetail({ id }: { id: string }) {
       {resource.error && <button onClick={() => void resource.reload()}>회차 다시 확인</button>}
       {resource.loading && (
         <p className="loading-state" role="status">
-          현재 납부 회차를 불러오고 있어요.
+          {row ? "납부 회차를 다시 확인하고 있어요." : "현재 납부 회차를 불러오고 있어요."}
         </p>
       )}
-      {row && !resource.loading && !resource.error && (
+      {resource.error && row && (
+        <p>아래는 마지막으로 확인한 회차예요. 다시 확인한 뒤 작업해 주세요.</p>
+      )}
+      {row && (
         <>
-          <section className="card">
+          <section className="card" aria-busy={resource.loading}>
             <div className="item-heading">
               <h2>{row.title}</h2>
-              <span className="status-chip">{obligationStates[row.status]}</span>
+              <span className="status-chip">{obligationStatusLabel(row)}</span>
             </div>
             <p className="record-amount">
               {row.expected_amount_krw === null
@@ -911,7 +928,7 @@ function ObligationDetail({ id }: { id: string }) {
                 <button
                   ref={actionTrigger}
                   className={entry === "settle" ? "primary-button" : "secondary-button"}
-                  disabled={Boolean(currentAction || voiding)}
+                  disabled={resource.loading || Boolean(resource.error || currentAction || voiding)}
                   onClick={(event) => {
                     actionTrigger.current = event.currentTarget;
                     setAction("settle");
@@ -933,7 +950,9 @@ function ObligationDetail({ id }: { id: string }) {
                     <button
                       className="secondary-button"
                       key={name}
-                      disabled={Boolean(currentAction || voiding)}
+                      disabled={
+                        resource.loading || Boolean(resource.error || currentAction || voiding)
+                      }
                       onClick={(event) => {
                         actionTrigger.current = event.currentTarget;
                         setAction(name);
@@ -988,7 +1007,7 @@ function ObligationDetail({ id }: { id: string }) {
           <SettlementList
             id={id}
             refresh={row.version}
-            locked={Boolean(currentAction || voiding)}
+            locked={resource.loading || Boolean(resource.error || currentAction || voiding)}
             onSelect={(payment, trigger) => {
               actionTrigger.current = trigger;
               setVoiding(payment);
