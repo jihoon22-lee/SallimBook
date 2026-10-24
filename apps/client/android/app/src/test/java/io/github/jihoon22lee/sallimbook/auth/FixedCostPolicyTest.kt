@@ -139,6 +139,15 @@ class FixedCostPolicyTest {
         }
         request(FinanceOperation.CREATE_RECURRING_RULE, write(create() + mapOf("economic_type" to "loan", "loan_asset_id" to ruleId)))
     }
+    @Test fun variablePaymentCanBeConfirmedWhileItsExpectedAmountAndDifferenceStayUnknown() {
+        val op = FinanceOperation.GET_OBLIGATION
+        val r = request(op, mapOf("obligationId" to obligationId))
+        val paid = obligation() + mapOf("amount_mode" to "variable", "expected_amount_krw" to null, "difference_krw" to null)
+        assertEquals(paid, FinancePolicy.response(op, r, 200, paid))
+        val voided = paid + mapOf("status" to "unpaid", "actual_amount_krw" to "0", "consumption_krw" to "0")
+        assertEquals(voided, FinancePolicy.response(op, r, 200, voided))
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, r, 200, paid + mapOf("difference_krw" to "0")) }
+    }
     @Test fun generationIsBoundedToAnInclusive366DayWindowAnd2000ImmutableReferences() {
         val args = write(mapOf("start_date" to "2024-01-01", "end_date" to "2024-12-31"))
         val r = request(FinanceOperation.GENERATE_OBLIGATIONS, args)

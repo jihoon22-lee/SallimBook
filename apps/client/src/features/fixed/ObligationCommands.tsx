@@ -7,7 +7,7 @@ import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { isDateOnly, isUuid, todaySeoul, dateLabel } from "../finance/dates";
 import { allPages } from "../finance/queries";
 import { useFixedApi } from "./api";
-import { economicTypes, obligationStates, paymentSplit } from "./model";
+import { economicTypes, obligationStatusLabel, paymentSplit } from "./model";
 import type { Obligation, Settlement } from "./model";
 import { PaymentMethod } from "./PaymentMethod";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
@@ -32,7 +32,7 @@ export function actionAllowed(row: Obligation, action: ObligationAction): boolea
 function CurrentObligation({ row }: { row: Obligation }) {
   return (
     <p>
-      현재 {obligationStates[row.status]} · 예정 {dateLabel(row.scheduled_date)} · 예정액{" "}
+      현재 {obligationStatusLabel(row)} · 예정 {dateLabel(row.scheduled_date)} · 예정액{" "}
       {row.expected_amount_krw === null ? "미정" : formatKrw(row.expected_amount_krw)} · 실제{" "}
       {formatKrw(row.actual_amount_krw)} · {economicTypes[row.economic_type]} · 버전 {row.version}
     </p>

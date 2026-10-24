@@ -6578,6 +6578,7 @@ export interface components {
             skipped: boolean;
             /**
              * Status
+             * @description 예정액 미정이어도 유효 실제 납부가 있으면 paid. 차액은 null이며 추가 납부를 막지 않습니다. 수동 완료·건너뜀·대체 상태가 우선합니다.
              * @enum {string}
              */
             status: "unpaid" | "partial" | "paid" | "skipped" | "superseded";

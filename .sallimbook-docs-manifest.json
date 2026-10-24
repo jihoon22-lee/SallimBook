@@ -66,8 +66,8 @@
       "git_sha1": "cf6e169a91995aa6b1a5122847a3f811b999d075"
     },
     "docs/api-contract.md": {
-      "sha256": "69f79f7951fd9ef68e146aee5c753efadad05c5e77a3da7757ad3a4fbc04c831",
-      "git_sha1": "a7a4d593b4f0e2708dd5ee15c7f5eb8f1ef56eb1"
+      "sha256": "3dc50edf3a6e2e386abcefd6e5b43470e73abb8385bbec819f89c7e4d92e190f",
+      "git_sha1": "a3da201592a4a0268d4e2194719cb6c67de4cdea"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -250,8 +250,8 @@
       "git_sha1": "e599ecb66f3d1611ff6cccca87c03ac134fc7c85"
     },
     "docs/testing/cashflow-client.md": {
-      "sha256": "4aaeb1166055bf17a292ef926124e455c00ddc7124966628805dff3fc955a714",
-      "git_sha1": "9659bc019a5da56eaf04c5c78a82aed2422dfb11"
+      "sha256": "3c95b09dc80c67179c68c68b5a63d390049aea726da33bce078fa97e2e3b4518",
+      "git_sha1": "1f009ea72d6797da2802e42e5a2f9e377a03a7af"
     },
     "docs/testing/documents-server.md": {
       "sha256": "2618c6f14ad02419dfac1e47a4268ddd521fd066d8dc1143acce539d80523fdd",
