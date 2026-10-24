@@ -161,3 +161,20 @@ test("claim evidence shows exact selected total and context without assigning a 
   await expect(page.getByLabel("직접 입력한 청구액 (원)", { exact: true })).toHaveValue("");
   expect(state.writes).toHaveLength(0);
 });
+
+test("closing and promptly reopening claim filters keeps the next control available", async ({
+  page,
+}) => {
+  const state = await mockInsuranceEvents(page);
+  await mockNativeInsurance(page, state);
+  await page.goto("/insurance/claims");
+  const dialog = page.getByRole("dialog", { name: "청구 찾기", exact: true });
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await openDisclosure(page, "청구 찾기");
+    await dialog
+      .getByRole("combobox", { name: "청구 환자 필터", exact: true })
+      .selectOption(attempt % 2 ? uid(5) : "");
+    await dialog.getByRole("button", { name: "필터 닫기", exact: true }).click();
+    await expect(page.locator("details.filter-panel")).not.toHaveAttribute("open", "");
+  }
+});
