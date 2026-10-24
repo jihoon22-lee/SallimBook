@@ -84,6 +84,17 @@ class NativeVaultWireTest {
         }
         bad { NativeVaultUiPolicy.arguments(mapOf("action" to "decrypt","cardId" to f.cardId)) }
     }
+    @Test fun sharePagesAcceptBusinessOrderWithoutUuidOrderAndKeepCursorShape() {
+        val ids=listOf("00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000009", "00000000-0000-4000-8000-000000000001")
+        val command=NativeVaultCommand(VaultOperation.SHARES,limit=2)
+        val first=mapOf("items" to ids.take(2).map { f.share()+mapOf("id" to it) }, "next_cursor" to ids[1])
+        assertEquals(first,NativeVaultWire.response(command,200,first))
+        val next=NativeVaultCommand(VaultOperation.SHARES,cursor=ids[1],limit=2)
+        assertTrue(NativeVaultWire.route(next).path.endsWith("&cursor=${ids[1]}"))
+        val last=mapOf("items" to listOf(f.share()+mapOf("id" to ids[2])), "next_cursor" to null)
+        assertEquals(last,NativeVaultWire.response(next,200,last))
+        bad { NativeVaultWire.response(command,200,first+mapOf("next_cursor" to ids[0])) }
+    }
     @Test fun statusPaginationRotationAndErrorShapesAreBounded() {
         bad { NativeVaultWire.status(f.snapshot(false).status+mapOf("current_key_version" to 1)) }
         bad { NativeVaultWire.status(f.snapshot().status+mapOf("initialized" to 1)) }

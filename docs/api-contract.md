@@ -560,6 +560,11 @@ pending 유효기간은 24시간이다. 연결이 모두 종료된 ready 문서�
 | `/vault/rotations/{rotation_id}/wrappings/me` | GET 준비된 본인 wrapping+key check |
 | `/vault/rotations/{rotation_id}/finalize`, `/abort` | POST 전체 원자 전환/회전 중단; rotation version |
 
+공유 이력 GET은 `(created_at DESC, id DESC)` 순서의 keyset 페이지다. 같은 생성 시각은
+ID 내림차순으로 구분하며 cursor의 UUID 형식과 응답 필드는 유지한다. cursor 원본도 현재
+가계와 요청자가 발신자/수신자인 범위에서 찾고, 존재하지 않거나 범위 밖이면 404다.
+목록은 공유 이력 metadata만 반환하며 wrapping·암호문 열람 권한을 부여하지 않는다.
+
 모든 mutation은 Idempotency-Key를 요구하며 재전송 응답은 당시 `{id,version}` 참조다.
 If-Match는 표의 해당 metadata version을 사용하며 key_version이나 카드 secret revision과 다르다.
 공유·복구·rewrap·철회·회전은 최근 5분의 계정 인증 또는 목적/대상에 묶인 일회성 step-up을 요구한다.
