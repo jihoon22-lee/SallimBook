@@ -379,6 +379,7 @@ test("T24 dashboard keeps today status independent of selected asset month and u
 }) => {
   const t24 = vectors.find((v) => v.id === "T-24")! as any;
   const state = await mockHomecare(page);
+  state.insurance.claims[0]!.claim_state = "documents_required";
   state.asOf = t24.expected.consumables_as_of;
   state.links[0]!.next_check_override = t24.inputs.next_check_on;
   state.consumables[0]!.stock_quantity = t24.inputs.stock;

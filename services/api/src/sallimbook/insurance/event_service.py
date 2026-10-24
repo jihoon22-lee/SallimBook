@@ -335,6 +335,7 @@ def list_expenses(
     state=None,
     claim_policy_id=None,
     claimed=None,
+    unclaimed_any_policy=False,
     cursor=None,
     limit=50,
 ):
@@ -348,6 +349,22 @@ def list_expenses(
         if case_id is not None and node.case_id != case_id:
             raise DomainError("NOT_FOUND", "같은 사건의 진료 항목을 선택해 주세요.", 404)
         query = query.where(MedicalExpense.node_id == node_id)
+    if unclaimed_any_policy:
+        if claimed is not None or claim_policy_id is not None:
+            raise DomainError(
+                "INVALID_INSURANCE_INPUT",
+                "전체 계약 검토와 계약별 연결 조건은 따로 선택해 주세요.",
+                422,
+            )
+        linked_any = (
+            select(ClaimExpense.claim_id)
+            .where(
+                ClaimExpense.household_id == principal.household_id,
+                ClaimExpense.expense_id == MedicalExpense.id,
+            )
+            .exists()
+        )
+        query = query.where(~linked_any)
     if claimed is not None and claim_policy_id is None:
         raise DomainError(
             "INVALID_INSURANCE_INPUT", "청구 연결 여부를 확인할 계약을 선택해 주세요.", 422

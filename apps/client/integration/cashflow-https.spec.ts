@@ -301,9 +301,20 @@ test("real income card recurring and closure workflow preserves cash facts and i
       exact: true,
     }),
   ).toBeVisible();
+  await page.goto("/");
+  const homeOverdue = page.getByRole("region", { name: "지난 예정일 납부 확인", exact: true });
+  await expect(homeOverdue.locator(`a[href="/fixed-payments/${obligationId}"]`)).toBeVisible();
+  await expect(homeOverdue).toContainText("3건");
+  await expect(
+    page.getByRole("region", { name: "청구 연결 검토 비용", exact: true }),
+  ).toContainText("청구에 연결하지 않은 활성 의료비가 없어요");
   await settle(page, obligationId, "10000");
   await settle(page, obligationId, "25000");
   await expect(page.getByText("+2,000원", { exact: true })).toBeVisible();
+  await page.goto("/");
+  await expect(homeOverdue).toContainText("2건");
+  await expect(homeOverdue.locator(`a[href="/fixed-payments/${obligationId}"]`)).toHaveCount(0);
+  console.log("SAFE_PHASE=HOME_ATTENTION_ORIGINAL_PAYMENT");
   await page.goto(`/fixed-payments/rules/${ruleId}/edit`);
   await page.getByLabel("원화 예정금액 (원)", { exact: true }).fill("34000");
   await page.getByLabel("적용 시작일", { exact: true }).fill(dayAfter(today, 1));

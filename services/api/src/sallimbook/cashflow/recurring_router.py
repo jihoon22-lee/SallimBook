@@ -15,6 +15,7 @@ from sallimbook.cashflow.recurring_schemas import (
     ObligationListResponse,
     ObligationReschedule,
     ObligationResponse,
+    OverdueObligationListResponse,
     RuleChange,
     RuleCreate,
     RuleEnd,
@@ -160,6 +161,22 @@ def obligations(
 )
 def summary(principal: PrincipalDependency, session: SessionDependency, month: YearMonth):
     return service.summary(session, principal, month)
+
+
+@router.get(
+    "/obligations/overdue",
+    response_model=OverdueObligationListResponse,
+    operation_id="listOverdueObligations",
+)
+def overdue_obligations(
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    response: Response,
+    cursor: UUID | None = None,
+    limit: Limit = 50,
+):
+    response.headers["Cache-Control"] = "no-store"
+    return service.list_overdue_obligations(session, principal, cursor=cursor, limit=limit)
 
 
 @router.get(

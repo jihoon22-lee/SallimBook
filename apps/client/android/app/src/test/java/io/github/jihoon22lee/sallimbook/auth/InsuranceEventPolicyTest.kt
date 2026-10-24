@@ -51,6 +51,10 @@ class InsuranceEventPolicyTest {
             assertTrue(req.path.contains("claimed=$linked"))
             assertTrue(InsuranceEventPolicy.httpAllowed("GET", req.path, null, null, null))
         }
+        val anyPolicy=request(op, mapOf("query" to mapOf("unclaimed_any_policy" to true)))
+        assertTrue(anyPolicy.path.contains("unclaimed_any_policy=true"))
+        assertTrue(InsuranceEventPolicy.httpAllowed("GET",anyPolicy.path,null,null,null))
+        bad { request(op,mapOf("query" to mapOf("unclaimed_any_policy" to "true"))) }
         bad { request(op, mapOf("query" to mapOf("claimed" to "false"))) }
         assertFalse(InsuranceEventPolicy.httpAllowed("GET", "/api/v1/insurance/medical-expenses?claimed=0", null, null, null))
     }

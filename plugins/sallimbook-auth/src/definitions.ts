@@ -487,6 +487,11 @@ export interface SallimBookAuth {
   getAssetTrends(options: {
     query: operations["getAssetTrends"]["parameters"]["query"];
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetTrendResponse"]>>>;
+  listOverdueObligations(options: {
+    query?: NonNullable<operations["listOverdueObligations"]["parameters"]["query"]>;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["OverdueObligationListResponse"]>>
+  >;
   listObligations(options: {
     query: NonNullable<operations["listObligations"]["parameters"]["query"]>;
   }): Promise<

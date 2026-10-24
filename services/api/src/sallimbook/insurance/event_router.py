@@ -237,6 +237,7 @@ def list_expenses(
     state: Literal["active", "void"] | None = None,
     claim_policy_id: UUID | None = None,
     claimed: bool | None = None,
+    unclaimed_any_policy: bool = False,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
@@ -248,6 +249,7 @@ def list_expenses(
         state=state,
         claim_policy_id=claim_policy_id,
         claimed=claimed,
+        unclaimed_any_policy=unclaimed_any_policy,
         cursor=cursor,
         limit=limit,
     )

@@ -79,6 +79,7 @@ internal object FixedCostPolicy {
         FinanceOperation.END_RECURRING_RULE to Route("POST", "/api/v1/recurring-rules/{ruleId}/end", version = true),
         FinanceOperation.DELETE_RECURRING_RULE to Route("DELETE", "/api/v1/recurring-rules/{ruleId}", version = true, status = 204),
         FinanceOperation.GENERATE_OBLIGATIONS to Route("POST", "/api/v1/obligations/generate", status = 201),
+        FinanceOperation.LIST_OVERDUE_OBLIGATIONS to Route("GET", "/api/v1/obligations/overdue", query = true),
         FinanceOperation.LIST_OBLIGATIONS to Route("GET", "/api/v1/obligations", query = true),
         FinanceOperation.FIXED_COST_SUMMARY to Route("GET", "/api/v1/obligations/summary", query = true),
         FinanceOperation.GET_OBLIGATION to Route("GET", "/api/v1/obligations/{obligationId}"),
@@ -244,6 +245,14 @@ internal object FixedCostPolicy {
             FinanceOperation.LIST_RECURRING_RULES -> page(value, ::rule)
             FinanceOperation.GET_RECURRING_RULE -> rule(value).also { if (it["id"] != target) invalid() }
             FinanceOperation.GENERATE_OBLIGATIONS -> shape(value, mapOf("id" to id, "version" to { integer(it, 1, 1) }, "items" to records({ reference(it); Unit }, 2000)))
+            FinanceOperation.LIST_OVERDUE_OBLIGATIONS -> shape(value, mapOf("as_of" to date,
+                "items" to records({ obligation(it); Unit }), "next_cursor" to nullable(id))).also { row ->
+                val asOf=row["as_of"] as String
+                if ((row["items"] as List<*>).any { item -> val item=obj(item)
+                    item["scheduled_date"] as String >= asOf || item["status"] !in setOf("unpaid","partial") ||
+                    item["schedule_state"]!="active" || item["skipped"]!=false || item["manually_completed"]!=false
+                }) invalid()
+            }
             FinanceOperation.LIST_OBLIGATIONS -> page(value, ::obligation).also { row ->
                 val month = parsedQuery(uri.rawQuery, operation)["month"]
                 if ((row["items"] as List<*>).any { (obj(it)["scheduled_date"] as String).take(7) != month }) invalid()

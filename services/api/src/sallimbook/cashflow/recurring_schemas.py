@@ -214,6 +214,10 @@ class ObligationListResponse(BaseModel):
     next_cursor: UUID | None
 
 
+class OverdueObligationListResponse(ObligationListResponse):
+    as_of: DateOnly
+
+
 class ObligationHistoryItem(BaseModel):
     id: UUID
     version: int
