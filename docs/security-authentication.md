@@ -53,7 +53,7 @@ Argon2id 해시·검증은 프로세스당 동시 2개까지만 실행한다. �
 경로만 허용하고 `//`·`/\`·역슬래시·제어문자·다른 origin·`/login` 자신은 버린다. 검증을 통과하지 못하거나
 복귀 정보가 없으면 홈으로 간다. URL query로 복귀 주소를 받지 않으므로 외부 링크가 이동 대상을 정할 수 없다.
 
-사설 웹 응답에는 `ops/deploy.py`의 `PRIVATE_WEB_HEADERS` 하나에서 렌더링한 보안 헤더를 붙인다.
+앱 웹 응답에는(사설/공개 8443 공통) `ops/deploy.py`의 `PRIVATE_WEB_HEADERS` 하나에서 렌더링한 보안 헤더를 붙인다.
 화면·정적 파일·APK 다운로드는 `Content-Security-Policy`(`default-src 'self'`, `script-src 'self'`,
 `style-src 'self'`, `img-src 'self' data: blob:`, `object-src 'none'`, `base-uri 'none'`,
 `form-action 'self'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `Strict-Transport-Security:
@@ -81,6 +81,10 @@ HTTPS 브라우저 하네스는 같은 정의를 읽어 화면에 붙이고 `sec
 ### 계정 인증
 
 부부 각각의 계정과 서버 세션을 만든다. 불특정 인터넷 공개 회원가입은 없다.
+8443 Funnel 공개 모드에서는 배포의 처음 시작 identity 설정 자체를 허용하지 않는다.
+공개 주소에서도 기존 계정 인증·가계 권한·Origin/CSRF·재인증·시도 제한은 동일하게 적용한다.
+출발지 시도 제한은 신뢰한 프록시 peer 기준이므로 외부 요청도 같은 버킷을 공유할 수 있다.
+공개가 무제한 부하나 서비스 가용성을 보장하는 것은 아니다.
 최초 사용자는 허용된 사설망 연결에서 이름·비밀번호로 직접 시작하고 두 번째 사용자는 15분 유효
 연결 코드를 사용한다. 첫 계정 `owner`와 연결 계정 `partner`는 가계 안의 두 사용자이며 외부 회원가입이 아니다.
 등록 이후 초대 기능은 제한하고 두 계정을 초과하지 않게 DB 트랜잭션에서 검사한다.

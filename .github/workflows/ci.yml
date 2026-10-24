@@ -302,6 +302,8 @@ jobs:
           exit 1
       - name: Check the private and public proxy routing in the built web image
         run: uv run --no-project python -m ops.test_deployment --web-image sallimbook-ci-web:test
+      - name: Check the opt-in app Funnel routing without host ports
+        run: uv run --no-project python -m ops.test_deployment --web-image sallimbook-ci-web:test --app-funnel
 
   web-smoke:
     name: Web UI and real HTTPS authentication

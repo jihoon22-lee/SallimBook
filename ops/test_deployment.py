@@ -17,7 +17,7 @@ def command(args):
     return result.stdout
 
 
-def main(web_image):
+def main(web_image, app_funnel=False):
     assert command(
         [
             "docker",
@@ -64,6 +64,9 @@ def main(web_image):
             "source_commit": "a" * 40,
             "setup_identity_sha256": "a" * 64,
         }
+        if app_funnel:
+            manifest.pop("setup_identity_sha256")
+            manifest["app_funnel_enabled"] = True
         output = root / "rendered"
         previous = os.umask(0o077)
         try:
@@ -243,7 +246,10 @@ fi
             web_image, "-c", identity_script,
         ])
         serve = json.loads((output / "node/serve.json").read_text())
-        assert set(serve["AllowFunnel"]) == {manifest["fqdn"] + ":443"}
+        expected_ports = {manifest["fqdn"] + ":443"}
+        if app_funnel:
+            expected_ports.add(manifest["fqdn"] + ":8443")
+        assert set(serve["AllowFunnel"]) == expected_ports
     print(
         "PASS: pinned Caddy/Tailscale versions, Compose/Caddy validation, "
         "strict-umask UID10001/cap-drop reads, private exact APK/public 404 routing, "
@@ -256,4 +262,6 @@ fi
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--web-image", required=True)
-    main(parser.parse_args().web_image)
+    parser.add_argument("--app-funnel", action="store_true")
+    args = parser.parse_args()
+    main(args.web_image, args.app_funnel)

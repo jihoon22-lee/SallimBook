@@ -60,6 +60,32 @@ uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/NEW_RENDER
 
 ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검사에 실패한다. scanner와 API의 Compose healthcheck는 실제 Unix PING과 VERSIONCOMMANDS, 고정 엔진·INSTREAM 지원·DB freshness를 기존 업로드 검사와 같은 함수로 확인한다. API healthcheck는 DB HTTP readiness도 확인하며, scanner가 healthy가 된 뒤 API를 시작하고 API가 healthy가 된 뒤 웹을 시작한다. 실행 중 scanner 중단·stale 상태는 API container를 unhealthy로 바꾼다. 기존 `/api/v1/ready`의 DB 검사 계약은 유지하며 운영 준비 상태는 Compose health를 기준으로 확인한다. unhealthy 표시는 서비스를 자동 중지시키는 기능이 아니며 첨부 업로드는 기존 검사에서도 실패 시 거부한다. `SALLIMBOOK_CVD_REFRESH`를 실제 갱신일로 바꿔 새 이미지로 배포한다. 오래된 이미지의 태그만 다시 붙여 검사 실패를 우회하지 않는다.
 
+### 앱 8443 Funnel 공개 선택
+
+`app_funnel_enabled`는 선택 boolean이며 기본값은 false다. true이면 **전용 SallimBook 노드**의
+`AllowFunnel`에 8443을 추가한다. 노드 주소·포트·upstream·앱 origin·RP ID는 바뀌지 않는다.
+443 인증 정적 파일의 GET/HEAD 허용과 나머지 404 정책은 유지한다. 호스트 포트는 publish하지 않는다.
+
+1. 기존 가계가 준비된 배포에서 새 manifest에 `app_funnel_enabled: true`를 넣고
+   `setup_identity_sha256`을 제거한다. 둘을 함께 지정하면 renderer가 거부한다.
+2. 이 필드를 지원하는 API/웹 이미지·서명 APK 및 운영 checkout으로 새 렌더를 준비한다.
+   API 이미지 안의 백업 manifest 검증도 필드를 알아야 하므로 예전 API 이미지로 공개 설정만
+   바꾸지 않는다. APK 검증은 기존과 같이 manifest의 소스·버전·인증서를 대조한다.
+3. `ops.test_deployment --web-image IMAGE --app-funnel`과 인증/권한 회귀를 통과시키고,
+   실제 배포 전후 호스트 Serve 설정의 해시와 다른 프로젝트 컨테이너의 ID·시작 시각을 대조한다.
+4. 새 렌더의 `ops.preflight --verify-database --sdk`와 새 자동화 설정 검증을 통과시켜 전환한다.
+   `TS_SERVE_CONFIG`가 읽는 설정으로 영속화하며 호스트 Tailscale 명령으로 경로를 바꾸지 않는다.
+   새 `operator_source_commit`·렌더 해시·state로 예약도 전환한다. 백업 유예 정책은 그대로 유지한다.
+5. Tailscale에 가입하지 않은 인터넷 경로에서 8443 화면·APK, 미인증 업무 API/첨부의 401,
+   위조 Tailscale 헤더를 보낸 처음 시작의 거부를 확인한다. 443은 여전히 인증 파일만 제공해야 한다.
+   인증된 실제 사용자 로그인·저장은 합성 환경 회귀와 실제 기기 확인을 구분해 기록한다.
+
+되돌리기는 `app_funnel_enabled: false`인 새 렌더와 새 자동화 설정을 준비하여 같은 절차로
+전환한다. 데이터·스키마·서명키를 바꾸거나 다른 노드의 8443을 점유하지 않는다.
+CVD 자동 갱신은 manifest 선택을 새 세대에 그대로 복사한다. 사용자에게 표시하는 접속 주소는
+같지만 공개 상태에서는 앱/API의 로그인 보호가 인터넷 접근을 통제한다. 일반 API/문서/내보내기에
+익명 접근을 추가하지 않으며, 앱 화면과 APK 파일이 인터넷에 노출된다는 점은 공개 선택에 포함된다.
+
 ### 문서 검사기 배포와 되돌리기
 
 문서 검사기(inspector)를 처음 배포하거나 되돌릴 때는 **자동화의 운영 코드(`operator_source_commit`)와 배포 고정값(`deployment_directory`·`deployment_sha256`)을 함께 바꾸고 함께 되돌린다.** 서비스 집합이 6개에서 7개로 바뀌므로 둘 중 하나만 바꾸면 매시간 `health`와 매일 `cvd-refresh`가 `SERVICE_SET`으로 실패한다. 검사기 변경 자체에는 마이그레이션이 없다. 함께 배포하는 릴리스의 스키마가 바뀌면(새 이미지의 `REQUIRED_SCHEMA_REVISION`이 운영 DB와 다르면) 아래 [스키마가 바뀌는 업그레이드](#스키마가-바뀌는-업그레이드--점검-시간-절차) 절차를 따른다.
@@ -183,7 +209,7 @@ ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검�
 
 Tailscale은 전용 container의 userspace 네트워크를 사용한다. Caddy 두 프로세스가 이 노드의 network namespace를 공유하고 각각 loopback 8080/8081만 수신한다. Tailscale Serve가 지원하는 loopback HTTP upstream과 일치한다.
 
-- 사설 HTTPS `https://FQDN:8443`: 웹/API와 `GET/HEAD /downloads/SallimBook.apk`만 허용하는 APK 다운로드. RP ID는 포트 없는 FQDN이다.
+- 앱 HTTPS `https://FQDN:8443`(기본 사설, 명시적 Funnel 선택 가능): 웹/API와 `GET/HEAD /downloads/SallimBook.apk`만 허용하는 APK 다운로드. RP ID는 포트 없는 FQDN이다.
 - 사설 Caddy는 요청의 `Host`(포트 제외)가 manifest의 FQDN과 다르면 웹 루트·APK·API 어디에도 가지 않고 421을 응답한다. 이 규칙은 첫 `handle` 블록이며, 최상위 `respond`는 뒤따르는 catch-all `handle`에 가려져 동작하지 않는다. Tailscale Serve는 들어온 `Host`를 그대로 전달하므로(1.104.1 소스에서 확인) 정상 요청은 영향이 없다. 이 규칙이 처음 켜지는 배포에서는 첫 요청(웹 첫 화면 또는 앱 로그인)이 421이 아닌지 바로 확인하고, 421이면 이전 렌더로 되돌린다.
 - 공개 HTTPS `https://FQDN:443`: `/.well-known/assetlinks.json`의 GET/HEAD만 제공한다. 다른 경로는 404다. 공개 Caddy에는 API upstream, DB·첨부·비밀 mount가 없다. 사설·공개 Caddy는 같은 source-bound 웹 이미지를 사용하되 공개 설정은 DAL 경로만 제공한다. 이 이미지는 고정된 Caddy base의 불필요한 cap_net_bind_service 파일 capability를 빌드 시 제거한다. 8080/8081 고포트만 사용하므로 런타임 UID 10001·cap_drop ALL·no-new-privileges는 그대로 유지한다.
 - TLS는 전용 노드의 Serve/Funnel에서 종료한다. Caddy는 같은 격리 namespace의 HTTP proxy다. 이전 문서의 “Caddy만 외부 HTTPS” 설명은 이 배치에서는 적용되지 않는다.
@@ -358,7 +384,7 @@ python3 -m ops.release \
 
 깨끗한 source commit, JDK 21, 고정 SDK/build-tools 36.0.0을 요구한다. `ops/release.init.gradle`은 이 실행에만 versionCode/versionName과 debuggable=false를 적용한다. 이전 배포 versionCode보다 커야 하며 이전 APK의 실제 앱 ID·버전·서명 인증서도 확인한다. 최초 배포만 `--previous-version 0`과 previous-apk 생략이 가능하다. 검사 항목은 release 앱 ID, manifest backup/cleartext/debug 설정, bundled WebView URL/allowNavigation/mixed-content 부재, native 공개 설정 값, debug proof class 부재, zipalign, apksigner 서명과 인증서 지문이다.
 
-검증된 최종 signed release APK만 생성 설정의 `downloads/SallimBook.apk`에 운영자가 0644로 복사한다. 이 디렉터리는 사설 Caddy에만 읽기 전용으로 mount하며 다른 파일·디렉터리·trailing-slash 경로는 404다. 다운로드 주소는 `https://FQDN:8443/downloads/SallimBook.apk`이고 허용된 tailnet 기기만 접근한다. APK는 첨부 다운로드 형식과 no-store 응답으로 제공하며, 공개 443에는 mount나 경로를 추가하지 않는다. 서명키·비밀번호 파일·debug/unsigned APK를 이 디렉터리에 넣지 않는다. 다운로드용 APK를 배치한 뒤 웹을 시작하거나 해당 다운로드 디렉터리로 전환하기 전에 아래 preflight를 통과해야 한다. APK가 존재하는데 --sdk가 없으면 실패한다. SDK의 apkanalyzer/apksigner/zipalign으로 manifest의 앱 ID·인증서·버전·debug/backup/원격 WebView 설정을 실제 파일과 대조하고 검사 전후 SHA-256 및 파일 식별자가 같은지 확인한다. 이웃 receipt의 signed=true나 이전 checksum만으로 통과하지 않는다.
+검증된 최종 signed release APK만 생성 설정의 `downloads/SallimBook.apk`에 운영자가 0644로 복사한다. 이 디렉터리는 사설 Caddy에만 읽기 전용으로 mount하며 다른 파일·디렉터리·trailing-slash 경로는 404다. 다운로드 주소는 `https://FQDN:8443/downloads/SallimBook.apk`이며 기본 모드에서는 허용된 tailnet 기기만 접근한다. `app_funnel_enabled: true` 배포에서는 같은 경로가 인터넷에도 공개된다. APK는 첨부 다운로드 형식과 no-store 응답으로 제공하며, 공개 443에는 mount나 경로를 추가하지 않는다. 서명키·비밀번호 파일·debug/unsigned APK를 이 디렉터리에 넣지 않는다. 다운로드용 APK를 배치한 뒤 웹을 시작하거나 해당 다운로드 디렉터리로 전환하기 전에 아래 preflight를 통과해야 한다. APK가 존재하는데 --sdk가 없으면 실패한다. SDK의 apkanalyzer/apksigner/zipalign으로 manifest의 앱 ID·인증서·버전·debug/backup/원격 WebView 설정을 실제 파일과 대조하고 검사 전후 SHA-256 및 파일 식별자가 같은지 확인한다. 이웃 receipt의 signed=true나 이전 checksum만으로 통과하지 않는다.
 
 ```bash
 JAVA_HOME=/SELECTED_JDK_21 uv run --project services/api python -m ops.preflight \
