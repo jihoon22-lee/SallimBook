@@ -568,7 +568,8 @@ Keystore strong auth-per-use CryptoObject의 동일 Cipher/실제 doFinal 또는
 앱 잠금 인증 bool로 복호화하지 않는다. 표시 30초·초점 복귀 1초·작업 60초, 취소/잠금 세대를 적용하고
 늦은 KDF/HTTP 결과를 폐기한다. 로컬 HVK/CVC 암호문은 별도 AAD/키로 noBackupFilesDir에 둔다.
 CVC는 현재 카드 secret ID/revision에 묶고 서버/API/web/backup에 전달하지 않는다.
-실기기 인수 전 CVC 입력·열람 gate는 비활성 상태이며 v1/R-12 완료를 뜻하지 않는다.
+CVC 입력·열람은 Android 네이티브의 저장 동의와 매회 강한 생체인증을 요구하는 선택 기능이다.
+JS에는 기존 동작/카드 ID와 완료/취소만 전달한다. [활성화 결정과 검증 범위](testing/local-cvc-release.md)를 따른다.
 
 설정·복구·회전 준비에는 새 복구코드의 명시적 오프라인 보관 확인을 요구한다. 네트워크 결과가
 불명확하면 같은 Activity의 요청/key를 유지해 수동 재시도하고, 종료 뒤에는 서버 staged wrapping으로

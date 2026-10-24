@@ -370,13 +370,27 @@ function VaultOverview({ memberId }: { memberId: string }) {
                             카드 비밀 제거
                           </button>
                           {native && (
-                            <button
-                              className="secondary-button"
-                              disabled={busy || !active}
-                              onClick={() => open({ action: "cvc-delete", cardId: card.id })}
-                            >
-                              이 기기의 CVC/CVV 삭제 검토
-                            </button>
+                            <>
+                              <button
+                                disabled={busy || !active}
+                                onClick={() => open({ action: "cvc-edit", cardId: card.id })}
+                              >
+                                이 기기의 CVC/CVV 입력·수정
+                              </button>
+                              <button
+                                disabled={busy || !active}
+                                onClick={() => open({ action: "cvc-view", cardId: card.id })}
+                              >
+                                이 기기의 CVC/CVV 열람
+                              </button>
+                              <button
+                                className="secondary-button"
+                                disabled={busy || !active}
+                                onClick={() => open({ action: "cvc-delete", cardId: card.id })}
+                              >
+                                이 기기의 CVC/CVV 삭제 검토
+                              </button>
+                            </>
                           )}
                         </div>
                       </li>
@@ -404,7 +418,7 @@ function VaultOverview({ memberId }: { memberId: string }) {
             <h2>기기와 복구 안내</h2>
             <p>
               {native
-                ? "이 Android 기기에서 비밀 입력·열람은 네이티브 보호 화면으로 열려요. 새 기기에서는 보관함을 등록하고 CVC/CVV를 다시 입력해야 해요. CVC/CVV 입력·열람은 보안 검증 전이라 현재 비활성 상태예요. 이 기기에 남은 CVC/CVV 삭제는 보호된 화면에서 할 수 있어요."
+                ? "이 Android 기기에서 비밀 입력·열람은 네이티브 보호 화면으로 열려요. 새 기기에서는 보관함을 등록하고 CVC/CVV를 다시 입력해야 해요. CVC/CVV 저장은 선택 사항이며 네이티브 화면에서 동의한 뒤 입력해요. 저장·열람마다 생체인증이 필요하고 이 기기에서 삭제할 수 있어요."
                 : "PC 웹은 카드번호와 유효기간을 별도 보관함 화면에서 다뤄요. CVC/CVV 입력·열람·저장은 지원하지 않아요. 웹에서는 화면 캡처를 막을 수 없어요."}
             </p>
             <p>

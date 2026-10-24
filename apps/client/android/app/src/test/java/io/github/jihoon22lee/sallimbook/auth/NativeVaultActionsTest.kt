@@ -107,7 +107,6 @@ class NativeVaultActionsTest {
         for(other in listOf(NativeVaultBinding(scope,f.partner,f.resource,2),NativeVaultBinding(scope,f.cardId,f.partner,2),NativeVaultBinding(scope,f.cardId,f.resource,3)))
             assertFalse(cvc.aad().contentEquals(other.aad()))
         assertEquals(cvc.name,NativeVaultBinding(scope,f.cardId,f.resource,2).name)
-        assertFalse(NativeVaultStore.LOCAL_CVC_ACCEPTANCE_VERIFIED)
         bad { NativeVaultBinding(scope,f.cardId,null,2) }; bad { NativeVaultBinding(scope,null,f.resource,2) }
     }
 }

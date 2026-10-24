@@ -21,6 +21,8 @@ test("native overview routes public IDs for all ordinary vault workflows without
     ["전체 번호·유효기간 열람", { action: "view", cardId: uid(50) }],
     ["카드 비밀 등록·수정", { action: "edit", cardId: uid(50) }],
     ["카드 비밀 제거", { action: "purge", cardId: uid(50) }],
+    ["이 기기의 CVC/CVV 입력·수정", { action: "cvc-edit", cardId: uid(50) }],
+    ["이 기기의 CVC/CVV 열람", { action: "cvc-view", cardId: uid(50) }],
     ["이 기기의 CVC/CVV 삭제 검토", { action: "cvc-delete", cardId: uid(50) }],
   ] as const;
   for (const [label, expected] of actions) {
@@ -39,11 +41,11 @@ test("native overview routes public IDs for all ordinary vault workflows without
   await expect
     .poll(() => state.calls.filter((call) => call.method === "openVaultUI").at(-1)?.args)
     .toEqual({ action: "revoke-member", memberId: uid(5) });
-  expect(state.calls.filter((call) => call.method === "openVaultUI")).toHaveLength(13);
+  expect(state.calls.filter((call) => call.method === "openVaultUI")).toHaveLength(15);
   expect(state.http).toEqual([]);
   await expect(page.locator('input[type="password"], input[type="text"], textarea')).toHaveCount(0);
   await expect(
-    page.getByText(/CVC\/CVV 입력·열람은 보안 검증 전이라 현재 비활성 상태예요/),
+    page.getByText(/CVC\/CVV 저장은 선택 사항이며 네이티브 화면에서 동의한 뒤 입력해요/),
   ).toBeVisible();
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
 });
@@ -161,5 +163,21 @@ test("native card details use native protected actions while ordinary metadata r
     )
     .toEqual([{ action: "view", cardId: uid(50) }]);
   expect(state.http).toEqual([]);
-  await expect(page.getByText(/현재 보안 검증 전이라 입력·열람은 비활성 상태예요/)).toBeVisible();
+  for (const [label, action] of [
+    ["이 기기의 CVC/CVV 입력·수정", "cvc-edit"],
+    ["이 기기의 CVC/CVV 열람", "cvc-view"],
+    ["이 기기의 CVC/CVV 삭제 검토", "cvc-delete"],
+  ]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect
+      .poll(() => state.calls.filter((call) => call.method === "openVaultUI").at(-1)?.args)
+      .toEqual({ action, cardId: uid(50) });
+    await expect(page.getByRole("button", { name: label, exact: true })).toBeEnabled();
+  }
+  await expect(
+    page.getByText(/저장은 선택 사항이며 보호된 화면에서 동의한 뒤 입력해요/),
+  ).toBeVisible();
+  expect(state.http).toEqual([]);
+  await expect(page.locator('input[type="password"], textarea')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
 });

@@ -67,9 +67,6 @@ internal class NativeVaultStore internal constructor(context: Context, private v
         fun get(context: Context): NativeVaultStore = instance ?: synchronized(this) {
             instance ?: NativeVaultStore(context.applicationContext).also { instance = it }
         }
-        // Release activation requires the separately recorded security + Galaxy acceptance gate.
-        // Neither a JS flag, Intent extra, server setting nor SharedPreferences can enable this.
-        const val LOCAL_CVC_ACCEPTANCE_VERIFIED = false
     }
     private val app = context.applicationContext
     private val directory = File(app.noBackupFilesDir, if (namespace == "vault.v1") "sallimbook-vault-v1" else "sallimbook-$namespace")
@@ -80,7 +77,7 @@ internal class NativeVaultStore internal constructor(context: Context, private v
             (app.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP) != 0) throw NativeVaultFailure("ACCESS_DENIED")
     }
     private fun requireCvcGate(binding: NativeVaultBinding) {
-        if (binding.localCode && !LOCAL_CVC_ACCEPTANCE_VERIFIED && !NativeVaultAcceptanceGate.allows(app, binding, namespace))
+        if (binding.localCode && !NativeVaultCvcPolicy.available(namespace) && !NativeVaultAcceptanceGate.allows(app, binding, namespace))
             throw NativeVaultFailure("CVC_GATE_CLOSED")
     }
     private fun file(binding: NativeVaultBinding): AtomicFile {

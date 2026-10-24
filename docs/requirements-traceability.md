@@ -16,7 +16,7 @@
 | R-09 | SB-017, SB-018, SB-029 | 일반 응답 비밀 없음·종료 참조 | [카드·종료 연결](testing/cashflow-client.md), [보관함 개요](testing/vault-overview.md) |
 | R-10 | SB-008, SB-009, SB-028, SB-029, SB-031, SB-032, SB-039 | G2~G5 / 30초·이탈 잠금 | [서버](testing/vault-server.md), [암호 벡터](testing/native-vault-crypto.md), [Android 수명](testing/native-vault-lifecycle.md), [웹](testing/vault-web.md) |
 | R-11 | SB-006, SB-008, SB-009, SB-029, SB-032, SB-039 | G1/G3 / 실제 기기 | [패스키 웹](testing/passkeys-web.md), [네이티브 정책/미실행 실기기](testing/native-security-proof.md) |
-| R-12 | SB-008, SB-009, SB-030, SB-039 | G4 / 백업·전송 제외 | [로컬 CVC 경계](testing/native-vault-lifecycle.md), [미실행 실기기](testing/native-security-proof.md) |
+| R-12 | SB-008, SB-009, SB-030, SB-039 | G4 / 백업·전송 제외 | [CVC 활성화·별도 보안 검토](testing/local-cvc-release.md), [사용자 후속 실기기](testing/native-security-proof.md) |
 | R-13 | SB-019, SB-023 | 보험료 단일원본·문서권한 | [보험](testing/insurance-client.md), [문서 서버](testing/documents-server.md) |
 | R-14 | SB-020 | 트리 순환·다중계약 | [진료 트리·다중 계약](testing/insurance-client.md) |
 | R-15 | SB-021, SB-022, SB-023 | T-12~T-19 | [보험 비용·수령·반환](testing/insurance-client.md), [문서](testing/documents-client.md) |
