@@ -169,11 +169,19 @@ test("insurance projections offer source navigation and no income mutation contr
   page,
 }) => {
   const state = await mockCashflow(page);
+  state.insuranceSources.set(uid(42), {
+    record_id: uid(42),
+    payout_id: uid(1100),
+    return_id: null,
+    original_allocation_id: null,
+    allocations: [
+      { id: uid(2100), case_id: uid(90), case_title: "합성 사건", amount_krw: "800000" },
+    ],
+  });
   await page.goto(`/income/${uid(42)}`);
-  await expect(page.getByRole("link", { name: "보험 사건에서 관리", exact: true })).toHaveAttribute(
-    "href",
-    "/insurance/cases",
-  );
+  await expect(
+    page.getByRole("link", { name: "실제 입금 원본과 전체 배분", exact: true }),
+  ).toHaveAttribute("href", `/insurance/payouts/${uid(1100)}`);
   await expect(page.getByRole("link", { name: "수입 정정", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "수입 반환 기록", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "무효 처리 검토", exact: true })).toHaveCount(0);

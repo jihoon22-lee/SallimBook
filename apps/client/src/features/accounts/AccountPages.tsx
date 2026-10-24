@@ -1,3 +1,4 @@
+import { PaymentConnections, AccountIncomeLinks } from "../finance/RelatedRecords";
 import { DateInput } from "../../shared/DateInput";
 import { FilterPanel, TaskPanel } from "../../shared/TaskLayout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -389,6 +390,12 @@ function AccountDetail({ id }: { id: string }) {
         <MemberLoadError error={members.error} retry={members.retry} />
         <Link to={`/assets/${account.asset_id}`}>연결된 자산 보기</Link>
       </section>
+      <PaymentConnections
+        key={`links:${account.version}:${account.asset.version}`}
+        kind="account"
+        id={id}
+      />
+      <AccountIncomeLinks accountId={id} />
       <AssetMonthlyData assetId={account.asset_id} />
       {closing && (
         <TaskPanel label="계좌 사용 종료">

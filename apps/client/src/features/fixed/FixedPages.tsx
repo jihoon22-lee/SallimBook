@@ -1,3 +1,4 @@
+import { RuleInsuranceLink, NamedReference } from "../finance/RelatedRecords";
 import { TaskNotice, TaskPanel, useTaskPanelRelease } from "../../shared/TaskLayout";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -284,9 +285,9 @@ export function ObligationSummary({ row }: { row: Obligation }) {
           <dt>예정 수단</dt>
           <dd>
             {row.card_id ? (
-              <Link to={`/cards/${row.card_id}`}>카드 승인 계획</Link>
+              <NamedReference kind="cards" id={row.card_id} suffix=" · 카드 승인 계획" />
             ) : row.account_id ? (
-              <Link to={`/accounts/${row.account_id}`}>계좌 직접 납부 계획</Link>
+              <NamedReference kind="accounts" id={row.account_id} suffix=" · 계좌 직접 납부 계획" />
             ) : (
               "수단 미지정"
             )}
@@ -744,6 +745,7 @@ function RuleDetail({ id, edit }: { id: string; edit: boolean }) {
               </details>
             </section>
           )}
+          {!edit && <RuleInsuranceLink ruleId={id} />}
           {deleting && (
             <MisregistrationDelete
               id="rule-delete"
@@ -873,9 +875,13 @@ function SettlementList({
             </p>
             <p>
               {payment.cash.card_id ? (
-                <Link to={`/cards/${payment.cash.card_id}`}>실제 납부 카드</Link>
+                <NamedReference kind="cards" id={payment.cash.card_id} suffix=" · 실제 납부 카드" />
               ) : payment.cash.account_id ? (
-                <Link to={`/accounts/${payment.cash.account_id}`}>실제 납부 계좌</Link>
+                <NamedReference
+                  kind="accounts"
+                  id={payment.cash.account_id}
+                  suffix=" · 실제 납부 계좌"
+                />
               ) : (
                 "납부수단 연결 안 함"
               )}

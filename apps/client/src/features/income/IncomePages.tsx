@@ -1,3 +1,4 @@
+import { IncomeInsuranceLinks } from "../finance/RelatedRecords";
 import { FilterPanel, TaskNotice, TaskPanel } from "../../shared/TaskLayout";
 import { useCallback, useRef, useState } from "react";
 import type { components } from "@sallimbook/api-client";
@@ -440,12 +441,7 @@ function IncomeDetail({ id, edit }: { id: string; edit: boolean }) {
             {row.reason && <p>변경 사유: {row.reason}</p>}
             {row.reverses_id && <Link to={`/income/${row.reverses_id}`}>반환 원본 수입 확인</Link>}
             <RecordedMoneyNotice />
-            {row.kind.startsWith("insurance") && (
-              <p>
-                보험 영역의 실제 수령·반환 기록을 그대로 보여줘요.{" "}
-                <Link to="/insurance/cases">보험 사건에서 관리</Link>
-              </p>
-            )}
+            {row.kind.startsWith("insurance") && <IncomeInsuranceLinks recordId={row.id} />}
             {!edit && (
               <div className="form-actions">
                 {row.editable &&

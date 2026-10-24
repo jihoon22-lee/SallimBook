@@ -168,8 +168,9 @@ test("mixed payment-link revisions are never combined into an approvable list", 
   const state = await mockCashflow(page);
   state.linksRequired = true;
   state.linksMore = true;
-  state.linksRace = true;
   await page.goto(`/cards/${uid(50)}`);
+  await expect(page.getByRole("region", { name: "정기 결제 연결" })).toContainText("연결 규칙 2개");
+  state.linksRace = true;
   await page.getByRole("button", { name: "카드 사용 종료", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("연결된 계획이 변경됐어요");
   await expect(

@@ -83,6 +83,7 @@ internal object CashflowPolicy {
         FinanceOperation.LIST_INCOME to Route("GET", "/api/v1/income", query = true),
         FinanceOperation.INCOME_SUMMARY to Route("GET", "/api/v1/income/summary", query = true),
         FinanceOperation.INCOME_DUPLICATE_CANDIDATES to Route("GET", "/api/v1/income/duplicates", query = true),
+        FinanceOperation.GET_INCOME_INSURANCE_SOURCE to Route("GET", "/api/v1/income/{recordId}/insurance-source"),
         FinanceOperation.GET_INCOME to Route("GET", "/api/v1/income/{recordId}"),
         FinanceOperation.INCOME_HISTORY to Route("GET", "/api/v1/income/{recordId}/history", query = true),
         FinanceOperation.CREATE_INCOME to Route("POST", "/api/v1/income", idempotent = true, status = 201),
@@ -294,6 +295,14 @@ internal object CashflowPolicy {
         val uri = URI(request.path)
         val recordId = uri.path.split('/').getOrNull(4)
         return when (operation) {
+            FinanceOperation.GET_INCOME_INSURANCE_SOURCE -> {
+                val row = shape(value, mapOf("record_id" to id, "payout_id" to nullable(id), "return_id" to nullable(id),
+                    "original_allocation_id" to nullable(id), "allocations" to list(record(mapOf(
+                        "id" to id, "case_id" to id, "case_title" to text(120), "amount_krw" to money)), 100)))
+                if (row["record_id"] != recordId || (row["return_id"] == null) != (row["original_allocation_id"] == null)) invalid()
+                if (row["payout_id"] == null && (row["return_id"] != null || (row["allocations"] as List<*>).isNotEmpty())) invalid()
+                row
+            }
             FinanceOperation.LIST_INCOME, FinanceOperation.INCOME_HISTORY -> {
                 val row = shape(value, mapOf("items" to list(cash), "next_cursor" to nullable(if (operation == FinanceOperation.INCOME_HISTORY) positive else id)))
                 if (operation == FinanceOperation.INCOME_HISTORY && (row["items"] as List<*>).any { obj(it)["id"] != recordId }) invalid()

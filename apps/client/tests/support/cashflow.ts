@@ -202,6 +202,8 @@ export async function mockCashflow(page: Page) {
     payments: [] as S["SettlementResponse"][],
     writes: [] as Write[],
     reads: [] as { path: string; query: URLSearchParams }[],
+    insuranceSources: new Map<string, S["IncomeInsuranceSource"]>(),
+    ruleInsuranceLinks: new Map<string, S["RuleInsuranceLink"]>(),
     incomeHistory: new Map<string, S["CashResponse"][]>(),
     obligationHistory: new Map<string, S["ObligationHistoryItem"][]>(),
     failure: "" as "" | "before" | "after",
@@ -454,6 +456,18 @@ export async function mockCashflow(page: Page) {
       action = parts[5];
     if (method === "GET") {
       state.reads.push({ path, query });
+      if (domain === "income" && action === "insurance-source")
+        return response(
+          state.insuranceSources.get(id!) ?? {
+            record_id: id,
+            payout_id: null,
+            return_id: null,
+            original_allocation_id: null,
+            allocations: [],
+          },
+        );
+      if (domain === "recurring-rules" && action === "insurance-link")
+        return response(state.ruleInsuranceLinks.get(id!) ?? { rule_id: id, link: null });
       if (action === "payment-links")
         return response(usage(domain === "cards" ? "card" : "account", id!, query));
       if (domain === "income") {

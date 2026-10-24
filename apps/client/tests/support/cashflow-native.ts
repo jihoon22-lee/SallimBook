@@ -14,6 +14,14 @@ export async function mockNativeCashflow(
     listIncome: { method: "GET", path: () => "/income" },
     incomeSummary: { method: "GET", path: () => "/income/summary" },
     incomeDuplicateCandidates: { method: "GET", path: () => "/income/duplicates" },
+    getIncomeInsuranceSource: {
+      method: "GET",
+      path: (a) => `/income/${a.recordId}/insurance-source`,
+    },
+    getRecurringRuleInsuranceLink: {
+      method: "GET",
+      path: (a) => `/recurring-rules/${a.ruleId}/insurance-link`,
+    },
     getIncome: { method: "GET", path: (a) => `/income/${a.recordId}` },
     incomeHistory: { method: "GET", path: (a) => `/income/${a.recordId}/history` },
     createIncome: { method: "POST", path: () => "/income" },

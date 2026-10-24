@@ -3,7 +3,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Response
 
-from sallimbook.cashflow import service
+from sallimbook.cashflow import related_service, service
+from sallimbook.cashflow.related_schemas import IncomeInsuranceSource
 from sallimbook.cashflow.schemas import (
     CashResponse,
     ConversionResponse,
@@ -212,3 +213,12 @@ def return_income(
     )
     response.headers["Location"] = f"/api/v1/income/{result.id}"
     return _etag(response, result)
+
+
+@router.get(
+    "/{record_id}/insurance-source",
+    response_model=IncomeInsuranceSource,
+    operation_id="getIncomeInsuranceSource",
+)
+def insurance_source(record_id: UUID, principal: PrincipalDependency, session: SessionDependency):
+    return related_service.income_source(session, principal, record_id)

@@ -406,6 +406,14 @@ export interface SallimBookAuth {
   incomeDuplicateCandidates(options: {
     query: NonNullable<operations["incomeDuplicateCandidates"]["parameters"]["query"]>;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["DuplicateResponse"]>>>;
+  getIncomeInsuranceSource(options: {
+    recordId: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeInsuranceSource"]>>
+  >;
+  getRecurringRuleInsuranceLink(options: {
+    ruleId: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["RuleInsuranceLink"]>>>;
   getIncome(options: {
     recordId: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CashResponse"]>>>;

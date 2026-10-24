@@ -177,6 +177,8 @@ export async function mockFinance(page: Page) {
         closed_on: asset.ended_on ?? null,
       };
     };
+    if (path === "/api/v1/income" && method === "GET")
+      return route.fulfill({ json: { items: [], next_cursor: null } });
     if (path === "/api/v1/accounts" && method === "GET") {
       state.accountQueries.push(url.searchParams);
       const selected = state.accounts

@@ -2058,3 +2058,76 @@ def test_even_withdrawn_claims_and_void_payouts_keep_case_and_policy(app, actors
             )
             assert response.status_code == 409, response.text
             assert read(client, actor, f"/{kind}/{row['id']}")["version"] == 1
+
+
+@pytest.mark.database
+def test_income_insurance_source_keeps_all_cases_and_return_origin(app, actors):
+    actor, spouse, outsider = actors
+    with TestClient(app) as client:
+        cases = [new_case(client, actor), new_case(client, actor)]
+        payout = new_payout(
+            client, actor, [allocation(cases[0]["id"], "100"), allocation(cases[1]["id"], "200")]
+        )
+        path = f"/api/v1/income/{payout['cash']['id']}/insurance-source"
+        for member in (actor, spouse):
+            result = client.get(path, headers=member.headers)
+            assert result.status_code == 200
+            body = result.json()
+            assert body["payout_id"] == payout["id"]
+            assert body["return_id"] is None
+            assert {row["case_id"] for row in body["allocations"]} == {row["id"] for row in cases}
+            assert sum(int(row["amount_krw"]) for row in body["allocations"]) == 300
+            assert {row["case_title"] for row in body["allocations"]} == {
+                row["title"] for row in cases
+            }
+        assert client.get(path, headers=outsider.headers).status_code == 404
+        assert client.get(path).status_code == 401
+        returned = money(
+            client,
+            actor,
+            f"/payouts/{payout['id']}/returns",
+            actual("20", original_allocation_id=payout["allocations"][0]["id"], reason="합성 반환"),
+            version=payout["version"],
+        )
+        returned = read(client, actor, f"/returns/{returned['id']}")
+        payout_after_return = read(client, actor, f"/payouts/{payout['id']}")
+        result = client.get(
+            f"/api/v1/income/{returned['cash']['id']}/insurance-source", headers=actor.headers
+        ).json()
+        assert result["return_id"] == returned["id"]
+        assert result["payout_id"] == payout["id"]
+        assert result["original_allocation_id"] == returned["original_allocation_id"]
+        assert len(result["allocations"]) == 2
+        assert read(client, actor, f"/payouts/{payout['id']}") == payout_after_return
+        assert payout_after_return["cash"] == payout["cash"]
+
+
+@pytest.mark.database
+def test_recurring_rule_insurance_reverse_link_keeps_ended_link(app, actors):
+    actor, spouse, outsider = actors
+    with TestClient(app) as client:
+        rule = post_rule(client, actor)
+        path = f"/api/v1/recurring-rules/{rule['id']}/insurance-link"
+        assert client.get(path, headers=actor.headers).json() == {
+            "rule_id": rule["id"],
+            "link": None,
+        }
+        policy = new_policy(client, actor)
+        link = create_metadata(
+            client, actor, f"/policies/{policy['id']}/premium-links", {"rule_id": rule["id"]}
+        )
+        result = client.get(path, headers=spouse.headers)
+        assert result.status_code == 200
+        assert result.json()["link"]["product_name"] == policy["product_name"]
+        assert result.json()["link"]["policy_id"] == policy["id"]
+        assert result.json()["link"]["active"] is True
+        response = client.patch(
+            BASE + f"/policies/{policy['id']}/premium-links/{link['id']}",
+            headers=actor.headers | {"If-Match": '"1"'},
+            json={"active": False},
+        )
+        assert response.status_code == 200
+        ended = client.get(path, headers=actor.headers).json()["link"]
+        assert ended["active"] is False and ended["ended_at"] is not None
+        assert client.get(path, headers=outsider.headers).status_code == 404
+        assert client.get(path).status_code == 401
