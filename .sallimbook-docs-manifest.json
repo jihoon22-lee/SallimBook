@@ -274,8 +274,8 @@
       "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
     },
     "docs/operations-runbook.md": {
-      "sha256": "fcfe4e4958bb93bb2123f70c3401e9ff5551f08ce437fd46a39c25aebda972e6",
-      "git_sha1": "46311670b45eb78a9aa2945d0c07141619fcf58c"
+      "sha256": "915033af188627a6de540c70637946e261b5ffef2c8b67b74139abd58a1e616f",
+      "git_sha1": "c335d51ff74922b9b47bb99ea29e391e3202afa0"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
