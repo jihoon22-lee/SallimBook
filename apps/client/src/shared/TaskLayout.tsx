@@ -47,11 +47,22 @@ export function FilterPanel({
         className="filter-dialog"
         data-filter-dialog
         aria-labelledby={titleId}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          // A queued close event must not close a dialog that has already reopened.
+          if (!dialog.current?.open) setOpen(false);
+        }}
       >
         <div className="section-title">
           <h2 id={titleId}>{title}</h2>
-          <button type="button" onClick={() => dialog.current?.close()}>
+          <button
+            type="button"
+            onClick={() => {
+              // Keep the disclosure in sync in this interaction; the native close event
+              // is queued and can otherwise leave a stale, apparently open disclosure.
+              setOpen(false);
+              dialog.current?.close();
+            }}
+          >
             필터 닫기
           </button>
         </div>

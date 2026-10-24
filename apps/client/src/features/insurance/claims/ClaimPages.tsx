@@ -1,3 +1,4 @@
+import { ExistingReceipt } from "./ExistingReceipt";
 import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
@@ -19,7 +20,7 @@ import type { Schema } from "../model";
 import { useInsuranceEventsApi } from "../events/api";
 import { CaseSelect, PolicySelect } from "../events/EventSupport";
 import { PayoutList } from "../events/EventPages";
-import { claimStates, needsCompare } from "../events/model";
+import { claimStates, exactSum, needsCompare } from "../events/model";
 import { useIdempotencyKey } from "../../assets/months/useMonthCommand";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 import { AmountField } from "../../../shared/AmountField";
@@ -330,6 +331,22 @@ export function ClaimEditor({
           </div>
           <p>미입력은 0원이 아니에요. 청구 종료를 실제 지급 완료로 바꾸지 않아요.</p>
           <h3>같은 사건의 실제 비용 근거</h3>
+          {!expenses.loading && !expenses.error && (
+            <p role="status">
+              선택 근거 {draft.expenses.length}개 · 실제 지불금 합계{" "}
+              {formatKrw(
+                exactSum(
+                  (expenses.data ?? [])
+                    .filter((e) => draft.expenses.includes(e.id))
+                    .map((e) => e.cash.amount_krw),
+                ),
+              )}
+            </p>
+          )}
+          <p className="muted">
+            근거 합계는 실제 지불금 원본의 합계예요. 병원 환불·보장 조건을 반영한 청구액을 자동
+            입력하지 않아요.
+          </p>
           <InsuranceError error={expenses.error} />
           {expenses.error && (
             <button type="button" onClick={() => void expenses.reload()}>
@@ -503,6 +520,7 @@ export function ClaimsList({ caseId, policyId }: { caseId?: string; policyId?: s
   return (
     <section className="card">
       <h2>청구 기록</h2>
+      <Link to="/insurance/claims">전체 청구 작업 목록</Link>
       <Link className="button-link secondary-button" to={`/insurance/claims/new?${query}`}>
         청구 추가
       </Link>
@@ -572,8 +590,11 @@ function ClaimDetail({ id, edit }: { id: string; edit: boolean }) {
                 </Link>
               </div>
             </section>
+            <ExistingReceipt claim={row} saved={() => void result.reload()} />
             <PayoutList caseId={row.case_id} claimId={id} policyId={row.policy_id} />
-            <DocumentPanel kind="claim" id={id} />
+            <section id="claim-documents" tabIndex={-1}>
+              <DocumentPanel kind="claim" id={id} />
+            </section>
             <ClaimHistory id={id} />
           </>
         ))}

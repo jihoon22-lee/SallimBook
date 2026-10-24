@@ -419,7 +419,7 @@ test("ended policy stays selectable for a late claim and a direct allocation wit
   await page.goto(`/insurance/claims/new?case=${uid(90)}`);
   const policy = page.getByRole("combobox", { name: "청구 보험계약", exact: true });
   const ended = policy.locator(`option[value="${uid(84)}"]`);
-  await expect(ended).toHaveText("합성 보험사 · 합성 종료 계약 · 계약 종료");
+  await expect(ended).toHaveText("합성 보험사 · 합성 종료 계약 · 합성 구성원 둘 · 계약 종료");
   await expect(ended).toHaveJSProperty("disabled", false);
   await policy.selectOption(uid(84));
   await expect(

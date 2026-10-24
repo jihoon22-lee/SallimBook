@@ -63,6 +63,7 @@ import {
   PolicyDetailPage,
 } from "../features/insurance/policies/PolicyPages";
 import { CaseListPage, CaseNewPage, CaseDetailPage } from "../features/insurance/cases/CasePages";
+import { ClaimWorkbench } from "../features/insurance/claims/ClaimWorkbench";
 import { ClaimNewPage, ClaimDetailPage } from "../features/insurance/claims/ClaimPages";
 import {
   EventDetailPage,
@@ -656,6 +657,14 @@ const screens = [
     element: <EventDetailPage kind="return" edit />,
   },
   {
+    path: "/insurance/claims",
+    title: "보험 청구 작업 목록",
+    group: "insurance" as NavigationGroup,
+    parent: { to: "/insurance", label: "보험" },
+    live: true,
+    element: <ClaimWorkbench />,
+  },
+  {
     path: "/insurance/claims/new",
     title: "보험 청구 기록",
     group: "insurance" as NavigationGroup,
@@ -718,6 +727,7 @@ const navigation: {
     children: [
       { to: "/insurance/policies", label: "계약" },
       { to: "/insurance/cases", label: "사건·청구·지급" },
+      { to: "/insurance/claims", label: "청구 작업" },
     ],
   },
   {

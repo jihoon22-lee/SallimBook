@@ -12,6 +12,9 @@ export function InsuranceHome() {
       <Link className="button-link" to="/insurance/cases">
         보험 사건
       </Link>
+      <Link className="button-link" to="/insurance/claims">
+        전체 청구 작업 목록
+      </Link>
       <Link className="button-link" to="/insurance/payouts">
         수령 원본 목록
       </Link>

@@ -314,11 +314,24 @@ test("real insurance policies cases medical originals claims receipts correction
       (await fetch(`/api/v1/insurance/payouts/${id}`).then((r) => r.json())).cash.id as string,
     payoutA,
   );
-  await page.getByRole("button", { name: "배분 1 청구 연결 정정", exact: true }).click();
-  await page.getByRole("combobox", { name: "배분 청구 (선택)", exact: true }).selectOption(claimA);
+  await page.goto(`/insurance/claims/${claimA}`);
+  await page.getByRole("button", { name: "같은 사건의 기존 수령 찾기", exact: true }).click();
+  const receipt = page
+    .getByRole("region", { name: "기존 수령 연결", exact: true })
+    .locator("li")
+    .filter({ hasText: "이 사건 배분 600,000원" });
+  await receipt.getByRole("button", { name: "이 배분을 청구에 연결 검토", exact: true }).click();
+  await page.getByLabel("기존 연결과 변경할 청구를 확인했어요.", { exact: true }).check();
   await page.getByLabel("배분 연결 정정 사유", { exact: true }).fill("합성 HTTPS 나중 청구 확인");
   await page.getByRole("button", { name: "같은 입금의 청구 연결 저장", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "배분 버전 2", exact: true })).toBeVisible();
+  await expect(
+    page.getByText("이 청구의 실제 수령 600,000원 · 반환 0원 · 순수령 600,000원"),
+  ).toBeVisible();
+  await page.goto("/insurance/claims");
+  await expect(page.getByRole("region", { name: "청구 작업 결과" })).toContainText(
+    "실제 수령 600,000원",
+  );
+  console.log("SAFE_PHASE=INSURANCE_CLAIM_WORKBENCH");
   expect(
     await page.evaluate(
       async ({ id, original }) =>

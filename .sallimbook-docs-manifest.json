@@ -66,8 +66,8 @@
       "git_sha1": "cf6e169a91995aa6b1a5122847a3f811b999d075"
     },
     "docs/api-contract.md": {
-      "sha256": "87a634ef10510a8fef14b18d215b66451ff949bbd87e6434f7898cb90d318e62",
-      "git_sha1": "59848fa9318e158a560016f014923ba5754b7143"
+      "sha256": "6614b38c1460e2aab5d378fd45e08bae1e93186655bf350a0bff42887c63d9ea",
+      "git_sha1": "8a6efa57d2ea9ff64deb1182405a8bbcaa5d8af4"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -270,8 +270,8 @@
       "git_sha1": "3ee8330ea99693bea87ed5d29398cc5d96910274"
     },
     "docs/testing/insurance-client.md": {
-      "sha256": "0e87b1cf2f240c5e0bef628b05edf427acbcba6b3e05d2388a8357d6a98f27cd",
-      "git_sha1": "f340bfc3a1e589da398319034f18f78daf7a324f"
+      "sha256": "3eb38eb3037a003f086545f704f15211ead0846cf42e946c41ad264127cae89a",
+      "git_sha1": "2425eb005d1189874ddf7cb9c4a81e9dc1655491"
     },
     "docs/operations-runbook.md": {
       "sha256": "4fe5cd604ce226e6c2b251de87332c453a9534bed5347a18c6fb7e152c235d54",

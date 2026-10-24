@@ -4227,13 +4227,19 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Net Received Krw */
+            net_received_krw: string;
             /**
              * Policy Id
              * Format: uuid
              */
             policy_id: string;
+            /** Received Krw */
+            received_krw: string;
             /** Requested Krw */
             requested_krw?: string | null;
+            /** Returned Krw */
+            returned_krw: string;
             /** Submitted On */
             submitted_on?: string | null;
             /**

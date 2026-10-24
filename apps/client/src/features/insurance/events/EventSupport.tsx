@@ -11,6 +11,7 @@ import { AccountSelect } from "../../finance/AccountChoices";
 import { PaymentMethod } from "../../fixed/PaymentMethod";
 import { allPages, useResource } from "../../finance/queries";
 import type { ActualDraft } from "./model";
+import { useHouseholdPeople } from "../../household/people";
 import { AmountField } from "../../../shared/AmountField";
 export function ActualFields({
   draft,
@@ -128,6 +129,7 @@ export function PolicySelect({
 }) {
   const api = useInsuranceApi();
   const noteId = useId();
+  const people = useHouseholdPeople();
   const rows = useResource(
     useCallback(
       () => allPages((cursor) => api.policies({ limit: 200, ...(cursor ? { cursor } : {}) })),
@@ -152,7 +154,9 @@ export function PolicySelect({
           <option value="">{required ? "계약 선택" : "계약 미지정"}</option>
           {rows.data?.map((row) => (
             <option key={row.id} value={row.id}>
-              {row.insurer} · {row.product_name}
+              {row.insurer} · {row.product_name} ·{" "}
+              {people.people.find((p) => p.id === row.insured_member_id)?.display_name ??
+                "가족 확인 필요"}
               {row.status === "active" ? "" : ` · ${policyStatuses[row.status]}`}
             </option>
           ))}
@@ -185,6 +189,7 @@ export function CaseSelect({
   label?: string;
 }) {
   const api = useInsuranceApi();
+  const people = useHouseholdPeople();
   const rows = useResource(
     useCallback(
       () => allPages((cursor) => api.cases({ limit: 200, ...(cursor ? { cursor } : {}) })),
@@ -204,7 +209,10 @@ export function CaseSelect({
           <option value="">사건 선택</option>
           {rows.data?.map((row) => (
             <option key={row.id} value={row.id}>
-              {row.title}
+              {row.title} ·{" "}
+              {people.people.find((p) => p.id === row.patient_member_id)?.display_name ??
+                "가족 확인 필요"}{" "}
+              · 진료 시작 {dateLabel(row.start_on)}
             </option>
           ))}
         </select>
