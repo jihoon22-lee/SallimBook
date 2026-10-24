@@ -459,6 +459,9 @@ class NativeVaultActivity : AppCompatActivity() {
         runNative(task={ c -> val s=c.snapshot(target); val e=c.cardEnvelope(s,target!!); BiometricLoad(s,e) },done={ data ->
             val binding=if(localCode) NativeVaultBinding(data.snapshot.requireEnrolled(),target!!,NativeVaultWire.id(data.envelope["id"]),NativeVaultWire.version(data.envelope["revision"]))
                 else NativeVaultBinding(data.snapshot.requireEnrolled())
+            if(localCode && !local.exists(binding)) {
+                status.text="이 기기에 저장된 보안코드가 없어요. 직접 입력해 주세요."; return@runNative
+            }
             try {
                 beginPrompt(local.prepareDecryption(binding),null) { raw ->
                     val bytes=raw ?: throw NativeVaultFailure("KEY_INVALIDATED")
@@ -534,16 +537,19 @@ class NativeVaultActivity : AppCompatActivity() {
                 runNative(task={ c -> c.snapshot(target).also { it.requireEnrolled() } },done={ s -> local.clearCard(s.requireEnrolled(),target!!); completed=true; success("이 기기의 보안코드를 삭제했어요.") })
             }; return
         }
-        if(!NativeVaultStore.LOCAL_CVC_ACCEPTANCE_VERIFIED) { failure("CVC_GATE_CLOSED"); button("이 기기 보안코드 삭제") { navigate("cvc-delete",target) }; return }
         if(!strongReady()) { failure("KEY_INVALIDATED"); return }
-        if(action=="cvc-view") { button("기기 인증 후 보안코드 보기") { biometricView(true) }; return }
+        if(action=="cvc-view") {
+            button("기기 인증 후 보안코드 보기") { biometricView(true) }
+            button("보안코드 직접 입력·수정") { navigate("cvc-edit",target) }
+            button("이 기기 보안코드 삭제") { navigate("cvc-delete",target) }; return
+        }
+        label("저장은 선택 사항입니다. 이 기기를 사용하는 사람이 등록된 생체인증으로 볼 수 있어요. 지문 등록 변경·재설치·기기 교체 후에는 삭제하고 다시 입력해야 합니다.")
         val code=input("이 기기에 직접 입력할 3~4자리 보안코드",true,4)
         val confirm=checkbox("이 기기에 보관할 위험과 재입력 필요성을 확인했고 직접 입력했어요")
         button("기기 인증 후 로컬 저장") {
             if(!confirm.isChecked) { status.text="보관 확인이 필요합니다."; return@button }
-            val chars=take(code)
-            if(chars.size !in 3..4 || chars.any { it !in '0'..'9' }) { chars.fill('\u0000'); failure("INVALID_FORMAT"); return@button }
-            val value=ByteArray(chars.size) { chars[it].code.toByte() }; chars.fill('\u0000')
+            val value=try { NativeVaultCvcPolicy.input(confirm.isChecked,take(code)) }
+                catch(problem:NativeVaultFailure) { failure(problem.code); return@button }
             runNative(discard=CodeLoad::discard,abandoned={ value.fill(0) },task={ c ->
                 try { val s=c.snapshot(target); val e=c.cardEnvelope(s,target!!); CodeLoad(BiometricLoad(s,e),value) } catch(failure:Exception) { value.fill(0); throw failure }
             },done={ owned ->

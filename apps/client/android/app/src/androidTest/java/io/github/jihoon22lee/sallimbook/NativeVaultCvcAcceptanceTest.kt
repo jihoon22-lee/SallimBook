@@ -15,6 +15,7 @@ import io.github.jihoon22lee.sallimbook.auth.NativeVaultAcceptanceGate
 import io.github.jihoon22lee.sallimbook.auth.AppLockController
 import io.github.jihoon22lee.sallimbook.auth.NativeVaultBinding
 import io.github.jihoon22lee.sallimbook.auth.NativeVaultFailure
+import io.github.jihoon22lee.sallimbook.auth.NativeVaultCvcPolicy
 import io.github.jihoon22lee.sallimbook.auth.NativeVaultStore
 import io.github.jihoon22lee.sallimbook.debugproof.CvcAcceptanceActivity
 import io.github.jihoon22lee.sallimbook.debugproof.CvcAcceptanceFixtures
@@ -40,10 +41,10 @@ class NativeVaultCvcAcceptanceTest {
         try { action(); fail("Expected closed CVC gate") }
         catch (failure: NativeVaultFailure) { assertEquals("CVC_GATE_CLOSED", failure.code) }
     }
-    @Test fun normalStoreCannotActivateLocalCvc() {
-        assertFalse(NativeVaultStore.LOCAL_CVC_ACCEPTANCE_VERIFIED)
-        rejected { NativeVaultStore.get(context).prepareEncryption(binding) }
-        rejected { NativeVaultStore.get(context).prepareDecryption(binding) }
+    @Test fun releaseOptionDoesNotEnableSyntheticNamespaces() {
+        // Never create, replace or delete production keys/records from an acceptance test.
+        assertTrue(NativeVaultCvcPolicy.available("vault.v1"))
+        assertFalse(NativeVaultCvcPolicy.available(CvcAcceptanceFixtures.NAMESPACE))
     }
     @Test fun syntheticStoreStartsClosedWithoutActivityOwner() {
         val store = NativeVaultStore(context, CvcAcceptanceFixtures.NAMESPACE)
@@ -85,7 +86,7 @@ class NativeVaultCvcAcceptanceTest {
         assertFalse(NativeVaultAcceptanceGate.allows(context, binding, "vault.v1"))
         val otherCard = NativeVaultBinding(binding.scope, "20000000-0000-4000-8000-000000000005", binding.envelopeId, binding.revision)
         assertFalse(NativeVaultAcceptanceGate.allows(context, otherCard, CvcAcceptanceFixtures.NAMESPACE))
-        rejected { NativeVaultStore.get(context).prepareEncryption(binding) }
+        assertFalse(NativeVaultCvcPolicy.available(CvcAcceptanceFixtures.NAMESPACE))
     }
     @Test fun endingOwnerImmediatelyClosesSyntheticGate() = withOwner { activity ->
         NativeVaultAcceptanceGate.end(activity)

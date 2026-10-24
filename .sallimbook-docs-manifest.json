@@ -42,16 +42,16 @@
       "git_sha1": "e9a38f5ee6fed120d1a0d0ae69eb9e6084fcc510"
     },
     "README.md": {
-      "sha256": "8d691ba62b8c540801033fba7ff267e018eb8e0098837b6781e154324aa026b7",
-      "git_sha1": "205712d8ca82d95d16a57a0821dccfe26d9da766"
+      "sha256": "d8b7fb6e4bc74ae41310150395f782b12414991dc879377e51a85c6aca95d324",
+      "git_sha1": "cdc8591e342fcf890159a204579c1853e531b27a"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
       "git_sha1": "022a000a8757c9e2e3303849ef0a68bd233fba4d"
     },
     "docs/product-requirements.md": {
-      "sha256": "727c24770d9faa3f7c142243eb79d5ee4754f6406e9bc54240ebb45243f9f686",
-      "git_sha1": "6fb66782a3da6edd33defd4078d42e1c3e50047c"
+      "sha256": "44be90a74a845c34596e1c5d76bd209f4dda2996c1ba1556e7cd25a4593b2f46",
+      "git_sha1": "be6e99e028fea0943191a4e53289d501b4e2a882"
     },
     "docs/architecture.md": {
       "sha256": "2f5325e56121b5e19f044d76df7e77f1e95add0db269c5059c6b7a0765dd1b74",
@@ -74,8 +74,8 @@
       "git_sha1": "e6616c15a275ad01ef2eb9181b3ac400c6fccfbc"
     },
     "docs/security-authentication.md": {
-      "sha256": "8ff112029041a3a70e8a894c36e287c8c7e707a9cb6857bb03e295dfafcc5f68",
-      "git_sha1": "cc2d332704917d7e0b10575adb6c8a6f0cf86819"
+      "sha256": "b689c99c5f971285a55c35ec3e52789d5d497f9317315c234f7b7402603c572c",
+      "git_sha1": "24b2eec7ee73e0f35cf1383343139d0b597dfabd"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -118,16 +118,16 @@
       "git_sha1": "8d85b0041b74f1df30d634b0e550a5003979f692"
     },
     "docs/requirements-traceability.md": {
-      "sha256": "b381a0b563dde16fb0c0708857e4c2acd13de65590c4d2ce28a81b061c7d007d",
-      "git_sha1": "83d47b91124e7293f04c3b2caa723d59ba6e9d22"
+      "sha256": "537757f8962e94c439a5e44a5dd05952f4e41f9316554ae939bbb0333a69365f",
+      "git_sha1": "7a2cf497ce90844fd22e9e5941454e182e561db9"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "73db6e7f623ce4a0e944f96b6e9f7028eecaee381b1db805335c03cd7821e0bd",
-      "git_sha1": "f3facaca52fa1e556f651d5b893079126be5b765"
+      "sha256": "8485dda796d4d69bd1afa9290d4a960fa62d5c4c75d2afb42bfd18564ba06181",
+      "git_sha1": "607712120f84b13ce2391f5dcf60e12ab2a5e9fc"
     },
     "docs/README.md": {
-      "sha256": "244511aba848675716f6454befcdf14dc4c05b99ee917ebf7dacbf501187e161",
-      "git_sha1": "9ebe3e2c4e18bef126b97a16cdab858affba9886"
+      "sha256": "8967b09dd9d25cc4410897c1e1267d4f19afed164a298ae0c95248b8b9cf49f1",
+      "git_sha1": "5349ed02497d4104fba0a2fb6e242167196b2f5b"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -226,8 +226,8 @@
       "git_sha1": "0d038ef4e8aab4e9237d99cdf8e1b0b1ec34e46f"
     },
     "docs/testing/native-security-proof.md": {
-      "sha256": "93ebc8ad098f87e2254f522b3509ff5e681ea1c426b3cb9c027f256612507a2e",
-      "git_sha1": "6829ec77c6ed8022ffeaab930ce7b4d1ea4a7dff"
+      "sha256": "b810c9b404c6f3ef58bf32d71d77f3c1d5fb93096147904a20be2bdd9070a509",
+      "git_sha1": "ae0d9541e218f1b8b872814dd06a79a348e85305"
     },
     "docs/testing/passkeys-web.md": {
       "sha256": "0619eb5d62382a50173e5de3e50b9e38cd1b2a56b34f63f250dbd58ebf604832",
@@ -286,8 +286,8 @@
       "git_sha1": "30cc1b01669de0f9d5b7d79a24292e4bbdb66d49"
     },
     "docs/testing/native-vault-lifecycle.md": {
-      "sha256": "f6555ef579f392a3b15bab5fb4be957638199bf8e131953655884bfe7aee72e1",
-      "git_sha1": "74009062a4aeaf305131c0cf5f2e84a81618c03f"
+      "sha256": "01c0a085aba08c1b39aa50206ec725b3c8be76ec405d3bedbcf37bce16229256",
+      "git_sha1": "6ce031336055fec096bc24e7686f7b61b24df67a"
     },
     "docs/testing/homecare-client.md": {
       "sha256": "dfc7dd8b63eea80d37582b25e602ea4df54ea25d8e0c1084c35625aa573bb6d9",
@@ -302,8 +302,8 @@
       "git_sha1": "6cbccd7d8c5cdf5f886b5431334a815240342ebd"
     },
     "docs/testing/vault-overview.md": {
-      "sha256": "546db5996e046fc5b32c1df3a09d6b87d104f42216a87db1593df99bb6eb7e83",
-      "git_sha1": "c8d785f25257c30141e59008be46acc0711197b4"
+      "sha256": "7b8f083292f8bd0f2190ee59cb64bad9c7527cad303a5f5d0c2a92b2255d01d5",
+      "git_sha1": "b18bbdf60d94a5d77e89de9b96b09fa1a882155d"
     },
     "docs/testing/native-exports.md": {
       "sha256": "7e484452d96b11c14f28b064861ec2eeac88d312b71363606ce8e3323ed544b8",
@@ -342,8 +342,8 @@
       "git_sha1": "e0b71b20f46b275bc0ff6ad45cec23188e135a47"
     },
     "docs/testing/final-integration.md": {
-      "sha256": "702774fe32125ea8e0ddbcae35833e36074a737659ff4c21a58c5ad326011f52",
-      "git_sha1": "0dbd4c6dc5e5e353349309a868673b63de63816c"
+      "sha256": "f79c83f89ea414658af14a0bc32b85bbe1b7b140b792041e6c553b242847ab11",
+      "git_sha1": "70efbb2fcb337f65469a81955e5ff364f9300984"
     },
     "docs/adr/mobile-first-start.md": {
       "sha256": "8d11b14255d18b61265b0ae97501afbfb0d359c909906b4715a01ff9d0ccc273",
@@ -362,8 +362,8 @@
       "git_sha1": "5a119e6711a79d23e196de519fbd595264bc2a78"
     },
     "docs/v1-completion-plan.md": {
-      "sha256": "cc9c40f0f7e8630e987c98822d029b6a0600e873b56f3542d73eeee4511cc765",
-      "git_sha1": "226c1bd0f5c840d3f8c8abaae1d8110e084712d3"
+      "sha256": "3cf321721a15cece386b9a33a47365e9300fd29b9df2fe15d34491694cc72e39",
+      "git_sha1": "6d49d543f237f4e8091372bf2670f4d28b61c614"
     },
     "docs/testing/operating-backup-restore.md": {
       "sha256": "a7df946e18d1e0e5eb342fb64300d6727a9f362e7687b23c1fbb7e2de4216f23",
@@ -390,8 +390,8 @@
       "git_sha1": "26f1dc6e74359ee5673ed2ee8d5db18231821ad8"
     },
     "docs/testing/threat-model-review.md": {
-      "sha256": "42903acd4dc4c62bd6a51cde0c59fc1ddafc0a95141c6bbf508f9cc64f25c17c",
-      "git_sha1": "3f4b07b8d692c4a30015430c6122d4d4c36f9a43"
+      "sha256": "87f017d4be120d5ea7053999fa7b5d94bfec3703d86a19c71cc7033985aa8e0b",
+      "git_sha1": "300204c49343785b527dc511b6dc28c7360b0999"
     },
     "docs/testing/scenario-ux.md": {
       "sha256": "520bd09d458990f49352994cf83b639e58cb20a47823ae09f8a29fa2c384f345",
@@ -432,6 +432,14 @@
     "docs/testing/payment-method-switch.md": {
       "sha256": "2ccac153083e28b085d5c9ecc350d29374ca9f6c5550cc20aefbaa29215c9d46",
       "git_sha1": "68a55c068dee0bd9bfd87707eb053d2d6988f870"
+    },
+    "docs/adr/local-cvc-release-option.md": {
+      "sha256": "52ccbc32eced95aa1c4ae8e9ecaa259ddfe593fbeacd9da85dd99916c227acf4",
+      "git_sha1": "c734b957740b5c75095db80e9a8d7fd233aeda8d"
+    },
+    "docs/testing/local-cvc-release.md": {
+      "sha256": "a3daeaefd577c5b234e3d18bc148082adca0356564c1a79bf8d418e7f058dac9",
+      "git_sha1": "9975154541ca1c79a593b9037c70b4f60d1dd064"
     }
   }
 }

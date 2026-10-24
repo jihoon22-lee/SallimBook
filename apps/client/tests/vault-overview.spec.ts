@@ -15,6 +15,7 @@ test("overview exposes safe status and masks only with no secret inputs or persi
   await expect(page.getByText("•••• 1111", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "이 구성원에게 공유", exact: true })).toBeEnabled();
   await expect(page.getByText(/CVC\/CVV 입력·열람·저장은 지원하지 않아요/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /이 기기의 CVC\/CVV/ })).toHaveCount(0);
   await expect(
     page.locator('input[type="password"], input[name="pan"], input[name="cvc"]'),
   ).toHaveCount(0);
@@ -132,6 +133,7 @@ test("card detail retains ordinary metadata operations and exposes separate prot
   await expect(page.getByRole("link", { name: "카드 정보 수정", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "카드 비밀 제거", exact: true })).toBeVisible();
   await expect(page.getByText(/CVC\/CVV는 PC 웹에서 입력·열람·저장하지 않아요/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /이 기기의 CVC\/CVV/ })).toHaveCount(0);
 });
 
 test("card with protected secret locks last four while ordinary alias stays editable", async ({

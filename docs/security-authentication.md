@@ -236,7 +236,9 @@ FAQ 1574는 소비자가 자기 기기에 직접 입력하는 경우를 FAQ의 �
 
 제품 정책은 다음과 같다.
 
-- 본인/공동 가계 사용자가 자기 Android 기기에 직접 입력한다.
+- 본인/공동 가계 사용자가 자기 Android 기기에 직접 입력한다. 저장은 선택 사항이며 네이티브 화면의
+  미선택 동의란을 확인한 후 매번 강한 생체인증으로 키를 사용한다. [활성화 결정](adr/local-cvc-release-option.md)과
+  [별도 보안 검토](testing/local-cvc-release.md)에 사용자 후속 실기기 시험과 실행한 회귀를 구분한다.
 - 가계 서버, DB, 객체 저장소, PC 웹, 브라우저 로컬 저장소, 로그, 내보내기에는 보내지 않는다.
 - Android cloud backup, device-to-device transfer, 앱 자체 백업 모두에서 제외한다.
 - `allowBackup=false` 하나로 제조사별 기기 이전까지 막혔다고 판단하지 않는다. noBackupFilesDir와 백업/전송 규칙을 함께 검증한다([S12](references.md)).

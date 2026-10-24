@@ -90,3 +90,5 @@ GitHub KVM 계측의 조건·정제 근거는 [Android CI](testing/android-ci.md
 
 인증·보관함 복구·CVC의 신뢰 경계와 미검증 가정은
 [SB-009 위협모델 설계 리뷰](testing/threat-model-review.md)에 추적합니다.
+
+- [Android 로컬 CVC 활성화·별도 보안 검토](testing/local-cvc-release.md) — 네이티브 동의·매회 인증·외부 경로 부재와 검증 수준

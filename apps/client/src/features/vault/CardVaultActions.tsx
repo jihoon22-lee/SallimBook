@@ -10,7 +10,11 @@ import type { WebVaultRequest } from "./actions";
 import { WebVaultAction } from "./WebVaultAction";
 
 type Entry =
-  WebVaultRequest | { action: "register-device" } | { action: "cvc-delete"; cardId: string };
+  | WebVaultRequest
+  | { action: "register-device" }
+  | { action: "cvc-edit"; cardId: string }
+  | { action: "cvc-view"; cardId: string }
+  | { action: "cvc-delete"; cardId: string };
 export function VaultActionLauncher({
   children,
   onCompleted,
@@ -31,7 +35,12 @@ export function VaultActionLauncher({
     setError(null);
     setMessage("");
     if (!isNativeAuth()) {
-      if (entry.action === "register-device" || entry.action === "cvc-delete") {
+      if (
+        entry.action === "register-device" ||
+        entry.action === "cvc-delete" ||
+        entry.action === "cvc-edit" ||
+        entry.action === "cvc-view"
+      ) {
         setError(new ApiError(0, "NATIVE_AUTH_UNAVAILABLE"));
         return;
       }
@@ -131,20 +140,28 @@ export function CardVaultActions({
               카드 비밀 제거
             </button>
             {native && (
-              <button
-                className="secondary-button"
-                disabled={busy}
-                onClick={() => open({ action: "cvc-delete", cardId })}
-              >
-                이 기기의 CVC/CVV 삭제 검토
-              </button>
+              <>
+                <button disabled={busy} onClick={() => open({ action: "cvc-edit", cardId })}>
+                  이 기기의 CVC/CVV 입력·수정
+                </button>
+                <button disabled={busy} onClick={() => open({ action: "cvc-view", cardId })}>
+                  이 기기의 CVC/CVV 열람
+                </button>
+                <button
+                  className="secondary-button"
+                  disabled={busy}
+                  onClick={() => open({ action: "cvc-delete", cardId })}
+                >
+                  이 기기의 CVC/CVV 삭제 검토
+                </button>
+              </>
             )}
           </div>
         )}
       </VaultActionLauncher>
       <p className="muted">
         {native
-          ? "CVC/CVV는 Android 기기 안에서만 보관하며 새 기기에서 다시 입력해야 해요. 현재 보안 검증 전이라 입력·열람은 비활성 상태예요. 이 기기에 남은 CVC/CVV는 보호된 화면에서 삭제할 수 있어요."
+          ? "CVC/CVV는 Android 기기 안에서만 보관하며 새 기기에서 다시 입력해야 해요. 저장은 선택 사항이며 보호된 화면에서 동의한 뒤 입력해요. 저장·열람마다 생체인증이 필요하고 이 기기에서 삭제할 수 있어요."
           : "CVC/CVV는 PC 웹에서 입력·열람·저장하지 않아요. 웹에서는 화면 캡처를 막을 수 없으니 주변을 확인해 주세요."}
       </p>
       <Link to="/vault">보관함 설정·공유·복구</Link>
