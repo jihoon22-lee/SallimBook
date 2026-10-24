@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useNavigationType } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
 import { useResumeRefresh } from "../../shared/useResumeRefresh";
@@ -72,11 +72,14 @@ export function usePagedList<T extends { id: string }, C extends string | number
 ) {
   const location = useLocation();
   const navigationType = useNavigationType();
-  const entry = useRef(historyEntryKey(location));
-  entry.current = historyEntryKey(location);
+  const entryKey = historyEntryKey(location);
+  const entry = useRef(entryKey);
+  useLayoutEffect(() => {
+    entry.current = entryKey;
+  }, [entryKey]);
   const restorePages = useRef(
     restoreAs !== undefined && navigationType === "POP"
-      ? Math.min(rememberedListPages(entry.current, restoreAs), 10)
+      ? Math.min(rememberedListPages(entryKey, restoreAs), 10)
       : 1,
   );
   const loadedPages = useRef(0);

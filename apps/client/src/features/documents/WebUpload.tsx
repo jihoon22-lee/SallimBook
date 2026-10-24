@@ -43,6 +43,7 @@ export function WebUpload({
   const file = useRef<File | null>(null);
   const attempt = useRef<Attempt | null>(null);
   const [chosen, setChosen] = useState("");
+  const [isJpeg, setIsJpeg] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [ack, setAck] = useState(false);
   const [started, setStarted] = useState(false);
@@ -51,6 +52,7 @@ export function WebUpload({
     if (attempt.current) new Uint8Array(attempt.current.bytes).fill(0);
     attempt.current = null;
     file.current = null;
+    setIsJpeg(false);
     if (input.current) input.current.value = "";
   }
   useEffect(() => {
@@ -221,6 +223,7 @@ export function WebUpload({
               onChange={(e) => {
                 const selected = e.target.files?.[0] ?? null;
                 file.current = selected;
+                setIsJpeg(selected?.type === "image/jpeg");
                 setChosen(selected?.name ?? "");
                 setProblem(selected ? fileProblem(selected) : null);
                 setAck(false);
@@ -232,7 +235,7 @@ export function WebUpload({
             카드 사진·전체 카드번호·CVC 등 카드 비밀정보가 없는 문서임을 확인했어요
           </label>
         </fieldset>
-        {file.current?.type === "image/jpeg" && (
+        {isJpeg && (
           <p>
             JPEG 사진은 방향을 맞추고 긴 변을 {MAX_LONG_EDGE}px 이하로 줄이며 위치 등 사진 정보를 뺀
             사본으로 올려요. 기기의 원래 사진은 바뀌지 않아요.

@@ -37,9 +37,10 @@ const UnsavedChangesContext = createContext<Registry>({
 /** The app's one navigation blocker; forms only report whether they hold unsaved input. */
 export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
   const entries = useRef(new Map<symbol, Entry>());
-  const [dirtyCount, setDirtyCount] = useState(0);
+  const [dirtyEntries, setDirtyEntries] = useState<Entry[]>([]);
+  const dirtyCount = dirtyEntries.length;
   const recount = useCallback(
-    () => setDirtyCount([...entries.current.values()].filter((entry) => entry.dirty).length),
+    () => setDirtyEntries([...entries.current.values()].filter((entry) => entry.dirty)),
     [],
   );
   const hasDirty = useCallback(
@@ -124,8 +125,7 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
     () => ({ register, unregister, release, hasDirty, open, stay }),
     [register, unregister, release, hasDirty, open, stay],
   );
-  const message =
-    [...entries.current.values()].find((entry) => entry.dirty)?.message ?? DEFAULT_MESSAGE;
+  const message = dirtyEntries[0]?.message ?? DEFAULT_MESSAGE;
 
   return (
     <UnsavedChangesContext.Provider value={registry}>

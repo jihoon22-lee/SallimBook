@@ -40,7 +40,9 @@ export function useHistoryScroll(location: HistoryLocation, navigationType: Navi
   const entry = historyEntryKey(location);
   const previousPath = useRef(location.pathname);
   const latest = useRef({ navigationType, pathname: location.pathname });
-  latest.current = { navigationType, pathname: location.pathname };
+  useLayoutEffect(() => {
+    latest.current = { navigationType, pathname: location.pathname };
+  }, [navigationType, location.pathname]);
 
   useEffect(() => {
     if (!("scrollRestoration" in history)) return;

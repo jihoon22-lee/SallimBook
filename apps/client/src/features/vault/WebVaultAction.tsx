@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError, requireWebAuth } from "../../platform/api";
 import { isNativeAuth } from "../../platform/nativeAuth";
@@ -74,7 +74,11 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
     workflow = useRef<VaultWorkflow | null>(null),
     flight = useRef(false);
   const callbacks = useRef({ onClose, onCompleted });
-  callbacks.current = { onClose, onCompleted };
+  useLayoutEffect(() => {
+    callbacks.current = { onClose, onCompleted };
+  }, [onClose, onCompleted]);
+  // Public UI metadata only. The workflow, keys and secret inputs stay outside React state.
+  const [canRetry, setCanRetry] = useState(false);
   const [context, setContext] = useState<VaultPublicContext | null>(null),
     [busy, setBusy] = useState(false),
     [locked, setLocked] = useState(false);
@@ -93,6 +97,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
     requireWebAuth();
     let active = true;
     setLocked(false);
+    setCanRetry(false);
     setBusy(true);
     setContext(null);
     setPhase("form");
@@ -107,6 +112,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
       workflow.current = null;
       if (active) {
         setLocked(true);
+        setCanRetry(false);
         setBusy(false);
         setPhase("form");
         setContext(null);
@@ -307,6 +313,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
         }
       }
       if (!life.signal.aborted && workflow.current === work) {
+        setCanRetry(work.canRetry);
         setBusy(false);
         flight.current = false;
       }
@@ -337,6 +344,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
     } finally {
       value = "";
       if (!life.signal.aborted && workflow.current === work) {
+        setCanRetry(work.canRetry);
         setBusy(false);
         flight.current = false;
       }
@@ -426,7 +434,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
             void execute("run");
           }}
         >
-          <fieldset disabled={busy || !!error || workflow.current?.canRetry}>
+          <fieldset disabled={busy || !!error || canRetry}>
             <legend>보호된 입력</legend>
             {needsPassword && (
               <div className="form-field">
@@ -628,10 +636,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
               </label>
             )}
           </fieldset>
-          <button
-            type="submit"
-            disabled={busy || !!error || workflow.current?.canRetry || (needsAck && !ack)}
-          >
+          <button type="submit" disabled={busy || !!error || canRetry || (needsAck && !ack)}>
             {request.action === "view" ? "보관함 암호로 30초 보기" : "보호 작업 진행"}
           </button>
         </form>
@@ -671,7 +676,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
           </button>
         </form>
       )}
-      {!locked && workflow.current?.canRetry && (
+      {!locked && canRetry && (
         <button
           type="button"
           disabled={busy || reauthRequired}
