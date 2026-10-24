@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { mockFinance } from "./support/finance";
+import { mockFinance, uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
 test("a route that throws shows the Korean error screen without a stack trace", async ({
   page,
 }) => {
   await mockFinance(page);
-  // A list row the screen cannot read makes its render throw.
+  // Keep a valid list key; an invalid nested asset makes the screen render throw.
   await page.route("**/api/v1/accounts?*", (route) =>
-    route.fulfill({ json: { items: [null], next_cursor: null } }),
+    route.fulfill({ json: { items: [{ id: uid(999), asset: null }], next_cursor: null } }),
   );
   page.on("pageerror", () => {});
   await page.goto("/accounts");
@@ -30,7 +30,9 @@ test("the error screen retry reloads the page", async ({ page }) => {
   const state = await mockFinance(page);
   let broken = true;
   await page.route("**/api/v1/accounts?*", (route) =>
-    broken ? route.fulfill({ json: { items: [null], next_cursor: null } }) : route.fallback(),
+    broken
+      ? route.fulfill({ json: { items: [{ id: uid(999), asset: null }], next_cursor: null } })
+      : route.fallback(),
   );
   page.on("pageerror", () => {});
   await page.goto("/accounts");

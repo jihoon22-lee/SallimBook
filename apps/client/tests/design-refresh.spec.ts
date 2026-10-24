@@ -24,7 +24,7 @@ test("home keeps date and scope cautions visible before expanding precise compar
   const assets = page.getByRole("region", { name: "자산의 변화", exact: true });
   await expect(assets.getByText("2,040원", { exact: true })).toBeVisible();
   await expect(assets.getByText("비교 대상·지분 변경", { exact: true })).toBeVisible();
-  await expect(assets.getByText("기준일 확인 필요", { exact: true })).toBeVisible();
+  await expect(assets.getByText("서로 다른 기준일", { exact: true })).toBeVisible();
   await expect(assets.locator("details")).not.toHaveAttribute("open", "");
   await assets.getByText("비교 기준과 상세 금액", { exact: true }).click();
   await expect(assets.getByText("+40원", { exact: true })).toBeVisible();
@@ -40,10 +40,10 @@ test("390px home presents consumable attention count and first status above the 
   await homeData(page);
   await page.goto("/");
   await page.getByLabel("확인할 월").fill("2025-02");
-  await expect(page.getByText("기준일 확인 필요", { exact: true })).toBeVisible();
+  await expect(page.getByText("서로 다른 기준일", { exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const today = await page.locator(".home-today .care-status").first().boundingBox();
-  await expect(page.locator(".home-today .care-count")).toHaveText("확인할 소모품 2개");
+  await expect(page.locator(".home-today .care-count")).toHaveText("기기별 확인 2건");
   const nav = await page.getByRole("navigation", { name: "주 메뉴", exact: true }).boundingBox();
   expect(today!.y + today!.height).toBeLessThan(nav!.y);
   for (const link of await page.locator(".asset-detail-actions > a").all())
