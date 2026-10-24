@@ -429,3 +429,7 @@ PATH=/VERIFIED_AGE_AND_POSTGRES_TOOL_DIRECTORY:$PATH \
 없이 제외한다. 전체 기록은 웹·새 APK에서 확인한다.** DB 감사와 내보내기는 전체를 유지한다.
 설치 파일 게시와 실제 폰 업데이트를 구분하여 보고한다. [가족 모델 ADR](adr/household-people.md)을
 따르며 이 절차는 실기기 보안 인수나 CVC 활성화 완료를 의미하지 않는다.
+
+0018→0021 전환은 0019의 가족 backfill, 0020의 보험 이력 삭제 제약, 0021의 빈 주문 표를 적용한다.
+이전 버전도 inspector를 쓰는 경우 해당 서비스를 포함한 [현행 업그레이드 리허설](testing/current-upgrade-rehearsal.md)을
+실행한다. 새 가족·주문 이력이 생긴 뒤에는 자료를 삭제하는 downgrade를 시도하지 않고 순방향으로 수정한다.
