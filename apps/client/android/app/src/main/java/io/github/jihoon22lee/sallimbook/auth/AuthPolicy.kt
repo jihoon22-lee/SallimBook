@@ -198,11 +198,14 @@ internal object AuthPolicy {
         }
         val seen = row["last_seen_at"] as? String ?: throw AuthFailure(AuthCode.ACCESS_DENIED)
         try { OffsetDateTime.parse(seen) } catch (_: Exception) { throw AuthFailure(AuthCode.ACCESS_DENIED) }
+        // Sent by servers from 0.1.7 on; the settings list folds expired devices with it.
+        val state = row["login_state"]
+        if ("login_state" in row && state !in setOf("active", "expired", "revoked")) throw AuthFailure(AuthCode.ACCESS_DENIED)
         return mapOf(
             "id" to uuidValue(row["id"]), "label" to boundedText(row["label"], 80),
             "platform" to row["platform"], "status" to row["status"], "last_seen_at" to seen,
             "version" to version, "current" to row["current"],
-        )
+        ) + (if ("login_state" in row) mapOf("login_state" to state) else emptyMap())
     }
 
     fun passkey(value: Any?): Map<String, Any?> {

@@ -62,7 +62,8 @@ export function LoginForm({
     };
     clearSensitiveFields(form);
     setError(null);
-    setPasswordError(true);
+    // In a re-check a 401 means the session ran out, not a wrong password (that is a 403).
+    setPasswordError(!recheck);
     setBusy(true);
     try {
       await login(input);

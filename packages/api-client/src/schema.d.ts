@@ -4726,6 +4726,11 @@ export interface components {
              */
             last_seen_at: string;
             /**
+             * Login State
+             * @enum {string}
+             */
+            login_state: "active" | "expired" | "revoked";
+            /**
              * Platform
              * @enum {string}
              */
@@ -5535,6 +5540,26 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * InstallClaim
+         * @description An Android install's device row from an earlier sign-in; empty on its first sign-in.
+         */
+        InstallClaim: {
+            /** Device Id */
+            device_id?: string | null;
+            /** Key */
+            key?: string | null;
+        };
+        /** InstallDevice */
+        InstallDevice: {
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Key */
+            key?: string | null;
+        };
         /** @enum {string} */
         IntervalUnit: "manual" | "days" | "months";
         /** InvitationAcceptance */
@@ -6233,6 +6258,43 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** NativeLoginRequest */
+        NativeLoginRequest: {
+            /** Device Label */
+            device_label: string;
+            install?: components["schemas"]["InstallClaim"] | null;
+            /** Login Name */
+            login_name: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+        };
+        /** NativeLoginResponse */
+        NativeLoginResponse: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Expires In
+             * @default 600
+             */
+            expires_in: number;
+            install?: components["schemas"]["InstallDevice"] | null;
+            /**
+             * Refresh Expires At
+             * Format: date-time
+             */
+            refresh_expires_at: string;
+            /** Refresh Token */
+            refresh_token: string;
+            /**
+             * Token Type
+             * @default Bearer
+             * @constant
+             */
+            token_type: "Bearer";
+        };
         /** NativeLoginVerification */
         NativeLoginVerification: {
             /**
@@ -6246,6 +6308,7 @@ export interface components {
              * Format: password
              */
             device_binding: string;
+            install?: components["schemas"]["InstallClaim"] | null;
         };
         /** NativeOptionsResponse */
         NativeOptionsResponse: {
@@ -12427,7 +12490,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LoginRequest"];
+                "application/json": components["schemas"]["NativeLoginRequest"];
             };
         };
         responses: {
@@ -12437,7 +12500,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeTokenResponse"];
+                    "application/json": components["schemas"]["NativeLoginResponse"];
                 };
             };
             /** @description Bad Request */
@@ -12746,7 +12809,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeTokenResponse"];
+                    "application/json": components["schemas"]["NativeLoginResponse"];
                 };
             };
             /** @description Bad Request */

@@ -33,6 +33,8 @@ from sallimbook.identity.schemas import (
     InvitationResponse,
     LoginRequest,
     MemberResponse,
+    NativeLoginRequest,
+    NativeLoginResponse,
     NativeTokenResponse,
     PasswordChangeRequest,
     ReauthenticationRequest,
@@ -231,14 +233,17 @@ def logout_web(principal: PrincipalDependency, session: SessionDependency) -> Re
 
 @router.post(
     "/auth/native/login",
-    response_model=NativeTokenResponse,
+    response_model=NativeLoginResponse,
+    # Without an install claim the body keeps exactly the fields older apps expect.
+    response_model_exclude_none=True,
     dependencies=[Depends(require_native_transport)],
     operation_id="loginNative",
 )
 def login_native(
-    payload: LoginRequest, request: Request, session: SessionDependency
-) -> NativeTokenResponse:
-    return service.login(session, payload, request_source(request), "native").native_tokens
+    payload: NativeLoginRequest, request: Request, session: SessionDependency
+) -> NativeLoginResponse:
+    result = service.login(session, payload, request_source(request), "native")
+    return NativeLoginResponse(**result.native_tokens.model_dump(), install=result.install)
 
 
 @router.post(
@@ -351,9 +356,23 @@ def get_devices(
     cursor: UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> DeviceListResponse:
+    now = service.utcnow()
+    cutoff = now - service.DEVICE_LIST_IDLE
+    used_recently = (
+        select(AuthSession.id)
+        .where(
+            AuthSession.household_id == RegisteredDevice.household_id,
+            AuthSession.device_id == RegisteredDevice.id,
+            AuthSession.last_seen_at > cutoff,
+        )
+        .exists()
+    )
     query = select(RegisteredDevice).where(
         RegisteredDevice.household_id == principal.household_id,
         RegisteredDevice.user_id == principal.user_id,
+        (RegisteredDevice.status != "active")
+        | (RegisteredDevice.last_seen_at > cutoff)
+        | used_recently,
     )
     rows, next_cursor = keyset_page(
         session,
@@ -379,6 +398,16 @@ def get_devices(
             .group_by(AuthSession.device_id)
         ).all()
     )
+    live = set(
+        session.scalars(
+            select(AuthSession.device_id).where(
+                AuthSession.household_id == principal.household_id,
+                AuthSession.user_id == principal.user_id,
+                AuthSession.device_id.in_([device.id for device in rows]),
+                service.live_session(now),
+            )
+        )
+    )
     result = DeviceListResponse(
         items=[
             DeviceResponse(
@@ -389,6 +418,13 @@ def get_devices(
                 last_seen_at=max(device.last_seen_at, activity.get(device.id, device.last_seen_at)),
                 version=device.version,
                 current=device.id == principal.device_id,
+                login_state=(
+                    "revoked"
+                    if device.status == "revoked"
+                    else "active"
+                    if device.id in live
+                    else "expired"
+                ),
             )
             for device in rows
         ],

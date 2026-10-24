@@ -5797,6 +5797,15 @@
             "title": "Last Seen At",
             "type": "string"
           },
+          "login_state": {
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ],
+            "title": "Login State",
+            "type": "string"
+          },
           "platform": {
             "enum": [
               "web",
@@ -5825,7 +5834,8 @@
           "status",
           "last_seen_at",
           "version",
-          "current"
+          "current",
+          "login_state"
         ],
         "title": "DeviceResponse",
         "type": "object"
@@ -8078,6 +8088,66 @@
         "title": "IncomeVoid",
         "type": "object"
       },
+      "InstallClaim": {
+        "additionalProperties": false,
+        "description": "An Android install's device row from an earlier sign-in; empty on its first sign-in.",
+        "properties": {
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "maxLength": 128,
+                "minLength": 32,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          }
+        },
+        "title": "InstallClaim",
+        "type": "object"
+      },
+      "InstallDevice": {
+        "properties": {
+          "device_id": {
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          }
+        },
+        "required": [
+          "device_id"
+        ],
+        "title": "InstallDevice",
+        "type": "object"
+      },
       "IntervalUnit": {
         "enum": [
           "manual",
@@ -10015,6 +10085,96 @@
         "title": "MutationReference",
         "type": "object"
       },
+      "NativeLoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "device_label": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Device Label",
+            "type": "string"
+          },
+          "install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstallClaim"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "login_name": {
+            "maxLength": 64,
+            "minLength": 3,
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]{2,63}$",
+            "title": "Login Name",
+            "type": "string"
+          },
+          "password": {
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "login_name",
+          "password",
+          "device_label"
+        ],
+        "title": "NativeLoginRequest",
+        "type": "object"
+      },
+      "NativeLoginResponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "default": 600,
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstallDevice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refresh_expires_at": {
+            "format": "date-time",
+            "title": "Refresh Expires At",
+            "type": "string"
+          },
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          },
+          "token_type": {
+            "const": "Bearer",
+            "default": "Bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token",
+          "refresh_expires_at"
+        ],
+        "title": "NativeLoginResponse",
+        "type": "object"
+      },
       "NativeLoginVerification": {
         "additionalProperties": false,
         "properties": {
@@ -10033,6 +10193,16 @@
             "title": "Device Binding",
             "type": "string",
             "writeOnly": true
+          },
+          "install": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstallClaim"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -21189,7 +21359,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
+                "$ref": "#/components/schemas/NativeLoginRequest"
               }
             }
           },
@@ -21200,7 +21370,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeTokenResponse"
+                  "$ref": "#/components/schemas/NativeLoginResponse"
                 }
               }
             },
@@ -21546,7 +21716,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeTokenResponse"
+                  "$ref": "#/components/schemas/NativeLoginResponse"
                 }
               }
             },

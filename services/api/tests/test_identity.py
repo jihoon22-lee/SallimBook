@@ -18,7 +18,7 @@ from argon2.low_level import Type
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from sallimbook.config import Settings
@@ -40,8 +40,10 @@ from sallimbook.identity.dependencies import NATIVE_HEADER, SESSION_COOKIE
 from sallimbook.identity.models import Household
 from sallimbook.identity.router import router
 from sallimbook.identity.schemas import (
+    InstallClaim,
     InvitationAcceptance,
     LoginRequest,
+    NativeLoginRequest,
     PasswordChangeRequest,
 )
 
@@ -636,6 +638,43 @@ class TestIdentityDatabase:
             assert session.get(LoginThrottle, key).attempts == 0
             assert session.scalar(select(func.count()).select_from(AuthSession)) == 0
 
+    def test_a_rate_limited_attempt_is_not_added_to_other_buckets(self, db_engine):
+        now = service.utcnow()
+        with Session(db_engine) as session:
+            service._admit_attempt(session, [("narrow", 1), ("wide", 30)], now)
+            for _ in range(3):
+                with pytest.raises(DomainError) as failure:
+                    service._admit_attempt(session, [("narrow", 1), ("wide", 30)], now)
+                assert failure.value.code == "RATE_LIMITED"
+            assert session.get(LoginThrottle, service.token_hash("throttle", "wide")).attempts == 1
+
+    def test_one_device_using_up_its_refreshes_does_not_block_another(self, identity_app, account):
+        # Every device refreshes through the same proxy peer, so the source bucket is shared.
+        with (
+            TestClient(identity_app, base_url="https://testserver") as first,
+            TestClient(identity_app, base_url="https://testserver") as second,
+        ):
+            tokens = native_login(first, account)
+            other = native_login(second, account)
+            refresh = tokens["refresh_token"]
+            limited = 0
+            for _ in range(31):
+                response = first.post(
+                    "/api/v1/auth/native/refresh", headers=NATIVE, json={"refresh_token": refresh}
+                )
+                if response.status_code == 200:
+                    refresh = response.json()["refresh_token"]
+                else:
+                    assert response.json()["error"]["code"] == "RATE_LIMITED"
+                    limited += 1
+            assert limited > 0
+            response = second.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": other["refresh_token"]},
+            )
+            assert response.status_code == 200, response.text
+
     def test_successful_logins_do_not_consume_account_limit(self, identity_app, account, db_engine):
         with TestClient(identity_app, base_url="https://testserver") as client:
             for _ in range(6):
@@ -1204,6 +1243,32 @@ class TestIdentityDatabase:
             )
             assert client.get("/api/v1/me", headers=bearer(tokens)).status_code == 401
 
+    def test_revoking_a_revoked_device_keeps_the_first_revocation(
+        self, identity_app, db_engine, account, monkeypatch
+    ):
+        with (
+            TestClient(identity_app, base_url="https://testserver") as first,
+            TestClient(identity_app, base_url="https://testserver") as second,
+        ):
+            native_login(first, account)
+            tokens = native_login(second, account)
+            devices = second.get("/api/v1/devices", headers=bearer(tokens))
+            assert devices.status_code == 200
+            other = next(row for row in devices.json()["items"] if not row["current"])
+            revoke = {**bearer(tokens), "If-Match": f'"{other["version"]}"'}
+            assert (
+                second.delete("/api/v1/devices/" + other["id"], headers=revoke).status_code == 204
+            )
+            with Session(db_engine) as session:
+                revoked = session.get(RegisteredDevice, UUID(other["id"]))
+                first_revoked_at, version = revoked.revoked_at, revoked.version
+            later = service.utcnow() + timedelta(minutes=1)
+            monkeypatch.setattr(service, "utcnow", lambda: later)
+            again = {**bearer(tokens), "If-Match": f'"{version}"'}
+            assert second.delete("/api/v1/devices/" + other["id"], headers=again).status_code == 204
+        with Session(db_engine) as session:
+            assert session.get(RegisteredDevice, UUID(other["id"])).revoked_at == first_revoked_at
+
     def test_rate_limit_persists_failed_logins_without_logging_secrets(
         self, identity_app, account, caplog
     ):
@@ -1526,6 +1591,67 @@ class TestIdentityDatabase:
                 )
             assert refresh.value.status == 401
 
+    def _age_device(self, db_engine, device_id, age):
+        # Moves every session of a synthetic device into the past, as if it was last used then.
+        then = service.utcnow() - age
+        with Session(db_engine) as session:
+            device = session.get(RegisteredDevice, device_id)
+            device.last_seen_at = then
+            for row in session.scalars(
+                select(AuthSession).where(AuthSession.device_id == device_id)
+            ):
+                row.last_seen_at = then
+                row.authenticated_at = then
+                row.expires_at = min(row.expires_at, then + timedelta(hours=12))
+            session.commit()
+
+    def _devices(self, client, tokens):
+        response = client.get("/api/v1/devices", headers=bearer(tokens))
+        assert response.status_code == 200, response.text
+        return {row["label"]: row for row in response.json()["items"]}
+
+    def test_device_login_state_is_active_expired_or_revoked(
+        self, identity_app, db_engine, account
+    ):
+        with TestClient(identity_app, base_url="https://testserver") as browser:
+            web_login(browser, account)
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            devices = self._devices(client, tokens)
+            assert devices["합성 Android"]["login_state"] == "active"
+            assert devices["합성 PC"]["login_state"] == "active"
+            # A web session ends after the idle limit even before its absolute expiry.
+            self._age_device(db_engine, UUID(devices["합성 PC"]["id"]), timedelta(hours=1))
+            assert self._devices(client, tokens)["합성 PC"]["login_state"] == "expired"
+            pc = self._devices(client, tokens)["합성 PC"]
+            assert (
+                client.delete(
+                    "/api/v1/devices/" + pc["id"],
+                    headers={**bearer(tokens), "If-Match": f'"{pc["version"]}"'},
+                ).status_code
+                == 204
+            )
+            assert self._devices(client, tokens)["합성 PC"]["login_state"] == "revoked"
+
+    @pytest.mark.parametrize(("days", "listed"), [(89, True), (91, False)])
+    def test_devices_unused_for_90_days_are_left_out_of_the_list(
+        self, identity_app, db_engine, account, days, listed
+    ):
+        with TestClient(identity_app, base_url="https://testserver") as browser:
+            web_login(browser, account)
+        with TestClient(identity_app, base_url="https://testserver") as client:
+            tokens = native_login(client, account)
+            pc = self._devices(client, tokens)["합성 PC"]
+            self._age_device(db_engine, UUID(pc["id"]), timedelta(days=days))
+            devices = self._devices(client, tokens)
+            assert ("합성 PC" in devices) is listed
+            assert devices["합성 Android"]["login_state"] == "active"
+            if listed:
+                assert devices["합성 PC"]["login_state"] == "expired"
+        with Session(db_engine) as session:
+            # Hidden, not deleted: sessions and audit history keep referring to the row.
+            assert session.get(RegisteredDevice, UUID(pc["id"])) is not None
+
     def test_device_activity_comes_from_session_without_advancing_edit_version(
         self,
         identity_app,
@@ -1546,3 +1672,220 @@ class TestIdentityDatabase:
             stored = session.get(RegisteredDevice, UUID(device["id"]))
             assert stored.last_seen_at < later
             assert stored.version == 1
+
+
+def install_login(client, account, install, label="합성 Android"):
+    response = client.post(
+        "/api/v1/auth/native/login",
+        headers=NATIVE,
+        json={
+            "login_name": account.login_name,
+            "password": account.password,
+            "device_label": label,
+            "install": install,
+        },
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def _user_devices(db_engine, user_id):
+    with Session(db_engine) as session:
+        return session.scalars(
+            select(RegisteredDevice).where(RegisteredDevice.user_id == user_id)
+        ).all()
+
+
+def _partner(identity_app, account):
+    password = secrets.token_urlsafe(24)
+    # A separate client: the web cookie must not mix with native requests.
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        login = web_login(client, account)
+        invited = client.post(
+            "/api/v1/household/invitations",
+            headers=csrf(login),
+            json={"intended_login": "synthetic_partner"},
+        )
+        accepted = client.post(
+            "/api/v1/auth/invitations/accept",
+            headers={"Origin": ORIGIN},
+            json={"token": invited.json()["token"], "password": password, "display_name": "합성 B"},
+        )
+        assert accepted.is_success
+    return Account(
+        "synthetic_partner", account.user_id, account.member_id, account.household_id, password
+    )
+
+
+def test_native_sign_in_without_install_keeps_the_old_response(identity_app, account):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        tokens = native_login(client, account)
+    assert set(tokens) == {
+        "access_token",
+        "refresh_token",
+        "token_type",
+        "expires_in",
+        "refresh_expires_at",
+    }
+
+
+def test_first_install_sign_in_returns_a_device_key_stored_only_as_a_hash(
+    identity_app, account, db_engine
+):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        install = install_login(client, account, {})["install"]
+    assert set(install) == {"device_id", "key"}
+    (device,) = _user_devices(db_engine, account.user_id)
+    assert str(device.id) == install["device_id"]
+    assert device.install_key_hash == service.token_hash("install-device", install["key"])
+
+
+def test_native_sign_in_reuses_the_install_device_row(identity_app, account, db_engine):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        claim = first["install"]
+        second = install_login(client, account, claim, label="합성 새 이름")
+        assert second["install"] == {"device_id": claim["device_id"]}
+        # The install signs in with one session at a time; the earlier one ends at the device
+        # row, without writing (and so locking) the earlier session's own row.
+        with Session(db_engine) as session:
+            earlier = session.scalar(
+                select(AuthSession).where(
+                    AuthSession.session_hash == service.token_hash("session", first["access_token"])
+                )
+            )
+            assert (earlier.revoked_at, earlier.version) == (None, 1)
+        assert client.get("/api/v1/me", headers=bearer(first)).status_code == 401
+        assert (
+            client.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": first["refresh_token"]},
+            ).status_code
+            == 401
+        )
+        assert client.get("/api/v1/me", headers=bearer(second)).status_code == 200
+    (device,) = _user_devices(db_engine, account.user_id)
+    assert str(device.id) == claim["device_id"]
+    assert (device.label, device.version, device.status) == ("합성 새 이름", 2, "active")
+    with Session(db_engine) as session:
+        logins = session.execute(
+            select(AuditEvent.before_version, AuditEvent.after_version)
+            .where(AuditEvent.entity_id == device.id, AuditEvent.action == "login")
+            .order_by(AuditEvent.occurred_at)
+        ).all()
+    assert [tuple(row) for row in logins] == [(None, 1), (1, 2)]
+
+
+def test_an_earlier_session_does_not_keep_a_reused_row_signed_in(identity_app, account):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        second = install_login(client, account, first["install"])
+
+        def refresh():
+            return client.post(
+                "/api/v1/auth/native/refresh",
+                headers=NATIVE,
+                json={"refresh_token": second["refresh_token"]},
+            ).status_code
+
+        # Presenting the same refresh token twice ends the new session.
+        assert (refresh(), refresh()) == (200, 401)
+        listed = client.get("/api/v1/devices", headers=bearer(native_login(client, account)))
+    (device,) = [d for d in listed.json()["items"] if d["id"] == first["install"]["device_id"]]
+    assert device["login_state"] == "expired"
+
+
+def test_an_install_claim_does_not_wait_for_another_users_device(identity_app, account, db_engine):
+    partner = _partner(identity_app, account)
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        owner = install_login(client, account, {})["install"]
+    claim = InstallClaim(device_id=UUID(owner["device_id"]), key=owner["key"])
+    request = NativeLoginRequest(
+        login_name=partner.login_name,
+        password=partner.password,
+        device_label="합성 Android",
+        install=claim,
+    )
+    with Session(db_engine) as holder, db_engine.connect() as connection:
+        holder.scalars(
+            select(RegisteredDevice).where(RegisteredDevice.id == claim.device_id).with_for_update()
+        ).all()
+        try:
+            # One outer transaction, so the timeout holds across the sign-in's own commits.
+            connection.execute(text("SET lock_timeout = '1s'"))
+            with Session(bind=connection) as session:
+                result = service.login(session, request, "synthetic-claim", "native")
+        finally:
+            holder.rollback()
+    assert result.install.device_id != claim.device_id and result.install.key
+
+
+def test_wrong_install_key_gets_a_fresh_row(identity_app, account, db_engine):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        claim = {**first["install"], "key": secrets.token_urlsafe(32)}
+        fresh = install_login(client, account, claim)["install"]
+        assert client.get("/api/v1/me", headers=bearer(first)).status_code == 200
+    assert fresh["device_id"] != claim["device_id"] and fresh["key"]
+    assert len(_user_devices(db_engine, account.user_id)) == 2
+
+
+def test_install_credential_of_another_user_gets_a_fresh_row(identity_app, account, db_engine):
+    partner = _partner(identity_app, account)
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        owner = install_login(client, account, {})
+        taken = install_login(client, partner, owner["install"])["install"]
+        assert taken["device_id"] != owner["install"]["device_id"] and taken["key"]
+        assert client.get("/api/v1/me", headers=bearer(owner)).status_code == 200
+    (device,) = [d for d in _user_devices(db_engine, account.user_id) if d.platform == "android"]
+    assert (str(device.id), device.version) == (owner["install"]["device_id"], 1)
+
+
+def test_revoked_install_device_gets_a_new_row(identity_app, account, db_engine):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        first = install_login(client, account, {})
+        assert (
+            client.post(
+                "/api/v1/auth/native/logout", headers={**NATIVE, **bearer(first)}, json={}
+            ).status_code
+            == 204
+        )
+        fresh = install_login(client, account, first["install"])["install"]
+    assert fresh["device_id"] != first["install"]["device_id"] and fresh["key"]
+
+
+@pytest.mark.parametrize(
+    "install",
+    [{"device_id": str(uuid4())}, {"key": "k" * 43}, {"device_id": str(uuid4()), "key": "short"}],
+)
+def test_an_install_claim_needs_both_a_device_id_and_a_well_formed_key(
+    identity_app, account, install
+):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        response = client.post(
+            "/api/v1/auth/native/login",
+            headers=NATIVE,
+            json={
+                "login_name": account.login_name,
+                "password": account.password,
+                "device_label": "합성 Android",
+                "install": install,
+            },
+        )
+    assert response.status_code == 422
+
+
+def test_web_sign_in_cannot_present_an_install_credential(identity_app, account):
+    with TestClient(identity_app, base_url="https://testserver") as client:
+        response = client.post(
+            "/api/v1/auth/web/login",
+            headers={"Origin": ORIGIN},
+            json={
+                "login_name": account.login_name,
+                "password": account.password,
+                "device_label": "합성 PC",
+                "install": {},
+            },
+        )
+    assert response.status_code == 422
