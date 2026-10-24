@@ -151,3 +151,35 @@ R-06/R-07/R-08/R-09/R-13/R-15/R-18/R-22. 계좌 상세에서 현재·미래 정�
 납부 규칙에서 보험 계약의 실제 상품명으로 이동하고, 보험금 수입에서는 원본 입금·반환과 입금에 배분된 모든 사건을 확인한다. 반환의 대상 배분을 별도로 표시하며 배분 금액을 실제 반환액으로 표현하지 않는다. 금융 자산은 연결 계좌로 이동하며 같은 평가액을 한 번만 합산한다. 카드의 결제계좌, 납부수단과 부채 링크는 일반 명칭 대신 저장된 이름을 표시한다. 번호 조회나 보관함 복호화는 호출하지 않는다.
 
 회귀 기준은 첫 페이지 밖의 수입·계좌 연결, 사용 종료된 참조, 다중 사건 배분과 실제 반환 원본, 페이지 사이 연결 변경 시 재조회, Android bridge의 HTTP 우회 방지다. 새 읽기 API는 가계 경계와 원본 불변을 DB 통합 테스트로 검증한다. 실행 결과는 연결 PR에 기록한다.
+
+## 가전·소모품 첫 설정과 저장 후 복귀 (P10, #159)
+
+R-16/R-17/R-18/R-19/R-22. 가전 등록 뒤 연결 영역으로 이동해 소모품 연결을 이어서 설정하거나
+나중에 설정할 수 있다. 연결 입력 중 새 소모품을 만들고 초기 재고를 설정해도 작성 중인 주기와
+직접 지정일을 유지한다. 새 소모품은 선택 상태로 돌아오며 연결 저장 후 이름 목록을 다시 읽는다.
+
+현재 보유 총수량은 일반 소모품 metadata에 쓰지 않는다. 기존 재고와의 차이를
+사유 `처음 확인한 보유 재고`가 있는 adjustment로 기록한다. 입력 총수량이 현재 재고와 같으면
+추가 조정 없이 건너뛸 수 있다. 409에서는 현재 재고를 비교하고 채택한 뒤 차이를 다시 계산한다.
+동일 입력 재시도는 같은 If-Match/Idempotency-Key를 사용한다. metadata 생성의 응답 유실은
+기존 목록 확인 절차를 유지하며 자동으로 새 소모품을 다시 만들지 않는다.
+
+입고·교체 링크는 시작 화면의 경로·필터·hash를 기억한다. 저장 후 그 화면에서 서버의 재고와
+원본 movement를 다시 읽어 변화와 다음 작업을 안내한다. 현재 재고 버전이 원본 movement와
+같을 때만 `3 → 5개`처럼 표시하고, 다르면 후속 변경을 포함한 현재 수량임을 알린다.
+조회 실패 시 저장 완료 사실을 유지하고 조회만 재시도한다. 직접 주소로 들어간 입력은 기존
+원본 상세/기기별 상세로 돌아간다. 홈의 소모품 필터도 URL에 보관하며 나머지 링크는 같은
+필터의 `#today-care`로 이동한다. 홈 우선순위와 서버 권한·계산·재고 원장은 그대로 사용한다.
+
+검증 명령은 `pnpm test:web homecare-workflow.spec.ts homecare-ui.spec.ts homecare-native-ui.spec.ts homecare-native-bridge.spec.ts homecare-model.spec.ts homecare-delete-snapshot.spec.ts --workers=2`,
+`pnpm test:web homecare-workflow.spec.ts home.spec.ts routing.spec.ts --workers=2`,
+`pnpm test:database services/api/tests/test_homecare_database.py -q`,
+`uv run --project services/api python scripts/test_web_auth.py --homecare`,
+Android `:app:testDebugUnitTest --tests io.github.jihoon22lee.sallimbook.auth.NativeHomecarePolicyTest`다.
+DB **39개**, 네이티브 정책 **16개**, 새 웹/Android 흐름 **24개**가 통과했다.
+실제 HTTPS에서 새 가전→소모품→초기 조정 3개→입고 2개→상세 복귀 5개와 기존 교체·취소·자산 불변식을 통과했다.
+초기 화면 시험의 나머지 링크 fixture 4개는 교체 기준일을 보완해 통과했고, HTTPS 선택기 접근과
+비동기 ID 읽기 assertion을 고친 뒤 재실행했다. 넓힌 경로 검증 중 Docker 시험망 시작·종료와 겹친
+브라우저 `ERR_NETWORK_CHANGED` 실패 4개는 망 변경 없이 `pnpm test:web routing.spec.ts --workers=2`로
+재검증해 **74개 모두 통과**했다. 타입·lint·format·build와 문서 도구 **258개**도 통과했다.
+API·DB schema 변경과 보관함 변경은 없다. 이 검증은 실기기 인증 시험을 대신하지 않는다.

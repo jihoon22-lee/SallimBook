@@ -1,5 +1,6 @@
+import { HomecareOutcome, useHomecareOrigin } from "./HomecareOutcome";
 import { Icon } from "../../shared/Icon";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ApiError } from "../../platform/api";
 import { SessionStatus } from "../auth/AuthFeedback";
@@ -40,22 +41,19 @@ export async function completeToday(
   return { ...first, items, next_cursor: null };
 }
 function TodayList({ compact }: { compact: boolean }) {
+  const origin = useHomecareOrigin();
   const api = useHomecareApi();
-  const [homeFilter, setHomeFilter] = useState<TodayFilter>("attention");
   const [params, setParams] = useSearchParams();
   const selected = params.get("care") ?? "attention";
-  const filter: TodayFilter = compact
-    ? homeFilter
-    : ["attention", "due", "soon", "purchase", "unknown", "all"].includes(selected)
-      ? (selected as TodayFilter)
-      : "attention";
+  const filter: TodayFilter = ["attention", "due", "soon", "purchase", "unknown", "all"].includes(
+    selected,
+  )
+    ? (selected as TodayFilter)
+    : "attention";
   const setFilter = (value: TodayFilter) => {
-    if (compact) setHomeFilter(value);
-    else {
-      const next = new URLSearchParams(params);
-      next.set("care", value);
-      setParams(next, { replace: true });
-    }
+    const next = new URLSearchParams(params);
+    next.set("care", value);
+    setParams(next, { replace: true });
   };
   const resource = useResource(
     useCallback(
@@ -150,8 +148,12 @@ function TodayList({ compact }: { compact: boolean }) {
                     재고 {row.stock_quantity.toLocaleString("ko-KR")} {row.unit}
                   </p>
                   <div className="form-actions care-item-actions">
-                    <Link to={`/appliance-consumables/${row.id}/replace`}>교체 기록</Link>
-                    <Link to={`/consumables/${row.consumable_id}/stock/new`}>입고 기록</Link>
+                    <Link to={`/appliance-consumables/${row.id}/replace`} state={origin}>
+                      교체 기록
+                    </Link>
+                    <Link to={`/consumables/${row.consumable_id}/stock/new`} state={origin}>
+                      입고 기록
+                    </Link>
                   </div>
                 </li>
               ))}
@@ -197,6 +199,7 @@ export function TodayConsumables({ compact = false }: { compact?: boolean }) {
       )}
       {state.status === "authenticated" ? (
         <>
+          {compact && <HomecareOutcome />}
           <TodayList compact={compact} />
           {compact && (
             <>

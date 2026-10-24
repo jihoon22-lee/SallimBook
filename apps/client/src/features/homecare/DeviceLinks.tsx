@@ -18,6 +18,11 @@ import {
 } from "./HomecareSupport";
 import { DeleteHomecare } from "./DeleteHomecare";
 import { ReplacementList, ReplacementEditor } from "./ReplacementPages";
+import { ConsumableEditor } from "./ConsumablePages";
+import { StockEditor } from "./StockPages";
+import { useHomecareOrigin, useHomecareReturn } from "./HomecareOutcome";
+import { stateFlag, useRouteNotice } from "../../shared/routeNotice";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 export function DeviceStatus({ row, unit = "단위" }: { row: DeviceLink; unit?: string }) {
   return (
@@ -100,6 +105,11 @@ function LinkEditor({
 }) {
   const api = useHomecareApi();
   const command = useMetadataCommand();
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<Consumable | null>(null);
+  const [stockSaved, setStockSaved] = useState(false);
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() => linkDraft(initial));
   const [latest, setLatest] = useState<DeviceLink | null>(null);
@@ -166,7 +176,10 @@ function LinkEditor({
             }),
       !base,
     );
-    if (result && command.mounted.current) saved(result);
+    if (result && command.mounted.current) {
+      guard.release();
+      saved(result);
+    }
   }
   async function compare() {
     if (!base) return;
@@ -185,10 +198,49 @@ function LinkEditor({
     command.setError(null);
     setClearAck(false);
   }
+  if (creating)
+    return (
+      <ConsumableEditor
+        onSaved={(row) => {
+          setCreating(false);
+          setCreated(row);
+        }}
+        onCancel={() => setCreating(false)}
+      />
+    );
+  if (created) {
+    const done = () => {
+      setSelected(created.id);
+      setCreated(null);
+      void choices.reload();
+    };
+    return (
+      <StockEditor
+        initial={created}
+        initialSetup
+        onSaved={() => {
+          setStockSaved(true);
+          done();
+        }}
+        onCancel={done}
+      />
+    );
+  }
   return (
     <section className="card">
+      {stockSaved && (
+        <p role="status">
+          현재 보유 재고를 저장했어요. 이 소모품의 기기별 주기를 정해 연결해 주세요.
+        </p>
+      )}
       <h3>{base ? "기기별 주기·연결 수정" : "호환 기기와 소모품 연결"}</h3>
-      <form onInput={() => setMessage("")} onSubmit={(e) => void submit(e)}>
+      <form
+        onInput={() => {
+          setDirty(true);
+          setMessage("");
+        }}
+        onSubmit={(e) => void submit(e)}
+      >
         <fieldset disabled={command.busy}>
           <legend>기기별 교체 기준</legend>
           {!base && (
@@ -220,6 +272,15 @@ function LinkEditor({
                 </label>
               </div>
               <ResourceFeedback resource={choices} />
+              {appliance && (
+                <button
+                  type="button"
+                  disabled={command.busy || command.uncertain}
+                  onClick={() => setCreating(true)}
+                >
+                  새 소모품 만들어 연결
+                </button>
+              )}
             </>
           )}
           <div className="form-grid">
@@ -339,7 +400,14 @@ function LinkEditor({
           >
             기기별 소모품 설정 저장
           </button>
-          <button type="button" disabled={command.busy} onClick={cancel}>
+          <button
+            type="button"
+            disabled={command.busy}
+            onClick={() => {
+              guard.release();
+              cancel();
+            }}
+          >
             입력 취소
           </button>
         </div>
@@ -355,6 +423,9 @@ export function DeviceLinks({
   consumable?: Consumable;
 }) {
   const api = useHomecareApi();
+  const origin = useHomecareOrigin();
+  const created = useRouteNotice(stateFlag("applianceCreated"));
+  const [dismissSetup, setDismissSetup] = useState(false);
   const [adding, setAdding] = useState(false);
   const [showAll, setShowAll] = useState(true);
   const list = usePagedList(
@@ -387,7 +458,27 @@ export function DeviceLinks({
   );
   const ended = appliance?.status === "ended" || consumable?.status === "ended";
   return (
-    <section className="card" id="device-consumables">
+    <section className="card" id="device-consumables" tabIndex={-1}>
+      {created && !dismissSetup && (
+        <div className="review-panel" role="status">
+          <p>
+            가전을 등록했어요. 소모품을 연결하면 공용 재고와 이 기기의 교체 주기를 함께 관리할 수
+            있어요.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(true);
+              setDismissSetup(true);
+            }}
+          >
+            소모품 연결 이어서 설정
+          </button>
+          <button type="button" onClick={() => setDismissSetup(true)}>
+            나중에 설정
+          </button>
+        </div>
+      )}
       <h2>{appliance ? "연결 소모품·기기별 주기" : "호환 기기·기기별 교체"}</h2>
       <p>
         같은 규격의 공용 재고를 여러 기기에서 함께 사용해요. 각 기기의 주기와 교체일은 따로
@@ -438,6 +529,7 @@ export function DeviceLinks({
                 <Link
                   className="button-link secondary-button"
                   to={`/appliance-consumables/${row.id}/replace`}
+                  state={origin}
                 >
                   교체 기록
                 </Link>
@@ -470,6 +562,7 @@ export function DeviceLinks({
             saved={() => {
               setAdding(false);
               void list.reload();
+              void names.reload();
             }}
             cancel={() => setAdding(false)}
           />
@@ -485,6 +578,8 @@ export function DeviceLinks({
   );
 }
 function DeviceDetail({ id, replacing }: { id: string; replacing: boolean }) {
+  const origin = useHomecareOrigin();
+  const returnTo = useHomecareReturn();
   const api = useHomecareApi();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
@@ -534,7 +629,11 @@ function DeviceDetail({ id, replacing }: { id: string; replacing: boolean }) {
                 {data.link.active &&
                   data.appliance.status === "active" &&
                   data.consumable.status === "active" && (
-                    <Link className="button-link" to={`/appliance-consumables/${id}/replace`}>
+                    <Link
+                      className="button-link"
+                      to={`/appliance-consumables/${id}/replace`}
+                      state={origin}
+                    >
                       교체 기록
                     </Link>
                   )}
@@ -584,7 +683,12 @@ function DeviceDetail({ id, replacing }: { id: string; replacing: boolean }) {
           {replacing ? (
             <ReplacementEditor
               initial={data}
-              saved={() => navigate(`/appliance-consumables/${id}`, { replace: true })}
+              saved={(result) =>
+                navigate(returnTo ?? `/appliance-consumables/${id}`, {
+                  replace: true,
+                  state: { homecareOutcome: result },
+                })
+              }
             />
           ) : (
             <>

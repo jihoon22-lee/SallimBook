@@ -290,8 +290,8 @@
       "git_sha1": "74009062a4aeaf305131c0cf5f2e84a81618c03f"
     },
     "docs/testing/homecare-client.md": {
-      "sha256": "fc1714d085bc13fcf7dd1f91e284fdc9ce9c606f29be63d89f827be48098eb0a",
-      "git_sha1": "c952a5604aef4a376d6468ad0a627b6e9ed258ed"
+      "sha256": "dfc7dd8b63eea80d37582b25e602ea4df54ea25d8e0c1084c35625aa573bb6d9",
+      "git_sha1": "ceaee6f938381173ebe4ddae0b01c7e57598cdc4"
     },
     "docs/testing/documents-client.md": {
       "sha256": "565158269cfa8366754827156379de7873b0a8d4c6a5e2f01700ee875dd53c82",
@@ -394,8 +394,8 @@
       "git_sha1": "3f4b07b8d692c4a30015430c6122d4d4c36f9a43"
     },
     "docs/testing/scenario-ux.md": {
-      "sha256": "39d34940afbf2a32f2f2b13b796f1c0da5a645102dcdb5681e2d324f3a89d4eb",
-      "git_sha1": "123424cc198c5c5d46e0f97bd6a45055cd4dac02"
+      "sha256": "d740f95f20001d6d754bc2c9c29308d271a83d0ba26d07a3ce16763364ca7635",
+      "git_sha1": "0555a6b77f2ac5b1fafc6a151d442b259deb7591"
     },
     "docs/adr/document-inspection-isolation.md": {
       "sha256": "7509deecc44c5d747a4b6a207ec1b4c6752c4de866d6b3acc24b81c9a873514b",
