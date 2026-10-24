@@ -31,7 +31,12 @@ function IncomeSummary() {
         </p>
       )}
       {result.error && <button onClick={() => void result.reload()}>홈 수입 다시 확인</button>}
-      {result.data && !result.loading && !result.error && (
+      {result.data && !result.loading && !result.error && result.data.totals.record_count === 0 && (
+        <p>
+          이 달에 등록한 수입 기록이 없어요. <Link to="/income/new">수입 입력</Link>
+        </p>
+      )}
+      {result.data && !result.loading && !result.error && result.data.totals.record_count > 0 && (
         <dl className="metadata-grid">
           <div>
             <dt>근로·부수입 순액</dt>
@@ -71,7 +76,11 @@ function FixedSummary() {
           <dl className="metadata-grid">
             <div>
               <dt>금액이 정해진 예정</dt>
-              <dd>{formatKrw(result.data.expected_known_krw)}</dd>
+              <dd>
+                {result.data.obligation_count
+                  ? formatKrw(result.data.expected_known_krw)
+                  : "예정 회차 없음"}
+              </dd>
             </div>
             <div>
               <dt>실제 납부</dt>
@@ -139,7 +148,7 @@ function InsuranceSummary() {
         </>
       )}
       <p className="muted">청구·결정 상태만으로 실제 보험금 수령을 만들지 않아요.</p>
-      <Link to="/insurance/cases?financial_state=open">사건과 청구 원본 확인</Link>
+      <Link to="/insurance/cases?financial=open">사건과 청구 원본 확인</Link>
     </section>
   );
 }

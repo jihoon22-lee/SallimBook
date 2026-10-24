@@ -19,6 +19,7 @@ type Registry = {
   register: (id: symbol, entry: Entry) => void;
   unregister: (id: symbol) => void;
   release: (id: symbol) => void;
+  hasDirty: () => boolean;
   open: boolean;
   stay: () => void;
 };
@@ -28,6 +29,7 @@ const UnsavedChangesContext = createContext<Registry>({
   register: () => {},
   unregister: () => {},
   release: () => {},
+  hasDirty: () => false,
   open: false,
   stay: () => {},
 });
@@ -119,8 +121,8 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
     [recount],
   );
   const registry = useMemo<Registry>(
-    () => ({ register, unregister, release, open, stay }),
-    [register, unregister, release, open, stay],
+    () => ({ register, unregister, release, hasDirty, open, stay }),
+    [register, unregister, release, hasDirty, open, stay],
   );
   const message =
     [...entries.current.values()].find((entry) => entry.dirty)?.message ?? DEFAULT_MESSAGE;
@@ -212,4 +214,8 @@ export function useUnsavedChangesGuard(dirty: boolean, message = DEFAULT_MESSAGE
 export function useLeavePrompt() {
   const { open, stay } = useContext(UnsavedChangesContext);
   return useMemo(() => ({ open, stay }), [open, stay]);
+}
+
+export function useHasUnsavedChanges() {
+  return useContext(UnsavedChangesContext).hasDirty;
 }

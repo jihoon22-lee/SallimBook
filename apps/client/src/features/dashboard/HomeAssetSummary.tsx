@@ -158,20 +158,27 @@ function CurrentAssetSummary({ view, hintId }: { view: HomeAssetView; hintId: st
     </Link>
   );
   const totals = data?.current.totals;
-  const dateCaution =
-    data &&
-    [data.previous, data.current].some(
-      (period) =>
-        period &&
-        (period.dates.mixed_dates ||
-          period.dates.non_month_end_asset_ids.length > 0 ||
-          period.dates.missing_date_asset_ids.length > 0),
-    );
+  const periods = data ? [data.previous, data.current].filter((period) => period !== null) : [];
+  const dateCaution = periods.some((period) => period.dates.missing_date_asset_ids.length > 0)
+    ? "기준일 미입력"
+    : periods.some((period) => period.dates.mixed_dates)
+      ? "서로 다른 기준일"
+      : periods.some((period) => period.dates.non_month_end_asset_ids.length > 0)
+        ? "월말 외 기준일"
+        : null;
   // The 390px home keeps today's consumables above the navigation, so the hint for an
   // unconfirmed month stays in the change line instead of a paragraph of its own.
   const unconfirmedMonth = view === "month" && data?.state === "unconfirmed";
   // The shown month can be confirmed already while only the month before it is still open.
   const onlyPreviousOpen = unconfirmedMonth && data?.current.state === "confirmed";
+  const previousOpen = data?.previous?.state === "draft" || data?.previous?.state === "reopened";
+  const recordAction =
+    onlyPreviousOpen && data?.previous
+      ? { to: `/assets/months/${data.previous.month}`, label: "전월 기록 확인", primary: true }
+      : action;
+  const recordPrimary = Boolean(
+    recordAction && (recordAction.primary || data?.state !== "available"),
+  );
   return (
     <>
       {unconfirmedMonth && (
@@ -227,7 +234,11 @@ function CurrentAssetSummary({ view, hintId }: { view: HomeAssetView; hintId: st
             </p>
           )}
           <div className="asset-hero">
-            <span className="metric-label">확인 월 순자산</span>
+            <span className="metric-label">
+              {totals?.provisional
+                ? `임시 순자산 · 미확인 ${totals.missing_count + totals.carried_count}개`
+                : "확인 월 순자산"}
+            </span>
             <strong className="asset-hero-value">
               {!totals
                 ? "월 기록 없음"
@@ -281,7 +292,10 @@ function CurrentAssetSummary({ view, hintId }: { view: HomeAssetView; hintId: st
               </span>
             )}
             {data.scope_changed && <span className="notice-badge">비교 대상·지분 변경</span>}
-            {dateCaution && <span className="notice-badge">기준일 확인 필요</span>}
+            {previousOpen && !onlyPreviousOpen && (
+              <span className="notice-badge">전월도 미확정</span>
+            )}
+            {dateCaution && <span className="notice-badge">{dateCaution}</span>}
           </div>
           <div className="asset-detail-actions">
             <details className="home-detail">
@@ -327,13 +341,18 @@ function CurrentAssetSummary({ view, hintId }: { view: HomeAssetView; hintId: st
               <ComparisonNotes data={data} />
               {/* One primary action stays beside the summary; the others live here. */}
               <div className="form-actions">
-                {action && !action.primary && <Link to={action.to}>{action.label}</Link>}
-                {action?.primary && compare()}
+                {recordAction && !recordPrimary && (
+                  <Link to={recordAction.to}>{recordAction.label}</Link>
+                )}
+                {recordPrimary && compare()}
+                {previousOpen && !onlyPreviousOpen && data.previous && (
+                  <Link to={`/assets/months/${data.previous.month}`}>전월 기록 확인</Link>
+                )}
               </div>
             </details>
-            {action?.primary ? (
-              <Link className="button-link" to={action.to}>
-                {action.label}
+            {recordPrimary && recordAction ? (
+              <Link className="button-link" to={recordAction.to}>
+                {recordAction.label}
               </Link>
             ) : (
               compare("button-link")

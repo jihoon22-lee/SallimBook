@@ -553,7 +553,7 @@ test("home today card ranks due, purchase, soon, low stock and unknown links and
   ];
   await page.goto("/");
   const region = page.getByRole("region", { name: "살펴볼 소모품" });
-  await expect(region.locator(".care-count")).toHaveText("확인할 소모품 6개");
+  await expect(region.locator(".care-count")).toHaveText("기기별 확인 6건");
   await expect(region.locator(".care-row h3")).toHaveText([
     "합성 공기청정기 · 합성 공용 필터",
     "합성 제습기 · 합성 공용 필터",
@@ -563,9 +563,16 @@ test("home today card ranks due, purchase, soon, low stock and unknown links and
   const soon = region.locator(".care-row").nth(3).locator(".care-status");
   await expect(soon).toHaveText("곧 교체 · 교체할 재고 있음");
   await expect(soon).toHaveAttribute("data-attention", "soon");
-  await expect(region.getByRole("link", { name: "나머지 2개 확인할 소모품 보기" })).toBeVisible();
+  await expect(region.getByRole("link", { name: "나머지 2건의 기기별 확인 보기" })).toHaveAttribute(
+    "href",
+    "/consumables?care=attention#today-care",
+  );
   await region.getByLabel("오늘 소모품 보기").selectOption("soon");
   await expect(region.locator(".care-row h3")).toHaveText(["합성 세탁기 · 합성 공용 필터"]);
+  await region.getByLabel("오늘 소모품 보기").selectOption("attention");
+  await region.getByRole("link", { name: "나머지 2건의 기기별 확인 보기" }).click();
+  await expect(page.locator("#today-care")).toBeFocused();
+  await expect(page.locator("#today-care .care-row")).toHaveCount(6);
 });
 test("home warranty card shows the soonest active expiries before the most recent expired one", async ({
   page,

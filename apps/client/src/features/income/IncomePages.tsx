@@ -54,7 +54,7 @@ function IncomeSummaryView({
           수입 요약 다시 확인
         </button>
       )}
-      {data && !summary.loading && !summary.error && (
+      {data && !summary.error && (
         <>
           <dl className="metric-strip">
             <div className="metric-primary">
@@ -234,6 +234,7 @@ function IncomeList() {
     { error: members.error, retry: members.retry },
   ];
   const combined = retriesCombined(failures);
+  const reloadIncome = () => Promise.all([summary.reload(), list.reload()]);
   return (
     <>
       <MonthPicker />
@@ -292,7 +293,7 @@ function IncomeList() {
           </div>
         </div>
         <div className="form-actions">
-          <button onClick={() => void list.reload()} disabled={list.loading}>
+          <button onClick={() => void reloadIncome()} disabled={list.loading || summary.loading}>
             수입 목록 다시 확인
           </button>
           <button className="secondary-button" onClick={reset}>
@@ -300,6 +301,12 @@ function IncomeList() {
           </button>
         </div>
       </FilterPanel>
+      {summary.checkedAt && list.checkedAt && (
+        <p className="muted" role="status">
+          마지막 확인 ·{" "}
+          {formatSeoulDateTime(new Date(Math.min(summary.checkedAt, list.checkedAt)).toISOString())}
+        </p>
+      )}
       {!combined && <MemberLoadError error={members.error} retry={members.retry} />}
       {!combined && <CashflowError error={list.error} />}
       {list.error && !combined && (
@@ -420,7 +427,7 @@ function IncomeDetail({ id, edit }: { id: string; edit: boolean }) {
           현재 수입 기록을 불러오고 있어요.
         </p>
       )}
-      {row && !resource.error && !resource.loading && (
+      {row && !resource.error && (
         <>
           <section className="card">
             <h2>{incomeKinds[row.kind as keyof typeof incomeKinds]}</h2>

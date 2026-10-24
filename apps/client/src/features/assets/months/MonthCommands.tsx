@@ -98,16 +98,18 @@ export function CreateMonthDraft({
   const [copyPrevious, setCopyPrevious] = useState(true);
   const [priorRefresh, setPriorRefresh] = useState(0);
   const prior = usePreviousConfirmation(month, priorRefresh);
+  const copyAvailable = prior.loading || Boolean(prior.error) || prior.exists;
+  const copyRequested = copyPrevious && copyAvailable;
   const [ackUnconfirmed, setAckUnconfirmed] = useState(false);
   // The acknowledgment does not change the request body, so the key fingerprint stays as is.
-  const key = useIdempotencyKey(JSON.stringify(["draft", month, copyPrevious]));
+  const key = useIdempotencyKey(JSON.stringify(["draft", month, copyRequested]));
   const priorMonth = previousMonth(month);
   const unconfirmedPrior =
     copyPrevious && !prior.loading && !prior.error && prior.exists && !prior.record;
   async function create(event: FormEvent) {
     event.preventDefault();
     const result = await command.run((signal) =>
-      api.draft(month, { copy_previous: copyPrevious }, key, signal),
+      api.draft(month, { copy_previous: copyRequested }, key, signal),
     );
     if (result.ok && command.mounted.current) await reload().catch(() => undefined);
   }
@@ -130,8 +132,8 @@ export function CreateMonthDraft({
         <label className="checkbox-field">
           <input
             type="checkbox"
-            checked={copyPrevious}
-            disabled={command.busy}
+            checked={copyRequested}
+            disabled={command.busy || !copyAvailable}
             onChange={(event) => setCopyPrevious(event.target.checked)}
           />
           전월 마지막 확정본의 금액 불러오기
@@ -256,7 +258,12 @@ function usePreviousConfirmation(month: string, refresh: number) {
   return { record, exists, loading, error };
 }
 
-export function ConfirmMonth({ initial, reload, close }: RecordActionProps) {
+export function ConfirmMonth({
+  initial,
+  reload,
+  close,
+  confirmed,
+}: RecordActionProps & { confirmed?: () => void }) {
   const api = useAssetMonthsApi();
   const command = useMonthCommand();
   const review = useReview(initial);
@@ -305,6 +312,7 @@ export function ConfirmMonth({ initial, reload, close }: RecordActionProps) {
     );
     if (!command.mounted.current) return;
     if (result.ok) {
+      confirmed?.();
       close();
       await reload().catch(() => undefined);
     } else if (result.error.code === "SCOPE_ACK_REQUIRED") {
