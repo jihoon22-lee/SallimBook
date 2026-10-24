@@ -30,12 +30,23 @@ export const economicTypes = {
 };
 export const frequencies = { monthly: "월 주기", annual: "연 주기", days: "일수 주기" };
 export const obligationStates = {
-  unpaid: "미납",
+  unpaid: "납부 확인 전",
   partial: "일부 납부",
   paid: "납부 확인",
   skipped: "건너뜀",
   superseded: "다른 규칙으로 대체",
 };
+/** A missing record is not proof of a delinquent payment. */
+export function obligationStatusLabel(row: Obligation, asOf = todaySeoul()): string {
+  if (row.status === "unpaid")
+    return row.scheduled_date > asOf
+      ? "납부 예정"
+      : row.scheduled_date === asOf
+        ? "오늘 예정 · 납부 확인 전"
+        : "예정일 지남 · 확인 필요";
+  if (row.status === "paid" && row.expected_amount_krw === null) return "납부 확인 · 예정액 미정";
+  return obligationStates[row.status];
+}
 export type RuleDraft = {
   title: string;
   category: string;
