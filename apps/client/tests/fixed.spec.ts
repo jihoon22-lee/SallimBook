@@ -363,12 +363,12 @@ test("a pending amount typo is replaced at its own start date", async ({ page })
     ["2025-01-01", "2025-12-01", "33000"],
     ["2025-12-01", null, "35000"],
   ]);
-  expect(state.writes.at(-1)!.body).toMatchObject({
+  expect(state.writes.filter((write) => write.method === "PATCH").at(-1)!.body).toMatchObject({
     effective_from: "2025-12-01",
     expected_amount_krw: "35000",
     reason: "합성 금액 오타 수정",
   });
-  expect(state.writes.at(-1)!.version).toBe('"1"');
+  expect(state.writes.filter((write) => write.method === "PATCH").at(-1)!.version).toBe('"1"');
 });
 test("the rule change form starts from the terms in effect today", async ({ page }) => {
   const state = await mockCashflow(page);
@@ -398,7 +398,7 @@ test("a change dated after a pending change starts from the pending terms", asyn
   await confirmRuleChange(page);
   await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
-  expect(state.writes.at(-1)!.body).toMatchObject({
+  expect(state.writes.filter((write) => write.method === "PATCH").at(-1)!.body).toMatchObject({
     effective_from: "2026-01-01",
     expected_amount_krw: "34000",
     note: "합성 이후 메모",
@@ -444,7 +444,7 @@ test("a rule change conflict lists pending changes and keeps edits on the versio
   await confirmRuleChange(page);
   await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
-  expect(state.writes.at(-1)!.body).toMatchObject({
+  expect(state.writes.filter((write) => write.method === "PATCH").at(-1)!.body).toMatchObject({
     effective_from: "2026-01-01",
     expected_amount_krw: "36000",
     note: "배우자 합성 규칙 메모",

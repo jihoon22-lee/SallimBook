@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { useTaskPanelRelease } from "../../shared/TaskLayout";
 import { toApiError } from "../../platform/api";
 import { useIdempotencyKey, useMonthCommand } from "../assets/months/useMonthCommand";
 import { formatKrw, parseKrw } from "../assets/months/model";
@@ -181,17 +183,25 @@ export function SettlementForm({
   onBusyChange,
 }: {
   initial: Obligation;
-  onSaved: () => void;
+  onSaved: (continueNext?: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
 }) {
   const api = useFixedApi();
   const command = useMonthCommand();
+  const release = useTaskPanelRelease();
   useEffect(() => {
     onBusyChange?.(command.busy);
   }, [command.busy, onBusyChange]);
   const [row, setRow] = useState(initial);
-  const [amount, setAmount] = useState("");
+  const suggested =
+    initial.actual_amount_krw === "0" &&
+    initial.expected_amount_krw !== null &&
+    BigInt(initial.expected_amount_krw) > 0n
+      ? initial.expected_amount_krw
+      : "";
+  const [amount, setAmount] = useState(suggested);
   const [date, setDate] = useState("");
+  const shortcutGuard = useUnsavedChangesGuard(Boolean(date));
   const [principal, setPrincipal] = useState("");
   const [interest, setInterest] = useState("");
   const [method, setMethod] = useState<"none" | "account" | "card">(
@@ -226,6 +236,9 @@ export function SettlementForm({
   const key = useIdempotencyKey(JSON.stringify([row.id, row.version, payload]));
   async function submit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
+    const continueNext =
+      (event.nativeEvent as SubmitEvent).submitter instanceof HTMLButtonElement &&
+      ((event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement).value === "next";
     event.preventDefault();
     if (!valid) {
       setMessage(
@@ -237,7 +250,11 @@ export function SettlementForm({
     const result = await command.run((signal) =>
       api.settle(row.id, payload, row.version, key, signal),
     );
-    if (result.ok && command.mounted.current) onSaved();
+    if (result.ok && command.mounted.current) {
+      shortcutGuard.release();
+      release();
+      onSaved(continueNext);
+    }
   }
   async function compare() {
     try {
@@ -267,6 +284,11 @@ export function SettlementForm({
               required
               value={amount}
               onChange={setAmount}
+              hint={
+                suggested
+                  ? "예정액을 제안했어요. 실제로 납부한 금액과 같은지 확인해 주세요."
+                  : undefined
+              }
               error={
                 attempt.attempted ? krwFieldError(amount, { required: true, positive: true }) : null
               }
@@ -282,6 +304,24 @@ export function SettlementForm({
                   required
                 />
               </label>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setDate(todaySeoul())}
+                >
+                  오늘 실제 납부
+                </button>
+                {row.scheduled_date <= todaySeoul() && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setDate(row.scheduled_date)}
+                  >
+                    예정일에 실제 납부
+                  </button>
+                )}
+              </div>
             </div>
             {row.economic_type === "loan" && (
               <>
@@ -402,6 +442,11 @@ export function SettlementForm({
           disabled={!allowed}
           label="실제 납부 저장"
         />
+        <div className="form-actions">
+          <button type="submit" name="after-save" value="next" disabled={command.busy || !allowed}>
+            저장하고 다음 미기록 회차
+          </button>
+        </div>
       </form>
     </section>
   );

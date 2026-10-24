@@ -205,7 +205,9 @@ export async function mockCashflow(page: Page) {
     incomeHistory: new Map<string, S["CashResponse"][]>(),
     obligationHistory: new Map<string, S["ObligationHistoryItem"][]>(),
     failure: "" as "" | "before" | "after",
+    failurePath: "",
     conflict: false,
+    conflictPath: "",
     withdrawalBlocked: false,
     ruleInUse: false,
     staleReceipt: false,
@@ -599,14 +601,18 @@ export async function mockCashflow(page: Page) {
         ? structuredClone(previous.result)
         : error("IDEMPOTENCY_CONFLICT");
     }
-    if (state.failure === "before") {
+    if (state.failure === "before" && (!state.failurePath || state.failurePath === path)) {
       state.failure = "";
       return { status: 0, body: null, abort: true };
     }
     const finish = (value: Result) => {
       if (key && value.status < 300)
         receipts.set(receiptKey, { fingerprint, result: structuredClone(value) });
-      if (state.failure === "after" && value.status < 300) {
+      if (
+        state.failure === "after" &&
+        value.status < 300 &&
+        (!state.failurePath || state.failurePath === path)
+      ) {
         state.failure = "";
         return { status: 0, body: null, abort: true };
       }
@@ -686,7 +692,7 @@ export async function mockCashflow(page: Page) {
       }
       const row = state.incomes.find((r) => r.id === id);
       if (!row) return error("NOT_FOUND", 404);
-      if (state.conflict) {
+      if (state.conflict && (!state.conflictPath || state.conflictPath === path)) {
         state.conflict = false;
         row.note = "배우자 합성 메모";
         row.version++;
@@ -738,7 +744,7 @@ export async function mockCashflow(page: Page) {
       }
       const row = state.cards.find((r) => r.id === id);
       if (!row) return error("NOT_FOUND", 404);
-      if (state.conflict) {
+      if (state.conflict && (!state.conflictPath || state.conflictPath === path)) {
         state.conflict = false;
         row.note = "배우자 합성 카드 메모";
         row.version++;
@@ -771,7 +777,7 @@ export async function mockCashflow(page: Page) {
       }
       const row = state.rules.find((r) => r.id === id);
       if (!row) return error("NOT_FOUND", 404);
-      if (state.conflict) {
+      if (state.conflict && (!state.conflictPath || state.conflictPath === path)) {
         state.conflict = false;
         row.version++;
         row.versions.at(-1)!.note = "배우자 합성 규칙 메모";
@@ -821,7 +827,7 @@ export async function mockCashflow(page: Page) {
         );
       const row = state.obligations.find((r) => r.id === id);
       if (!row) return error("NOT_FOUND", 404);
-      if (state.conflict) {
+      if (state.conflict && (!state.conflictPath || state.conflictPath === path)) {
         state.conflict = false;
         row.version++;
         row.note = "배우자 합성 회차 메모";

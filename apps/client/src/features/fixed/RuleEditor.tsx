@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { toApiError } from "../../platform/api";
 import type { ApiError } from "../../platform/api";
 import { useMonthCommand, useIdempotencyKey } from "../assets/months/useMonthCommand";
@@ -14,6 +14,7 @@ import {
   economicTypes,
   frequencies,
   pendingVersions,
+  preparationWindow,
   preserveRuleChanges,
   ruleCommandMessages,
   ruleDraft,
@@ -47,6 +48,10 @@ export function WithdrawalNotice({ withdrawn }: { withdrawn: { effective_from: s
   );
 }
 export function RuleEditor({ initial }: { initial?: Rule }) {
+  const [prepare, setPrepare] = useState<{
+    input: components["schemas"]["GenerateObligations"];
+    key: string;
+  } | null>(null);
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const api = useFixedApi();
@@ -96,9 +101,25 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
     setReviewAck(false);
     setValidation("");
   }
+  async function prepareSaved(task: NonNullable<typeof prepare>) {
+    const result = await command.run((signal) => api.generate(task.input, task.key, signal));
+    if (result.ok && command.mounted.current) {
+      guard.release();
+      navigate(`/fixed-payments/rules/${task.input.rule_id}`, {
+        replace: true,
+        state: {
+          prepared: `${dateLabel(task.input.start_date)} ~ ${dateLabel(task.input.end_date)} 예정 회차 ${result.value.items.length}건을 확인했어요. 실제 납부는 별도로 기록해 주세요.`,
+        },
+      });
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
     event.preventDefault();
+    if (prepare) {
+      await prepareSaved(prepare);
+      return;
+    }
     if (conflict || !valid || !input || !changed) {
       setValidation("필수 정보·날짜·금액과 적용 범위를 확인해 주세요.");
       attempt.reject(form);
@@ -110,8 +131,15 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         : api.createRule(input, key, signal),
     );
     if (result.ok && command.mounted.current) {
+      // Save and prepare are distinct idempotent commands. Never repeat a known saved rule.
+      const task = {
+        input: { rule_id: result.value.id, ...preparationWindow(draft.from) },
+        key: `prepare:${key}`,
+      };
+      setPrepare(task);
+      setDirty(false);
       guard.release();
-      navigate(`/fixed-payments/rules/${result.value.id}`, { replace: true });
+      await prepareSaved(task);
     } else if (!result.ok && result.error.code === "VERSION_CONFLICT") setConflict(true);
   }
   async function compare() {
@@ -130,8 +158,12 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         짧은 달은 말일로 보정하고 다음 달에는 원래 기준일로 돌아와요. 주말·공휴일은 자동으로
         이동하지 않아요.
       </p>
+      <p>
+        저장하면 이번 달 또는 적용 시작월부터 12개월의 예정 회차를 함께 준비해요. 실제 납부는 별도로
+        확인해 기록해요.
+      </p>
       <form onInput={() => setDirty(true)} onSubmit={(event) => void submit(event)}>
-        <fieldset disabled={command.busy}>
+        <fieldset disabled={command.busy || Boolean(prepare)}>
           <legend>반복 규칙</legend>
           <div className="form-grid">
             <div className="form-field">
@@ -375,6 +407,20 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
             </>
           )}
         </fieldset>
+        {prepare && (
+          <section className="review-panel">
+            <p role="status">규칙은 저장됐어요. 예정 회차 준비 결과를 확인해 주세요.</p>
+            <p>
+              {dateLabel(prepare.input.start_date)} ~ {dateLabel(prepare.input.end_date)} · 실제
+              납부액은 생기지 않아요.
+            </p>
+            {!command.busy && (
+              <Link to={`/fixed-payments/rules/${prepare.input.rule_id}`}>
+                저장된 규칙 확인 · 회차는 월별 화면에서 준비 가능
+              </Link>
+            )}
+          </section>
+        )}
         <FormError message={validation} />
         <RuleCommandError error={command.error} />
         {conflict && (
@@ -422,7 +468,9 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
           busy={command.busy}
           cancel={command.cancel}
           disabled={conflict}
-          label={base ? "새 적용기간 저장" : "납부 규칙 저장"}
+          label={
+            prepare ? "예정 회차 준비 다시 확인" : base ? "새 적용기간 저장" : "납부 규칙 저장"
+          }
         />
       </form>
     </section>

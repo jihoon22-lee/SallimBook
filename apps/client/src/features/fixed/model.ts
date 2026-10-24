@@ -1,7 +1,7 @@
 import type { components } from "@sallimbook/api-client";
 import type { ApiErrorCode } from "../../platform/api";
 import { isDateOnly, isUuid, todaySeoul } from "../finance/dates";
-import { parseKrw } from "../assets/months/model";
+import { monthEnd, parseKrw } from "../assets/months/model";
 export type Rule = components["schemas"]["RuleResponse"];
 export type RuleTerms = components["schemas"]["RuleVersionResponse"];
 export type Obligation = components["schemas"]["ObligationResponse"];
@@ -233,6 +233,17 @@ export function preserveRuleChanges(
       Object.entries(draft).filter(([key, value]) => previous[key as keyof RuleDraft] !== value),
     ),
   };
+}
+/** Request window only; the server decides which occurrences belong to the rule. */
+export function preparationWindow(effectiveFrom: string, today = todaySeoul()) {
+  const first = `${today.slice(0, 7)}-01`;
+  const start_date = effectiveFrom > first ? effectiveFrom : first;
+  const index = Number(start_date.slice(0, 4)) * 12 + Number(start_date.slice(5, 7)) - 1 + 11;
+  const lastMonth =
+    index >= 10000 * 12
+      ? "9999-12"
+      : `${String(Math.floor(index / 12)).padStart(4, "0")}-${String((index % 12) + 1).padStart(2, "0")}`;
+  return { start_date, end_date: monthEnd(lastMonth) };
 }
 export function generationValid(start: string, end: string): boolean {
   return (
