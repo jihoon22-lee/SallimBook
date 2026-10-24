@@ -8,7 +8,13 @@ import {
   conversionTotal,
 } from "../src/features/income/model";
 import { cardDraft, cardInput } from "../src/features/cards/model";
-import { generationValid, paymentSplit, ruleDraft, ruleInput } from "../src/features/fixed/model";
+import {
+  preparationWindow,
+  generationValid,
+  paymentSplit,
+  ruleDraft,
+  ruleInput,
+} from "../src/features/fixed/model";
 import { uid } from "./support/finance";
 test("cash form normalization preserves exact money, month precision and changed-only corrections", () => {
   const draft = {
@@ -97,4 +103,17 @@ test("T-09 payment split conserves the fixture amount and keeps asset transfers 
     principal: "0",
     interest: null,
   });
+});
+
+test("rule preparation covers twelve calendar months within the generation limit", () => {
+  for (const [from, today, start, end] of [
+    ["2023-01-01", "2024-01-20", "2024-01-01", "2024-12-31"],
+    ["2025-02-28", "2025-01-01", "2025-02-28", "2026-01-31"],
+    ["2024-02-29", "2024-02-20", "2024-02-29", "2025-01-31"],
+    ["9999-12-01", "2025-01-01", "9999-12-01", "9999-12-31"],
+  ]) {
+    const window = preparationWindow(from!, today!);
+    expect(window).toEqual({ start_date: start, end_date: end });
+    expect(generationValid(window.start_date, window.end_date)).toBe(true);
+  }
 });

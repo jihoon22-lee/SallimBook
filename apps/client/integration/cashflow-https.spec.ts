@@ -406,6 +406,69 @@ test("real income card recurring and closure workflow preserves cash facts and i
   expect(invariant).toBe(true);
   console.log("SAFE_PHASE=CASHFLOW_ACTUALS");
 
+  // Rule save prepares the current horizon; a chosen month is still prepared by an
+  // explicit command. Both batch rows use the existing per-occurrence server checks.
+  for (const options of [
+    {
+      title: "합성 HTTPS 함께 기록 소비",
+      amount: "120",
+      method: "card" as const,
+      methodId: cardId,
+    },
+    {
+      title: "합성 HTTPS 함께 기록 연금",
+      amount: "230",
+      economic: "asset_transfer" as const,
+      method: "account" as const,
+      methodId: accountId,
+    },
+  ]) {
+    const created = await createRule(page, options);
+    const prepared = await page.evaluate(
+      async ({ rule, month }) => {
+        const result = await fetch(`/api/v1/obligations?month=${month}`).then((r) => r.json());
+        return result.items.filter((row: { rule_id: string }) => row.rule_id === rule).length;
+      },
+      { rule: created, month: today.slice(0, 7) },
+    );
+    expect(prepared).toBe(1);
+  }
+  await page.goto("/fixed-payments");
+  await page.getByLabel("확인할 월", { exact: true }).fill("2025-03");
+  await page.getByRole("button", { name: "이달 예정 준비", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "이달 예정 회차" })).toBeVisible();
+  await page.getByRole("button", { name: "여러 회차 납부 입력 열기", exact: true }).click();
+  const batch = page.getByRole("region", { name: "선택 납부 입력", exact: true });
+  await batch.getByRole("checkbox", { name: /합성 HTTPS 함께 기록 소비/ }).check();
+  await batch.getByRole("checkbox", { name: /합성 HTTPS 함께 기록 연금/ }).check();
+  await batch.getByLabel("함께 기록할 실제 납부일", { exact: true }).fill("2025-03-20");
+  await batch
+    .getByRole("checkbox", {
+      name: "선택한 회차를 위 날짜에 예정액과 같은 금액으로 실제 납부했어요.",
+      exact: true,
+    })
+    .check();
+  await batch.getByRole("button", { name: "선택한 실제 납부 저장", exact: true }).click();
+  await expect(batch).toContainText("2 / 2건 저장 확인");
+  await batch.getByRole("button", { name: "결과 확인 후 닫기", exact: true }).click();
+  const batchFacts = await page.evaluate(async () => {
+    const summary = await fetch("/api/v1/obligations/summary?month=2025-03").then((r) => r.json());
+    const snapshot = await fetch("/api/v1/asset-months/2025-02").then((r) => r.json());
+    return {
+      actual: summary.actual_amount_krw,
+      consumption: summary.consumption_krw,
+      transfer: summary.asset_transfer_krw,
+      snapshotVersion: snapshot.version,
+    };
+  });
+  expect(batchFacts).toEqual({
+    actual: "350",
+    consumption: "120",
+    transfer: "230",
+    snapshotVersion: before.version,
+  });
+  console.log("SAFE_PHASE=CASHFLOW_BATCH");
+
   await page.goto(`/cards/${cardId}`);
   await page.getByRole("button", { name: "카드 사용 종료", exact: true }).click();
   const cardReview = page.getByRole("region", { name: "사용 종료 영향 확인", exact: true });

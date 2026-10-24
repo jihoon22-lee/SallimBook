@@ -32,6 +32,7 @@ import {
 import type { Obligation, Rule, Settlement } from "./model";
 import { RuleCommandError, RuleEditor, WithdrawalNotice } from "./RuleEditor";
 import { RuleSummary } from "./RuleSummary";
+import { BatchSettlement } from "./BatchSettlement";
 import { ObligationCalendar } from "./ObligationCalendar";
 import {
   actionAllowed,
@@ -304,9 +305,46 @@ export function ObligationSummary({ row }: { row: Obligation }) {
     </>
   );
 }
-function FixedList() {
+function PrepareMonth({ month, onSaved }: { month: string; onSaved: () => void }) {
   const api = useFixedApi();
+  const command = useMonthCommand();
+  const [sequence, setSequence] = useState(0);
+  const [notice, setNotice] = useState("");
+  const key = useIdempotencyKey(JSON.stringify([month, sequence]));
+  useUnsavedChangesGuard(command.busy);
+  async function prepare() {
+    const result = await command.run((signal) =>
+      api.generate(
+        { start_date: `${month}-01`, end_date: monthEnd(month), rule_id: null },
+        key,
+        signal,
+      ),
+    );
+    if (result.ok && command.mounted.current) {
+      setNotice(
+        `이달 예정 회차 ${result.value.items.length}건을 확인했어요. 실제 납부는 별도로 기록해 주세요.`,
+      );
+      setSequence((value) => value + 1);
+      onSaved();
+    }
+  }
+  return (
+    <div>
+      <button className="secondary-button" disabled={command.busy} onClick={() => void prepare()}>
+        이달 예정 준비
+      </button>
+      <CashflowError error={command.error} />
+      {notice && <p role="status">{notice}</p>}
+    </div>
+  );
+}
+function FixedList() {
   const { month } = useMonth();
+  return <FixedMonthList key={month} month={month} />;
+}
+function FixedMonthList({ month }: { month: string }) {
+  const api = useFixedApi();
+  const [showBatch, setShowBatch] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
   const [view, setView] = useState<"list" | "calendar">("list");
   const [refresh, setRefresh] = useState(0);
@@ -325,24 +363,6 @@ function FixedList() {
   return (
     <>
       <MonthPicker />
-      <div className="form-actions">
-        <Link className="button-link" to="/fixed-payments/rules/new">
-          납부 규칙 등록
-        </Link>
-        <Link className="button-link secondary-button" to="/fixed-payments/rules">
-          규칙과 적용기간 관리
-        </Link>
-        <button aria-expanded={showGenerate} onClick={() => setShowGenerate((value) => !value)}>
-          예정 회차 생성 {showGenerate ? "닫기" : "열기"}
-        </button>
-      </div>
-      {showGenerate && (
-        <TaskPanel key={month} label="예정 회차 생성 입력">
-          <GenerateForm month={month} onSaved={reload} />
-        </TaskPanel>
-      )}
-      <FixedSummaryPanel refresh={refresh} />
-      <RecordedMoneyNotice />
       <CashflowError error={list.error} />
       <div className="task-toolbar">
         <h2>{formatMonth(month)} 납부 목록</h2>
@@ -358,6 +378,21 @@ function FixedList() {
           월 납부 목록 다시 확인
         </button>
       </div>
+      <div className="form-actions">
+        <button
+          className="secondary-button"
+          disabled={showBatch || list.loading || Boolean(list.error)}
+          onClick={() => setShowBatch(true)}
+        >
+          여러 회차 납부 입력 열기
+        </button>
+        <PrepareMonth key={month} month={month} onSaved={reload} />
+      </div>
+      {showBatch && (
+        <TaskPanel label="선택 납부 입력">
+          <BatchSettlement month={month} onSaved={reload} onClose={() => setShowBatch(false)} />
+        </TaskPanel>
+      )}
       {list.loading && (
         <p className="loading-state" role="status">
           납부 회차를 불러오고 있어요.
@@ -367,8 +402,8 @@ function FixedList() {
         <section className="card empty-state">
           <h2>이 달의 회차가 없어요</h2>
           <p>
-            규칙을 등록하고 원하는 기간의 회차를 생성해 주세요. 규칙만 등록해도 실제 납부가 생기지는
-            않아요.
+            규칙을 새로 저장하면 12개월의 예정을 준비해요. 이미 등록한 규칙은 ‘이달 예정 준비’를
+            선택해 주세요. 실제 납부는 직접 기록해요.
           </p>
         </section>
       )}
@@ -426,6 +461,24 @@ function FixedList() {
           )}
         </>
       )}
+      <div className="form-actions">
+        <Link className="button-link" to="/fixed-payments/rules/new">
+          납부 규칙 등록
+        </Link>
+        <Link className="button-link secondary-button" to="/fixed-payments/rules">
+          규칙과 적용기간 관리
+        </Link>
+        <button aria-expanded={showGenerate} onClick={() => setShowGenerate((value) => !value)}>
+          예정 회차 생성 {showGenerate ? "닫기" : "열기"}
+        </button>
+      </div>
+      {showGenerate && (
+        <TaskPanel key={month} label="예정 회차 생성 입력">
+          <GenerateForm month={month} onSaved={reload} />
+        </TaskPanel>
+      )}
+      <FixedSummaryPanel refresh={refresh} />
+      <RecordedMoneyNotice />
     </>
   );
 }
@@ -616,6 +669,10 @@ function EndRule({ initial, onSaved }: { initial: Rule; onSaved: () => void }) {
   );
 }
 function RuleDetail({ id, edit }: { id: string; edit: boolean }) {
+  const prepared = useRouteNotice((state) => {
+    const value = (state as { prepared?: unknown } | null)?.prepared;
+    return typeof value === "string" ? value : null;
+  });
   const api = useFixedApi();
   const resource = useResource(
     useCallback(
@@ -630,6 +687,7 @@ function RuleDetail({ id, edit }: { id: string; edit: boolean }) {
   const deleteKey = useIdempotencyKey(JSON.stringify(["rule-delete", row?.id, row?.version]));
   return (
     <>
+      <TaskNotice message={prepared ?? ""} />
       <CashflowError error={resource.error} />
       {resource.error && <button onClick={() => void resource.reload()}>규칙 다시 확인</button>}
       {resource.loading && (
@@ -846,6 +904,10 @@ function SettlementList({
 }
 function ObligationDetail({ id }: { id: string }) {
   const api = useFixedApi();
+  const navigate = useNavigate();
+  const previousSaved = useRouteNotice(stateFlag("previousPaymentSaved"));
+  const nextCommand = useMonthCommand();
+  const [nextMonth, setNextMonth] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
   const actionTrigger = useRef<HTMLButtonElement>(null);
   const resource = useResource(
@@ -878,12 +940,35 @@ function ObligationDetail({ id }: { id: string }) {
   }
   // Drop ?task= only after the closed panel unmounts, so its unsaved guard is gone first.
   useEffect(() => {
-    if (action || !params.has("task")) return;
+    if (action || nextMonth || !params.has("task")) return;
     const next = new URLSearchParams(params);
     next.delete("task");
     setParams(next, { replace: true });
-  }, [action, params, setParams]);
-  function saved() {
+  }, [action, nextMonth, params, setParams]);
+  async function continueToNext(month: string) {
+    const result = await nextCommand.run(() =>
+      allPages((cursor) => api.obligations({ month, limit: 200, ...(cursor ? { cursor } : {}) })),
+    );
+    if (!result.ok || !nextCommand.mounted.current) return;
+    const next = result.value.find(
+      (item) =>
+        item.id !== id &&
+        item.status === "unpaid" &&
+        item.actual_amount_krw === "0" &&
+        item.schedule_state === "active" &&
+        !item.skipped &&
+        !item.manually_completed,
+    );
+    // Keep the old task URL intact until navigation unmounts this occurrence. Clearing
+    // it in an effect while a fast native read navigates can otherwise win that race.
+    if (next)
+      navigate(`/fixed-payments/${next.id}?task=settle`, { state: { previousPaymentSaved: true } });
+    else {
+      setNextMonth(null);
+      setNotice("실제 납부를 저장했어요. 이달에 이어서 입력할 미기록 회차가 없어요.");
+    }
+  }
+  function saved(continueNext = false) {
     const message = voiding
       ? "납부 무효 처리를 저장했어요."
       : action === "settle"
@@ -893,11 +978,32 @@ function ObligationDetail({ id }: { id: string }) {
     close(false);
     setNotice(message);
     void resource.reload();
+    if (continueNext && row) {
+      const month = row.scheduled_date.slice(0, 7);
+      setNextMonth(month);
+      void continueToNext(month);
+    }
   }
   return (
     <>
       <CashflowError error={resource.error} />
-      <TaskNotice message={notice} />
+      <TaskNotice
+        message={
+          notice ||
+          (previousSaved ? "이전 회차의 실제 납부를 저장했어요. 다음 회차를 확인해 주세요." : "")
+        }
+      />
+      {nextMonth && (
+        <section className="card" aria-label="다음 회차 확인">
+          <p>납부는 저장됐어요. 다음 미기록 회차를 확인하고 있어요.</p>
+          <CashflowError error={nextCommand.error} />
+          {nextCommand.error && (
+            <button disabled={nextCommand.busy} onClick={() => void continueToNext(nextMonth)}>
+              다음 회차만 다시 확인
+            </button>
+          )}
+        </section>
+      )}
       {resource.error && <button onClick={() => void resource.reload()}>회차 다시 확인</button>}
       {resource.loading && (
         <p className="loading-state" role="status">
@@ -928,7 +1034,10 @@ function ObligationDetail({ id }: { id: string }) {
                 <button
                   ref={actionTrigger}
                   className={entry === "settle" ? "primary-button" : "secondary-button"}
-                  disabled={resource.loading || Boolean(resource.error || currentAction || voiding)}
+                  disabled={
+                    resource.loading ||
+                    Boolean(resource.error || currentAction || voiding || nextMonth)
+                  }
                   onClick={(event) => {
                     actionTrigger.current = event.currentTarget;
                     setAction("settle");
@@ -951,7 +1060,8 @@ function ObligationDetail({ id }: { id: string }) {
                       className="secondary-button"
                       key={name}
                       disabled={
-                        resource.loading || Boolean(resource.error || currentAction || voiding)
+                        resource.loading ||
+                        Boolean(resource.error || currentAction || voiding || nextMonth)
                       }
                       onClick={(event) => {
                         actionTrigger.current = event.currentTarget;
@@ -1007,7 +1117,9 @@ function ObligationDetail({ id }: { id: string }) {
           <SettlementList
             id={id}
             refresh={row.version}
-            locked={resource.loading || Boolean(resource.error || currentAction || voiding)}
+            locked={
+              resource.loading || Boolean(resource.error || currentAction || voiding || nextMonth)
+            }
             onSelect={(payment, trigger) => {
               actionTrigger.current = trigger;
               setVoiding(payment);
