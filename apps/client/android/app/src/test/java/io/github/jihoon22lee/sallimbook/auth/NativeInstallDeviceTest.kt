@@ -73,6 +73,20 @@ class NativeInstallDeviceTest {
         }
     }
 
+    @Test fun signingInAgainOnTheSameRowKeepsTheVaultRegistration() {
+        val household = "00000000-0000-4000-8000-000000000011"
+        val user = "00000000-0000-4000-8000-000000000012"
+        val member = "00000000-0000-4000-8000-000000000013"
+        fun scope(device: String) = NativeVaultBinding(
+            NativeVaultScope("io.github.synthetic", "https://synthetic.invalid", household, user, member, device, 7))
+        // reconcile keeps only files under the current scope; the reused row keeps that scope.
+        assertEquals(scope(id).name, scope(id).name)
+        assertFalse(scope(id).scopeName == scope(other).scopeName)
+        val session = File("src/main/java/io/github/jihoon22lee/sallimbook/auth/NativeAuthSession.kt").readText()
+        val accept = session.substringAfter("private fun acceptTokens(").substringBefore("\n    }")
+        for (wipe in listOf("clearAll", "clearLocal", "dropSession")) assertFalse(wipe, accept.contains(wipe))
+    }
+
     @Test fun claimsNeverPrintTheirKey() {
         assertFalse(InstallClaim(id, key).toString().contains(key))
     }

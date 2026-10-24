@@ -133,7 +133,7 @@ Android는 native auth adapter가 refresh token을 Keystore 보호 저장소에 
 현재 Android 계정 인증 구현은 다음 경계를 따른다.
 
 - 비밀번호·초대 코드 입력과 생성 코드 표시는 비공개 네이티브 Activity에서 처리한다. JS에는 완료/취소 상태만 반환한다.
-- access token은 네이티브 메모리, refresh token은 앱·API origin에 바인딩한 AAD와 Keystore AES-GCM으로 보호한 `noBackupFilesDir` 파일에 둔다. 계정 세션 키는 보관함의 생체인증 필수 키와 다르다. 보관함과 같이 `setUnlockedDeviceRequired(true)`는 API 35 이상에서만 건다(그 전 버전은 얼굴 인식·신뢰 에이전트 잠금 해제로 키를 쓰지 못하는 문제가 있다). 복호화 실패 중 봉투 형식 오류·GCM 태그 실패·플랫폼이 무효화한 키만 저장 토큰과 키를 지우고, 잠긴 Keystore 같은 다른 실패는 토큰을 그대로 두고 다시 시도할 수 있는 `AUTH_UNAVAILABLE`로 알린다.
+- access token은 네이티브 메모리, refresh token은 앱·API origin에 바인딩한 AAD와 Keystore AES-GCM으로 보호한 `noBackupFilesDir` 파일에 둔다. 계정 세션 키는 보관함의 생체인증 필수 키와 다르다. 보관함과 같이 `setUnlockedDeviceRequired(true)`는 API 35 이상에서만 건다(그 전 버전은 얼굴 인식·신뢰 에이전트 잠금 해제로 키를 쓰지 못하는 문제가 있다). 0.1.7 이전 설치의 키는 모든 버전에서 이 조건을 걸었으므로, 봉투 첫 바이트로 봉한 키를 구분해 이전 키 봉투도 읽고 다음 refresh 저장 때 현재 키로 옮긴 뒤 이전 키를 지운다. 복호화 실패 중 봉투 형식 오류·GCM 태그 실패·플랫폼이 무효화한 키만 저장 토큰과 키를 지우고, 잠긴 Keystore 같은 다른 실패는 토큰을 그대로 두고 다시 시도할 수 있는 `AUTH_UNAVAILABLE`로 알린다.
 - refresh는 계정 executor에서 직렬로 한 번만 전송한다. 저장된 암호문은 요청 본문을 쓰기 직전에 소비한다. 본문을 쓰기 전 실패(화면 이탈·앱 잠금·DNS·연결 실패)는 저장된 토큰을 그대로 둔다. 서버가 401이 아닌 응답(429·5xx 등)을 주면 같은 토큰을 다시 저장한다. 본문을 보낸 뒤 응답이 불명확하면 이전 토큰을 재사용하지 않고 재로그인을 요구한다. 회전 응답은 화면이 비활성이어도 먼저 저장하고 결과만 전달하지 않는다. 서버 401만 계정 세션 종료로 보고 보관함 로컬 등록까지 지운다. 일시적 실패와 응답 불명확은 보관함 로컬 등록을 지우지 않는다.
 - OkHttp 전용 클라이언트는 쿠키·리디렉션·자격증명 요청 자동 재전송·인증 자동응답·캐시·HTTP 로그를 사용하지 않는다. 플랫폼 TLS 검증을 유지하며 WebView의 전역 CookieHandler와 분리한다.
 - bridge는 번들 `https://localhost`의 주 프레임 메시지만 허용한다. 보안 메시지 리스너 미지원/설치 실패 시 구형 `androidBridge`를 설치하지 않고 앱 진입을 막는다. iframe/object 로드를 CSP로 차단한다.
