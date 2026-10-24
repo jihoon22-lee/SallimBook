@@ -34,21 +34,22 @@ export default defineConfig([
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
-      // Diagnostics for React Compiler, which this app does not use (see PR).
-      "react-hooks/config": "off",
-      "react-hooks/error-boundaries": "off",
-      "react-hooks/gating": "off",
-      "react-hooks/globals": "off",
-      "react-hooks/immutability": "off",
-      "react-hooks/incompatible-library": "off",
+      // Compiler diagnostics also enforce React correctness without a compilation transform.
+      // Keep the two reviewed diagnostic groups below explicit; see docs/adr/react-diagnostics.md.
+      "react-hooks/config": "error",
+      "react-hooks/error-boundaries": "error",
+      "react-hooks/gating": "error",
+      "react-hooks/globals": "error",
+      "react-hooks/immutability": "error",
+      "react-hooks/incompatible-library": "error",
       "react-hooks/preserve-manual-memoization": "off",
-      "react-hooks/purity": "off",
-      "react-hooks/refs": "off",
+      "react-hooks/purity": "error",
+      "react-hooks/refs": "error",
       "react-hooks/set-state-in-effect": "off",
-      "react-hooks/set-state-in-render": "off",
-      "react-hooks/static-components": "off",
-      "react-hooks/unsupported-syntax": "off",
-      "react-hooks/use-memo": "off",
+      "react-hooks/set-state-in-render": "error",
+      "react-hooks/static-components": "error",
+      "react-hooks/unsupported-syntax": "error",
+      "react-hooks/use-memo": "error",
       // Scrollable tables are focusable regions so keyboard users can scroll them (WCAG 2.1.1).
       "jsx-a11y/no-noninteractive-tabindex": [
         "error",

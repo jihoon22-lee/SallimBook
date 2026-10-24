@@ -85,6 +85,12 @@ test("real monthly workflow preserves null zero copied values scope and immutabl
   const house = await asset(page, "합성 월 확인 주택", false);
   await asset(page, "합성 월 확인 대출", true);
   console.log("SAFE_PHASE=MONTH_ASSETS_CREATED");
+  const firstMonthRequests: { method: string; path: string }[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/v1/asset-months/2025-01"))
+      firstMonthRequests.push({ method: request.method(), path });
+  });
   await page.goto("/assets/months/2025-01");
   await page.getByRole("button", { name: "월 작성본 만들기", exact: true }).click();
   await expect(page.locator(".month-value-card")).toHaveCount(2);
@@ -95,6 +101,11 @@ test("real monthly workflow preserves null zero copied values scope and immutabl
     "20,000,001원",
   );
   await confirmReviewed(page, false);
+  expect(firstMonthRequests.filter((request) => request.method === "POST")).toEqual([
+    { method: "POST", path: "/api/v1/asset-months/2025-01/draft" },
+    { method: "POST", path: "/api/v1/asset-months/2025-01/confirm" },
+  ]);
+  expect(firstMonthRequests.filter((request) => request.method === "PATCH")).toHaveLength(2);
   console.log("SAFE_PHASE=MONTH_FIRST_CONFIRMED");
 
   await page.setViewportSize({ width: 412, height: 915 });

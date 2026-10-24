@@ -5,10 +5,13 @@ import { rememberFocus } from "../../../shared/focusKeeper";
 
 /** A changed payload/version gets a new key; cancelled/ambiguous retries reuse the same key. */
 export function useIdempotencyKey(fingerprint: string) {
-  const current = useRef<{ fingerprint: string; key: string } | null>(null);
-  if (current.current?.fingerprint !== fingerprint)
-    current.current = { fingerprint, key: crypto.randomUUID() };
-  return current.current.key;
+  const [current, setCurrent] = useState(() => ({ fingerprint, key: crypto.randomUUID() }));
+  if (current.fingerprint !== fingerprint) {
+    const next = { fingerprint, key: crypto.randomUUID() };
+    setCurrent(next);
+    return next.key;
+  }
+  return current.key;
 }
 export function useMonthCommand() {
   const mounted = useMounted();

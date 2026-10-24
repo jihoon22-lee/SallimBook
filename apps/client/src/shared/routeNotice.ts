@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 
 /**
@@ -9,9 +9,10 @@ import { useLocation, useNavigate } from "react-router";
 export function useRouteNotice<T>(pick: (state: unknown) => T | null): T | null {
   const location = useLocation();
   const navigate = useNavigate();
-  const shown = useRef<T | null>(null);
   const fresh = pick(location.state);
-  if (fresh !== null) shown.current = fresh;
+  const [shown, setShown] = useState(() => ({ arrival: location.key, value: fresh }));
+  if (fresh !== null && shown.arrival !== location.key)
+    setShown({ arrival: location.key, value: fresh });
   const hasState = fresh !== null;
   useEffect(() => {
     if (!hasState) return;
@@ -20,7 +21,7 @@ export function useRouteNotice<T>(pick: (state: unknown) => T | null): T | null 
       state: null,
     });
   }, [hasState, location.pathname, location.search, location.hash, navigate]);
-  return shown.current;
+  return fresh !== null ? fresh : shown.value;
 }
 
 /** Router state `{ [key]: value }`, or any truthy `{ [key]: … }` when no value is given. */

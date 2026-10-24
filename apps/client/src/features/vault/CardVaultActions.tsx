@@ -15,6 +15,7 @@ export function VaultActionLauncher({
   children,
   onCompleted,
 }: {
+  // Render prop: the supplied open callback must only run from a user event handler.
   children: (open: (request: Entry) => void, busy: boolean) => ReactNode;
   onCompleted?: () => void;
 }) {
@@ -63,6 +64,7 @@ export function VaultActionLauncher({
   return (
     <>
       {children(
+        // eslint-disable-next-line react-hooks/refs -- Passed to button events by the render prop; never invoked during render.
         (entry) => {
           void open(entry);
         },

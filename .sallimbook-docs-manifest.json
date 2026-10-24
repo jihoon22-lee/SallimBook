@@ -400,6 +400,10 @@
     "docs/adr/document-inspection-isolation.md": {
       "sha256": "7509deecc44c5d747a4b6a207ec1b4c6752c4de866d6b3acc24b81c9a873514b",
       "git_sha1": "a832e2e673123a6563a0b1e1d859eb173b622570"
+    },
+    "docs/adr/react-diagnostics.md": {
+      "sha256": "e5b1112339d48bdbf67f796a11dcbf81b45f16e2575437f9c0c92521578b0764",
+      "git_sha1": "6bc27ef9568cbcbd8fe931c6a61d539cc72ecb00"
     }
   }
 }
