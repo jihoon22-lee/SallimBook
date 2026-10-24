@@ -12,6 +12,11 @@ export const householdScreens: PlannedScreen[] = [
     links: [
       { to: "/appliances", label: "가전 관리", description: "구매·보증·호환 소모품" },
       { to: "/consumables", label: "소모품 관리", description: "오늘의 재고와 교체 기록" },
+      {
+        to: "/purchase-plan",
+        label: "구매 계획·주문",
+        description: "공용 수요·구매 예정·실제 입고",
+      },
       { to: "/settings", label: "설정", description: "계정·기기·공동 가계" },
       { to: "/vault", label: "보관함 안내", description: "보호된 카드 정보와 기기 상태" },
     ],

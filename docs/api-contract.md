@@ -712,3 +712,28 @@ Android는 생성 query/응답 타입과 기존 `listAuditEvents` 플러그인�
 홈의 지난달 상태·추가 서류 청구는 기존 월 추이와 청구 상태 조회를 사용한다. 각 목록의 모든
 페이지를 읽고, 기한 지난 납부 페이지 사이 `as_of`가 달라지면 다시 조회한다. 실패·누락을 0건으로
 표현하지 않는다. Android의 생성 query/응답과 고정 경로 정책을 함께 갱신한다.
+
+## P16 공용 소모품 구매 계획·주문 계약 (R-01/R-17/R-19/R-22)
+
+Issue #169. 일반 가계 권한과 원 단위 규칙을 따른다. 신규 API는 다음과 같으며 기존 재고·교체 API를 대체하지 않는다.
+
+| 동작 | 경로 | 제어 |
+|---|---|---|
+| 공용 구매 계획 조회 | `GET /api/v1/homecare/purchase-plan` | `through`(기본 서버 서울 오늘, 오늘부터 최대 365일), 이름·규격 `q`, UUID cursor, limit 1~200 |
+| 주문 목록 | `GET /api/v1/consumable-orders` | `state=open/planned/ordered/received/cancelled/all`(기본 open), `consumable_id`, 이름·규격 `q`, cursor, limit |
+| 구매 예정 생성 | `POST /api/v1/consumable-orders` | Idempotency-Key, 소모품 ID·수량·선택 단가/구매 링크/메모 |
+| 주문 상세 | `GET /api/v1/consumable-orders/{order_id}` | 현재 버전 ETag |
+| 완료 전 내용 수정 | `PATCH /api/v1/consumable-orders/{order_id}` | If-Match, 수량·선택 단가/구매 링크/메모. 대상 소모품·작성자는 변경 불가 |
+| 실제 주문 확인 | `POST /api/v1/consumable-orders/{order_id}/submit` | If-Match + Idempotency-Key, 실제 `ordered_on` |
+| 전체 실제 입고 | `POST /api/v1/consumable-orders/{order_id}/receive` | If-Match + Idempotency-Key, 실제 `received_on` + 현재 `stock_version` |
+| 예정·주문 취소 | `POST /api/v1/consumable-orders/{order_id}/cancel` | If-Match + Idempotency-Key, 취소 사유 |
+
+모든 응답은 no-store다. POST 생성은 201과 Location을, 상태 명령은 200을 반환하며 `{id, version}`은 최초 실행 당시의 불변 결과 참조다. 재전송 시 현재 주문이 더 진행돼도 최초 참조를 반환한다. 이 ETag를 현재 편집 버전이라고 간주하지 않고 GET으로 현재 상태를 확인한다. PATCH는 현재 상세를 반환한다. 날짜·수량·잘못된 필드는 422, 다른 가계의 자원·관계·cursor는 404, 버전 또는 진행 상태 충돌은 409다. 주문/입고 기록자의 ID는 인증된 구성원에서 정하며 요청으로 받지 않는다.
+
+계획은 활성 소모품별 한 행이며 필터와 SKU 페이지를 먼저 정한 뒤 각 소모품의 **모든** 활성 기기 연결·최근 취소되지 않은 교체를 합산한다. 같은 재고를 기기 수만큼 재사용하지 않는다. `demand_quantity`는 일정이 알려진 수요, `shortage_quantity`는 수요에서 실제 재고를 뺀 0 이상 값, `planned_quantity`/`ordered_quantity`는 아직 입고되지 않은 별도 수량, `additional_quantity`는 부족에서 두 진행 수량을 제외한 참고값이다. `unscheduled_link_count`가 양수이면 전체 수요가 확정된 것으로 표시하지 않는다. 계산 수량은 서버 정수이며 JS 안전 정수 상한을 둔다. 행의 `demand_sources`는 최대 20개를 보여 주고 나머지는 `additional_source_count`로 명시하지만 합계에는 전체를 사용한다. 동일 소모품의 진행 주문 건수를 함께 반환해 중복 구매 검토를 돕는다.
+
+`as_of`와 `through`를 각 페이지에 반환한다. 화면은 서울 날짜가 다른 페이지나 중복 SKU를 합치지 않고 재조회를 요구한다. 지난 기한은 오늘 한 번 확인할 대상으로 놓고 선택 기간의 이후 주기 수요는 그날 교체한다는 가정이다. 실제 과거 사용량을 생성하지 않는다. `last_receipt`는 취소되지 않은 실제 입고 중 발생일·작성 시각·ID 순으로 가장 최근 한 건이며, nullable 단가와 0원을 구분한다. 구매 링크는 사용자 클릭용 HTTPS 주소이며 서버가 가져오지 않는다.
+
+상태는 planned → ordered → received이며 planned/ordered는 사유 있는 cancelled로 바꿀 수 있다. 단일 주문의 전체 수량만 입고하므로 일부 도착한 묶음은 입고 전에 주문 수량을 나누어 기록한다. 입고는 기존 `stock_movements` receipt 생성·재고 버전 갱신과 주문 완료를 같은 트랜잭션으로 처리한다. 완료·취소 주문은 수정·삭제하지 않는다. 기존 원장에서 receipt를 취소하면 주문 상세의 `receipt_reversed_by`에 보정 원본을 표시하며 같은 주문의 재입고는 거부한다. 금융 납부·수입·자산 스냅샷은 생성하거나 가감하지 않는다.
+
+Android는 생성 OpenAPI 타입에서 파생한 명명된 bridge와 고정 경로·입력/응답 검증을 사용한다. 감사의 `consumable_order`는 현재 소모품 이름·주문 경로와 원래 변경자를 연결한다. 구형 native의 감사 vocabulary는 기존 호환 필터로 유지한다. [계산·검증 기록](testing/consumable-orders.md)을 참고한다.

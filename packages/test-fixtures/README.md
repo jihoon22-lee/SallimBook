@@ -48,3 +48,7 @@ uv run --project services/api pytest services/api/tests/test_fixture_catalog.py
 
 이 검사는 문서 ID의 누락, 금액 표현, UUID/가계 관계, 보험 원본 연결,
 계산 예제의 산술·날짜 일관성을 확인한다. 실제 DB/API·Android·웹 기능 시험을 대체하지 않는다.
+
+P16의 보충 예제 `edge_cases.shared_purchase_plan`은 두 기기 수요 1개씩과 공용 재고 1개를
+합산해 수요 2·부족 1로 만드는 사례다. 서버 계획 계산과 웹/native 구매 계획 표시에서 같은 예제를 읽는다.
+기존 T-20~T-24와 별도로 주문 수량을 실제 재고로 간주하지 않는 경계를 검사한다.

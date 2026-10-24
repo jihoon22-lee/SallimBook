@@ -21,6 +21,7 @@ from sallimbook.homecare.models import (
     Appliance,
     ApplianceConsumable,
     Consumable,
+    ConsumableOrder,
     ConsumableReplacement,
     StockMovement,
 )
@@ -88,6 +89,7 @@ __all__ = [
     "ApplianceConsumable",
     "StockMovement",
     "ConsumableReplacement",
+    "ConsumableOrder",
     "MedicalExpense",
     "MedicalExpenseLine",
     "MedicalRefund",

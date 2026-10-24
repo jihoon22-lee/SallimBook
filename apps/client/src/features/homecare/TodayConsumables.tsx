@@ -222,6 +222,9 @@ export function TodayConsumables({ compact = false }: { compact?: boolean }) {
       ) : (
         <SessionStatus />
       )}
+      <p>
+        <Link to="/purchase-plan">공용 재고로 함께 구매 계획 세우기</Link>
+      </p>
       <Link className="button-link" to={compact ? "/consumables" : "/appliances"}>
         {compact ? "소모품 전체 관리" : "가전에 소모품 연결하기"}
       </Link>

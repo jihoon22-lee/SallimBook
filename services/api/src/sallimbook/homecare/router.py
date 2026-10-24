@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, Query, Response
 from sallimbook.core.name_search import NameQuery
 from sallimbook.homecare import service
 from sallimbook.homecare.models import Appliance, ApplianceConsumable, Consumable
+from sallimbook.homecare.order_router import router as order_router
 from sallimbook.homecare.schemas import (
     ApplianceConsumableCreate,
     ApplianceConsumableListResponse,
@@ -33,6 +34,7 @@ from sallimbook.homecare.schemas import (
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
 router = APIRouter(prefix="/api/v1", tags=["homecare"])
+router.include_router(order_router)
 IfMatch = Annotated[str, Header(alias="If-Match")]
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)]
 Limit = Annotated[int, Query(ge=1, le=200)]

@@ -40,9 +40,10 @@ def application(engine=None):
     return app
 
 
-def test_name_query_contract_is_bounded_on_metadata_lists_only():
+def test_name_query_contract_is_bounded_on_reviewed_name_queries_only():
     spec = application().openapi()
-    for path in PATHS:
+    name_paths = (*PATHS, "consumable-orders", "homecare/purchase-plan")
+    for path in name_paths:
         query = next(
             p for p in spec["paths"][f"/api/v1/{path}"]["get"]["parameters"] if p["name"] == "q"
         )
@@ -51,7 +52,7 @@ def test_name_query_contract_is_bounded_on_metadata_lists_only():
     assert all(
         p["name"] != "q"
         for path, methods in spec["paths"].items()
-        if path.removeprefix("/api/v1/") not in PATHS
+        if path.removeprefix("/api/v1/") not in name_paths
         for operation in methods.values()
         for p in operation.get("parameters", [])
     )

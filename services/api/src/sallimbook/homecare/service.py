@@ -22,6 +22,7 @@ from sallimbook.homecare.models import (
     Appliance,
     ApplianceConsumable,
     Consumable,
+    ConsumableOrder,
     ConsumableReplacement,
     StockMovement,
 )
@@ -330,9 +331,8 @@ def update_consumable(session, principal, consumable_id, payload, if_match):
     candidate = _candidate(row, ConsumableInput, payload)
     _actual_dates(candidate.ended_on)
     _unique_sku(session, principal, candidate.sku_or_model, row.id)
-    if (
-        candidate.unit != row.unit
-        and session.scalar(
+    if candidate.unit != row.unit and (
+        session.scalar(
             select(StockMovement.id)
             .where(
                 StockMovement.household_id == principal.household_id,
@@ -341,9 +341,18 @@ def update_consumable(session, principal, consumable_id, payload, if_match):
             .limit(1)
         )
         is not None
+        or session.scalar(
+            select(ConsumableOrder.id)
+            .where(
+                ConsumableOrder.household_id == principal.household_id,
+                ConsumableOrder.consumable_id == row.id,
+            )
+            .limit(1)
+        )
+        is not None
     ):
         raise DomainError(
-            "CONSUMABLE_UNIT_IN_USE", "재고 이력이 있어 단위를 바꿀 수 없습니다.", 409
+            "CONSUMABLE_UNIT_IN_USE", "재고·주문 이력이 있어 단위를 바꿀 수 없습니다.", 409
         )
     before = _touch(row, principal)
     _assign(row, candidate.model_dump())

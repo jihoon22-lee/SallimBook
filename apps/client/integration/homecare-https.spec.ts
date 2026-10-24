@@ -123,7 +123,7 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
   let missingKey = false;
   page.on("response", (response) => {
     if (
-      /\/api\/v1\/(appliances|consumables|appliance-consumables|homecare)(\/|\?|$)/.test(
+      /\/api\/v1\/(appliances|consumables|appliance-consumables|consumable-orders|homecare)(\/|\?|$)/.test(
         response.url(),
       ) &&
       response.status() >= 200 &&
@@ -137,6 +137,16 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
       request.method() === "POST" &&
       /\/(stock-movements|replacements)(\/|$)/.test(new URL(request.url()).pathname) &&
       (!request.headers()["idempotency-key"] || !request.headers()["if-match"])
+    )
+      missingKey = true;
+  });
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (
+      request.method() === "POST" &&
+      path.startsWith("/api/v1/consumable-orders") &&
+      (!request.headers()["idempotency-key"] ||
+        (path.split("/").length > 4 && !request.headers()["if-match"]))
     )
       missingKey = true;
   });
@@ -434,6 +444,92 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
     (await read<S["IncomeSummaryResponse"]>(page, "/api/v1/income/summary?month=2025-03")).totals
       .record_count,
   ).toBe(0);
+  // One shared unit cannot satisfy two device replacement demands independently.
+  const shoppingName = "합성 HTTPS 구매 공용 필터";
+  const shoppingSku = await consumable(page, shoppingName, "SYNTHETIC-HTTPS-ORDER");
+  const shoppingA = await appliance(page, "합성 HTTPS 구매 거실 기기");
+  const shoppingB = await appliance(page, "합성 HTTPS 구매 안방 기기");
+  const asOf = (await read<S["PurchasePlanResponse"]>(page, "/api/v1/homecare/purchase-plan"))
+    .as_of;
+  for (const applianceId of [shoppingA, shoppingB]) {
+    const linkId = await connect(page, applianceId, shoppingSku, shoppingName, "1");
+    await page.goto(`/appliance-consumables/${linkId}`);
+    await page.getByRole("button", { name: "기기별 주기·연결 수정", exact: true }).click();
+    await page.getByLabel("다음 확인일 직접 지정", { exact: true }).fill(asOf);
+    await page.getByRole("button", { name: "기기별 소모품 설정 저장", exact: true }).click();
+    await expect(
+      page.getByText(`${asOf.replaceAll("-", ".")} · 직접 지정`, { exact: true }),
+    ).toBeVisible();
+  }
+  await movement(page, shoppingSku, "receipt", "1", asOf);
+  await page.goto("/purchase-plan");
+  const shoppingRow = page.getByRole("listitem", {
+    name: `${shoppingName} 구매 계획`,
+    exact: true,
+  });
+  const planning = (
+    await read<S["PurchasePlanResponse"]>(page, "/api/v1/homecare/purchase-plan")
+  ).items.find((row) => row.consumable.id === shoppingSku)!;
+  expect([
+    planning.demand_quantity,
+    planning.consumable.stock_quantity,
+    planning.shortage_quantity,
+  ]).toEqual([2, 1, 1]);
+  await expect(
+    shoppingRow.locator("dl > div").filter({ hasText: "현재 재고로 부족" }),
+  ).toContainText("1 개");
+  await shoppingRow.getByRole("link", { name: "구매 예정 추가", exact: true }).click();
+  await expect(page.getByLabel("구매 수량 (개)", { exact: true })).toHaveValue("1");
+  await page.getByLabel("단위당 참고 가격 (원, 선택)", { exact: true }).fill("1500");
+  await page
+    .getByLabel("구매 링크 (선택)", { exact: true })
+    .fill("https://example.test/synthetic-filter");
+  await page.getByRole("button", { name: "구매 예정 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "소모품 주문 상세", exact: true })).toBeVisible();
+  const orderId = lastId(page);
+  expect(
+    (await read<S["ConsumableResponse"]>(page, `/api/v1/consumables/${shoppingSku}`))
+      .stock_quantity,
+  ).toBe(1);
+  await page.getByRole("button", { name: "실제 주문 확인", exact: true }).click();
+  await page.getByLabel("실제 주문일", { exact: true }).fill(asOf);
+  await page.getByLabel("판매처에서 실제 주문을 완료한 것을 확인했어요").check();
+  await page.getByRole("button", { name: "주문 중으로 저장", exact: true }).click();
+  await expect(page.getByRole("region", { name: "소모품 주문 원본" })).toContainText("주문 중");
+  expect(
+    (await read<S["ConsumableResponse"]>(page, `/api/v1/consumables/${shoppingSku}`))
+      .stock_quantity,
+  ).toBe(1);
+  await page.getByRole("button", { name: "전체 입고 확인", exact: true }).click();
+  await page.getByLabel("실제 입고일", { exact: true }).fill(asOf);
+  await page.getByLabel("표시된 전체 수량이 도착했고 재고에 더할 것을 확인했어요").check();
+  await page.getByRole("button", { name: "전체 입고·재고 저장", exact: true }).click();
+  await expect(page.getByRole("region", { name: "소모품 주문 원본" })).toContainText("입고 완료");
+  const receivedOrder = await read<S["ConsumableOrderResponse"]>(
+    page,
+    `/api/v1/consumable-orders/${orderId}`,
+  );
+  expect(receivedOrder.unit_cost_krw).toBe("1500");
+  expect(receivedOrder.stock_movement_id).not.toBeNull();
+  expect(
+    (await read<S["ConsumableResponse"]>(page, `/api/v1/consumables/${shoppingSku}`))
+      .stock_quantity,
+  ).toBe(2);
+  await page.getByRole("link", { name: "시작 화면으로 돌아가기", exact: true }).click();
+  await expect(
+    shoppingRow.locator("dl > div").filter({ hasText: "현재 재고로 부족" }),
+  ).toContainText("0 개");
+  await cancel(page, `/consumables/${shoppingSku}/stock/${receivedOrder.stock_movement_id}`, false);
+  await page.goto(`/consumable-orders/${orderId}`);
+  await expect(page.getByRole("region", { name: "소모품 주문 원본" })).toContainText(
+    "입고 취소됨 · 원본 보존",
+  );
+  expect(
+    (await read<S["ConsumableResponse"]>(page, `/api/v1/consumables/${shoppingSku}`))
+      .stock_quantity,
+  ).toBe(1);
+  expect(await read<S["MonthResponse"]>(page, "/api/v1/asset-months/2025-02")).toEqual(snapshot);
+  console.log("SAFE_PHASE=HOMECARE_PURCHASE_ORDER_RECEIPT");
   expect(missingKey).toBe(false);
   expect(missingNoStore).toBe(false);
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);

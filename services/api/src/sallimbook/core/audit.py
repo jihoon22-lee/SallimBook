@@ -78,6 +78,7 @@ AuditEntityType = Literal[
     "appliance_consumable",
     "stock_movement",
     "consumable_replacement",
+    "consumable_order",
     "medical_expense",
     "medical_refund",
     "insurance_claim",

@@ -5,6 +5,27 @@ They are never selected by the exporter. Users and audits use dedicated safe pro
 """
 
 PUBLIC_COLUMNS = {
+    "consumable_orders": (
+        "id",
+        "household_id",
+        "consumable_id",
+        "state",
+        "quantity",
+        "unit_cost_krw",
+        "purchase_url",
+        "note",
+        "ordered_on",
+        "ordered_by_member_id",
+        "received_on",
+        "received_by_member_id",
+        "stock_movement_id",
+        "cancel_reason",
+        "created_by_member_id",
+        "updated_by_member_id",
+        "created_at",
+        "updated_at",
+        "version",
+    ),
     "household_people": (
         "id",
         "household_id",

@@ -384,6 +384,7 @@ export function ConsumableListPage() {
           <Link className="button-link" to="/consumables/new">
             소모품 등록하기
           </Link>
+          <Link to="/purchase-plan">공용 구매 계획·주문</Link>
           <Link to="/appliances">가전 관리</Link>
         </div>
       }
@@ -437,6 +438,9 @@ function ConsumableDetail({ id, edit }: { id: string; edit: boolean }) {
                   </Link>
                 )}
                 <Link to={`/consumables/${id}/edit`}>소모품 정보 수정·사용 종료</Link>
+                <Link to={`/consumable-orders?consumable_id=${id}&state=all`} state={origin}>
+                  구매 예정·주문 이력
+                </Link>
               </div>
               <ConsumableSummary row={row} />
               <DeleteHomecare

@@ -76,7 +76,17 @@ internal object NativeHomecarePolicy {
     private val pageQuery = mapOf("cursor" to nullable(id), "limit" to integer(1, 200))
     private val statusQuery = pageQuery + mapOf("q" to nullable(NameSearchQuery::validate), "status" to choice("active", "ended", "all"))
     private val linkQuery = pageQuery + mapOf("appliance_id" to nullable(id), "consumable_id" to nullable(id))
+    private val orderStates = choice("planned", "ordered", "received", "cancelled")
+    private val orderQuery = pageQuery + mapOf("state" to choice("open", "planned", "ordered", "received", "cancelled", "all"), "consumable_id" to nullable(id), "q" to nullable(NameSearchQuery::validate))
     private val routes = mapOf(
+        FinanceOperation.GET_PURCHASE_PLAN to Route("GET", "/api/v1/homecare/purchase-plan", "", "PurchasePlanResponse", pageQuery + mapOf("through" to nullable(date), "q" to nullable(NameSearchQuery::validate)), false, false, 200),
+        FinanceOperation.LIST_CONSUMABLE_ORDERS to Route("GET", "/api/v1/consumable-orders", "", "ConsumableOrderListResponse", orderQuery, false, false, 200),
+        FinanceOperation.CREATE_CONSUMABLE_ORDER to Route("POST", "/api/v1/consumable-orders", "ConsumableOrderCreate", "ConsumableOrderReference", emptyMap(), false, true, 201),
+        FinanceOperation.GET_CONSUMABLE_ORDER to Route("GET", "/api/v1/consumable-orders/{orderId}", "", "ConsumableOrderResponse", emptyMap(), false, false, 200),
+        FinanceOperation.UPDATE_CONSUMABLE_ORDER to Route("PATCH", "/api/v1/consumable-orders/{orderId}", "ConsumableOrderPatch", "ConsumableOrderResponse", emptyMap(), true, false, 200),
+        FinanceOperation.SUBMIT_CONSUMABLE_ORDER to Route("POST", "/api/v1/consumable-orders/{orderId}/submit", "ConsumableOrderSubmit", "ConsumableOrderReference", emptyMap(), true, true, 200),
+        FinanceOperation.RECEIVE_CONSUMABLE_ORDER to Route("POST", "/api/v1/consumable-orders/{orderId}/receive", "ConsumableOrderReceive", "ConsumableOrderReference", emptyMap(), true, true, 200),
+        FinanceOperation.CANCEL_CONSUMABLE_ORDER to Route("POST", "/api/v1/consumable-orders/{orderId}/cancel", "ConsumableOrderCancel", "ConsumableOrderReference", emptyMap(), true, true, 200),
         FinanceOperation.DELETE_APPLIANCE to Route("DELETE", "/api/v1/appliances/{applianceId}", "", "", emptyMap(), true, false, 204),
         FinanceOperation.DELETE_CONSUMABLE to Route("DELETE", "/api/v1/consumables/{consumableId}", "", "", emptyMap(), true, false, 204),
         FinanceOperation.DELETE_APPLIANCE_CONSUMABLE to Route("DELETE", "/api/v1/appliance-consumables/{linkId}", "", "", emptyMap(), true, false, 204),
@@ -121,6 +131,9 @@ internal object NativeHomecarePolicy {
     private val movementFields = mapOf("kind" to choice("receipt", "return_in", "return_out", "adjustment"),
         "quantity_delta" to delta, "occurred_on" to date, "unit_cost_krw" to nullable(money),
         "purchase_url" to nullable(purchaseUrl), "reason" to nullable(text(500)), "note" to nullable(text(2000, true)))
+    private val orderFields = mapOf("quantity" to positiveQuantity, "unit_cost_krw" to nullable(money), "purchase_url" to nullable(purchaseUrl), "note" to nullable(text(2000, true)))
+    private val aggregate = integer(0, MAX_VERSION)
+    private val demandFields = mapOf("link_id" to id, "appliance_id" to id, "appliance_name" to text(120), "next_check_on" to nullable(date), "replacement_count" to nullable(aggregate), "quantity" to nullable(aggregate))
     fun supports(operation: FinanceOperation) = operation in routes
     private fun chronology(row: Map<String, Any?>) {
         if (row["purchased_on"] != null && row["ended_on"] != null && (row["ended_on"] as String) < (row["purchased_on"] as String)) invalid()
@@ -139,6 +152,11 @@ internal object NativeHomecarePolicy {
     }
     private fun input(schema: String, value: Any?): Map<String, Any?> {
         val fields = when (schema) {
+            "ConsumableOrderCreate" -> orderFields + mapOf("consumable_id" to id)
+            "ConsumableOrderPatch" -> orderFields
+            "ConsumableOrderSubmit" -> mapOf("ordered_on" to date)
+            "ConsumableOrderReceive" -> mapOf("received_on" to date, "stock_version" to version)
+            "ConsumableOrderCancel" -> mapOf("reason" to text(500))
             "ApplianceInput", "AppliancePatch" -> applianceFields
             "ConsumableInput", "ConsumablePatch" -> consumableFields
             "ApplianceConsumableCreate" -> linkFields + linkIdentity
@@ -150,6 +168,8 @@ internal object NativeHomecarePolicy {
             else -> invalid()
         }
         val required = when (schema) {
+            "ConsumableOrderCreate" -> setOf("consumable_id", "quantity")
+            "ConsumableOrderSubmit", "ConsumableOrderReceive", "ConsumableOrderCancel" -> fields.keys
             "ApplianceInput" -> setOf("name")
             "ConsumableInput" -> setOf("name", "unit")
             "ApplianceConsumableCreate" -> linkIdentity.keys
@@ -237,6 +257,18 @@ internal object NativeHomecarePolicy {
     }
     private fun entity(schema: String, value: Any?): Map<String, Any?> {
         val row = when (schema) {
+            "ConsumableOrderReference" -> shape(value, mapOf("id" to id, "version" to version))
+            "ConsumableOrderResponse" -> shape(value, orderFields + audit + mapOf("consumable_id" to id, "consumable_name" to text(120), "unit" to text(40), "sku_or_model" to nullable(text(120)), "state" to orderStates,
+                "ordered_on" to nullable(date), "ordered_by_member_id" to nullable(id), "received_on" to nullable(date), "received_by_member_id" to nullable(id), "stock_movement_id" to nullable(id), "receipt_reversed_by" to nullable(id), "cancel_reason" to nullable(text(500))))
+            "PurchasePlanItem" -> shape(value, mapOf<String, HomecareField>(
+                "consumable" to { entity("ConsumableResponse", it); Unit },
+                "demand_quantity" to aggregate, "shortage_quantity" to aggregate, "planned_quantity" to aggregate, "ordered_quantity" to aggregate, "additional_quantity" to aggregate, "open_order_count" to aggregate, "unscheduled_link_count" to aggregate, "additional_source_count" to aggregate,
+                "demand_sources" to { sources ->
+                    val rows = sources as? List<*> ?: invalid()
+                    if (rows.size > 20) invalid()
+                    rows.forEach { shape(it, demandFields) }
+                },
+                "last_receipt" to nullable { entity("StockMovementResponse", it); Unit }))
             "ApplianceResponse" -> shape(value, applianceFields + audit + mapOf("status" to choice("active", "ended"), "as_of" to date, "warranty_status" to choice("unknown", "active", "expired")))
             "ConsumableResponse" -> shape(value, consumableFields + audit + mapOf("status" to choice("active", "ended"), "stock_quantity" to quantity, "low_stock" to bool))
             "ApplianceConsumableResponse" -> shape(value, linkFields + linkIdentity + linkStatus + audit)
@@ -251,6 +283,17 @@ internal object NativeHomecarePolicy {
             else -> invalid()
         }
         chronology(row)
+        if (schema == "ConsumableOrderResponse") {
+            if ((row["ordered_on"] == null) != (row["ordered_by_member_id"] == null)) invalid()
+            if (row["state"] == "planned" && row["ordered_on"] != null) invalid()
+            if (row["state"] in setOf("ordered", "received") && row["ordered_on"] == null) invalid()
+            val received = row["state"] == "received"
+            if (listOf("received_on", "received_by_member_id", "stock_movement_id").any { (row[it] != null) != received }) invalid()
+            if (received && (row["received_on"] as String) < (row["ordered_on"] as String)) invalid()
+            if (!received && row["receipt_reversed_by"] != null) invalid()
+            if ((row["state"] == "cancelled") != (row["cancel_reason"] != null)) invalid()
+        }
+        if (schema == "PurchasePlanItem") planState(row)
         if ("status" in row && row["status"] != if (row["ended_on"] == null) "active" else "ended") invalid()
         if (schema == "ApplianceResponse") {
             val warranty = row["warranty_until"] as String?
@@ -265,6 +308,33 @@ internal object NativeHomecarePolicy {
         }
         return row
     }
+    private fun planState(row: Map<String, Any?>) {
+        val stock = obj(row["consumable"])
+        if (stock["status"] != "active") invalid()
+        val demand = number(row["demand_quantity"], 0, MAX_VERSION)
+        val shortage = maxOf(0L, demand - number(stock["stock_quantity"], 0, MAX_QUANTITY))
+        val planned = number(row["planned_quantity"], 0, MAX_VERSION)
+        val ordered = number(row["ordered_quantity"], 0, MAX_VERSION)
+        if (number(row["shortage_quantity"], 0, MAX_VERSION) != shortage || number(row["additional_quantity"], 0, MAX_VERSION) != maxOf(0L, shortage - planned - ordered)) invalid()
+        val sources = row["demand_sources"] as List<*>
+        val seen = mutableSetOf<String>()
+        var total = 0L
+        var unknown = 0L
+        sources.forEach {
+            val source = obj(it)
+            if (!seen.add(source["link_id"] as String)) invalid()
+            if ((source["replacement_count"] == null) != (source["quantity"] == null) || (source["next_check_on"] == null) != (source["quantity"] == null)) invalid()
+            if (source["quantity"] == null) unknown++ else total += number(source["quantity"], 0, MAX_VERSION)
+        }
+        val additional = number(row["additional_source_count"], 0, MAX_VERSION)
+        val unscheduled = number(row["unscheduled_link_count"], 0, MAX_VERSION)
+        if (total > demand || unknown > unscheduled || unscheduled > sources.size + additional) invalid()
+        if (additional == 0L && (total != demand || unknown != unscheduled)) invalid()
+        row["last_receipt"]?.let {
+            val receipt = obj(it)
+            if (receipt["consumable_id"] != stock["id"] || receipt["household_id"] != stock["household_id"] || receipt["kind"] != "receipt" || receipt["reversed_by"] != null) invalid()
+        }
+    }
     fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
         try {
             val route = routes[operation] ?: invalid()
@@ -277,6 +347,8 @@ internal object NativeHomecarePolicy {
             val q = queryValues(route, uri)
             fun bound(row: Map<String, Any?>, schema: String) {
                 val names = when (schema) {
+                    "ConsumableOrderResponse", "ConsumableOrderReference" -> mapOf("orderId" to "id")
+                    "PurchasePlanItem" -> emptyMap()
                     "ApplianceResponse" -> mapOf("applianceId" to "id")
                     "ConsumableResponse" -> mapOf("consumableId" to "id")
                     "ApplianceConsumableResponse", "HomecareStatusItem" -> mapOf("linkId" to "id")
@@ -289,20 +361,33 @@ internal object NativeHomecarePolicy {
                 for (filter in listOf("appliance_id", "consumable_id", "active")) {
                     if (q[filter] != null && row[filter].toString().lowercase() != q[filter].toString().lowercase()) invalid()
                 }
+                if (schema == "ConsumableOrderResponse" && route.query.isNotEmpty()) {
+                    val state = q["state"] ?: "open"
+                    if (state == "open" && row["state"] !in setOf("planned", "ordered") || state != "open" && state != "all" && row["state"] != state) invalid()
+                }
                 if (schema in setOf("ApplianceResponse", "ConsumableResponse") && route.query.isNotEmpty()) {
                     val state = q["status"] ?: "active"
                     if (state != "all" && row["status"] != state) invalid()
                 }
             }
-            if (route.output.endsWith("ListResponse") || route.output == "HomecareStatusResponse") {
+            if (route.output.endsWith("ListResponse") || route.output == "HomecareStatusResponse" || route.output == "PurchasePlanResponse") {
                 val page = obj(value)
                 val statusPage = route.output == "HomecareStatusResponse"
-                val pageKeys = setOf("items", "next_cursor") + if (statusPage) setOf("as_of") else emptySet()
+                val planPage = route.output == "PurchasePlanResponse"
+                val pageKeys = setOf("items", "next_cursor") + if (planPage) setOf("as_of", "through") else if (statusPage) setOf("as_of") else emptySet()
                 NativeResponseShape.accept(page, page.keys, pageKeys, pageKeys, ::invalid)
-                if (statusPage) date(page["as_of"])
+                if (statusPage || planPage) date(page["as_of"])
+                if (planPage) {
+                    date(page["through"])
+                    if (page["through"] != (q["through"] ?: page["as_of"])) invalid()
+                    val days = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(page["as_of"] as String), LocalDate.parse(page["through"] as String))
+                    if (days !in 0..365) invalid()
+                }
                 val items = page["items"] as? List<*> ?: invalid()
                 if (items.size > ((q["limit"] as? Number)?.toInt() ?: 50)) invalid()
                 val schema = when (route.output) {
+                    "ConsumableOrderListResponse" -> "ConsumableOrderResponse"
+                    "PurchasePlanResponse" -> "PurchasePlanItem"
                     "ApplianceListResponse" -> "ApplianceResponse"
                     "ConsumableListResponse" -> "ConsumableResponse"
                     "ApplianceConsumableListResponse" -> "ApplianceConsumableResponse"
@@ -318,10 +403,11 @@ internal object NativeHomecarePolicy {
                 val dates = mutableSetOf<Any?>()
                 for (item in items) {
                     val row = entity(schema, item); bound(row, schema)
-                    val current = (row["id"] as String).lowercase()
+                    val identity = if (planPage) obj(row["consumable"]) else row
+                    val current = (identity["id"] as String).lowercase()
                     if (!seen.add(current)) invalid()
                     last = current
-                    households.add(row["household_id"])
+                    households.add(identity["household_id"])
                     if ("as_of" in row) dates.add(row["as_of"])
                     if (statusPage && (row["active"] != true || row["as_of"] != page["as_of"])) invalid()
                 }

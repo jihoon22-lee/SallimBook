@@ -54,10 +54,10 @@ class NativeAuditWireTest {
         // Names of sensitive columns are metadata, never their stored values.
         val fields=listOf("account_number","password_hash","wrapped_hvk")
         assertEquals(fields,((NativeAuditWire.response(request(),200,page(row()+mapOf("changed_fields" to fields)))["items"] as List<*>)[0] as Map<*,*>)["changed_fields"])
-        assertEquals(40,NativeAuditWire.entityTypes.size); assertEquals(22,NativeAuditWire.actions.size); assertEquals(308,NativeAuditWire.knownFields.size)
+        assertEquals(41,NativeAuditWire.entityTypes.size); assertEquals(22,NativeAuditWire.actions.size); assertEquals(313,NativeAuditWire.knownFields.size)
     }
     @Test fun securityEventTypesAreAcceptedAndCounted() {
-        assertEquals(40, NativeAuditWire.entityTypes.size); assertEquals(22, NativeAuditWire.actions.size)
+        assertEquals(41, NativeAuditWire.entityTypes.size); assertEquals(22, NativeAuditWire.actions.size)
         assertTrue(NativeAuditWire.entityTypes.contains("user"))
         assertTrue(NativeAuditWire.entityTypes.containsAll(setOf("registered_device", "passkey", "invitation")))
         assertTrue(NativeAuditWire.actions.containsAll(setOf("login", "revoke", "accept")))

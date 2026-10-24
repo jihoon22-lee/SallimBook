@@ -6,6 +6,34 @@ import type { mockHomecare } from "./homecare";
 type State = Awaited<ReturnType<typeof mockHomecare>>;
 type Args = Record<string, any>;
 const mapping: Record<string, { method: string; path: string; fields: Record<string, string> }> = {
+  getPurchasePlan: { method: "GET", path: "/api/v1/homecare/purchase-plan", fields: {} },
+  listConsumableOrders: { method: "GET", path: "/api/v1/consumable-orders", fields: {} },
+  createConsumableOrder: { method: "POST", path: "/api/v1/consumable-orders", fields: {} },
+  getConsumableOrder: {
+    method: "GET",
+    path: "/api/v1/consumable-orders/{order_id}",
+    fields: { order_id: "orderId" },
+  },
+  updateConsumableOrder: {
+    method: "PATCH",
+    path: "/api/v1/consumable-orders/{order_id}",
+    fields: { order_id: "orderId" },
+  },
+  submitConsumableOrder: {
+    method: "POST",
+    path: "/api/v1/consumable-orders/{order_id}/submit",
+    fields: { order_id: "orderId" },
+  },
+  receiveConsumableOrder: {
+    method: "POST",
+    path: "/api/v1/consumable-orders/{order_id}/receive",
+    fields: { order_id: "orderId" },
+  },
+  cancelConsumableOrder: {
+    method: "POST",
+    path: "/api/v1/consumable-orders/{order_id}/cancel",
+    fields: { order_id: "orderId" },
+  },
   listApplianceConsumables: {
     method: "GET",
     path: "/api/v1/appliance-consumables",

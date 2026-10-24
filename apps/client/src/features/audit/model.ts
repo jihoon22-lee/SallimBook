@@ -47,6 +47,7 @@ export const entityLabels: Record<string, string> = {
   consumable: "소모품",
   appliance_consumable: "기기별 소모품",
   stock_movement: "재고 이동",
+  consumable_order: "소모품 주문",
   consumable_replacement: "소모품 교체",
   vault: "보관함",
   vault_membership: "보관함 구성원",

@@ -352,3 +352,18 @@ relation(member/child/parent/other), archived_at, 생성/수정 member ID와 공
 UPDATE는 금지한다. `insurance_cases` / `insurance_policies`에는 version > 1의 DELETE를
 거부하는 트리거를 둔다. 비용·청구·지급·진료·보장·보험료·문서 참조의 RESTRICT는 유지한다.
 [설계 결정](adr/insurance-misregistration.md)에 삭제와 감사 보존 범위를 기록한다.
+
+## P16 구매 예정·주문·입고
+
+Issue #169의 `0021_consumable_orders`는 기존 공용 재고 원장을 변경하지 않고 `consumable_orders`를 추가한다.
+주문은 household/consumable 복합 FK, 작성·수정·주문·입고 구성원의 동일 가계 FK, 양수 정수 수량, nullable 정수 원 단가와 HTTPS 구매 링크를 가진다.
+state는 planned/ordered/received/cancelled, 실제 주문·입고일은 date, 작성·수정 시각은 UTC timestamp다.
+
+주문 한 건의 `stock_movement_id`는 같은 가계·소모품의 receipt 한 건과만 연결되며 UNIQUE로 재사용을 막는다.
+DB trigger는 예정에서 시작하는 상태 전이·버전 증가·불변 신원·완료/취소 이력 보존을 검사한다.
+입고 시 receipt 종류·소모품·수량·실제 날짜·기록자·단가·구매 링크가 주문과 일치해야 한다.
+재고 원장의 기존 캐시·불변 이벤트 제약과 멱등 예약을 같은 트랜잭션에서 사용한다.
+주문 이력이 있으면 소모품 단위 변경·소모품 삭제도 막아 과거 수량의 의미를 보존한다.
+
+기존 자료의 변환은 없다. 0021에서 주문 행이 생기면 downgrade는 자료 유실을 막기 위해 거부하며,
+빈 상태의 migration 왕복과 이전 revision의 재고 자료 보존을 검사한다. 주문의 취소는 판매처 취소나 환불을 자동 처리하지 않는다.
