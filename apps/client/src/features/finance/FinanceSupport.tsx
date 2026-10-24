@@ -59,13 +59,20 @@ export function FinanceError({ error }: { error: ApiError | null }) {
   );
 }
 
-export function useHouseholdMembers() {
-  const { domainApi } = useAuth();
+export function useHouseholdMembers(enabled = true) {
+  const { domainApi, state } = useAuth();
+  const memberKey = state.status === "authenticated" ? state.member.member_id : null;
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    if (!enabled) {
+      setMembers([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     setError(null);
@@ -87,7 +94,7 @@ export function useHouseholdMembers() {
     return () => {
       active = false;
     };
-  }, [domainApi, retry]);
+  }, [domainApi, retry, enabled, memberKey]);
   return { members, error, loading, retry: () => setRetry((value) => value + 1) };
 }
 

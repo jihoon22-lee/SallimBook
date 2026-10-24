@@ -1,19 +1,22 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "../features/auth/AuthProvider";
 import { useHouseholdMembers } from "../features/finance/FinanceSupport";
 import { formatSeoulDateTime } from "./format";
-const Actors = createContext<ReturnType<typeof useHouseholdMembers> | null>(null);
-function LoadedActors({ children }: { children: ReactNode }) {
-  const members = useHouseholdMembers();
-  return <Actors.Provider value={members}>{children}</Actors.Provider>;
-}
+type ActorContext = {
+  members: ReturnType<typeof useHouseholdMembers>;
+  subscribe: () => () => void;
+};
+const Actors = createContext<ActorContext | null>(null);
 export function RecordActorsProvider({ children }: { children: ReactNode }) {
   const { state } = useAuth();
-  return state.status === "authenticated" ? (
-    <LoadedActors key={state.member.member_id}>{children}</LoadedActors>
-  ) : (
-    children
-  );
+  const [consumers, setConsumers] = useState(0);
+  const subscribe = useCallback(() => {
+    setConsumers((value) => value + 1);
+    return () => setConsumers((value) => value - 1);
+  }, []);
+  const members = useHouseholdMembers(state.status === "authenticated" && consumers > 0);
+  // Keep the route tree stable through login/expiry. Only visible actor labels request names.
+  return <Actors.Provider value={{ members, subscribe }}>{children}</Actors.Provider>;
 }
 export function RecordActor({
   memberId,
@@ -24,7 +27,10 @@ export function RecordActor({
   at?: string | null;
   label?: string;
 }) {
-  const actors = useContext(Actors);
+  const context = useContext(Actors);
+  const subscribe = context?.subscribe;
+  useEffect(() => (at ? subscribe?.() : undefined), [subscribe, at]);
+  const actors = context?.members;
   if (!at) return null;
   const name = actors?.error
     ? "수정자 확인 실패"
