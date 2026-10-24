@@ -104,7 +104,7 @@ export function ReplacementEditor({
       <h2>실제 교체와 재고 사용</h2>
       <StockSummary row={base.consumable} />
       <p>
-        {base.appliance.name}에서 {base.consumable.name}을 실제 사용한 수량만 차감해요. 지난 주기를
+        {base.appliance.name}에서 실제 사용한 {base.consumable.name} 수량만 차감해요. 지난 주기를
         놓쳤더라도 놓친 횟수만큼 재고를 자동 차감하지 않아요.
       </p>
       <form

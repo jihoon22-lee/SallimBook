@@ -42,7 +42,7 @@ test("server totals, changed scope, share and debt effects are distinguished", a
   await expect(summary).toContainText("추가 1개 · 제외 1개 · 지분 변경 1개");
   await expect(summary).toContainText("서로 다른 기준일이 섞여 있어요");
   const loan = page
-    .getByRole("listitem")
+    .locator(".comparison-item")
     .filter({ has: page.getByRole("heading", { name: "합성 대출" }) });
   await expect(loan).toContainText("-20원");
   await expect(loan).toContainText("+20원");

@@ -1,3 +1,4 @@
+import { formatFileSize } from "../../shared/format";
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { isNativeAuth } from "../../platform/nativeAuth";
@@ -102,8 +103,7 @@ function Documents({ target }: { target: Target }) {
           <li key={row.id}>
             <button onClick={() => setSelected(row.id)}>{row.original_name}</button>
             <p>
-              {stateLabel(row)} · {row.size_bytes.toLocaleString("ko-KR")}바이트 · 연결{" "}
-              {row.active_link_count}개
+              {stateLabel(row)} · {formatFileSize(row.size_bytes)} · 연결 {row.active_link_count}개
             </p>
           </li>
         ))}

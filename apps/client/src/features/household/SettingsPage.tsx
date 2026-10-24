@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { installedAppInfo } from "../../platform/appInfo";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { version } from "../../../package.json";
 import { toApiError } from "../../platform/api";
@@ -31,6 +32,45 @@ function HouseholdSummary() {
         </ul>
       )}
       <Link to="/settings/auth">구성원 초대와 기기 관리</Link>
+    </section>
+  );
+}
+
+function AppVersion() {
+  const [info, setInfo] = useState<{ version: string; build: string } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setFailed(false);
+    void installedAppInfo()
+      .then((value) => {
+        if (active) setInfo(value);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [retry]);
+  return (
+    <section className="card">
+      <h2>앱 정보</h2>
+      <p>SallimBook · 웹 클라이언트 버전 {version}</p>
+      {info && (
+        <p>
+          Android 앱 버전 {info.version} · 빌드 {info.build}
+        </p>
+      )}
+      {failed && (
+        <>
+          <p role="alert">Android 앱 버전을 확인하지 못했어요.</p>
+          <button type="button" onClick={() => setRetry((value) => value + 1)}>
+            앱 버전 다시 확인
+          </button>
+        </>
+      )}
     </section>
   );
 }
@@ -112,17 +152,13 @@ export function SettingsPage() {
         <RelatedLinks
           links={[
             { to: "/login", label: "로그인·재인증" },
-            { to: "/onboarding", label: "초대받은 계정 등록" },
+            state.status === "authenticated"
+              ? { to: "/settings/auth", label: "가계 구성원 관리" }
+              : { to: "/onboarding", label: "초대받은 계정 등록" },
           ]}
         />
       </section>
-      <section className="card">
-        <h2>앱 정보</h2>
-        <p>SallimBook · 웹 클라이언트 버전 {version}</p>
-        <p className="muted">
-          Android 설치 앱의 버전과 빌드 번호는 기기의 앱 정보에서 확인해 주세요.
-        </p>
-      </section>
+      <AppVersion />
     </>
   );
 }

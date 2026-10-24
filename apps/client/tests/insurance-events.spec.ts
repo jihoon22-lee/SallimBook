@@ -454,7 +454,7 @@ test("correcting a refund keeps its reason and explains where the correction rea
   await page.goto(`/insurance/refunds/${state.refunds.at(-1)!.id}/correct`);
   await expect(
     page.getByText(
-      "원래 의료비 환불 사유 “합성 본인부담 환불”은 그대로 남아요. 정정 사유는 금전 이력에 기록돼요. 사유 자체가 틀렸다면 무효 처리 후 새로 기록해 주세요.",
+      "원래 의료비 환불 사유는 “합성 본인부담 환불” 그대로 남아요. 정정 사유는 금전 이력에 기록돼요. 사유 자체가 틀렸다면 무효 처리 후 새로 기록해 주세요.",
       { exact: true },
     ),
   ).toBeVisible();
