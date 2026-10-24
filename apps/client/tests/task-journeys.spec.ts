@@ -138,7 +138,7 @@ test("monthly confirmation uses the compact amount row and keeps its saved owner
   const state = await mockMonths(page);
   await page.goto("/assets/months/2025-02");
   const card = page
-    .getByRole("listitem")
+    .locator(".month-value-card")
     .filter({ has: page.getByRole("heading", { name: "합성 공동 주택", exact: true }) });
   await expect(card.locator("details")).not.toHaveAttribute("open", "");
   await expect(card).toContainText("불러온 값 · 미확인");
@@ -148,7 +148,8 @@ test("monthly confirmation uses the compact amount row and keeps its saved owner
   await page.getByRole("button", { name: "금액 확인 저장", exact: true }).click();
   await expect(page.getByText("확인한 금액과 기준일을 저장했어요.", { exact: true })).toBeVisible();
   await card.locator("summary").click();
-  await expect(card.getByText("50%", { exact: true })).toBeVisible();
+  await expect(card.locator("details")).toHaveAttribute("open", "");
+  await expect(card.locator("details")).toContainText("50%");
   expect(state.writes).toHaveLength(1);
   expect(state.writes[0]!.body.unchanged).toBe(true);
 });
