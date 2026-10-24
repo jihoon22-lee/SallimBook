@@ -1,3 +1,4 @@
+import { NameSearch } from "../../../shared/NameSearch";
 import { MisregistrationDelete } from "../../assets/MisregistrationDelete";
 import { FilterPanel, TaskNavigation } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
@@ -69,6 +70,7 @@ function CaseList() {
   const treatment = params.get("treatment") ?? "";
   const financial = params.get("financial") ?? "";
   const people = useHouseholdPeople();
+  const q = params.get("q") ?? "";
   const list = usePagedList(
     useCallback(
       (cursor?: string) =>
@@ -81,15 +83,17 @@ function CaseList() {
             ? { financial_state: financial as CaseQuery["financial_state"] }
             : {}),
           limit: 50,
+          ...(q ? { q } : {}),
           ...(cursor ? { cursor } : {}),
         }),
-      [api, patient, treatment, financial],
+      [api, patient, treatment, financial, q],
     ),
     undefined,
     "insurance-cases",
   );
   return (
     <>
+      <NameSearch label="보험 사건 이름 검색" />
       <Link className="button-link" to="/insurance/cases/new">
         보험 사건 등록
       </Link>

@@ -29,6 +29,7 @@ from sallimbook.core.authorization import (
     scoped_entity,
 )
 from sallimbook.core.errors import DomainError
+from sallimbook.core.name_search import search_names
 from sallimbook.core.pagination import keyset_page
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
@@ -188,6 +189,7 @@ def list_accounts(
     session: Session,
     principal: Principal,
     *,
+    q: str | None = None,
     cursor: UUID | None = None,
     limit: int = 50,
     account_type: AccountType | None = None,
@@ -216,6 +218,7 @@ def list_accounts(
         query = query.where(Asset.ended_on.is_(None))
     elif status == "closed":
         query = query.where(Asset.ended_on.is_not(None))
+    query = search_names(query, q, Asset.name, FinancialAccount.institution_name)
     rows, next_cursor = keyset_page(
         session,
         query,

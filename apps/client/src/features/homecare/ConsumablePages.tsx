@@ -1,3 +1,4 @@
+import { NameSearch } from "../../shared/NameSearch";
 import { TaskNavigation } from "../../shared/TaskLayout";
 import { Icon } from "../../shared/Icon";
 import { useCallback, useState } from "react";
@@ -277,10 +278,12 @@ function ConsumableList() {
   const [params, setParams] = useSearchParams();
   const status =
     params.get("status") === "all" ? "all" : params.get("status") === "ended" ? "ended" : "active";
+  const q = params.get("q") ?? "";
   const list = usePagedList(
     useCallback(
-      (cursor?: string) => api.listConsumables({ query: { status, cursor, limit: 50 } }),
-      [api, status],
+      (cursor?: string) =>
+        api.listConsumables({ query: { status, cursor, limit: 50, ...(q ? { q } : {}) } }),
+      [api, status, q],
     ),
     undefined,
     "consumables",
@@ -301,10 +304,20 @@ function ConsumableList() {
         aria-label="소모품 규격 목록"
       >
         <h2>공용 재고·규격 목록</h2>
+        <NameSearch label="소모품 이름·규격 검색" />
         <div className="form-field">
           <label>
             소모품 사용 상태
-            <select value={status} onChange={(e) => setParams({ status: e.target.value })}>
+            <select
+              value={status}
+              onChange={(e) =>
+                setParams((previous) => {
+                  const next = new URLSearchParams(previous);
+                  next.set("status", e.target.value);
+                  return next;
+                })
+              }
+            >
               {Object.entries(statuses).map(([value, label]) => (
                 <option value={value} key={value}>
                   {label}

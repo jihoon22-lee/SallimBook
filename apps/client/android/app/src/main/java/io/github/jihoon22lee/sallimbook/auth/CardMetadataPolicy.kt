@@ -62,15 +62,16 @@ internal object CardMetadataPolicy {
     private fun query(value: Any?): String {
         if (value == null) return ""
         val row = obj(value)
-        if (!setOf("owner_member_id", "card_type", "settlement_account_id", "status", "cursor", "limit").containsAll(row.keys)) invalid()
+        if (!setOf("q", "owner_member_id", "card_type", "settlement_account_id", "status", "cursor", "limit").containsAll(row.keys)) invalid()
         for ((key, item) in row) when (key) {
+            "q" -> if (item != null) NameSearchQuery.validate(item)
             "owner_member_id", "settlement_account_id", "cursor" -> if (item != null) FinancePolicy.id(item)
             "card_type" -> if (item != null) choice(item, "credit", "debit")
             "status" -> choice(item, "active", "closed", "all")
             "limit" -> integer(item, 1, 200)
         }
         val values = row.filterValues { it != null }
-        return if (values.isEmpty()) "" else "?" + values.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }
+        return if (values.isEmpty()) "" else "?" + values.toSortedMap().entries.joinToString("&") { "${it.key}=${NameSearchQuery.value(it.key, it.value)}" }
     }
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
         val args = obj(value)
@@ -109,7 +110,7 @@ internal object CardMetadataPolicy {
     fun httpAllowed(method: String, path: String, body: Any?, ifMatch: String?): Boolean {
         try {
             val uri = URI(path)
-            if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) return false
+            if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in uri.rawPath || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) return false
             val segments = uri.rawPath.split('/')
             val args = mutableMapOf<String, Any?>()
             val operation = when {
@@ -120,7 +121,7 @@ internal object CardMetadataPolicy {
                         for (part in raw.split('&')) {
                             val pair = part.split('=', limit = 2)
                             if (pair.size != 2 || pair[0] in values) invalid()
-                            values[pair[0]] = if (pair[0] == "limit") pair[1].toLongOrNull() ?: invalid() else pair[1]
+                            values[pair[0]] = if (pair[0] == "limit") pair[1].toLongOrNull() ?: invalid() else if (pair[0] == "q") NameSearchQuery.decode(pair[1]) else pair[1]
                         }
                     }
                     args["query"] = values

@@ -14,6 +14,7 @@ from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, run_idempotent
+from sallimbook.core.name_search import search_names
 from sallimbook.core.pagination import check_limit, keyset_page
 from sallimbook.core.types import SEOUL, krw_string
 from sallimbook.homecare.calculations import MAX_QUANTITY, consumable_status, next_check_on
@@ -246,9 +247,12 @@ def get_appliance(session, principal, appliance_id):
     return _finish(session, _appliance_response(row, today()))
 
 
-def list_appliances(session, principal, *, status="active", cursor=None, limit=50):
+def list_appliances(session, principal, *, q=None, status="active", cursor=None, limit=50):
     query = _status_filter(
         select(Appliance).where(Appliance.household_id == principal.household_id), Appliance, status
+    )
+    query = search_names(
+        query, q, Appliance.name, Appliance.model, Appliance.manufacturer, Appliance.location
     )
     rows, next_cursor = _page(session, principal, query, Appliance, cursor, limit)
     current = today()
@@ -303,12 +307,13 @@ def get_consumable(session, principal, consumable_id):
     return _finish(session, _consumable_response(row))
 
 
-def list_consumables(session, principal, *, status="active", cursor=None, limit=50):
+def list_consumables(session, principal, *, q=None, status="active", cursor=None, limit=50):
     query = _status_filter(
         select(Consumable).where(Consumable.household_id == principal.household_id),
         Consumable,
         status,
     )
+    query = search_names(query, q, Consumable.name, Consumable.sku_or_model)
     rows, next_cursor = _page(session, principal, query, Consumable, cursor, limit)
     return _finish(
         session,

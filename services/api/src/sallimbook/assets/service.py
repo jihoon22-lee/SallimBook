@@ -30,6 +30,7 @@ from sallimbook.cashflow.payment_links import require_closure
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.name_search import search_names
 from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL
 from sallimbook.identity.auth_models import HouseholdMember
@@ -128,6 +129,7 @@ def list_assets(
     session: Session,
     principal: Principal,
     *,
+    q: str | None = None,
     cursor: UUID | None = None,
     limit: int = 50,
     kind: AssetKind | None = None,
@@ -158,6 +160,7 @@ def list_assets(
         query = query.where(Asset.archived_at.is_(None))
     elif status == "archived":
         query = query.where(Asset.archived_at.is_not(None))
+    query = search_names(query, q, Asset.name)
     rows, next_cursor = keyset_page(
         session,
         query,

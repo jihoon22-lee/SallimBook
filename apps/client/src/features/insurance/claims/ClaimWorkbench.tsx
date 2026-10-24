@@ -1,3 +1,5 @@
+import { SearchableSelect } from "../../../shared/SearchableSelect";
+import { treatments, finances, policyStatuses } from "../model";
 import { useCallback } from "react";
 import { Link } from "react-router";
 import { FilterPanel } from "../../../shared/TaskLayout";
@@ -50,9 +52,9 @@ function ClaimTasks() {
   const personName = (id: string | null | undefined) =>
     people.people.find((p) => p.id === id)?.display_name ?? "가족 확인 필요";
   const caseLabel = (row: Schema["CaseListItem"]) =>
-    `${row.title} · ${personName(row.patient_member_id)} · 진료 시작 ${dateLabel(row.start_on)}`;
+    `${row.title} · ${personName(row.patient_member_id)} · 진료 시작 ${dateLabel(row.start_on)} · ${treatments[row.treatment_state]} · ${finances[row.financial_state]}`;
   const policyLabel = (row: Schema["PolicyResponse"]) =>
-    `${row.insurer} · ${row.product_name} · ${personName(row.insured_member_id)}`;
+    `${row.insurer} · ${row.product_name} · ${personName(row.insured_member_id)} · 계약 시작 ${dateLabel(row.contract_start ?? null)} · ${policyStatuses[row.status]}`;
   const dateError = isDateOnly(from) && isDateOnly(until) && from > until;
   const rows = (result.data?.claims ?? [])
     .filter((row) => {
@@ -114,28 +116,30 @@ function ClaimTasks() {
               ))}
             </select>
           </label>
-          <label>
-            청구 사건 필터
-            <select value={caseId} onChange={(e) => filter("case", e.target.value)}>
-              <option value="">모든 사건</option>
-              {result.data?.cases.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {caseLabel(row)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            청구 계약 필터
-            <select value={policyId} onChange={(e) => filter("policy", e.target.value)}>
-              <option value="">모든 계약</option>
-              {result.data?.policies.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {policyLabel(row)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="form-field">
+            <SearchableSelect
+              label="청구 사건 필터"
+              value={caseId}
+              onChange={(value) => filter("case", value)}
+              placeholder="모든 사건"
+              options={(result.data?.cases ?? []).map((row) => ({
+                value: row.id,
+                label: caseLabel(row),
+              }))}
+            />
+          </div>
+          <div className="form-field">
+            <SearchableSelect
+              label="청구 계약 필터"
+              value={policyId}
+              onChange={(value) => filter("policy", value)}
+              placeholder="모든 계약"
+              options={(result.data?.policies ?? []).map((row) => ({
+                value: row.id,
+                label: policyLabel(row),
+              }))}
+            />
+          </div>
           <label>
             청구 환자 필터
             <select value={patient} onChange={(e) => filter("patient", e.target.value)}>

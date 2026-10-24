@@ -130,8 +130,8 @@ internal object InsurancePolicy {
     private fun query(operation: FinanceOperation, value: Any?): Map<String, Any?> {
         if (value == null) return emptyMap()
         val fields = mapOf("cursor" to nullable(if (operation == FinanceOperation.INSURANCE_CASE_HISTORY) positive else id), "limit" to { v: Any? -> integer(v, 1, 200) }) + when (operation) {
-            FinanceOperation.LIST_INSURANCE_POLICIES -> mapOf("status" to nullable(choice("active", "ended", "lapsed")), "insured_member_id" to nullable(id), "policyholder_member_id" to nullable(id))
-            FinanceOperation.LIST_INSURANCE_CASES -> mapOf("patient_member_id" to nullable(id), "treatment_state" to nullable(choice("ongoing", "ended")), "financial_state" to nullable(choice("open", "settled")))
+            FinanceOperation.LIST_INSURANCE_POLICIES -> mapOf("q" to nullable(NameSearchQuery::validate), "status" to nullable(choice("active", "ended", "lapsed")), "insured_member_id" to nullable(id), "policyholder_member_id" to nullable(id))
+            FinanceOperation.LIST_INSURANCE_CASES -> mapOf("q" to nullable(NameSearchQuery::validate), "patient_member_id" to nullable(id), "treatment_state" to nullable(choice("ongoing", "ended")), "financial_state" to nullable(choice("open", "settled")))
             FinanceOperation.LIST_INSURANCE_COVERAGES, FinanceOperation.LIST_POLICY_PREMIUM_LINKS -> mapOf("active" to nullable(bool))
             else -> emptyMap()
         }
@@ -146,14 +146,14 @@ internal object InsurancePolicy {
         var path = route.path
         ids.forEach { path = path.replace("{$it}", FinancePolicy.id(args[it])) }
         val values = if (route.query) query(operation, args["query"]) else emptyMap()
-        if (values.isNotEmpty()) path += "?" + values.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }
+        if (values.isNotEmpty()) path += "?" + values.toSortedMap().entries.joinToString("&") { "${it.key}=${NameSearchQuery.value(it.key, it.value)}" }
         val body = if (route.input.isEmpty()) null else input(route.input, args["input"])
         if (body?.get("parent_id") != null && body["parent_id"] == args["nodeId"]) invalid()
         return FinanceRequest(route.method, path, body, if (route.version) tag(args["ifMatch"]) else null)
     }
     fun httpAllowed(method: String, path: String, body: Any?, ifMatch: String?): Boolean = try {
         val uri = URI(path)
-        if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) invalid()
+        if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in uri.rawPath || '\\' in path || path.any { it.isWhitespace() || it.code < 32 }) invalid()
         val parts = uri.rawPath.split('/')
         val entry = routes.entries.firstOrNull { (_, route) ->
             val pattern = route.path.split('/')
@@ -172,6 +172,7 @@ internal object InsurancePolicy {
                 values[pair[0]] = when {
                     pair[0] == "active" -> when (pair[1]) { "true" -> true; "false" -> false; else -> invalid() }
                     pair[0] == "limit" || pair[0] == "cursor" && entry.key == FinanceOperation.INSURANCE_CASE_HISTORY -> pair[1].toLongOrNull() ?: invalid()
+                    pair[0] == "q" -> NameSearchQuery.decode(pair[1])
                     else -> pair[1]
                 }
             }

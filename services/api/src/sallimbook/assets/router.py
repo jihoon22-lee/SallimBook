@@ -15,6 +15,7 @@ from sallimbook.assets.schemas import (
     InclusionStatus,
     OwnershipKind,
 )
+from sallimbook.core.name_search import NameQuery
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
 router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
@@ -32,6 +33,7 @@ CREATED_HEADERS = {
 def list_assets(
     principal: PrincipalDependency,
     session: SessionDependency,
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     kind: AssetKind | None = None,
@@ -44,6 +46,7 @@ def list_assets(
     return service.list_assets(
         session,
         principal,
+        q=q,
         cursor=cursor,
         limit=limit,
         kind=kind,

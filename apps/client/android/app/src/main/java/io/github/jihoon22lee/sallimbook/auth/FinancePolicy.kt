@@ -141,10 +141,11 @@ internal object FinancePolicy {
     private fun query(value: Any?, account: Boolean): String {
         if (value == null) return ""
         val row = objectValue(value)
-        val allowed = if (account) setOf("cursor", "limit", "account_type", "owner_member_id", "status")
-            else setOf("cursor", "limit", "kind", "category", "ownership_kind", "owner_member_id", "inclusion_status", "status")
+        val allowed = if (account) setOf("q", "cursor", "limit", "account_type", "owner_member_id", "status")
+            else setOf("q", "cursor", "limit", "kind", "category", "ownership_kind", "owner_member_id", "inclusion_status", "status")
         if (!allowed.containsAll(row.keys)) invalid()
         for ((key, item) in row) when (key) {
+            "q" -> if (item != null) NameSearchQuery.validate(item)
             "cursor", "owner_member_id" -> id(item)
             "limit" -> if (item !is Int || item !in 1..200) invalid()
             "account_type" -> choice(item, accountTypes)
@@ -154,8 +155,9 @@ internal object FinancePolicy {
             "inclusion_status" -> choice(item, inclusion)
             "status" -> choice(item, if (account) setOf("active", "closed", "all") else setOf("active", "archived", "all"))
         }
-        // Values are now bounded enum/UUID/integer only; no arbitrary URL encoding is needed.
-        return if (row.isEmpty()) "" else "?" + row.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }
+        // Only q uses URL encoding; all other values keep their exact bounded format.
+        val values = row.filterValues { it != null }
+        return if (values.isEmpty()) "" else "?" + values.toSortedMap().entries.joinToString("&") { "${it.key}=${NameSearchQuery.value(it.key, it.value)}" }
     }
 
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
@@ -220,7 +222,7 @@ internal object FinancePolicy {
         if (PaymentLinksPolicy.httpAllowed(method, path, body, ifMatch)) return true
         if (InsurancePolicy.httpAllowed(method, path, body, ifMatch)) return true
         val uri = URI(path)
-        if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in path || '\\' in path ||
+        if (uri.isAbsolute || uri.rawAuthority != null || uri.rawFragment != null || '%' in uri.rawPath || '\\' in path ||
             path.any { it.isWhitespace() || it.code < 32 }) false
         else {
             val pieces = uri.rawPath.split('/')
@@ -242,7 +244,7 @@ internal object FinancePolicy {
                                     val number = pair[1].toIntOrNull() ?: invalid()
                                     if (number.toString() != pair[1]) invalid()
                                     number
-                                } else pair[1]
+                                } else if (pair[0] == "q") NameSearchQuery.decode(pair[1]) else pair[1]
                             }
                         }
                         args["query"] = values

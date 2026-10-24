@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Response
 
+from sallimbook.core.name_search import NameQuery
 from sallimbook.homecare import service
 from sallimbook.homecare.models import Appliance, ApplianceConsumable, Consumable
 from sallimbook.homecare.schemas import (
@@ -101,10 +102,13 @@ def list_appliances(
     principal: PrincipalDependency,
     session: SessionDependency,
     status: StatusFilter = "active",
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
-    return service.list_appliances(session, principal, status=status, cursor=cursor, limit=limit)
+    return service.list_appliances(
+        session, principal, status=status, q=q, cursor=cursor, limit=limit
+    )
 
 
 @router.post(
@@ -163,10 +167,13 @@ def list_consumables(
     principal: PrincipalDependency,
     session: SessionDependency,
     status: StatusFilter = "active",
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Limit = 50,
 ):
-    return service.list_consumables(session, principal, status=status, cursor=cursor, limit=limit)
+    return service.list_consumables(
+        session, principal, status=status, q=q, cursor=cursor, limit=limit
+    )
 
 
 @router.post(

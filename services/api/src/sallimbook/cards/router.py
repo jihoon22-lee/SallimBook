@@ -12,6 +12,7 @@ from sallimbook.cards.schemas import (
     CardResponse,
     CardType,
 )
+from sallimbook.core.name_search import NameQuery
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
 router = APIRouter(prefix="/api/v1/cards", tags=["cards"])
@@ -56,6 +57,7 @@ def list_cards(
     card_type: CardType | None = None,
     settlement_account_id: UUID | None = None,
     status: Literal["active", "closed", "all"] = "active",
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ):
@@ -66,6 +68,7 @@ def list_cards(
         card_type=card_type,
         settlement_account_id=settlement_account_id,
         status=status,
+        q=q,
         cursor=cursor,
         limit=limit,
     )

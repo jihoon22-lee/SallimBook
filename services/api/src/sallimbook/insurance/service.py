@@ -16,6 +16,7 @@ from sallimbook.cashflow.recurring_service import _rule_response
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
+from sallimbook.core.name_search import search_names
 from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, krw_string
 from sallimbook.identity import service as identity
@@ -231,6 +232,7 @@ def list_policies(
     session,
     principal,
     *,
+    q: str | None = None,
     status=None,
     insured_member_id=None,
     policyholder_member_id=None,
@@ -248,6 +250,7 @@ def list_policies(
             query = query.where(getattr(InsurancePolicy, field) == value)
     if status is not None:
         query = query.where(InsurancePolicy.status == status)
+    query = search_names(query, q, InsurancePolicy.product_name, InsurancePolicy.insurer)
     rows, next_cursor = _page_rows(session, principal, query, InsurancePolicy, cursor, limit)
     return _finish(
         session,
@@ -524,6 +527,7 @@ def list_cases(
     session,
     principal,
     *,
+    q: str | None = None,
     patient_member_id=None,
     treatment_state=None,
     financial_state=None,
@@ -540,6 +544,7 @@ def list_cases(
     ):
         if value is not None:
             query = query.where(getattr(InsuranceCase, field) == value)
+    query = search_names(query, q, InsuranceCase.title)
     rows, next_cursor = _page_rows(
         session,
         principal,

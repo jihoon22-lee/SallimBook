@@ -1,3 +1,5 @@
+import { SearchableSelect } from "../../shared/SearchableSelect";
+import { NameSearch } from "../../shared/NameSearch";
 import { PaymentConnections, NamedReference } from "../finance/RelatedRecords";
 import { FilterPanel } from "../../shared/TaskLayout";
 import { useCallback, useRef, useState } from "react";
@@ -106,24 +108,27 @@ function CardList() {
   const status = ["active", "closed", "all"].includes(params.get("status") ?? "")
     ? (params.get("status") as CardQuery["status"])
     : "active";
+  const q = params.get("q") ?? "";
   const list = usePagedList(
     useCallback(
       (cursor?: string) =>
         api.list({
           status,
           limit: 50,
+          ...(q ? { q } : {}),
           ...(owner ? { owner_member_id: owner } : {}),
           ...(type ? { card_type: type } : {}),
           ...(account ? { settlement_account_id: account } : {}),
           ...(cursor ? { cursor } : {}),
         }),
-      [api, owner, type, account, status],
+      [api, owner, type, account, status, q],
     ),
     undefined,
     "cards",
   );
   return (
     <>
+      <NameSearch label="카드 이름·카드사 검색" />
       <div className="form-actions">
         <Link className="button-link" to="/cards/new">
           카드 등록
@@ -165,18 +170,16 @@ function CardList() {
             </label>
           </div>
           <div className="form-field">
-            <label>
-              결제계좌 필터
-              <select value={account} onChange={(event) => filter("account", event.target.value)}>
-                <option value="">모든 계좌</option>
-                {accounts.data?.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.asset.name}
-                    {row.status === "closed" ? " · 사용 종료" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchableSelect
+              label="결제계좌 필터"
+              value={account}
+              onChange={(value) => filter("account", value)}
+              placeholder="모든 계좌"
+              options={(accounts.data ?? []).map((row) => ({
+                value: row.id,
+                label: `${row.asset.name} · ${row.institution_name} · ${row.asset.ownership_kind === "joint" ? "공동 소유" : (members.members.find((member) => member.member_id === row.asset.owner_member_id)?.display_name ?? "구성원 확인 필요")} · ${row.status === "closed" ? "사용 종료" : "사용 중"}`,
+              }))}
+            />
           </div>
           <div className="form-field">
             <label>

@@ -12,6 +12,7 @@ from sallimbook.accounts.schemas import (
     AccountRevealResponse,
     AccountType,
 )
+from sallimbook.core.name_search import NameQuery
 from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
 
 router = APIRouter(prefix="/api/v1/accounts", tags=["accounts"])
@@ -54,6 +55,7 @@ def create_account(
 def list_accounts(
     principal: PrincipalDependency,
     session: SessionDependency,
+    q: NameQuery = None,
     cursor: UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     account_type: AccountType | None = None,
@@ -63,6 +65,7 @@ def list_accounts(
     return service.list_accounts(
         session,
         principal,
+        q=q,
         cursor=cursor,
         limit=limit,
         account_type=account_type,

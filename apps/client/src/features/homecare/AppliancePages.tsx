@@ -1,3 +1,4 @@
+import { NameSearch } from "../../shared/NameSearch";
 import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
@@ -286,10 +287,12 @@ function ApplianceList() {
   const [params, setParams] = useSearchParams();
   const status =
     params.get("status") === "all" ? "all" : params.get("status") === "ended" ? "ended" : "active";
+  const q = params.get("q") ?? "";
   const list = usePagedList(
     useCallback(
-      (cursor?: string) => api.listAppliances({ query: { status, cursor, limit: 50 } }),
-      [api, status],
+      (cursor?: string) =>
+        api.listAppliances({ query: { status, cursor, limit: 50, ...(q ? { q } : {}) } }),
+      [api, status, q],
     ),
     undefined,
     "appliances",
@@ -302,11 +305,21 @@ function ApplianceList() {
   );
   return (
     <>
+      <NameSearch label="가전 이름·모델·장소 검색" />
       <ResourceFeedback resource={today} />
       <div className="form-field">
         <label>
           가전 사용 상태
-          <select value={status} onChange={(e) => setParams({ status: e.target.value })}>
+          <select
+            value={status}
+            onChange={(e) =>
+              setParams((previous) => {
+                const next = new URLSearchParams(previous);
+                next.set("status", e.target.value);
+                return next;
+              })
+            }
+          >
             {Object.entries(statuses).map(([value, label]) => (
               <option value={value} key={value}>
                 {label}

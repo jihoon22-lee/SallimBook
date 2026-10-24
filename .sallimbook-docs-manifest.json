@@ -66,8 +66,8 @@
       "git_sha1": "9f36f5ae87a99e4ff7a6eeda0650e4d4be1b7b27"
     },
     "docs/api-contract.md": {
-      "sha256": "1cfb98255ea32ab2291d6ba64e9b6730d7f6435ce728898f32593036e5124d4a",
-      "git_sha1": "1edabee387124ce613426b7035892ee291be8204"
+      "sha256": "a83b5b9cf745ee6910bf9c5e4d17dfc28f1b5951d09d56f4cf117f30c53e0e27",
+      "git_sha1": "ac0464c53e3e82f33fcc4c306e8e91d6052f4c98"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -394,8 +394,8 @@
       "git_sha1": "3f4b07b8d692c4a30015430c6122d4d4c36f9a43"
     },
     "docs/testing/scenario-ux.md": {
-      "sha256": "d740f95f20001d6d754bc2c9c29308d271a83d0ba26d07a3ce16763364ca7635",
-      "git_sha1": "0555a6b77f2ac5b1fafc6a151d442b259deb7591"
+      "sha256": "520bd09d458990f49352994cf83b639e58cb20a47823ae09f8a29fa2c384f345",
+      "git_sha1": "289d25afe7c6db618736a091c3dde7b5b6d3355b"
     },
     "docs/adr/document-inspection-isolation.md": {
       "sha256": "7509deecc44c5d747a4b6a207ec1b4c6752c4de866d6b3acc24b81c9a873514b",

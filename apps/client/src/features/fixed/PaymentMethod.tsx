@@ -1,3 +1,6 @@
+import { SearchableSelect } from "../../shared/SearchableSelect";
+import { MemberLoadError, useHouseholdMembers } from "../finance/FinanceSupport";
+import { dateLabel } from "../finance/dates";
 import { useCallback } from "react";
 import { useCardsApi } from "../cards/api";
 import { useAssetsApi } from "../assets/api";
@@ -14,6 +17,7 @@ function CardSelect({
   on?: string;
 }) {
   const api = useCardsApi();
+  const members = useHouseholdMembers();
   const resource = useResource(
     useCallback(
       () =>
@@ -25,32 +29,27 @@ function CardSelect({
   );
   return (
     <div className="form-field">
-      <label>
-        납부 카드
-        <select
-          value={value}
-          disabled={resource.loading}
-          onChange={(event) => onChange(event.target.value)}
-          required
-        >
-          <option value="">카드 선택</option>
-          {resource.data
-            ?.filter((row) => row.id === value || methodUsable(row.status, row.ended_on, on))
-            .map((row) => (
-              <option
-                value={row.id}
-                key={row.id}
-                disabled={!methodUsable(row.status, row.ended_on, on)}
-              >
-                {row.alias || row.product_name} · {row.masked_number || "네 자리 미입력"}
-                {endedSuffix(row.status, row.ended_on)}
-              </option>
-            ))}
-          {value && !resource.data?.some((row) => row.id === value) && (
-            <option value={value}>현재 연결 카드 · 다시 확인 필요</option>
-          )}
-        </select>
-      </label>
+      <SearchableSelect
+        label="납부 카드"
+        value={value}
+        onChange={onChange}
+        required
+        placeholder="카드 선택"
+        disabled={resource.loading || !!resource.error}
+        options={[
+          ...(resource.data ?? [])
+            .filter((row) => row.id === value || methodUsable(row.status, row.ended_on, on))
+            .map((row) => ({
+              value: row.id,
+              disabled: !methodUsable(row.status, row.ended_on, on),
+              label: `${row.alias || row.product_name} · ${row.masked_number || "네 자리 미입력"} · ${row.issuer_name} · ${members.members.find((member) => member.member_id === row.owner_member_id)?.display_name ?? "구성원 확인 필요"}${row.started_on ? ` · 시작 ${dateLabel(row.started_on)}` : ""}${endedSuffix(row.status, row.ended_on) || " · 사용 중"}`,
+            })),
+          ...(value && !resource.data?.some((row) => row.id === value)
+            ? [{ value, label: "현재 연결 카드 · 다시 확인 필요", disabled: true }]
+            : []),
+        ]}
+      />
+      <MemberLoadError error={members.error} retry={members.retry} />
       <CashflowError error={resource.error} />
       {resource.error && (
         <button type="button" onClick={() => void resource.reload()}>
