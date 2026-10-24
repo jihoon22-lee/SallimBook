@@ -3,7 +3,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, Response
 
-from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
+from sallimbook.identity.dependencies import (
+    PeopleCapability,
+    PrincipalDependency,
+    SessionDependency,
+)
 from sallimbook.insurance import service
 from sallimbook.insurance.schemas import (
     CaseHistoryResponse,
@@ -63,6 +67,7 @@ def create_policy(
     payload: PolicyCreate,
     principal: PrincipalDependency,
     session: SessionDependency,
+    people_supported: PeopleCapability,
     request: Request,
     response: Response,
 ):
@@ -72,6 +77,7 @@ def create_policy(
         payload,
         request.app.state.settings.field_encryption_key_file,
         request_id=request.state.request_id,
+        people_supported=people_supported,
     )
     return _etag(response, result, f"/api/v1/insurance/policies/{result.id}")
 
@@ -120,6 +126,7 @@ def update_policy(
     payload: PolicyPatch,
     principal: PrincipalDependency,
     session: SessionDependency,
+    people_supported: PeopleCapability,
     request: Request,
     response: Response,
     if_match: IfMatch,
@@ -134,6 +141,7 @@ def update_policy(
             if_match,
             request.app.state.settings.field_encryption_key_file,
             request_id=request.state.request_id,
+            people_supported=people_supported,
         ),
     )
 
@@ -282,9 +290,15 @@ def create_case(
     payload: CaseInput,
     principal: PrincipalDependency,
     session: SessionDependency,
+    people_supported: PeopleCapability,
     response: Response,
 ):
-    result = service.create_case(session, principal, payload)
+    result = service.create_case(
+        session,
+        principal,
+        payload,
+        people_supported=people_supported,
+    )
     return _etag(response, result, f"/api/v1/insurance/cases/{result.id}")
 
 
@@ -332,10 +346,21 @@ def update_case(
     payload: CasePatch,
     principal: PrincipalDependency,
     session: SessionDependency,
+    people_supported: PeopleCapability,
     response: Response,
     if_match: IfMatch,
 ):
-    return _etag(response, service.update_case(session, principal, case_id, payload, if_match))
+    return _etag(
+        response,
+        service.update_case(
+            session,
+            principal,
+            case_id,
+            payload,
+            if_match,
+            people_supported=people_supported,
+        ),
+    )
 
 
 @router.get(

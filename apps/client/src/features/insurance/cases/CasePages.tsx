@@ -5,13 +5,14 @@ import { Link, useParams } from "react-router";
 import { ApiError } from "../../../platform/api";
 import { isUuid, dateLabel } from "../../finance/dates";
 import { formatKrw } from "../../assets/months/model";
+import { useHouseholdPeople, PersonSelect } from "../../household/people";
 import { useHouseholdMembers } from "../../finance/FinanceSupport";
 import { usePagedList, useResource } from "../../finance/queries";
 import { useUrlFilters } from "../../finance/useUrlFilters";
 import { useInsuranceApi } from "../api";
 import { finances, treatments } from "../model";
 import type { CaseQuery } from "../model";
-import { InsuranceError, InsurancePage, MemberSelect } from "../InsuranceSupport";
+import { InsuranceError, InsurancePage } from "../InsuranceSupport";
 import { CaseEditor, CaseSummary } from "./CaseEditor";
 import { CaseMoneySummary } from "../events/EventSupport";
 import { ExpenseList, PayoutList } from "../events/EventPages";
@@ -22,6 +23,7 @@ const historyKey = (row: { id: string; version: number }) => `${row.id}:${row.ve
 function CaseHistory({ id }: { id: string }) {
   const api = useInsuranceApi();
   const members = useHouseholdMembers();
+  const people = useHouseholdPeople();
   const list = usePagedList(
     useCallback(
       async (cursor?: number) => {
@@ -46,7 +48,7 @@ function CaseHistory({ id }: { id: string }) {
               {members.members.find((m) => m.member_id === row.changed_by_member_id)
                 ?.display_name ?? "가계 구성원"}
             </p>
-            <CaseSummary row={row} members={members.members} />
+            <CaseSummary row={row} members={people.people} />
             {row.reason && <p>변경 사유: {row.reason}</p>}
           </li>
         ))}
@@ -65,7 +67,7 @@ function CaseList() {
   const patient = params.get("patient") ?? "";
   const treatment = params.get("treatment") ?? "";
   const financial = params.get("financial") ?? "";
-  const members = useHouseholdMembers();
+  const people = useHouseholdPeople();
   const list = usePagedList(
     useCallback(
       (cursor?: string) =>
@@ -101,7 +103,8 @@ function CaseList() {
         }
       >
         <div className="form-grid">
-          <MemberSelect
+          <PersonSelect
+            includeArchived
             label="사건 환자 필터"
             value={patient}
             onChange={(v) => filter("patient", v)}
@@ -152,7 +155,7 @@ function CaseList() {
               <Link to={`/insurance/cases/${row.id}`}>{row.title}</Link>
             </h2>
             <p>
-              {members.members.find((m) => m.member_id === row.patient_member_id)?.display_name ??
+              {people.people.find((m) => m.id === row.patient_member_id)?.display_name ??
                 "가계 구성원"}{" "}
               · {dateLabel(row.start_on)} ~ {dateLabel(row.end_on)}
             </p>
@@ -176,7 +179,7 @@ function CaseList() {
   );
 }
 function CaseDetail({ id, edit, nodeId }: { id: string; edit: boolean; nodeId?: string }) {
-  const members = useHouseholdMembers();
+  const people = useHouseholdPeople();
   const api = useInsuranceApi();
   const record = useResource(
     useCallback(
@@ -209,7 +212,7 @@ function CaseDetail({ id, edit, nodeId }: { id: string; edit: boolean; nodeId?: 
                 </Link>
               </div>
               <p className="record-subline">
-                {members.members.find((member) => member.member_id === row.patient_member_id)
+                {people.people.find((member) => member.id === row.patient_member_id)
                   ?.display_name ?? "가계 구성원"}{" "}
                 · {dateLabel(row.start_on)} 시작
               </p>
@@ -219,7 +222,7 @@ function CaseDetail({ id, edit, nodeId }: { id: string; edit: boolean; nodeId?: 
               </p>
               <details className="record-details">
                 <summary>사건 기간·진단 정보 자세히</summary>
-                <CaseSummary row={row} members={members.members} />
+                <CaseSummary row={row} members={people.people} />
               </details>
             </section>
             <TaskNavigation

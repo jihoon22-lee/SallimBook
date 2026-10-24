@@ -4,7 +4,7 @@ import ipaddress
 import socket
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from sallimbook.core.authorization import Principal
@@ -127,3 +127,20 @@ def self_setup_identity_allowed(request: Request) -> bool:
 def require_self_setup_identity(request: Request) -> None:
     if not self_setup_identity_allowed(request):
         raise DomainError("SETUP_UNAVAILABLE", "이 연결에서는 처음 시작할 수 없습니다.", 403)
+
+
+def people_capability(
+    value: Annotated[
+        str | None,
+        Header(
+            alias="X-SallimBook-People",
+            description=(
+                "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다."
+            ),
+        ),
+    ] = None,
+) -> bool:
+    return value == "1"
+
+
+PeopleCapability = Annotated[bool, Depends(people_capability)]

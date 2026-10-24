@@ -4,7 +4,7 @@ A new disposable ``sallimbook-ops-smoke-*`` Compose project with no host ports, 
 real key. The old release migrates its own schema, seeds data through its HTTP API and
 takes a backup with its own tool. The new image then runs the runbook's preflight
 schema check and literal migration command, starts, and is rolled back with
-``downgrade 0014_vault`` from the new image. The old release starts again, the schema is
+``downgrade <old schema revision>`` from the new image. The old release starts again, the schema is
 upgraded once more and obligations are regenerated. Only this project is removed.
 """
 
@@ -24,17 +24,12 @@ from ops.preflight import database_report, verify_database_command, verify_image
 
 ROOT = Path(__file__).resolve().parent.parent
 PASSWORD = "Synthetic upgrade password only 2026!"
-# Columns added after 0014 are left out so snapshots compare across the downgrade
-# (0015 revoked_at, 0016 the two cleared_* columns, 0018 the two install_* columns), and
-# manual_override, which 0015 normalizes.
-NEW_COLUMNS = (
-    "revoked_at",
-    "cleared_link_version",
-    "cleared_next_check_override",
-    "install_key_hash",
-    "install_session_id",
-)
-IGNORED_COLUMNS = ("manual_override", *NEW_COLUMNS)
+# Only columns introduced after the tested old schema may be omitted from row hashes.
+ADDED_COLUMNS = {
+    15: ("revoked_at", "manual_override"),
+    16: ("cleared_link_version", "cleared_next_check_override"),
+    18: ("install_key_hash", "install_session_id"),
+}
 
 CLIENT = """
 import json, urllib.error, urllib.request
@@ -162,20 +157,26 @@ assert len(page["items"]) == 1
 print(json.dumps({"regenerated": len(rows)}))
 """
 
-SNAPSHOT = """
+SNAPSHOT_TEMPLATE = """
 SELECT c.relname,
   (xpath('/row/n/text()', query_to_xml(format(
      'SELECT count(*) AS n FROM public.%I', c.relname), false, true, '')))[1]::text,
   (xpath('/row/h/text()', query_to_xml(format(
      'SELECT md5(coalesce(string_agg(x, %L ORDER BY x), %L)) AS h FROM ('
      'SELECT (to_jsonb(t){ignored})::text AS x FROM public.%I t) s',
-     ',', '', {names}, c.relname), false, true, '')))[1]::text
+     ',', ''{names}, c.relname), false, true, '')))[1]::text
 FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
   AND c.relname <> 'alembic_version'
 ORDER BY c.relname
-""".replace("{ignored}", " - %L" * len(IGNORED_COLUMNS)).replace(
-    "{names}", ", ".join(f"'{name}'" for name in IGNORED_COLUMNS)
-)
+"""
+
+
+def snapshot_query(old_schema):
+    number = int(old_schema.split("_", 1)[0])
+    ignored = tuple(name for added, names in ADDED_COLUMNS.items() if added > number for name in names)
+    return SNAPSHOT_TEMPLATE.replace("{ignored}", " - %L" * len(ignored)).replace(
+        "{names}", "".join(f", '{name}'" for name in ignored)
+    )
 
 
 def run(command, *, stdin=None, timeout=300):
@@ -415,7 +416,7 @@ def main(old_image, new_image):
 
         def snapshot():
             output = compose("new", "exec", "-T", "db", "psql", "-U", "sallimbook_admin",
-                             "-d", database, "-AtF", "\t", "-c", SNAPSHOT)
+                             "-d", database, "-AtF", "\t", "-c", snapshot_query(old_schema))
             tables = {}
             for line in output.strip().splitlines():
                 name, count, digest = line.split("\t")
@@ -427,6 +428,19 @@ def main(old_image, new_image):
             return tables, dict(line.split("|") for line in overrides.split())
 
         def same(left, right, message):
+            if "household_people" not in left and "household_people" in right:
+                assert right["household_people"][0] == left["household_members"][0]
+                invalid = compose("new", "exec", "-T", "db", "psql", "-U", "sallimbook_admin",
+                                  "-d", database, "-At", "-c", """
+                    SELECT count(*) FROM household_people p FULL JOIN household_members m
+                      ON p.id=m.id AND p.household_id=m.household_id
+                    WHERE p.id IS NULL OR m.id IS NULL OR p.member_id IS DISTINCT FROM m.id
+                      OR p.display_name IS NOT NULL OR p.relation <> 'member'
+                      OR p.archived_at IS NOT NULL
+                      OR p.created_by_member_id <> m.id OR p.updated_by_member_id <> m.id
+                """)
+                assert invalid.strip() == "0", "Member-person backfill differs"
+                right = {name: value for name, value in right.items() if name != "household_people"}
             if left != right:
                 # Synthetic table names and row counts only.
                 print({name: (left.get(name, ("-",))[0], right.get(name, ("-",))[0])
@@ -457,8 +471,11 @@ def main(old_image, new_image):
                               "import json, os; print(json.dumps(os.listdir('/srv/backups')))")
             names = json.loads(listing.strip().splitlines()[-1])
             assert any(name.endswith(".complete.json") for name in names), names
+            old_schema = compose("old", "exec", "-T", "db", "psql", "-U", "sallimbook_admin",
+                                 "-d", database, "-At", "-c",
+                                 "SELECT version_num FROM alembic_version").strip()
             before, before_overrides = snapshot()
-            assert before_overrides[seeded["released"]] == "t"
+            assert before_overrides[seeded["released"]] == ("t" if old_schema == "0014_vault" else "f")
 
             # Maintenance window: stop the old app, check, migrate, start the new image.
             compose("old", "stop", "api", "scanner")
@@ -472,11 +489,12 @@ def main(old_image, new_image):
             same(before, upgraded, "Upgrade changed rows beyond the documented fields")
             changed = {key for key in before_overrides
                        if before_overrides[key] != upgraded_overrides[key]}
-            assert changed == {seeded["released"]}, changed
+            expected_changes = {seeded["released"]} if old_schema == "0014_vault" else set()
+            assert changed == expected_changes, changed
 
             # Rollback before any phone update: downgrade with the new image's scripts.
             compose("new", "stop", "api", "inspector", "scanner")
-            run(migration_command(network, admin_env, new_id, "downgrade", "0014_vault"))
+            run(migration_command(network, admin_env, new_id, "downgrade", old_schema))
             assert schema(new_id) == "upgrade-required"
             rolled_back, rolled_overrides = snapshot()
             same(before, rolled_back, "Rollback did not restore the old rows")
@@ -496,9 +514,9 @@ def main(old_image, new_image):
             regenerated = python_in_api("new", REGENERATE, seeded)
             print(
                 "PASS: old " + old_revision[:7] + " seed/backup, new " + new_revision[:7]
-                + " preflight upgrade-required, migration, start, rollback to 0014_vault"
-                " with the old release healthy (row counts and hashes kept; one stale"
-                " manual_override stays cleared), re-upgrade and regeneration of "
+                + " preflight upgrade-required, migration, start, rollback to " + old_schema
+                + " with the old release healthy (row counts and hashes kept;"
+                " manual_override normalization is preserved), re-upgrade and regeneration of "
                 + str(regenerated["regenerated"]) + " obligations; no ports, node or real key"
             )
         finally:

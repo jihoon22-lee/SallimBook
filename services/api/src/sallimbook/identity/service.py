@@ -811,6 +811,9 @@ def _accept_invitation_locked(
         before = invitation.version
         invitation.used_at = now
         session.flush()
+        from sallimbook.identity.people_models import add_member_person
+
+        add_member_person(session, member)
         # The new member is the actor; acceptance does not sign anyone in.
         append_event(
             session,
@@ -928,6 +931,9 @@ def setup_household(
         )
         session.add(member)
         session.flush()
+        from sallimbook.identity.people_models import add_member_person
+
+        add_member_person(session, member)
         result = issue_session(session, user, member, request.device_label, transport)
         session.commit()
     except IntegrityError:

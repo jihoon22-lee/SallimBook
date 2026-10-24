@@ -6,6 +6,9 @@ import type { components } from "@sallimbook/api-client";
 export const apiClient = createApiClient();
 
 const knownCodes = [
+  "PERSON_UNAVAILABLE",
+  "PEOPLE_CLIENT_REQUIRED",
+  "MEMBER_PERSON_MANAGED",
   "SETUP_UNAVAILABLE",
   "SETUP_COMPLETE",
   "INVALID_CONNECTION_CODE",

@@ -119,6 +119,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from None
         return HealthResponse(status="ok")
 
+    from sallimbook.identity.people_router import router as people_router
+
+    app.include_router(people_router)
     app.include_router(identity_router)
     app.include_router(passkey_router)
     app.include_router(assets_router)

@@ -50,8 +50,8 @@
       "git_sha1": "022a000a8757c9e2e3303849ef0a68bd233fba4d"
     },
     "docs/product-requirements.md": {
-      "sha256": "2cb7a39e339a414f01525b0553418ddb549efc2595064fadd460df84045115cb",
-      "git_sha1": "25296bd053abe202585cecbe85b0d3c9d54b7930"
+      "sha256": "727c24770d9faa3f7c142243eb79d5ee4754f6406e9bc54240ebb45243f9f686",
+      "git_sha1": "6fb66782a3da6edd33defd4078d42e1c3e50047c"
     },
     "docs/architecture.md": {
       "sha256": "ee9d38e6ae6f998c1adac3c932c1ff378c861a57ded75e627deae4f46d2bc16c",
@@ -62,12 +62,12 @@
       "git_sha1": "73402e2b2e77c705fe24639b7b3cea41e8f66118"
     },
     "docs/data-model.md": {
-      "sha256": "cbc6344843647823ed5779ad09bbc5bc034aeef0a7d1bdfe2af2c1037ff68139",
-      "git_sha1": "23c106b30d0acffff269c7486adc408bd3681d05"
+      "sha256": "592e65ce05c2500cab97310e7d8cc17c3204b9bd3d098b7fdf951b5a36f4935d",
+      "git_sha1": "cf6e169a91995aa6b1a5122847a3f811b999d075"
     },
     "docs/api-contract.md": {
-      "sha256": "6feaa1ab06d1b2019e3a76a86a4bf50ab1366f37a1b9d15618968f988494009d",
-      "git_sha1": "35e0bb22e48f4cb86539a86aa3262f511d502852"
+      "sha256": "69f79f7951fd9ef68e146aee5c753efadad05c5e77a3da7757ad3a4fbc04c831",
+      "git_sha1": "a7a4d593b4f0e2708dd5ee15c7f5eb8f1ef56eb1"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -82,8 +82,8 @@
       "git_sha1": "7e9827ebf39404d2d5cb7db850a7bfec0cf53d64"
     },
     "docs/insurance-workflows.md": {
-      "sha256": "62f5e12222691de73f39749c8f7bd43ba4f321d8dcf9dbae98a938a122229d7d",
-      "git_sha1": "f46bf015dcb2926d345b5c72d3fc2127d31cc615"
+      "sha256": "b20912401fb5d12d67955a02c594e594b72966238d758331fd4d539672db7388",
+      "git_sha1": "64f13c7ce690ea0c835e3cf85abd853fce933929"
     },
     "docs/development-environment.md": {
       "sha256": "108d9079245e6867b1135458da2816b1d8294dd9898273778bb8fb731cde0df9",
@@ -270,12 +270,12 @@
       "git_sha1": "3ee8330ea99693bea87ed5d29398cc5d96910274"
     },
     "docs/testing/insurance-client.md": {
-      "sha256": "3704dbac754c3e8a2ed8ac406a229c6418f524624cdb19a08ead3d6151269460",
-      "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
+      "sha256": "0e87b1cf2f240c5e0bef628b05edf427acbcba6b3e05d2388a8357d6a98f27cd",
+      "git_sha1": "f340bfc3a1e589da398319034f18f78daf7a324f"
     },
     "docs/operations-runbook.md": {
-      "sha256": "f946e47e6ce36ffe235c908a880b53b8032c4cf74868041b36974f925f8564c9",
-      "git_sha1": "c572df0d433a17d274db4d1c1e0b236f2c575dd2"
+      "sha256": "4fe5cd604ce226e6c2b251de87332c453a9534bed5347a18c6fb7e152c235d54",
+      "git_sha1": "65a7970689d124e56f6ac06f1854f067b320210e"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
@@ -404,6 +404,10 @@
     "docs/adr/react-diagnostics.md": {
       "sha256": "e5b1112339d48bdbf67f796a11dcbf81b45f16e2575437f9c0c92521578b0764",
       "git_sha1": "6bc27ef9568cbcbd8fe931c6a61d539cc72ecb00"
+    },
+    "docs/adr/household-people.md": {
+      "sha256": "a7ab38d319cd9ddfc27f4fbb6f0e878b888800c52d145e0155115d952791a0ff",
+      "git_sha1": "603d746d066d503983685be0b12f9b49eea6091d"
     }
   }
 }

@@ -414,3 +414,18 @@ PATH=/VERIFIED_AGE_AND_POSTGRES_TOOL_DIRECTORY:$PATH \
 운영 완료에는 별도로 실제 허용/비허용 기기의 사설 접근, 외부 443의 JSON 이외 차단, DB 비노출, 실제 패스키, 이전 앱-새 API, 두 기기 데이터 보존 업데이트, WSL 재시작 복귀, 서명키/서버키/복구코드 별도 보관, 전체 도메인 fixture·G1~G6 인수, 실제 새 환경 복원 시각과 RPO/RTO 측정이 필요하다. 이 문서나 단위검사만으로 SB-036~040을 완료 처리하지 않는다.
 
 공식 근거: [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve), [컨테이너 설정](https://tailscale.com/docs/features/containers/docker/docker-params), [Funnel](https://tailscale.com/docs/reference/tailscale-cli/funnel), [Caddy proxy header](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy), [PostgreSQL pg_dump snapshot](https://www.postgresql.org/docs/18/app-pgdump.html), [age 공식 CLI](https://github.com/FiloSottile/age), [Android 앱 서명](https://developer.android.com/studio/publish/app-signing), [Android 개발자 검증 정책](https://developer.android.com/developer-verification/guides/faq). 배포 시점의 Android 지역·배포경로 정책은 다시 확인한다.
+
+### 0018 → 0019 가족 대상 마이그레이션
+
+현재 스키마가 0018이면 기존 운영 백업과 점검 절차로 API 쓰기를 멈춘 뒤 0019를 적용한다.
+0019는 모든 기존 로그인 구성원을 동일 UUID의 household_people로 복사하고 보험의
+환자·피보험자 FK 세 개만 변경한다. 기존 보험 행과 불변 사건 이력은 수정하지 않는다.
+`ops.test_upgrade`는 이전 DB의 실제 revision으로 downgrade하며, 0018 기준 리허설에서는
+기존 열을 해시 비교에서 제외하지 않는다. 새 people 행은 기존 구성원과 정확히 일치하는지
+별도 확인한다. 신규 가족이 있으면 0019 downgrade가 거부되므로 순방향 수정한다.
+
+새 웹·APK에서 가족 선택을 지원한다. 0.1.9 APK는 가족 이름·선택 기능을 지원하지 않으며
+가족 연결을 바꾸는 요청은 거부된다. **0.1.9 앱의 설정 → 감사 이력은 가족 이벤트를 표시
+없이 제외한다. 전체 기록은 웹·새 APK에서 확인한다.** DB 감사와 내보내기는 전체를 유지한다.
+설치 파일 게시와 실제 폰 업데이트를 구분하여 보고한다. [가족 모델 ADR](adr/household-people.md)을
+따르며 이 절차는 실기기 보안 인수나 CVC 활성화 완료를 의미하지 않는다.

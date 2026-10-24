@@ -43,7 +43,10 @@ class PolicyFields(InputModel):
     insurer: Title
     product_name: Title
     policyholder_member_id: UUID | None = None
-    insured_member_id: UUID | None = None
+    insured_member_id: UUID | None = Field(
+        default=None,
+        description="household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
+    )
     beneficiary_note: ShortNote | None = Field(default=None, repr=False)
     contract_start: DateOnly | None = None
     contract_end: DateOnly | None = None
@@ -71,7 +74,10 @@ class PolicyPatch(InputModel):
     insurer: Title | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     product_name: Title | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     policyholder_member_id: UUID | None = None
-    insured_member_id: UUID | None = None
+    insured_member_id: UUID | None = Field(
+        default=None,
+        description="household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
+    )
     beneficiary_note: ShortNote | None = Field(default=None, repr=False)
     contract_start: DateOnly | None = None
     contract_end: DateOnly | None = None
@@ -178,7 +184,9 @@ class PremiumLinkListResponse(BaseModel):
 
 class CaseInput(InputModel):
     title: Title
-    patient_member_id: UUID
+    patient_member_id: UUID = Field(
+        description="household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다."
+    )
     diagnosis_note: Note | None = Field(default=None, repr=False)
     diagnosis_code: DiagnosisCode | None = Field(default=None, repr=False)
     start_on: DateOnly
@@ -218,7 +226,9 @@ class CaseResponse(CaseInput, EntityResponse):
 
 class CaseListItem(EntityResponse):
     title: str
-    patient_member_id: UUID
+    patient_member_id: UUID = Field(
+        description="household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다."
+    )
     start_on: DateOnly
     end_on: DateOnly | None
     treatment_state: TreatmentState

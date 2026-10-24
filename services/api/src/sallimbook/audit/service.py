@@ -129,6 +129,7 @@ def list_events(
     action=None,
     since=None,
     until=None,
+    legacy_native=False,
 ):
     auth, devices = identity.lock_session_devices(session, principal)
     lock_asset_scope(session, principal)
@@ -152,6 +153,7 @@ def list_events(
     ):
         raise DomainError("NOT_FOUND", "요청한 항목을 찾을 수 없습니다.", 404)
     filters = [
+        "native-0.1.9" if legacy_native else "current",
         str(principal.household_id),
         entity_type,
         str(entity_id),
@@ -162,6 +164,14 @@ def list_events(
     ]
     binding = hashlib.sha256(json.dumps(filters).encode()).hexdigest()
     query = projection(principal.household_id)
+    if legacy_native:
+        from sallimbook.audit import legacy_native as vocabulary
+
+        query = query.where(
+            AuditEvent.entity_type.in_(vocabulary.ENTITY_TYPES),
+            AuditEvent.action.in_(vocabulary.ACTIONS),
+            AuditEvent.safe_diff["changed_fields"].contained_by(sorted(vocabulary.KNOWN_FIELDS)),
+        )
     for column, value in (
         (AuditEvent.entity_type, entity_type),
         (AuditEvent.entity_id, entity_id),

@@ -3230,6 +3230,7 @@
             "default": "open"
           },
           "patient_member_id": {
+            "description": "household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
             "format": "uuid",
             "title": "Patient Member Id",
             "type": "string"
@@ -3302,6 +3303,7 @@
             "type": "string"
           },
           "patient_member_id": {
+            "description": "household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
             "format": "uuid",
             "title": "Patient Member Id",
             "type": "string"
@@ -3521,6 +3523,7 @@
             "type": "string"
           },
           "patient_member_id": {
+            "description": "household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
             "format": "uuid",
             "title": "Patient Member Id",
             "type": "string"
@@ -3629,6 +3632,7 @@
             "default": "open"
           },
           "patient_member_id": {
+            "description": "household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
             "format": "uuid",
             "title": "Patient Member Id",
             "type": "string"
@@ -7106,6 +7110,14 @@
         },
         "title": "ExportRequest",
         "type": "object"
+      },
+      "FamilyRelation": {
+        "enum": [
+          "child",
+          "parent",
+          "other"
+        ],
+        "type": "string"
       },
       "FieldError": {
         "properties": {
@@ -11368,6 +11380,191 @@
         ],
         "type": "string"
       },
+      "PersonCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "relation": {
+            "$ref": "#/components/schemas/FamilyRelation"
+          }
+        },
+        "required": [
+          "display_name",
+          "relation"
+        ],
+        "title": "PersonCreate",
+        "type": "object"
+      },
+      "PersonCreatedReference": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "PersonCreatedReference",
+        "type": "object"
+      },
+      "PersonListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PersonResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "PersonListResponse",
+        "type": "object"
+      },
+      "PersonPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "relation": {
+            "$ref": "#/components/schemas/FamilyRelation",
+            "title": "Relation"
+          }
+        },
+        "title": "PersonPatch",
+        "type": "object"
+      },
+      "PersonResponse": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_member_id": {
+            "format": "uuid",
+            "title": "Created By Member Id",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "household_id": {
+            "format": "uuid",
+            "title": "Household Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
+          },
+          "relation": {
+            "enum": [
+              "member",
+              "child",
+              "parent",
+              "other"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by_member_id": {
+            "format": "uuid",
+            "title": "Updated By Member Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "household_id",
+          "member_id",
+          "display_name",
+          "relation",
+          "active",
+          "archived_at",
+          "version",
+          "created_at",
+          "updated_at",
+          "created_by_member_id",
+          "updated_by_member_id"
+        ],
+        "title": "PersonResponse",
+        "type": "object"
+      },
       "PolicyCreate": {
         "additionalProperties": false,
         "properties": {
@@ -11434,6 +11631,7 @@
                 "type": "null"
               }
             ],
+            "description": "household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
             "title": "Insured Member Id"
           },
           "insurer": {
@@ -11631,6 +11829,7 @@
                 "type": "null"
               }
             ],
+            "description": "household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
             "title": "Insured Member Id"
           },
           "insurer": {
@@ -11818,6 +12017,7 @@
                 "type": "null"
               }
             ],
+            "description": "household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.",
             "title": "Insured Member Id"
           },
           "insurer": {
@@ -21000,6 +21200,24 @@
               ],
               "title": "Until"
             }
+          },
+          {
+            "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+            "in": "header",
+            "name": "X-SallimBook-People",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+              "title": "X-Sallimbook-People"
+            }
           }
         ],
         "responses": {
@@ -29560,6 +29778,422 @@
         ]
       }
     },
+    "/api/v1/household/people": {
+      "get": {
+        "operationId": "listHouseholdPeople",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List People",
+        "tags": [
+          "household-people"
+        ]
+      },
+      "post": {
+        "operationId": "createHouseholdPerson",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonCreatedReference"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Person",
+        "tags": [
+          "household-people"
+        ]
+      }
+    },
+    "/api/v1/household/people/{person_id}": {
+      "patch": {
+        "operationId": "updateHouseholdPerson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Person Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Update Person",
+        "tags": [
+          "household-people"
+        ]
+      }
+    },
     "/api/v1/household/setup": {
       "get": {
         "operationId": "getHouseholdSetup",
@@ -31391,6 +32025,26 @@
       },
       "post": {
         "operationId": "createInsuranceCase",
+        "parameters": [
+          {
+            "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+            "in": "header",
+            "name": "X-SallimBook-People",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+              "title": "X-Sallimbook-People"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -31673,6 +32327,24 @@
             "schema": {
               "title": "If-Match",
               "type": "string"
+            }
+          },
+          {
+            "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+            "in": "header",
+            "name": "X-SallimBook-People",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+              "title": "X-Sallimbook-People"
             }
           }
         ],
@@ -37535,6 +38207,26 @@
       },
       "post": {
         "operationId": "createInsurancePolicy",
+        "parameters": [
+          {
+            "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+            "in": "header",
+            "name": "X-SallimBook-People",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+              "title": "X-Sallimbook-People"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -37817,6 +38509,24 @@
             "schema": {
               "title": "If-Match",
               "type": "string"
+            }
+          },
+          {
+            "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+            "in": "header",
+            "name": "X-SallimBook-People",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다.",
+              "title": "X-Sallimbook-People"
             }
           }
         ],

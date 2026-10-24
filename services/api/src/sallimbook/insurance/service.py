@@ -20,6 +20,7 @@ from sallimbook.core.pagination import keyset_page
 from sallimbook.core.types import SEOUL, krw_string
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
+from sallimbook.identity.people_service import require_people_client, require_person
 from sallimbook.insurance.crypto import decrypt_number, encrypt_number
 from sallimbook.insurance.event_models import MedicalExpense
 from sallimbook.insurance.models import (
@@ -118,17 +119,27 @@ def _member(session, principal, member_id, *, active=True):
         raise DomainError("MEMBER_UNAVAILABLE", "현재 가계 구성원을 선택해 주세요.", 422)
 
 
-def _policy_links(session, principal, candidate, previous=None):
+def _policy_links(session, principal, candidate, previous=None, *, people_supported=False):
+    require_people_client(
+        session,
+        principal,
+        previous.insured_member_id if previous else None,
+        candidate.insured_member_id,
+        people_supported,
+    )
     reactivating = (
         previous is not None and previous.status != "active" and candidate.status == "active"
     )
     for field in ("policyholder_member_id", "insured_member_id"):
         member_id = getattr(candidate, field)
-        _member(
+        validator = require_person if field == "insured_member_id" else _member
+        validator(
             session,
             principal,
             member_id,
-            active=previous is None or reactivating or getattr(previous, field) != member_id,
+            active=previous is None
+            or (reactivating and field == "policyholder_member_id")
+            or getattr(previous, field) != member_id,
         )
     if candidate.valuation_asset_id is not None:
         asset = scoped_entity(session, Asset, candidate.valuation_asset_id, principal)
@@ -187,9 +198,11 @@ def _page_rows(session, principal, query, model, cursor, limit, *, keys=None, de
     )
 
 
-def create_policy(session, principal, payload, key_file, *, request_id=None):
+def create_policy(
+    session, principal, payload, key_file, *, request_id=None, people_supported=False
+):
     lock_asset_scope(session, principal)
-    _policy_links(session, principal, payload)
+    _policy_links(session, principal, payload, people_supported=people_supported)
     row = InsurancePolicy(
         id=uuid4(), **payload.model_dump(exclude={"policy_number"}), **_actors(principal)
     )
@@ -230,7 +243,8 @@ def list_policies(
         ("policyholder_member_id", policyholder_member_id),
     ):
         if value is not None:
-            _member(session, principal, value, active=False)
+            validator = require_person if field == "insured_member_id" else _member
+            validator(session, principal, value, active=False)
             query = query.where(getattr(InsurancePolicy, field) == value)
     if status is not None:
         query = query.where(InsurancePolicy.status == status)
@@ -241,12 +255,22 @@ def list_policies(
     )
 
 
-def update_policy(session, principal, policy_id, payload, if_match, key_file, *, request_id=None):
+def update_policy(
+    session,
+    principal,
+    policy_id,
+    payload,
+    if_match,
+    key_file,
+    *,
+    request_id=None,
+    people_supported=False,
+):
     lock_asset_scope(session, principal)
     row = scoped_entity(session, InsurancePolicy, policy_id, principal, for_update=True)
     require_version(row, if_match)
     candidate = _candidate(row, PolicyFields, payload, exclude={"policy_number"})
-    _policy_links(session, principal, candidate, row)
+    _policy_links(session, principal, candidate, row, people_supported=people_supported)
     before = _touch(row, principal)
     _assign(row, candidate.model_dump())
     if "policy_number" in payload.model_fields_set:
@@ -477,9 +501,10 @@ def _case_revision(session, row, principal, reason=None):
     )
 
 
-def create_case(session, principal, payload):
+def create_case(session, principal, payload, *, people_supported=False):
     lock_asset_scope(session, principal)
-    _member(session, principal, payload.patient_member_id)
+    require_people_client(session, principal, None, payload.patient_member_id, people_supported)
+    require_person(session, principal, payload.patient_member_id)
     _actual_dates(payload.start_on, payload.end_on)
     row = InsuranceCase(**payload.model_dump(), **_actors(principal))
     session.add(row)
@@ -507,7 +532,7 @@ def list_cases(
 ):
     query = select(InsuranceCase).where(InsuranceCase.household_id == principal.household_id)
     if patient_member_id is not None:
-        _member(session, principal, patient_member_id, active=False)
+        require_person(session, principal, patient_member_id, active=False)
     for field, value in (
         ("patient_member_id", patient_member_id),
         ("treatment_state", treatment_state),
@@ -546,12 +571,15 @@ def list_cases(
     )
 
 
-def update_case(session, principal, case_id, payload, if_match):
+def update_case(session, principal, case_id, payload, if_match, *, people_supported=False):
     lock_asset_scope(session, principal)
     row = scoped_entity(session, InsuranceCase, case_id, principal, for_update=True)
     require_version(row, if_match)
     candidate = _candidate(row, CaseInput, payload, exclude={"reason"})
-    _member(
+    require_people_client(
+        session, principal, row.patient_member_id, candidate.patient_member_id, people_supported
+    )
+    require_person(
         session,
         principal,
         candidate.patient_member_id,

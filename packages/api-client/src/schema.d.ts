@@ -1345,6 +1345,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/household/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List People */
+        get: operations["listHouseholdPeople"];
+        put?: never;
+        /** Create Person */
+        post: operations["createHouseholdPerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household/people/{person_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Person */
+        patch: operations["updateHouseholdPerson"];
+        trace?: never;
+    };
     "/api/v1/household/setup": {
         parameters: {
             query?: never;
@@ -3809,6 +3844,7 @@ export interface components {
             /**
              * Patient Member Id
              * Format: uuid
+             * @description household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.
              */
             patient_member_id: string;
             /**
@@ -3851,6 +3887,7 @@ export interface components {
             /**
              * Patient Member Id
              * Format: uuid
+             * @description household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.
              */
             patient_member_id: string;
             /**
@@ -3941,6 +3978,7 @@ export interface components {
             /**
              * Patient Member Id
              * Format: uuid
+             * @description household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.
              */
             patient_member_id: string;
             /**
@@ -3993,6 +4031,7 @@ export interface components {
             /**
              * Patient Member Id
              * Format: uuid
+             * @description household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.
              */
             patient_member_id: string;
             /** Reason */
@@ -5204,6 +5243,8 @@ export interface components {
             /** Formats */
             formats?: ("json" | "csv")[];
         };
+        /** @enum {string} */
+        FamilyRelation: "child" | "parent" | "other";
         /** FieldError */
         FieldError: {
             /** Code */
@@ -6775,6 +6816,86 @@ export interface components {
         };
         /** @enum {string} */
         PercentUnavailable: "no_previous_month" | "current_missing" | "unconfirmed" | "zero_previous_total" | "negative_previous_total";
+        /** PersonCreate */
+        PersonCreate: {
+            /** Display Name */
+            display_name: string;
+            relation: components["schemas"]["FamilyRelation"];
+        };
+        /** PersonCreatedReference */
+        PersonCreatedReference: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+        };
+        /** PersonListResponse */
+        PersonListResponse: {
+            /** Items */
+            items: components["schemas"]["PersonResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** PersonPatch */
+        PersonPatch: {
+            /** Active */
+            active?: boolean;
+            /** Display Name */
+            display_name?: string;
+            /** Relation */
+            relation?: components["schemas"]["FamilyRelation"];
+        };
+        /** PersonResponse */
+        PersonResponse: {
+            /** Active */
+            active: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By Member Id
+             * Format: uuid
+             */
+            created_by_member_id: string;
+            /** Display Name */
+            display_name: string;
+            /**
+             * Household Id
+             * Format: uuid
+             */
+            household_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Member Id */
+            member_id: string | null;
+            /**
+             * Relation
+             * @enum {string}
+             */
+            relation: "member" | "child" | "parent" | "other";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Updated By Member Id
+             * Format: uuid
+             */
+            updated_by_member_id: string;
+            /** Version */
+            version: number;
+        };
         /** PolicyCreate */
         PolicyCreate: {
             /** Beneficiary Note */
@@ -6790,7 +6911,10 @@ export interface components {
              * Format: date
              */
             coverage_start: string;
-            /** Insured Member Id */
+            /**
+             * Insured Member Id
+             * @description household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.
+             */
             insured_member_id?: string | null;
             /** Insurer */
             insurer: string;
@@ -6833,7 +6957,10 @@ export interface components {
              * Format: date
              */
             coverage_start?: string;
-            /** Insured Member Id */
+            /**
+             * Insured Member Id
+             * @description household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.
+             */
             insured_member_id?: string | null;
             /** Insurer */
             insurer?: string;
@@ -6891,7 +7018,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Insured Member Id */
+            /**
+             * Insured Member Id
+             * @description household_people ID. 기존 wire 이름을 유지하며 비로그인 가족도 포함합니다.
+             */
             insured_member_id?: string | null;
             /** Insurer */
             insurer: string;
@@ -12176,7 +12306,10 @@ export interface operations {
                 since?: string | null;
                 until?: string | null;
             };
-            header?: never;
+            header?: {
+                /** @description 가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다. */
+                "X-SallimBook-People"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -18899,6 +19032,326 @@ export interface operations {
             };
         };
     };
+    listHouseholdPeople: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createHouseholdPerson: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonCreatedReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateHouseholdPerson: {
+        parameters: {
+            query?: never;
+            header: {
+                "If-Match": string;
+            };
+            path: {
+                person_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getHouseholdSetup: {
         parameters: {
             query?: never;
@@ -20194,7 +20647,10 @@ export interface operations {
     createInsuranceCase: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다. */
+                "X-SallimBook-People"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -20410,6 +20866,8 @@ export interface operations {
             query?: never;
             header: {
                 "If-Match": string;
+                /** @description 가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다. */
+                "X-SallimBook-People"?: string | null;
             };
             path: {
                 case_id: string;
@@ -24530,7 +24988,10 @@ export interface operations {
     createInsurancePolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다. */
+                "X-SallimBook-People"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -24746,6 +25207,8 @@ export interface operations {
             query?: never;
             header: {
                 "If-Match": string;
+                /** @description 가족 선택과 전체 감사 이력을 지원하는 클라이언트는 1. 권한 증명이 아닙니다. */
+                "X-SallimBook-People"?: string | null;
             };
             path: {
                 policy_id: string;

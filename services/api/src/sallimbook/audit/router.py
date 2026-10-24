@@ -6,7 +6,11 @@ from fastapi import APIRouter, Query, Response
 
 from sallimbook.audit import service
 from sallimbook.audit.schemas import AuditListResponse
-from sallimbook.identity.dependencies import PrincipalDependency, SessionDependency
+from sallimbook.identity.dependencies import (
+    PeopleCapability,
+    PrincipalDependency,
+    SessionDependency,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["audit"])
 
@@ -15,6 +19,7 @@ router = APIRouter(prefix="/api/v1", tags=["audit"])
 def list_events(
     principal: PrincipalDependency,
     session: SessionDependency,
+    people_supported: PeopleCapability,
     response: Response,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     cursor: Annotated[str | None, Query(max_length=1024)] = None,
@@ -37,4 +42,5 @@ def list_events(
         action=action,
         since=since,
         until=until,
+        legacy_native=principal.transport == "native" and not people_supported,
     )

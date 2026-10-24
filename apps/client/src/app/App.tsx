@@ -72,6 +72,7 @@ import {
   ReturnNewPage,
 } from "../features/insurance/events/EventPages";
 import { AuditPage } from "../features/audit/AuditPage";
+import { PeoplePage } from "../features/household/PeoplePage";
 import { SettingsPage } from "../features/household/SettingsPage";
 import { ExportsPage } from "../features/exports/ExportsPage";
 import { VaultPage } from "../features/vault/VaultPage";
@@ -257,6 +258,14 @@ const screens = [
     parent: { to: "/more", label: "더보기" },
     live: true,
     element: <SettingsPage />,
+  },
+  {
+    path: "/settings/people",
+    title: "가족 관리",
+    group: "more" as NavigationGroup,
+    parent: { to: "/settings", label: "설정" },
+    live: true,
+    element: <PeoplePage />,
   },
   {
     path: "/settings/audit",

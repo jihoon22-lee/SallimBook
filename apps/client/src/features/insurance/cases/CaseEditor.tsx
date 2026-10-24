@@ -3,8 +3,8 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { toApiError } from "../../../platform/api";
 import { dateLabel, isUuid, todaySeoul } from "../../finance/dates";
-import type { HouseholdMember } from "../../finance/FinanceSupport";
-import { useHouseholdMembers } from "../../finance/FinanceSupport";
+import type { HouseholdPerson } from "../../household/people";
+import { useHouseholdPeople, PersonSelect } from "../../household/people";
 import { useInsuranceApi } from "../api";
 import {
   changedFields,
@@ -15,12 +15,7 @@ import {
   validPeriod,
 } from "../model";
 import type { InsuranceCase, Schema } from "../model";
-import {
-  ConflictReview,
-  MemberSelect,
-  MetadataFeedback,
-  useMetadataCommand,
-} from "../InsuranceSupport";
+import { ConflictReview, MetadataFeedback, useMetadataCommand } from "../InsuranceSupport";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 export type CaseDraft = {
@@ -74,7 +69,7 @@ export function CaseSummary({
   members,
 }: {
   row: Schema["CaseInput"];
-  members: HouseholdMember[];
+  members: HouseholdPerson[];
 }) {
   return (
     <dl className="metadata-grid">
@@ -85,8 +80,7 @@ export function CaseSummary({
       <div>
         <dt>환자</dt>
         <dd>
-          {members.find((m) => m.member_id === row.patient_member_id)?.display_name ??
-            "구성원 확인 필요"}
+          {members.find((m) => m.id === row.patient_member_id)?.display_name ?? "구성원 확인 필요"}
         </dd>
       </div>
       <div>
@@ -117,7 +111,7 @@ export function CaseSummary({
 export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
-  const members = useHouseholdMembers();
+  const members = useHouseholdPeople();
   const api = useInsuranceApi();
   const navigate = useNavigate();
   const command = useMetadataCommand();
@@ -204,7 +198,7 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
                 />
               </label>
             </div>
-            <MemberSelect
+            <PersonSelect
               label="사건 환자"
               required
               value={draft.patient}
@@ -311,7 +305,7 @@ export function CaseEditor({ initial }: { initial?: InsuranceCase }) {
           adopt={() => adopt(true)}
           replace={() => adopt(false)}
         >
-          {latest && <CaseSummary row={latest} members={members.members} />}
+          {latest && <CaseSummary row={latest} members={members.people} />}
         </ConflictReview>
         <div className="form-actions save-actions">
           <button

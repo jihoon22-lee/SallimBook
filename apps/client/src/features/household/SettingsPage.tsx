@@ -66,6 +66,11 @@ export function SettingsPage() {
             label: "계정과 기기",
             description: "로그인 계정·패스키·등록 기기·구성원 초대",
           },
+          {
+            to: "/settings/people",
+            label: "가족 관리",
+            description: "보험의 환자·피보험자와 비로그인 가족",
+          },
           { to: "/vault", label: "보관함", description: "보호된 카드 정보·복구·기기 상태" },
           { to: "/exports", label: "자료 내보내기", description: "JSON·CSV와 선택 문서 ZIP" },
           {

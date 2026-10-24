@@ -2,6 +2,7 @@
 // Not a second API schema: a name this table does not know shows as "기타 항목" instead of the
 // raw identifier. Secret and key material is only ever named, never shown, as "보안 정보".
 const groups: [label: string, names: string[]][] = [
+  ["가족 관계", ["relation"]],
   [
     "보안 정보",
     [

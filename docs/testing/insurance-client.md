@@ -137,3 +137,16 @@ uv run --project services/api python scripts/test_web_auth.py --insurance
 브라우저 **158 passed**, JVM `InsurancePolicyTest` 16·`InsuranceEventPolicyTest` 16·`AuthPolicyTest` 12 통과,
 `pnpm api:generate` 후 생성 client 변경 없음, 실제 HTTPS 보험 흐름 종료 코드 0.
 Android 실기기에서 새 목록·청구 필드 표시는 확인하지 않았다(미실행).
+
+## Issue #141 · 비로그인 가족
+
+`test_household_people.py`는 같은 이름의 별도 가족, 멱등 재시도와 최초 버전 참조,
+가계 격리·외부 cursor, 계정 행 보호·두 슬롯 유지, version 충돌, 보관/복구,
+가족 환자/피보험자·계약자 경계, 구 클라이언트 변경 거부, 보관 후 기존 사건 재개방,
+감사 페이지 SQL 필터와 cursor 모드, 0018 기존 revision 보존·비활성 구성원 backfill,
+가족 생성 후 downgrade 거부를 검사한다.
+`household-people.spec.ts`는 웹과 native bridge 모의에서 등록 응답 유실 후 같은 키 재시도,
+충돌 시 입력 보존, 보관/복구, 환자/피보험자 선택과 계약자 제한을 검사한다.
+`HouseholdPeoplePolicyTest`는 이름 있는 명령·필드 제한·version/키·응답 가계/중복/cursor와
+계정/가족 구분을 검증한다. 구 APK 감사 제약은 [ADR](../adr/household-people.md)에 기록한다.
+검사 목록은 실제 실행 통과를 뜻하지 않는다. 실행 결과는 PR에 기록한다.

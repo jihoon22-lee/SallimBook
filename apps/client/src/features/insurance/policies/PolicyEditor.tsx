@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { toApiError } from "../../../platform/api";
 import { useAssetsApi } from "../../assets/api";
 import { allPages, useResource } from "../../finance/queries";
+import { useHouseholdPeople, PersonSelect } from "../../household/people";
 import { useHouseholdMembers, dateLabel } from "../../finance/FinanceSupport";
 import { useInsuranceApi } from "../api";
 import { changedFields, policyStatuses, preserveDraft } from "../model";
@@ -20,6 +21,7 @@ import type { PolicyDraft } from "./model";
 import { useUnsavedChangesGuard } from "../../../shared/UnsavedChanges";
 export function PolicySummary({ row }: { row: Policy }) {
   const members = useHouseholdMembers();
+  const people = useHouseholdPeople();
   const name = (id: string | null | undefined) =>
     id
       ? (members.members.find((m) => m.member_id === id)?.display_name ?? "구성원 확인 필요")
@@ -40,7 +42,11 @@ export function PolicySummary({ row }: { row: Policy }) {
         <div>
           <dt>계약자 / 피보험자</dt>
           <dd>
-            {name(row.policyholder_member_id)} / {name(row.insured_member_id)}
+            {name(row.policyholder_member_id)} /{" "}
+            {row.insured_member_id
+              ? (people.people.find((p) => p.id === row.insured_member_id)?.display_name ??
+                "가족 확인 필요")
+              : "미지정"}
           </dd>
         </div>
         <div>
@@ -202,7 +208,7 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
               value={draft.holder}
               onChange={(v) => change("holder", v)}
             />
-            <MemberSelect
+            <PersonSelect
               label="보험 피보험자"
               value={draft.insured}
               onChange={(v) => change("insured", v)}

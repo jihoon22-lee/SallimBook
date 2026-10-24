@@ -6,6 +6,7 @@ import { ApiError } from "../../../platform/api";
 import { isUuid } from "../../finance/dates";
 import { usePagedList, useResource } from "../../finance/queries";
 import { useUrlFilters } from "../../finance/useUrlFilters";
+import { PersonSelect } from "../../household/people";
 import { useInsuranceApi } from "../api";
 import { policyStatuses } from "../model";
 import type { PolicyQuery } from "../model";
@@ -67,7 +68,8 @@ function PolicyList() {
               </select>
             </label>
           </div>
-          <MemberSelect
+          <PersonSelect
+            includeArchived
             label="피보험자 필터"
             value={insured}
             onChange={(v) => filter("insured", v)}
