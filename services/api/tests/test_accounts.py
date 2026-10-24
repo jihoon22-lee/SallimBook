@@ -341,6 +341,10 @@ def make_actor(engine, household_id=None):
             household_id=household_id, user_id=user.id, slot=slot, role=role, status="active"
         )
         session.add(member)
+        session.flush()
+        from sallimbook.identity.people_models import add_member_person
+
+        add_member_person(session, member)
         session.commit()
         result = identity.login(
             session,

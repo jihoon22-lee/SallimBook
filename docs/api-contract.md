@@ -600,3 +600,21 @@ JSON 금액은 정밀한 십진 문자열, 월은 `YYYY-MM`, 날짜는 ISO 날�
 계정 보안 동작도 같은 감사 어휘(`core/audit.py`의 `AuditEntityType`·`AuditAction`, 39개·22개)로 기록한다. `registered_device/login`(로그인으로 기기 세션 시작), `registered_device/revoke`(기기 연결 해제·로그아웃·다른 기기 모두 로그아웃으로 실제 세션 폐기, 기기마다 1행), `passkey/create`·`passkey/revoke`, `invitation/create`·`invitation/accept`, `user/update`(비밀번호 변경, 바뀐 필드 이름 `password_hash`만)이다. 비밀번호·토큰·초대 코드·자격증명 원문은 기록하지 않는다.
 
 `user_export/export` 감사는 완성된 파일의 **서버 발급**을 뜻하며 클라이언트 저장 완료를 뜻하지 않는다. 선택 문서 열람 감사도 같은 요청 ID로 기록한다. 일반 audit API에는 최근 재인증을 추가로 요구하지 않지만 현재 세션·기기·활성 가계 구성원 권한은 검사한다. 이 API PR은 Android/웹 내보내기 화면, 운영 백업 스케줄과 실제 새 서버 복원 완료를 의미하지 않는다.
+
+## 가족 대상 API · Issue #141
+
+`/api/v1/household/people` GET은 로그인 구성원과 보관된 사람을 포함하는 keyset 목록이다.
+생성 시각·ID 내림차순, limit 1~200, UUID cursor이며 외부 가계 cursor는 404다.
+POST는 이름·관계(child/parent/other)만 받고 Idempotency-Key를 요구한다. 최초 결과
+`{id,version}`을 재전송에도 그대로 반환하므로 현재 상태는 GET으로 다시 읽는다.
+`/{person_id}` PATCH는 If-Match를 요구하며 이름·관계·active를 변경한다. 같은 이름을
+금지하지 않고 로그인 구성원 행의 수정이나 임의 member 연결은 허용하지 않는다.
+보관/복구와 이름 수정은 감사 대상이며 family ID로 로그인·actor·소유자 권한을 얻지 못한다.
+
+보험의 `insured_member_id`와 `patient_member_id`는 이름을 유지하되 household_people를
+참조한다. 계약자와 작성자는 계속 household_members다. `X-SallimBook-People: 1`은
+가족 선택 및 전체 감사 어휘의 지원 표시다. 없는 클라이언트가 비로그인 가족 연결을
+새로 만들거나 바꾸면 422 `PEOPLE_CLIENT_REQUIRED`다. 기존 값을 유지하는 수정은 가능하다.
+구 native 감사 목록은 0.1.9의 어휘로 SQL 필터링하며 cursor도 모드에 묶인다.
+[구버전의 표시 제한과 배포 순서](adr/household-people.md)를 함께 확인한다.
+내보내기는 household_people의 모든 가계 행과 가족 감사 이벤트를 포함한다.

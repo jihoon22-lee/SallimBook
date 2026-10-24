@@ -5,6 +5,19 @@ They are never selected by the exporter. Users and audits use dedicated safe pro
 """
 
 PUBLIC_COLUMNS = {
+    "household_people": (
+        "id",
+        "household_id",
+        "member_id",
+        "display_name",
+        "relation",
+        "archived_at",
+        "created_by_member_id",
+        "updated_by_member_id",
+        "created_at",
+        "updated_at",
+        "version",
+    ),
     "households": (
         "name",
         "timezone",

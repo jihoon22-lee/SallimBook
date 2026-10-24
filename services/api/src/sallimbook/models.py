@@ -35,6 +35,7 @@ from sallimbook.identity.auth_models import (
 )
 from sallimbook.identity.models import Household
 from sallimbook.identity.passkeys.models import AuthChallenge, AuthCredential, StepUpGrant
+from sallimbook.identity.people_models import HouseholdPerson
 from sallimbook.insurance.event_models import (
     ClaimExpense,
     ClaimRevisionExpense,
@@ -121,6 +122,7 @@ __all__ = [
     "FinancialAccount",
     "FixedSettlement",
     "Household",
+    "HouseholdPerson",
     "HouseholdMember",
     "IncomeConversion",
     "IdempotencyRecord",

@@ -195,6 +195,9 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun getCardPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_CARD_PAYMENT_LINKS)
     @PluginMethod fun getAccountPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_ACCOUNT_PAYMENT_LINKS)
 
+    @PluginMethod fun listHouseholdPeople(call: PluginCall) = finance(call, FinanceOperation.LIST_HOUSEHOLD_PEOPLE)
+    @PluginMethod fun createHouseholdPerson(call: PluginCall) = finance(call, FinanceOperation.CREATE_HOUSEHOLD_PERSON)
+    @PluginMethod fun updateHouseholdPerson(call: PluginCall) = finance(call, FinanceOperation.UPDATE_HOUSEHOLD_PERSON)
     @PluginMethod fun listInsuranceCases(call: PluginCall) = finance(call, FinanceOperation.LIST_INSURANCE_CASES)
     @PluginMethod fun createInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.CREATE_INSURANCE_CASE)
     @PluginMethod fun getInsuranceCase(call: PluginCall) = finance(call, FinanceOperation.GET_INSURANCE_CASE)

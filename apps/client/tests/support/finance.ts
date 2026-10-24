@@ -17,6 +17,20 @@ export const members: components["schemas"]["MemberResponse"][] = [
     role: "member",
   },
 ];
+export const householdPeople: components["schemas"]["PersonResponse"][] = members.map((m) => ({
+  id: m.member_id,
+  household_id: m.household_id,
+  member_id: m.member_id,
+  display_name: m.display_name,
+  relation: "member",
+  active: true,
+  archived_at: null,
+  version: 1,
+  created_at: "2026-10-17T00:00:00Z",
+  updated_at: "2026-10-17T00:00:00Z",
+  created_by_member_id: m.member_id,
+  updated_by_member_id: m.member_id,
+}));
 export const jointAsset: components["schemas"]["AssetResponse"] = {
   id: uid(10),
   household_id: uid(3),
@@ -137,6 +151,10 @@ export async function mockFinance(page: Page) {
       state.csrfCalls++;
       return route.fulfill({ json: { csrf_token: `synthetic-finance-csrf-${state.csrfCalls}` } });
     }
+    if (path === "/api/v1/household/people")
+      return state.membersFailure
+        ? error(route, 503, "UNAVAILABLE")
+        : route.fulfill({ json: { items: householdPeople, next_cursor: null } });
     if (path === "/api/v1/household/members")
       return state.membersFailure
         ? error(route, 503, "UNAVAILABLE")

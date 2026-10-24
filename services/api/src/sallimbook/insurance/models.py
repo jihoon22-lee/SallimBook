@@ -50,7 +50,7 @@ class InsurancePolicy(ActorFields, EntityMixin, Base):
         UniqueConstraint("household_id", "id"),
         *actor_constraints("insurance_policies"),
         household_fk("insurance_policies", "policyholder_member_id", "household_members"),
-        household_fk("insurance_policies", "insured_member_id", "household_members"),
+        household_fk("insurance_policies", "insured_member_id", "household_people"),
         household_fk("insurance_policies", "valuation_asset_id", "assets"),
         CheckConstraint("char_length(btrim(insurer)) > 0", name="nonempty_insurer"),
         CheckConstraint("char_length(btrim(product_name)) > 0", name="nonempty_product"),
@@ -156,7 +156,7 @@ class CaseFields:
 
 def case_constraints(table: str):
     return (
-        household_fk(table, "patient_member_id", "household_members"),
+        household_fk(table, "patient_member_id", "household_people"),
         CheckConstraint("char_length(btrim(title)) > 0", name="nonempty_title"),
         CheckConstraint("end_on IS NULL OR end_on >= start_on", name="case_period"),
         CheckConstraint("treatment_state IN ('ongoing','ended')", name="treatment_state"),

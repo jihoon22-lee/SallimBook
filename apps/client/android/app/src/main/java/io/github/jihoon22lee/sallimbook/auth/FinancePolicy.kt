@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 
 internal enum class FinanceOperation {
+    LIST_HOUSEHOLD_PEOPLE, CREATE_HOUSEHOLD_PERSON, UPDATE_HOUSEHOLD_PERSON,
     DELETE_APPLIANCE, DELETE_CONSUMABLE, DELETE_APPLIANCE_CONSUMABLE,
     CREATE_DOCUMENT_LINK, END_DOCUMENT_LINK, LIST_DOCUMENTS, GET_DOCUMENT, DELETE_DOCUMENT, LIST_DOCUMENT_LINKS,
     LIST_APPLIANCE_CONSUMABLES, CREATE_APPLIANCE_CONSUMABLE, GET_APPLIANCE_CONSUMABLE, UPDATE_APPLIANCE_CONSUMABLE, LIST_CONSUMABLE_REPLACEMENTS, CREATE_CONSUMABLE_REPLACEMENT, GET_CONSUMABLE_REPLACEMENT, CANCEL_CONSUMABLE_REPLACEMENT, LIST_APPLIANCES, CREATE_APPLIANCE, GET_APPLIANCE, UPDATE_APPLIANCE, LIST_CONSUMABLES, CREATE_CONSUMABLE, GET_CONSUMABLE, UPDATE_CONSUMABLE, LIST_STOCK_MOVEMENTS, CREATE_STOCK_MOVEMENT, GET_STOCK_MOVEMENT, CANCEL_STOCK_MOVEMENT, GET_HOMECARE_STATUS,
@@ -157,6 +158,7 @@ internal object FinancePolicy {
     }
 
     fun prepare(operation: FinanceOperation, value: Any?): FinanceRequest {
+        if (HouseholdPeoplePolicy.supports(operation)) return HouseholdPeoplePolicy.prepare(operation, value)
         if (CashflowPolicy.supports(operation)) return CashflowPolicy.prepare(operation, value)
         if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.prepare(operation, value)
         if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
@@ -205,6 +207,7 @@ internal object FinancePolicy {
     }
 
     fun metadataHttpAllowed(method: String, path: String, body: Any?, ifMatch: String?, idempotencyKey: String? = null): Boolean { return try {
+        if (HouseholdPeoplePolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (CashflowPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (FixedCostPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (NativeDocumentPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
@@ -337,6 +340,7 @@ internal object FinancePolicy {
             if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.response(operation, request, status, value)
             if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.response(operation, request, status, value)
             if (NativeDocumentPolicy.supports(operation)) return NativeDocumentPolicy.response(operation, request, status, value)
+            if (HouseholdPeoplePolicy.supports(operation)) return HouseholdPeoplePolicy.response(operation, request, status, value)
             if (NativeHomecarePolicy.supports(operation)) return NativeHomecarePolicy.response(operation, request, status, value)
             if (InsuranceEventPolicy.supports(operation)) return InsuranceEventPolicy.response(operation, request, status, value)
             if (InsurancePolicy.supports(operation)) return InsurancePolicy.response(operation, request, status, value)

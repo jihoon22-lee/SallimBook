@@ -1,3 +1,4 @@
+import { householdPeople } from "./finance";
 import type { Page } from "@playwright/test";
 import { members } from "./finance";
 import { homeComparison } from "./homecare";
@@ -206,6 +207,8 @@ export async function mockNativeHomecare(page: Page, state: State) {
     calls.push({ method, args });
     if (method === "getSession")
       return { ok: true, value: { available: true, authenticated: true } };
+    if (method === "listHouseholdPeople")
+      return metadata({ items: householdPeople, next_cursor: null });
     if (method === "request") return metadata(args.path === "/api/v1/me" ? members[0] : members);
     if (control.failure && (!control.method || control.method === method))
       return { ok: false, code: control.failure };
@@ -246,7 +249,7 @@ export async function mockNativeHomecare(page: Page, state: State) {
           PluginHeaders: [
             {
               name: "SallimBookAuth",
-              methods: [...methods, "getSession", "request"]
+              methods: [...methods, "listHouseholdPeople", "getSession", "request"]
                 .map((name) => ({ name, rtype: "promise" }))
                 .concat([
                   { name: "addListener", rtype: "callback" },

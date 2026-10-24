@@ -22,6 +22,7 @@ export const emptyFilters: AuditFilterDraft = {
 
 // Display labels, not a second API schema. The server validates accepted filter values.
 export const entityLabels: Record<string, string> = {
+  household_person: "가족",
   asset: "자산·부채",
   financial_account: "계좌",
   asset_month: "월별 자산",

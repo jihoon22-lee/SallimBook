@@ -8,5 +8,6 @@ export function createApiClient(baseUrl = "") {
     baseUrl,
     credentials: "include",
     cache: "no-store",
+    headers: { "X-SallimBook-People": "1" },
   });
 }

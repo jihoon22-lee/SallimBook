@@ -70,6 +70,13 @@ function metadataOnly(input: NativeAccountCreate | NativeAccountPatch): void {
 
 /** Tokenless, generated-schema metadata operations. No URL, bearer token or raw body API. */
 export const nativeFinance = {
+  listHouseholdPeople: (options: Parameters<SallimBookAuth["listHouseholdPeople"]>[0]) =>
+    metadata(() => plugin.listHouseholdPeople(options)),
+  createHouseholdPerson: (options: Parameters<SallimBookAuth["createHouseholdPerson"]>[0]) =>
+    metadata(() => plugin.createHouseholdPerson(options)),
+  updateHouseholdPerson: (options: Parameters<SallimBookAuth["updateHouseholdPerson"]>[0]) =>
+    metadata(() => plugin.updateHouseholdPerson(options)),
+
   deleteAppliance: (options: Parameters<SallimBookAuth["deleteAppliance"]>[0]) =>
     metadata(() => plugin.deleteAppliance(options)),
   deleteConsumable: (options: Parameters<SallimBookAuth["deleteConsumable"]>[0]) =>

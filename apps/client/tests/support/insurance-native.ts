@@ -1,3 +1,4 @@
+import { householdPeople } from "./finance";
 import type { Page } from "@playwright/test";
 import { members } from "./finance";
 import type { mockInsuranceEvents } from "./insurance-events";
@@ -369,7 +370,11 @@ const mapping: Record<string, { method: string; path: string; fields: Record<str
     },
   },
 };
-export async function mockNativeInsurance(page: Page, state: State) {
+export async function mockNativeInsurance(
+  page: Page,
+  state: State,
+  people?: { handle: (method: string, args: Args) => unknown },
+) {
   const calls: { method: string; args: Args }[] = [];
   const http: string[] = [];
   const control = {
@@ -386,6 +391,13 @@ export async function mockNativeInsurance(page: Page, state: State) {
     calls.push({ method, args });
     if (method === "getSession")
       return { ok: true, value: { available: true, authenticated: true } };
+    if (
+      ["listHouseholdPeople", "createHouseholdPerson", "updateHouseholdPerson"].includes(method) &&
+      people
+    )
+      return people.handle(method, args);
+    if (method === "listHouseholdPeople")
+      return metadata({ items: householdPeople, next_cursor: null });
     if (method === "request") return metadata(args.path === "/api/v1/me" ? members[0] : members);
     if (control.failure && (!control.method || control.method === method))
       return { ok: false, code: control.failure };
@@ -442,6 +454,9 @@ export async function mockNativeInsurance(page: Page, state: State) {
               name: "SallimBookAuth",
               methods: [
                 ...methods,
+                "listHouseholdPeople",
+                "createHouseholdPerson",
+                "updateHouseholdPerson",
                 "getSession",
                 "request",
                 "listAccounts",

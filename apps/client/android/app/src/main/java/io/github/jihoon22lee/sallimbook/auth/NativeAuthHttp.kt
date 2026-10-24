@@ -67,7 +67,7 @@ internal class NativeAuthHttp(private val origin: String, private val client: Ok
                 .url(origin + REFRESH_PATH)
                 .post(OneShotAuthBody(requestBytes) { gate.checkHttp("POST", REFRESH_PATH); consume() })
                 .header("Accept", "application/json")
-                .header("X-SallimBook-Native", "1")
+                .header("X-SallimBook-Native", "1").header("X-SallimBook-People", "1")
                 .build()
             return client.newCall(request).execute().use { response ->
                 val requestId = requestId(response)
@@ -151,7 +151,7 @@ internal class NativeAuthHttp(private val origin: String, private val client: Ok
                 .url(origin + path)
                 .method(method, requestBytes?.let { OneShotAuthBody(it) { gate.checkHttp(method, path) } })
                 .header("Accept", "application/json")
-                .header("X-SallimBook-Native", "1")
+                .header("X-SallimBook-Native", "1").header("X-SallimBook-People", "1")
                 .apply {
                     if (accessToken != null) header("Authorization", "Bearer $accessToken")
                     if (ifMatch != null) header("If-Match", ifMatch)

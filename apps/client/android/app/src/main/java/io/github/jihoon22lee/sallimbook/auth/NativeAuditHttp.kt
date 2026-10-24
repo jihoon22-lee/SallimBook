@@ -15,7 +15,7 @@ internal class NativeAuditHttp(private val origin:String,private val client:OkHt
         gate.checkHttp("GET",query.path)
         try {
             val request=Request.Builder().url(origin+query.path).get().header("Accept","application/json")
-                .header("X-SallimBook-Native","1").header("Authorization","Bearer $accessToken").build()
+                .header("X-SallimBook-Native","1").header("X-SallimBook-People","1").header("Authorization","Bearer $accessToken").build()
             val call=client.newCall(request); gate.bindNetworkCancellation { call.cancel() }; gate.checkHttp("GET",query.path)
             return call.execute().use { response ->
                 if(response.code in 300..399) throw AuthFailure(AuthCode.ACCESS_DENIED)

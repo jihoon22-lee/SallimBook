@@ -332,3 +332,14 @@ BEFORE guard는 가계 잠금과 수명주기/동결을 검사하고 deferred tr
 납부가 있는 회차는 FK로도 지울 수 없다. downgrade는 0015의 트리거 함수를 복원한다.
 
 `0018_install_device`는 `registered_devices.install_key_hash`(Android 설치 key의 SHA-256, 64자)를 더하고 Android 행에만 둘 수 있게 검사 제약을 건다. 같은 revision이 `install_session_id`(그 설치의 마지막 로그인 세션 ID, 외래 키 없음)를 더하고 key가 있는 행에만 둘 수 있게 한다. 이 값이 있는 행은 그 세션만 인정하므로 다시 로그인한 설치의 이전 세션은 세션 행을 쓰거나 잠그지 않고 끝난다. downgrade는 두 열과 제약을 지운다. 이전 API는 요청의 `install` 필드를 422로 거부하므로 새 APK는 이전 서버에 로그인할 수 없다. 폰을 업데이트한 뒤에는 서버를 되돌리지 않는다(운영 runbook).
+
+## 0019 · 보험의 가족 대상
+
+`household_people`는 household_id, nullable member_id, nullable display_name,
+relation(member/child/parent/other), archived_at, 생성/수정 member ID와 공통 entity 필드로
+구성한다. 로그인 연결 행은 id=member_id·display_name=null·relation=member이고,
+독립 가족은 member_id=null·비어 있지 않은 이름·child/parent/other다. member_id는 unique,
+이름은 unique가 아니다. household/member/작성자 FK를 DB에서 강제한다.
+보험계약 insured와 사건·사건 revision patient의 세 FK만 이 테이블을 참조한다.
+로그인 구성원·계약자·actor·금융 소유자 관계는 바꾸지 않는다.
+상세 근거와 downgrade 제약은 [가족 모델 ADR](adr/household-people.md)을 따른다.

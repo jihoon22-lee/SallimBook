@@ -3,6 +3,9 @@ import { InsurancePage } from "./InsuranceSupport";
 export function InsuranceHome() {
   const navigation = (
     <div className="form-actions">
+      <Link className="button-link secondary-button" to="/settings/people">
+        가족 관리
+      </Link>
       <Link className="button-link" to="/insurance/policies">
         보험 계약
       </Link>

@@ -442,3 +442,63 @@ test("real insurance policies cases medical originals claims receipts correction
   );
   console.log("SAFE_PHASE=INSURANCE_INVARIANTS");
 });
+
+test("real family patient survives archive without gaining a login membership", async ({
+  page,
+}) => {
+  const read = (path: string) =>
+    page.evaluate(async (url) => {
+      const response = await fetch(url, { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error(`Synthetic family read HTTP ${response.status}`);
+      return response.json();
+    }, path);
+  await page.goto("/login");
+  await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login);
+  await page.getByLabel("비밀번호", { exact: true }).fill(fixture.password);
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "오늘의 살림", exact: true }),
+  ).toBeVisible();
+  const membersBefore = await read("/api/v1/household/members");
+  await page.goto("/settings/people");
+  await page.getByLabel("가족 이름", { exact: true }).fill("합성 HTTPS 자녀");
+  await page.getByRole("button", { name: "가족 등록", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /합성 HTTPS 자녀/ })).toBeVisible();
+  const people = await read("/api/v1/household/people");
+  const person = people.items.find(
+    (p: { display_name: string }) => p.display_name === "합성 HTTPS 자녀",
+  );
+  expect(person.member_id).toBeNull();
+  expect(await read("/api/v1/household/members")).toEqual(membersBefore);
+  await page.goto("/insurance/cases/new");
+  await page.getByLabel("사건 이름", { exact: true }).fill("합성 HTTPS 가족 진료");
+  await page.getByRole("combobox", { name: "사건 환자", exact: true }).selectOption(person.id);
+  await page.getByLabel("사건 시작일", { exact: true }).fill("2025-02-01");
+  await page.getByRole("button", { name: "보험 사건 등록", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "합성 HTTPS 가족 진료", exact: true }),
+  ).toBeVisible();
+  const caseId = lastId(page);
+  await page.goto("/settings/people");
+  await page.getByRole("button", { name: "가족 보관", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /합성 HTTPS 자녀.*보관됨/ })).toBeVisible();
+  await page.goto(`/insurance/cases/${caseId}/edit`);
+  await expect(page.getByRole("combobox", { name: "사건 환자", exact: true })).toHaveValue(
+    person.id,
+  );
+  await page.getByLabel("사건 이름", { exact: true }).fill("합성 HTTPS 가족 기록 유지");
+  await page.getByLabel("사건 변경 사유", { exact: true }).fill("합성 설명 정정");
+  await page.getByRole("button", { name: "사건 변경 저장", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "합성 HTTPS 가족 기록 유지", exact: true }),
+  ).toBeVisible();
+  const history = await read(`/api/v1/insurance/cases/${caseId}/history`);
+  expect(history.items).toHaveLength(2);
+  expect(
+    history.items.every((r: { patient_member_id: string }) => r.patient_member_id === person.id),
+  ).toBe(true);
+  const audit = await read("/api/v1/audit-events?entity_type=household_person");
+  expect(audit.items.filter((r: { entity_id: string }) => r.entity_id === person.id)).toHaveLength(
+    2,
+  );
+});

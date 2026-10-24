@@ -4,12 +4,15 @@ import hashlib
 import io
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import UUID, uuid4
 from zipfile import ZipFile
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 from test_accounts import (
     NATIVE_ORIGIN,
@@ -23,7 +26,15 @@ from test_documents import CONTENT, document_app, pending, upload  # noqa: F401 
 from test_homecare_database import post_appliance, post_consumable, post_link
 from test_income import headers, income_payload
 from test_insurance_core import policy_payload
-from test_insurance_events import allocation, new_case, new_expense, new_node, new_payout
+from test_insurance_events import (
+    actual,
+    allocation,
+    money,
+    new_case,
+    new_expense,
+    new_node,
+    new_payout,
+)
 from test_recurring import generate, obligation_for, post_rule, settle
 from webauthn.helpers import base64url_to_bytes
 
@@ -155,6 +166,9 @@ def test_all_seven_domains_exact_manual_records_versions_and_secret_omissions(
     export_app, actors, db_engine
 ):
     actor, partner, foreign = actors
+    from sallimbook.identity.people_router import router as people_router
+
+    export_app.include_router(people_router)
     with TestClient(export_app) as client:
         account = create_account(client, actor)
         create_account(client, foreign, institution_name="FOREIGN-HOUSEHOLD-CANARY")
@@ -184,7 +198,31 @@ def test_all_seven_domains_exact_manual_records_versions_and_secret_omissions(
         case = new_case(client, actor)
         node = new_node(client, actor, case)
         expense = new_expense(client, actor, case, node, "100")
-        new_payout(client, actor, [allocation(case["id"], "30")])
+        claim = client.post(
+            "/api/v1/insurance/claims",
+            headers=headers(actor),
+            json={
+                "case_id": case["id"],
+                "policy_id": policy.json()["id"],
+                "expense_ids": [expense["id"]],
+            },
+        )
+        assert claim.status_code == 201, claim.text
+        payout = new_payout(client, actor, [allocation(case["id"], "30")])
+        money(
+            client,
+            actor,
+            f"/medical-expenses/{expense['id']}/refunds",
+            actual("5", reason="합성 환불"),
+            version=expense["version"],
+        )
+        money(
+            client,
+            actor,
+            f"/payouts/{payout['id']}/returns",
+            actual("5", original_allocation_id=payout["allocations"][0]["id"], reason="합성 반환"),
+            version=payout["version"],
+        )
         appliance = post_appliance(client, actor, purchase_price_krw="0")
         stock = post_consumable(client, actor)
         post_link(client, actor, appliance, stock)
@@ -196,6 +234,34 @@ def test_all_seven_domains_exact_manual_records_versions_and_secret_omissions(
         assert month.status_code == 201, month.text
         document = pending(client, actor)
         assert upload(client, actor, document).status_code == 200
+
+        # Migration must preserve every old domain row, including immutable histories,
+        # claim/refund/return references and uploaded encrypted-document metadata.
+        def snapshot():
+            with db_engine.connect() as connection:
+                return {
+                    name: connection.execute(
+                        text(f'SELECT row_to_json(t)::text FROM "{name}" t ORDER BY 1')
+                    )
+                    .scalars()
+                    .all()
+                    for name in Base.metadata.tables
+                    if name != "household_people"
+                }
+
+        before = snapshot()
+        for direction, revision in (("downgrade", "0018_install_device"), ("upgrade", "head")):
+            with db_engine.connect() as connection:
+                config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+                config.attributes["connection"] = connection
+                getattr(command, direction)(config, revision)
+        assert snapshot() == before
+        person = client.post(
+            "/api/v1/household/people",
+            headers=headers(actor),
+            json={"display_name": "합성 내보내기 가족", "relation": "child"},
+        )
+        assert person.status_code == 201, person.text
         response = export(client, partner, document_ids=[document["id"]])
         data = decoded(response)
         for private in (
@@ -208,6 +274,15 @@ def test_all_seven_domains_exact_manual_records_versions_and_secret_omissions(
         ):
             assert private not in response.content
         assert len(data["json/member_names.json"]) == 2
+        families = [p for p in data["json/household_people.json"] if p["member_id"] is None]
+        assert [(p["id"], p["display_name"]) for p in families] == [
+            (person.json()["id"], "합성 내보내기 가족")
+        ]
+        assert any(
+            event["entity_type"] == "household_person" and event["entity_id"] == person.json()["id"]
+            for event in data["json/audit_events.json"]
+        )
+
         assert data["json/financial_accounts.json"][0]["asset_id"] == account["asset_id"]
         assert data["json/asset_values.json"][0]["input_amount_krw"] is None
         assert data["json/appliances.json"][0]["purchase_price_krw"] == "0"

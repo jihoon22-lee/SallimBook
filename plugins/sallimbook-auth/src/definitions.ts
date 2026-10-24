@@ -582,6 +582,20 @@ export interface SallimBookAuth {
   }): Promise<
     NativeAuthResult<NativeFinanceResponse<components["schemas"]["PaymentLinksResponse"]>>
   >;
+  listHouseholdPeople(options: {
+    query?: NonNullable<operations["listHouseholdPeople"]["parameters"]["query"]>;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["PersonListResponse"]>>>;
+  createHouseholdPerson(options: {
+    input: components["schemas"]["PersonCreate"];
+    idempotencyKey: string;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["PersonCreatedReference"]>>
+  >;
+  updateHouseholdPerson(options: {
+    personId: string;
+    input: components["schemas"]["PersonPatch"];
+    ifMatch: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["PersonResponse"]>>>;
   listInsuranceCases(options: {
     query?: NonNullable<operations["listInsuranceCases"]["parameters"]["query"]>;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["CaseListResponse"]>>>;
