@@ -1,4 +1,5 @@
 import type { components } from "@sallimbook/api-client";
+import { readableSelection } from "./exportScope";
 import type { NativeAuthResult } from "../../../../plugins/sallimbook-auth/src/definitions";
 import { ApiError, type ApiErrorCode } from "./api";
 import { hasNativeAuth, nativeAuthPlugin as plugin } from "./nativeAuth";
@@ -19,14 +20,18 @@ function selection(options: { input: ExportRequest }): { input: ExportRequest } 
     !object(options) ||
     Object.keys(options).length !== 1 ||
     !object(options.input) ||
-    Object.keys(options.input).some((key) => key !== "formats" && key !== "document_ids")
+    Object.keys(options.input).some(
+      (key) => key !== "formats" && key !== "document_ids" && key !== "readable",
+    )
   )
     throw new ApiError(422, "VALIDATION_ERROR");
   const formats = options.input.formats === undefined ? ["json", "csv"] : options.input.formats;
   const documents = options.input.document_ids === undefined ? [] : options.input.document_ids;
+  const readable =
+    options.input.readable == null ? undefined : readableSelection(options.input.readable);
   if (
     !Array.isArray(formats) ||
-    formats.length < 1 ||
+    (formats.length < 1 && !readable) ||
     formats.length > 2 ||
     formats.some((format) => format !== "json" && format !== "csv") ||
     new Set(formats).size !== formats.length ||
@@ -36,7 +41,13 @@ function selection(options: { input: ExportRequest }): { input: ExportRequest } 
     new Set(documents).size !== documents.length
   )
     throw new ApiError(422, "VALIDATION_ERROR");
-  return { input: { formats: [...formats] as ("json" | "csv")[], document_ids: [...documents] } };
+  return {
+    input: {
+      formats: [...formats] as ("json" | "csv")[],
+      document_ids: [...documents],
+      ...(readable ? { readable } : {}),
+    },
+  };
 }
 
 /** Opens a native confirmation/reauthentication/SAF flow. Never exposes a URL, path, token or file bytes. */

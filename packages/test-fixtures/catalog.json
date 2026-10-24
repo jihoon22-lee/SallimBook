@@ -1059,6 +1059,31 @@
         "shortage_quantity": 1,
         "additional_quantity": 1
       }
+    },
+    "annual_family_cash_year": {
+      "year": 2026,
+      "patient": {
+        "medical_paid_krw": "600",
+        "medical_refunded_krw": "100",
+        "insurance_received_krw": "200",
+        "insurance_returned_krw": "50"
+      },
+      "expected": {
+        "net_medical_krw": "500",
+        "net_insurance_krw": "150",
+        "net_burden_krw": "350"
+      },
+      "prior_year_refund": {
+        "medical_paid_krw": "0",
+        "medical_refunded_krw": "70",
+        "insurance_received_krw": "0",
+        "insurance_returned_krw": "80"
+      },
+      "prior_year_refund_expected": {
+        "net_medical_krw": "-70",
+        "net_insurance_krw": "-80",
+        "net_burden_krw": "10"
+      }
     }
   }
 }

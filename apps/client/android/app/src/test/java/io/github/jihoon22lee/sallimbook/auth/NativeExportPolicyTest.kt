@@ -29,6 +29,27 @@ class NativeExportPolicyTest {
             bad { NativeExportPolicy.selection(mapOf("document_ids" to docs)) }
         assertEquals(10,NativeExportPolicy.selection(mapOf("document_ids" to List(10) { "00000000-0000-4000-8000-${it.toString().padStart(12,'0')}" })).documents.size)
     }
+    @Test fun readableOnlyScopeIsCopiedAndBoundedWithoutPathsOrSecrets() {
+        val domains=mutableListOf("insurance", "homecare")
+        val scope=mutableMapOf<String,Any?>("domains" to domains, "from_date" to "2024-02-29", "through_date" to "2024-03-01", "annual_year" to 2024L)
+        val selected=NativeExportPolicy.selection(mapOf("formats" to emptyList<String>(), "readable" to scope))
+        domains.clear(); scope.clear()
+        assertEquals(listOf("insurance", "homecare"), selected.readable!!.domains)
+        assertEquals(2024, selected.readable!!.year)
+        assertEquals("2024-02-29", (selected.body()["readable"] as Map<*,*>)["from_date"])
+        for(invalid in listOf(
+            mapOf("domains" to emptyList<String>()), mapOf("domains" to listOf("vault")),
+            mapOf("domains" to listOf("insurance","insurance")),
+            mapOf("domains" to listOf("income"), "annual_year" to 2024),
+            mapOf("domains" to listOf("insurance"), "annual_year" to 1.5),
+            mapOf("domains" to listOf("insurance"), "annual_year" to 10000),
+            mapOf("domains" to listOf("insurance"), "from_date" to "2025-02-29"),
+            mapOf("domains" to listOf("insurance"), "from_date" to "0000-01-01"),
+            mapOf("domains" to listOf("insurance"), "from_date" to "2025-03-01", "through_date" to "2025-02-28"),
+            mapOf("domains" to listOf("insurance"), "household_id" to id),
+            mapOf("domains" to listOf("insurance"), "url" to "https://synthetic.invalid/"),
+        )) bad { NativeExportPolicy.selection(mapOf("readable" to invalid)) }
+    }
     @Test fun serverErrorsAreStatusBoundAndNeverExposeRawDetails() {
         for((code,status) in NativeExportPolicy.errors) {
             val body=mapOf("error" to mapOf("code" to code,"message" to "synthetic private detail","details" to mapOf("uri" to "content://synthetic/private")))

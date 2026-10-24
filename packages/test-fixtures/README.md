@@ -52,3 +52,7 @@ uv run --project services/api pytest services/api/tests/test_fixture_catalog.py
 P16의 보충 예제 `edge_cases.shared_purchase_plan`은 두 기기 수요 1개씩과 공용 재고 1개를
 합산해 수요 2·부족 1로 만드는 사례다. 서버 계획 계산과 웹/native 구매 계획 표시에서 같은 예제를 읽는다.
 기존 T-20~T-24와 별도로 주문 수량을 실제 재고로 간주하지 않는 경계를 검사한다.
+
+P17의 `edge_cases.annual_family_cash_year`는 환자별 실제 지불·환불·보험금 배분·반환과
+이전 연도 원본의 당해 연도 환불·반환으로 생기는 음수를 구분한다. 서버 계산 및 PostgreSQL
+읽기용 연간 자료에서 검증하며, 청구액과 보험료·연금은 환자별 순부담에 더하지 않는다.
