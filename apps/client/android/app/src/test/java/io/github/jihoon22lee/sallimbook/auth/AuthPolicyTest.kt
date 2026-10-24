@@ -89,6 +89,18 @@ class AuthPolicyTest {
         assertFalse(AuthPolicy.safeJson(nested))
     }
 
+    @Test fun safeFieldComparesWholeWordsSoOrdinaryNamesPass() {
+        for (key in listOf("company", "company_name", "expand", "span", "possession", "login_state", "HTTPStatus", "URLPath")) {
+            assertTrue(key, AuthPolicy.safeField(key))
+        }
+        for (key in listOf("pan", "cardPan", "card_pan", "session_token", "sessions", "cvc", "cvc2",
+            "CVV", "refresh_tokens", "newPassword", "bank_account_number",
+            // An uppercase run ends where the next capitalised word starts.
+            "IDToken", "APIToken", "OTPSecret", "CVCCode", "PANNumber")) {
+            assertFalse(key, AuthPolicy.safeField(key))
+        }
+    }
+
     @Test fun cancelledForegroundRequestCannotApplyALateResult() {
         val request = ForegroundRequest()
         var applied = false

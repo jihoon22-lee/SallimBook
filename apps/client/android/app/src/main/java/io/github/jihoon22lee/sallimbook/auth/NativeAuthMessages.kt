@@ -14,6 +14,13 @@ internal object NativeAuthMessages {
         else -> "인증을 완료할 수 없어요. 앱 설정을 확인해 주세요."
     }
 
+    /** Invitation screens: a new invitation replaces one that may already exist. */
+    fun invitationMessage(code: AuthCode): String = when (code) {
+        AuthCode.NETWORK_UNAVAILABLE ->
+            "초대를 만들었는지 확인하지 못했어요. 자동으로 다시 보내지 않았어요. 다시 만들면 이전 초대 코드는 쓸 수 없게 돼요."
+        else -> message(code)
+    }
+
     /** Password change and sign-out-others screens. Everything else keeps [message]. */
     fun accountMessage(code: AuthCode, changingPassword: Boolean): String = when {
         code == AuthCode.AUTH_FAILED -> "현재 비밀번호를 확인해 주세요."

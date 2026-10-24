@@ -144,6 +144,16 @@ class IncomePolicyTest {
         assertEquals("INCOME_DUPLICATE_SUSPECTED", (error["error"] as Map<*, *>)["code"])
         assertFalse(error.toString().contains("synthetic"))
     }
+    @Test fun aReturnDatedBeforeItsOriginalKeepsItsCodeAt422AndAConflictAt409() {
+        fun refused(status: Int) = AuthPolicy.safeError(status, mapOf("error" to mapOf(
+            "code" to "INVALID_REVERSAL", "message" to "synthetic secret")), id)!!["error"] as Map<*, *>
+        assertEquals("INVALID_REVERSAL", refused(422)["code"])
+        assertEquals("반환일은 원본 날짜보다 빠를 수 없어요.", refused(422)["message"])
+        assertEquals("INVALID_REVERSAL", refused(409)["code"])
+        assertEquals("반환할 원본을 확인해 주세요.", refused(409)["message"])
+        assertEquals("VALIDATION_ERROR", (AuthPolicy.safeError(422, mapOf("error" to mapOf(
+            "code" to "RETURN_EXCEEDS_ORIGINAL")), id)!!["error"] as Map<*, *>)["code"])
+    }
     @Test fun cashResponseAcceptsOnlyNullableCardIdWhileIncomeInputsNeverAcceptACard() {
         val get = request(FinanceOperation.GET_INCOME, mapOf("recordId" to id))
         for (card in listOf(null, other)) {

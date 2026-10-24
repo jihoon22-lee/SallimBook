@@ -85,6 +85,7 @@ internal class NativeDocumentHttp(private val origin: String, private val client
                 consume(response)
             }
         } catch (failure: AuthFailure) { throw failure }
+        catch (failure: NativeDocumentTooLarge) { throw failure }
         catch (_: Exception) { throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE) }
         finally { gate.releaseNetworkCancellation() }
     }

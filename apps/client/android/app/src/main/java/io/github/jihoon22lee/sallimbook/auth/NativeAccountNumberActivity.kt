@@ -39,6 +39,7 @@ class NativeAccountNumberActivity : AppCompatActivity() {
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
     private val handler = Handler(Looper.getMainLooper())
     private var mode = ""
+    private var startedSignedIn = false
     private var accountId = ""
     private var ifMatch: String? = null
     private var resumed = false
@@ -66,6 +67,7 @@ class NativeAccountNumberActivity : AppCompatActivity() {
         super.onCreate(null)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setResult(Activity.RESULT_CANCELED)
+        startedSignedIn = auth.hasLocalSession()
         mode = intent.getStringExtra(NativeAuthActivity.EXTRA_MODE) ?: ""
         accountId = intent.getStringExtra(NativePasskeyActivity.EXTRA_ID) ?: ""
         ifMatch = intent.getStringExtra(NativePasskeyActivity.EXTRA_VERSION)
@@ -147,11 +149,19 @@ class NativeAccountNumberActivity : AppCompatActivity() {
 
     private fun ready() = resumed && hasWindowFocus() && !keyguard.isDeviceLocked && !isFinishing && !isDestroyed
 
+    private fun closeIfSignedOut(current: Boolean) {
+        if (!NativeSessionEnd.ended(current, ready(), startedSignedIn, auth.hasLocalSession())) return
+        gate = null; pendingNumber?.fill('\u0000'); pendingNumber = null
+        NativeSessionEnd.close(this)
+    }
+
     private fun load() {
         if (!ready() || loaded || gate != null) return
         val request = ForegroundRequest().also { gate = it }
         auth.finance(FinanceOperation.GET_ACCOUNT, JSONObject().put("accountId", accountId), request) { outcome -> runOnUiThread {
-            if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
+            if (gate !== request || !request.isActive() || !ready()) {
+                request.cancel(); closeIfSignedOut(gate === request); return@runOnUiThread
+            }
             gate = null
             val account = outcome.value?.get("body") as? Map<*, *>
             if (outcome.code != null || outcome.value?.get("status") != 200 || account == null) {
@@ -180,7 +190,9 @@ class NativeAccountNumberActivity : AppCompatActivity() {
         val request = ForegroundRequest().also { gate = it }
         status.text = "요청을 처리하고 있어요."
         auth.editAccountNumber(accountId, ifMatch!!, number, request) { outcome -> runOnUiThread {
-            if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
+            if (gate !== request || !request.isActive() || !ready()) {
+                request.cancel(); closeIfSignedOut(gate === request); return@runOnUiThread
+            }
             gate = null; pendingNumber?.fill('\u0000'); pendingNumber = null
             if (outcome.code != null) { failure(outcome.code); return@runOnUiThread }
             setResult(Activity.RESULT_OK, Intent().putExtra(NativeAuthActivity.EXTRA_STATUS, if (remove) "deleted" else "saved"))
@@ -194,7 +206,9 @@ class NativeAccountNumberActivity : AppCompatActivity() {
         val request = ForegroundRequest().also { gate = it }
         auth.revealAccountNumber(accountId, request) { outcome, number -> runOnUiThread {
             try {
-                if (gate !== request || !request.isActive() || !ready()) { request.cancel(); return@runOnUiThread }
+                if (gate !== request || !request.isActive() || !ready()) {
+                    request.cancel(); closeIfSignedOut(gate === request); return@runOnUiThread
+                }
                 gate = null
                 if (outcome.code != null || number == null) { failure(outcome.code ?: AuthCode.ACCESS_DENIED); return@runOnUiThread }
                 val now = SystemClock.elapsedRealtime()

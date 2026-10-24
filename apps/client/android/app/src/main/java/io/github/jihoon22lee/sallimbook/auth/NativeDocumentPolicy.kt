@@ -44,6 +44,7 @@ internal object NativeDocumentPolicy {
     fun errorMessage(code: String?): String = errorMessages[code]?.second ?: when (code) {
         "UNAUTHENTICATED", "REAUTHENTICATION_REQUIRED" -> "화면을 닫고 다시 로그인한 후 진행해 주세요."
         "VERSION_CONFLICT", "IDEMPOTENCY_CONFLICT" -> "첨부 상태가 변경됐습니다. 목록을 다시 확인해 주세요."
+        NativeDocumentBytes.TOO_LARGE_CODE -> "이 기기에서 한 번에 처리하기에는 파일이 너무 커요. 다른 앱을 닫거나 더 작은 파일로 다시 시도해 주세요."
         NativeDocumentImage.FAILURE_CODE -> "사진을 변환하지 못해 올리지 않았어요. 위치 등 사진 정보가 남은 원본은 보내지 않아요. 화면을 캡처하거나 다른 사진을 선택해 주세요."
         "NOT_FOUND", "FORBIDDEN" -> "이 첨부파일에 접근할 수 없습니다. 연결된 항목을 확인해 주세요."
         else -> "파일 처리를 완료하지 못했습니다. 자동 재전송하지 않았으니 목록을 다시 확인해 주세요."
@@ -171,11 +172,19 @@ internal object NativeDocumentPolicy {
     } catch (_: Exception) { false }
     private val audit = mapOf("id" to id, "household_id" to id, "version" to version, "created_by_member_id" to id,
         "updated_by_member_id" to id, "created_at" to timestamp, "updated_at" to timestamp)
-    fun reference(value: Any?, expectedId: String? = null): Map<String, Any?> {
+    private fun reference(value: Any?, expectedId: String?): Map<String, Any?> {
         val row = shape(value, mapOf("id" to id, "version" to version))
         if (expectedId != null && !(row["id"] as String).equals(expectedId, true)) invalid()
         return row
     }
+    /**
+     * The id and version a create or upload answered with. Added fields are dropped; since the
+     * write already happened, anything unreadable leaves the result unknown, not a file error.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun written(value: Any?, expectedId: String? = null): Map<String, Any?> = try {
+        NativeResponseShape.project { reference(value, expectedId) } as Map<String, Any?>
+    } catch (_: Exception) { throw AuthFailure(AuthCode.NETWORK_UNAVAILABLE) }
     private fun document(value: Any?): Map<String, Any?> {
         val row = shape(value, audit + mapOf("original_name" to text(255), "mime_type" to mime, "size_bytes" to size, "checksum_sha256" to hash,
             "state" to choice("pending", "ready", "deleted"), "pending_expires_at" to timestamp, "stored_at" to nullable(timestamp),

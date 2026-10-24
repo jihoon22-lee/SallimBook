@@ -47,6 +47,7 @@ class NativeAuthActivity : AppCompatActivity() {
     private val auth by lazy { NativeAuthSession.get(applicationContext) }
     private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
     private var foreground = false
+    private var startedSignedIn = false
     private var pending: ForegroundRequest? = null
     private var mode = LOGIN
     private val inputs = mutableListOf<EditText>()
@@ -76,6 +77,7 @@ class NativeAuthActivity : AppCompatActivity() {
         super.onCreate(null)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setResult(Activity.RESULT_CANCELED)
+        startedSignedIn = auth.hasLocalSession()
         val notExported = try {
             !packageManager.getActivityInfo(ComponentName(this, NativeAuthActivity::class.java), 0).exported
         } catch (_: Exception) { false }
@@ -271,8 +273,16 @@ class NativeAuthActivity : AppCompatActivity() {
                     clearInputs()
                     finish()
                 } else status.text = failure(outcome.code)
-            } else gate.cancel()
+            } else { gate.cancel(); closeIfSignedOut(pending === gate) }
         }
+    }
+
+    private fun closeIfSignedOut(current: Boolean) {
+        val ready = foreground && hasWindowFocus() && !keyguard.isDeviceLocked && !isFinishing && !isDestroyed
+        if (!NativeSessionEnd.ended(current, ready, startedSignedIn, auth.hasLocalSession())) return
+        pending = null
+        clearInputs()
+        NativeSessionEnd.close(this)
     }
 
     private fun submitAccount() {
@@ -340,10 +350,11 @@ class NativeAuthActivity : AppCompatActivity() {
                             close.text = "닫기"
                         } else {
                             submit.isEnabled = true
-                            status.text = NativeAuthMessages.message(outcome.code ?: AuthCode.AUTH_UNAVAILABLE)
+                            status.text = NativeAuthMessages.invitationMessage(outcome.code ?: AuthCode.AUTH_UNAVAILABLE)
                         }
                     } else {
                         gate.cancel()
+                        closeIfSignedOut(pending === gate)
                         if (!isFinishing && !isDestroyed) {
                             status.text = "화면을 벗어나 초대 코드를 지웠어요. 다시 초대를 만들어 주세요."
                         }

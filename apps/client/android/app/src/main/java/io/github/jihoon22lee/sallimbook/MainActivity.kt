@@ -61,9 +61,9 @@ class MainActivity : BridgeActivity() {
         secureWebView?.importantForAccessibility = if (visible) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
     }
     override fun onResume() {
+        // super.onResume() runs AppLockController's lifecycle callback, which evaluates elapsed
+        // background time before a cached WebView can become visible.
         super.onResume()
-        // Evaluate elapsed background time before a cached WebView can become visible.
-        AppLockController.get(this).onActivityResumed(this)
         appLockScreen?.onResume()
     }
     override fun onPause() { appLockScreen?.onPause(); super.onPause() }

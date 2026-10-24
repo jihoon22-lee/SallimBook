@@ -22,6 +22,12 @@ internal object AuthPolicy {
         "challenge", "assertion", "attestation", "devicebinding", "grant", "clientdata", "authenticatordata", "signature",
     )
 
+    private val longestForbidden = forbiddenFields.maxOf { it.length }
+    // Invisible format characters join a word instead of splitting it.
+    private val fieldSeparator = Regex("[^\\p{L}\\p{N}\\p{Cf}]+")
+    // camelCase, an uppercase run before a capitalised word (IDToken), and letter/digit edges.
+    private val wordBoundary = Regex("(?<=\\p{Ll})(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}\\p{Ll})|(?<=\\p{L})(?=\\p{N})|(?<=\\p{N})(?=\\p{L})")
+
     fun apiOrigin(value: String): String? = try {
         if (value.isEmpty() || value.length > 512 || value.any { it.isWhitespace() || it.code < 32 } ||
             '%' in value || '\\' in value) null
@@ -80,10 +86,29 @@ internal object AuthPolicy {
         return true
     }
 
+    /**
+     * Field names are compared word by word (split on separators, camelCase and digits), so
+     * `company` or `possession` pass while `cardPan` or `session_token` do not. Words of eight
+     * letters or more, such as `password`, also count inside a longer word.
+     */
     fun safeField(name: String): Boolean {
-        val normalized = Normalizer.normalize(name, Normalizer.Form.NFKC).lowercase()
-            .filter { it.isLetterOrDigit() }
-        return name.length in 1..128 && forbiddenFields.none { it in normalized }
+        if (name.length !in 1..128) return false
+        val normalized = Normalizer.normalize(name, Normalizer.Form.NFKC)
+        val squashed = normalized.lowercase().filter { it.isLetterOrDigit() }
+        if (forbiddenFields.any { it.length >= 8 && it in squashed }) return false
+        val words = normalized.split(fieldSeparator)
+            .map { part -> part.filter { it.isLetterOrDigit() } }
+            .flatMap { it.split(wordBoundary) }
+            .map { it.lowercase() }
+            .filter { it.isNotEmpty() }
+        return words.indices.none { start ->
+            var joined = ""
+            words.drop(start).any { word ->
+                joined += word
+                joined.length <= longestForbidden + 2 &&
+                    forbiddenFields.any { joined == it || joined == "${it}s" || joined == "${it}es" }
+            }
+        }
     }
 
     /** Defense in depth for the metadata allowlist; never used to permit arbitrary endpoints. */
@@ -210,10 +235,9 @@ internal object AuthPolicy {
         }
     }
 
-    /** Preserve only recognized server codes/correlation; messages are local constants. */
-    fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
-        if (requestId == null || !uuid.matches(requestId)) return null
-        val messages = mapOf(
+    // Built once: the server's safe Korean message per code, at the status it is sent with.
+    private val messages by lazy {
+        mapOf(
             "INVALID_CURSOR" to (400 to "페이지 기준을 다시 확인해 주세요."),
             "INVALID_AUDIT_FILTER" to (422 to "감사 조회 조건과 기간을 확인해 주세요."),
             "AUDIT_METADATA_INVALID" to (503 to "감사 기록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."),
@@ -336,9 +360,20 @@ internal object AuthPolicy {
             "FIELD_ENCRYPTION_UNAVAILABLE" to (503 to "계좌번호 보호 설정을 확인해 주세요."),
             "ACCOUNT_NUMBER_UNAVAILABLE" to (503 to "계좌번호를 열 수 없습니다."),
         ) + NativeDocumentPolicy.errorMessages
+    }
+    // Codes the server also returns at a second status, with the message for that status.
+    private val alternates = mapOf(
+        ("INVALID_REVERSAL" to 422) to "반환일은 원본 날짜보다 빠를 수 없어요.",
+    )
+
+    /** Preserve only recognized server codes/correlation; messages are local constants. */
+    fun safeError(status: Int, body: Any?, requestId: String?): Map<String, Any?>? {
+        if (requestId == null || !uuid.matches(requestId)) return null
         val serverError = (body as? Map<*, *>)?.get("error") as? Map<*, *>
         val suppliedCode = serverError?.get("code") as? String
-        val knownCode = suppliedCode?.takeIf { messages[it]?.first == status }
+        val knownCode = suppliedCode?.takeIf {
+            messages[it]?.first == status || (it to status) in alternates
+        }
         val code = knownCode ?: when (status) {
             400 -> "BAD_REQUEST"
             401 -> "UNAUTHENTICATED"
@@ -351,7 +386,8 @@ internal object AuthPolicy {
             else -> "REQUEST_FAILED"
         }
         val detail = mutableMapOf<String, Any?>(
-            "code" to code, "message" to (messages[code]?.second ?: "요청을 처리하지 못했습니다."),
+            "code" to code,
+            "message" to (alternates[code to status] ?: messages[code]?.second ?: "요청을 처리하지 못했습니다."),
             "request_id" to requestId,
         )
         val version = serverError?.get("current_version")

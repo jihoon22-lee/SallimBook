@@ -10,9 +10,11 @@ internal class NativeExportBytes private constructor(private val bytes:ByteArray
     companion object {
         const val MAX_BYTES=64*1024*1024
         const val TRANSFER_MILLIS=180_000L
-        fun read(input:InputStream,size:Long,checksum:String,check:()->Unit):NativeExportBytes {
+        fun read(input:InputStream,size:Long,checksum:String,allocate:(Int)->ByteArray={ ByteArray(it) },check:()->Unit):NativeExportBytes {
             if(size !in 4..MAX_BYTES.toLong() || !Regex("[0-9a-f]{64}").matches(checksum)) throw AuthFailure(AuthCode.ACCESS_DENIED)
-            val bytes=ByteArray(size.toInt()+1); var count=0
+            // The archive is held whole in memory; a device without room for it gets the size message.
+            val bytes=try { allocate(size.toInt()+1) } catch(_:OutOfMemoryError) { throw NativeExportTooLarge() }
+            var count=0
             try {
                 while(true) {
                     check(); val n=input.read(bytes,count,minOf(8192,bytes.size-count))
@@ -43,6 +45,8 @@ internal class NativeExportBytes private constructor(private val bytes:ByteArray
     override fun close() { discarded=true; bytes.fill(0) }
     override fun toString()="NativeExportBytes(redacted)"
 }
+
+internal class NativeExportTooLarge : Exception()
 
 internal class NativeExportArchive(val id:String,val content:NativeExportBytes):Closeable {
     override fun close()=content.close()

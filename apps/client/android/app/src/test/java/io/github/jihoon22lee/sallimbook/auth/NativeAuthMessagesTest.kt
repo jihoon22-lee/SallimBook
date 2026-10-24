@@ -15,6 +15,11 @@ class NativeAuthMessagesTest {
         assertEquals("인증을 완료할 수 없어요. 앱 설정을 확인해 주세요.", NativeAuthMessages.message(AuthCode.AUTH_UNAVAILABLE))
     }
 
+    @Test fun anUnknownInvitationResultSaysANewOneReplacesIt() {
+        assertTrue(NativeAuthMessages.invitationMessage(AuthCode.NETWORK_UNAVAILABLE).contains("이전 초대 코드는 쓸 수 없게 돼요"))
+        assertEquals(NativeAuthMessages.message(AuthCode.ACCESS_DENIED), NativeAuthMessages.invitationMessage(AuthCode.ACCESS_DENIED))
+    }
+
     @Test fun accountScreensExplainWrongPasswordsAndPossiblyAppliedChanges() {
         assertEquals("현재 비밀번호를 확인해 주세요.", NativeAuthMessages.accountMessage(AuthCode.AUTH_FAILED, true))
         assertEquals("새 비밀번호는 15자 이상이고 현재 비밀번호와 달라야 해요.",
