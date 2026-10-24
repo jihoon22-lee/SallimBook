@@ -64,6 +64,7 @@ from sallimbook.identity.passkeys.schemas import (
     StepUpOptionsRequest,
     StepUpResponse,
 )
+from sallimbook.identity.schemas import InstallClaim
 
 CHALLENGE_LIFETIME = timedelta(minutes=5)
 GRANT_LIFETIME = timedelta(minutes=2)
@@ -641,8 +642,14 @@ def verify_login(
     )
     install = getattr(payload, "install", None)
     # The claimed device before the credential, the order step-up uses; issue_session's own
-    # lock then lands on the row this transaction already holds.
-    identity.lock_install_device(session, install, challenge.user_id, challenge.household_id)
+    # lock then lands on the row this transaction already holds. The user is not proven yet,
+    # so a busy row is skipped and treated as no claim (a fresh row with a new key).
+    if install is not None and install.device_id is not None:
+        held = identity.lock_install_device(
+            session, install, challenge.user_id, challenge.household_id, skip_locked=True
+        )
+        if held is None:
+            install = InstallClaim()
     _, user, member = _verify_owned_assertion(
         session, challenge, payload.credential, policy, discoverable=True
     )

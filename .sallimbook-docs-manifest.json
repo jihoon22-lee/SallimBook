@@ -74,8 +74,8 @@
       "git_sha1": "e6616c15a275ad01ef2eb9181b3ac400c6fccfbc"
     },
     "docs/security-authentication.md": {
-      "sha256": "e98633a409088793b689fa2121114cab119115371de1d369f98adbfc4e74224e",
-      "git_sha1": "96956d488ae3c157effb022fa438f088f49cc785"
+      "sha256": "05953852335c2d63fce11446042b89476648b53d65d3045d6b4577590001ed3a",
+      "git_sha1": "e9e59519d99e80277fd70e686bd9f2a4da9c7958"
     },
     "docs/vault-key-lifecycle.md": {
       "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
@@ -274,8 +274,8 @@
       "git_sha1": "bbd400a7acb1ecba51e809e8bd963111d3f8d1c9"
     },
     "docs/operations-runbook.md": {
-      "sha256": "7e7438f6b9de32a24781fa46837a2ad320686d98b0f5af83b366f5211ad499b8",
-      "git_sha1": "db2161c2b04d93b16c20fae4b3104471b7151a8d"
+      "sha256": "fcfe4e4958bb93bb2123f70c3401e9ff5551f08ce437fd46a39c25aebda972e6",
+      "git_sha1": "46311670b45eb78a9aa2945d0c07141619fcf58c"
     },
     "docs/adr/vault-format-v1.md": {
       "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",

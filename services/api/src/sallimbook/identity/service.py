@@ -1000,12 +1000,15 @@ def lock_install_device(
     install: InstallClaim | None,
     user_id: UUID | None,
     household_id: UUID | None,
+    *,
+    skip_locked: bool = False,
 ) -> RegisteredDevice | None:
     """Lock the device row an install claim names, only if it is this user's Android row.
 
     Devices come before the users row and before credentials, the order password change,
-    revocation and step-up use. Another member's row is never locked, so a claim can neither
-    hold it nor learn from waiting whether it is busy.
+    revocation and step-up use. After a password check the user is known, so another member's
+    row is never locked. Before a passkey proof the user is only claimed: `skip_locked` takes
+    the row only when free, so a claim never waits on it or learns whether it is busy.
     """
     if install is None or install.device_id is None or user_id is None or household_id is None:
         return None
@@ -1017,7 +1020,7 @@ def lock_install_device(
             RegisteredDevice.household_id == household_id,
             RegisteredDevice.platform == "android",
         )
-        .with_for_update()
+        .with_for_update(skip_locked=skip_locked)
         .execution_options(populate_existing=True)
     )
 
