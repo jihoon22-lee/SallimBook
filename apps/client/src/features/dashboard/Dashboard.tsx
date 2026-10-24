@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import type { ReactNode } from "react";
 import { MonthPicker } from "../../shared/MonthContext";
 import { HomeAssetSummary } from "./HomeAssetSummary";
@@ -21,6 +22,9 @@ export function Dashboard({ welcome }: { welcome?: ReactNode }) {
         <TodayConsumables compact />
       </div>
       <HomeSecondary />
+      <p>
+        <Link to="/activity">함께한 최근 작업 보기</Link>
+      </p>
     </>
   );
 }

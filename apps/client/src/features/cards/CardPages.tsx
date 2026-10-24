@@ -1,3 +1,4 @@
+import { LastModified } from "../../shared/RecordActor";
 import { SearchableSelect } from "../../shared/SearchableSelect";
 import { NameSearch } from "../../shared/NameSearch";
 import { PaymentConnections, NamedReference } from "../finance/RelatedRecords";
@@ -85,6 +86,7 @@ export function CardSummary({
           <dt>상태</dt>
           <dd>{card.status === "active" ? "사용 중" : "사용 종료"}</dd>
         </div>
+        <LastModified record={card} />
       </dl>
       {card.settlement_account_status === "closed" && (
         <p className="month-warning">

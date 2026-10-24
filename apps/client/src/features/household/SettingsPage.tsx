@@ -74,6 +74,11 @@ export function SettingsPage() {
           { to: "/vault", label: "보관함", description: "보호된 카드 정보·복구·기기 상태" },
           { to: "/exports", label: "자료 내보내기", description: "JSON·CSV와 선택 문서 ZIP" },
           {
+            to: "/activity",
+            label: "최근 작업 이력",
+            description: "구성원·기간·대상별 작업 기록",
+          },
+          {
             to: "/settings/audit",
             label: "감사 이력",
             description: "구성원·기간·대상별 작업 기록",

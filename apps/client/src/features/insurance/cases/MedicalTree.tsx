@@ -1,3 +1,4 @@
+import { LastModified } from "../../../shared/RecordActor";
 import { TaskNotice, TaskPanel, useTaskPanelRelease } from "../../../shared/TaskLayout";
 import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useRef, useState } from "react";
@@ -99,6 +100,7 @@ function NodeSummary({ row }: { row: MedicalNode }) {
           <dt>진료 메모</dt>
           <dd>{row.note || "미입력"}</dd>
         </div>
+        <LastModified record={row} />
       </dl>
       {row.kind === "prescription" && (
         <p>

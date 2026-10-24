@@ -1,3 +1,5 @@
+import { ActivityPage } from "../features/audit/ActivityPage";
+import { RecordActorsProvider } from "../shared/RecordActor";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { isNativeAuth, nativeAuth } from "../platform/nativeAuth";
 import {
@@ -267,6 +269,14 @@ const screens = [
     parent: { to: "/settings", label: "설정" },
     live: true,
     element: <PeoplePage />,
+  },
+  {
+    path: "/activity",
+    title: "최근 작업 이력",
+    group: "more" as NavigationGroup,
+    parent: { to: "/settings", label: "설정" },
+    live: true,
+    element: <ActivityPage />,
   },
   {
     path: "/settings/audit",
@@ -975,7 +985,9 @@ export function App() {
   return (
     <AuthProvider>
       <MonthProvider>
-        <AppShell />
+        <RecordActorsProvider>
+          <AppShell />
+        </RecordActorsProvider>
       </MonthProvider>
     </AuthProvider>
   );

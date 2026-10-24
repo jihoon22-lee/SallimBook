@@ -9,6 +9,11 @@ export function useAuditApi() {
   const { domainApi } = useAuth();
   return useMemo(
     () => ({
+      activity: (query: AuditQuery, signal?: AbortSignal) =>
+        domainApi.read<components["schemas"]["ActivityListResponse"]>(
+          (client) => client.GET("/api/v1/activity-events", { params: { query }, signal }),
+          () => cancellableNative(signal, () => nativeAudit.activity({ query })),
+        ),
       list: (query: AuditQuery, signal?: AbortSignal) =>
         domainApi.read<components["schemas"]["AuditListResponse"]>(
           (client) => client.GET("/api/v1/audit-events", { params: { query }, signal }),

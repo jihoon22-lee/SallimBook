@@ -1,3 +1,4 @@
+import { RecordActor } from "../../shared/RecordActor";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
@@ -277,6 +278,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
         )}
         {latest && (
           <section className="review-panel">
+            <RecordActor memberId={latest.updated_by_member_id} at={latest.updated_at} />
             <h3>다른 곳에서 저장한 현재 수입</h3>
             <p>
               {formatKrw(latest.amount_krw)} · {latest.period_month} ·{" "}

@@ -1,3 +1,4 @@
+import { LastModified } from "../../../shared/RecordActor";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
@@ -68,7 +69,8 @@ export function CaseSummary({
   row,
   members,
 }: {
-  row: Schema["CaseInput"];
+  row: Schema["CaseInput"] &
+    Partial<Pick<Schema["CaseResponse"], "updated_at" | "updated_by_member_id">>;
   members: HouseholdPerson[];
 }) {
   return (
@@ -105,6 +107,7 @@ export function CaseSummary({
         <dt>진단 코드</dt>
         <dd>{row.diagnosis_code || "미입력"}</dd>
       </div>
+      <LastModified record={row} />
     </dl>
   );
 }

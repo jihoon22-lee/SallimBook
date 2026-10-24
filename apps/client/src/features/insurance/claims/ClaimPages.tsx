@@ -1,3 +1,4 @@
+import { LastModified } from "../../../shared/RecordActor";
 import { ExistingReceipt } from "./ExistingReceipt";
 import { DocumentPanel } from "../../documents/DocumentPanel";
 import { useCallback, useState } from "react";
@@ -108,6 +109,13 @@ export function ClaimSummary({
           <dt>심사·결정 메모</dt>
           <dd>{row.decision_note || "미입력"}</dd>
         </div>
+        <LastModified
+          record={
+            "updated_at" in row
+              ? row
+              : { updated_at: row.changed_at, updated_by_member_id: row.changed_by_member_id }
+          }
+        />
       </dl>
       <div className="form-actions">
         <Link to={`/insurance/cases/${row.case_id}`}>청구 사건</Link>

@@ -123,7 +123,7 @@ test("generated audit filters cross only the dedicated native command without st
       storage: localStorage.length + sessionStorage.length,
     };
   }, id);
-  expect(result.methods).toEqual(["list"]);
+  expect(result.methods).toEqual(["activity", "list"]);
   expect(result.first).toEqual(result.filtered);
   expect(result.first.items[0]).toMatchObject({ action: "update", changed_fields: ["name"] });
   expect(result).toMatchObject({

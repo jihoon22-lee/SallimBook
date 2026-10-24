@@ -1,3 +1,4 @@
+import { RecordActor } from "../../shared/RecordActor";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
@@ -169,6 +170,8 @@ export function AssetEditor({ initial }: { initial?: Asset }) {
             </button>
             {latest && (
               <>
+                <RecordActor memberId={latest.updated_by_member_id} at={latest.updated_at} />
+
                 <div
                   className="table-scroll"
                   tabIndex={0}

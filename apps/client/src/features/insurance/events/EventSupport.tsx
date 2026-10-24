@@ -1,3 +1,4 @@
+import { LastModified } from "../../../shared/RecordActor";
 import { SearchableSelect } from "../../../shared/SearchableSelect";
 import { useCallback, useId } from "react";
 import { Link } from "react-router";
@@ -112,6 +113,7 @@ export function CashSummary({ cash }: { cash: Schema["CashResponse"] }) {
         <dt>원본 메모</dt>
         <dd>{cash.note || "미입력"}</dd>
       </div>
+      <LastModified record={cash} />
     </dl>
   );
 }

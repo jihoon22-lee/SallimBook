@@ -1,3 +1,4 @@
+import { LastModified } from "../../shared/RecordActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { DocumentPanel } from "../documents/DocumentPanel";
 import { useCallback, useState } from "react";
@@ -78,6 +79,7 @@ export function ApplianceSummary({ row }: { row: Appliance }) {
           <dt>관리·수리 메모</dt>
           <dd>{row.note || "미입력"}</dd>
         </div>
+        <LastModified record={row} />
       </dl>
       <p className="muted">
         보증 표시는 {dateLabel(row.as_of)} 기준 기록한 기한과 비교한 결과예요. 실제 보증 조건은 구매

@@ -17,7 +17,7 @@ import { AmountField } from "../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../shared/formValidation";
 import { krwFieldError } from "../../shared/krw";
 import { useHomecareReturn, type StockOutcome } from "./HomecareOutcome";
-import { formatSeoulDateTime } from "../../shared/format";
+import { RecordActor } from "../../shared/RecordActor";
 export function StockSummary({ row }: { row: Consumable }) {
   return (
     <p>
@@ -89,8 +89,8 @@ export function MovementSummary({ row, unit }: { row: Movement; unit: string }) 
         </p>
       )}
       <p className="muted">
-        작성 시각 {formatSeoulDateTime(row.created_at)} · 재고 동작은 자산·수입·지출을 자동 변경하지
-        않아요.
+        <RecordActor memberId={row.created_by_member_id} at={row.created_at} label="기록자" />
+        재고 동작은 자산·수입·지출을 자동 변경하지 않아요.
       </p>
     </>
   );
