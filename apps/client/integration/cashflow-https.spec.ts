@@ -123,7 +123,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
   let missingIdempotency = false;
   page.on("response", (response) => {
     if (
-      /\/api\/v1\/(income|cards|recurring-rules|obligations|settlements)(\/|\?|$)/.test(
+      /\/api\/v1\/(income|cards|recurring-rules|obligations|settlements|payment-switch)(\/|\?|$)/.test(
         response.url(),
       ) &&
       response.status() >= 200 &&
@@ -135,7 +135,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
   page.on("request", (request) => {
     if (
       ["POST", "PATCH"].includes(request.method()) &&
-      /\/api\/v1\/(income|recurring-rules|obligations|settlements)(\/|$)/.test(
+      /\/api\/v1\/(income|recurring-rules|obligations|settlements|payment-switch\/rules)(\/|$)/.test(
         new URL(request.url()).pathname,
       ) &&
       !request.headers()["idempotency-key"]
@@ -509,9 +509,38 @@ test("real income card recurring and closure workflow preserves cash facts and i
   });
   console.log("SAFE_PHASE=CASHFLOW_BATCH");
 
+  const switchTitle = "합성 HTTPS 결제수단 변경";
+  const switchRule = await createRule(page, {
+    title: switchTitle,
+    amount: "4321",
+    method: "card",
+    methodId: cardId,
+  });
   await page.goto(`/cards/${cardId}`);
   await page.getByRole("button", { name: "카드 사용 종료", exact: true }).click();
   const cardReview = page.getByRole("region", { name: "사용 종료 영향 확인", exact: true });
+  await cardReview.getByRole("button", { name: "연결 규칙 결제수단 바꾸기" }).click();
+  const switchPanel = cardReview.getByRole("region", { name: "결제수단 일괄 변경", exact: true });
+  await switchPanel
+    .getByRole("combobox", { name: "납부수단 구분", exact: true })
+    .selectOption("account");
+  await switchPanel
+    .getByRole("combobox", { name: "납부 계좌", exact: true })
+    .selectOption(accountId);
+  await switchPanel.getByRole("button", { name: "변경 미리보기", exact: true }).click();
+  await switchPanel.getByRole("checkbox", { name: switchTitle, exact: true }).check();
+  await switchPanel.getByRole("button", { name: "선택한 규칙 변경", exact: true }).click();
+  await expect(switchPanel.getByText("변경 완료", { exact: true })).toHaveCount(1);
+  const switched = await page.evaluate(
+    async (id) => fetch(`/api/v1/recurring-rules/${id}`).then((r) => r.json()),
+    switchRule,
+  );
+  expect(switched.versions).toHaveLength(2);
+  expect(switched.versions[0].card_id).toBe(cardId);
+  expect(switched.versions[1].account_id).toBe(accountId);
+  expect(switched.versions[1].expected_amount_krw).toBe("4321");
+  expect(switched.versions[1].effective_from).toBe(currentDate());
+  await cardReview.getByRole("button", { name: "연결 규칙 결제수단 바꾸기" }).click();
   await cardReview.getByRole("checkbox").check();
   await page.getByRole("button", { name: "카드 사용 종료 저장", exact: true }).click();
   await expect(page.getByRole("button", { name: "카드 사용 종료", exact: true })).toHaveCount(0);

@@ -14,6 +14,7 @@ from sallimbook.assets.router import router as assets_router
 from sallimbook.audit.router import router as audit_router
 from sallimbook.cards.router import router as cards_router
 from sallimbook.cashflow.payment_link_router import router as payment_links_router
+from sallimbook.cashflow.payment_switch_router import router as payment_switch_router
 from sallimbook.cashflow.recurring_router import router as recurring_router
 from sallimbook.cashflow.router import router as income_router
 from sallimbook.config import Settings
@@ -140,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(vault_router)
 
     app.include_router(payment_links_router)
+    app.include_router(payment_switch_router)
     return app
 
 

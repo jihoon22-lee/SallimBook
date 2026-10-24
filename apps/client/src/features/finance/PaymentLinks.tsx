@@ -9,6 +9,7 @@ import type { Asset } from "../assets/model";
 import { formatKrw } from "../assets/months/model";
 import { CashflowError } from "./FinancialFeedback";
 import { isDateOnly, dateLabel } from "./dates";
+import { PaymentSwitch } from "./PaymentSwitch";
 import { allPages } from "./queries";
 type Usage = components["schemas"]["PaymentLinksResponse"];
 type Kind = Usage["resource_kind"];
@@ -83,6 +84,7 @@ export function useClosureReview(kind: Kind | null, id: string, date: string, ac
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
   const [ack, setAck] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [retry, setRetry] = useState(0);
   const stamp = `${kind}:${id}:${date}:${active}`;
   const [loadedStamp, setLoadedStamp] = useState("");
@@ -135,7 +137,8 @@ export function useClosureReview(kind: Kind | null, id: string, date: string, ac
   const required = active && kind !== null;
   const current = loadedStamp === stamp ? data : null;
   const ready =
-    !required || (!!current && !loading && !error && (!current.requires_confirmation || ack));
+    !required ||
+    (!!current && !loading && !error && !switching && (!current.requires_confirmation || ack));
   const proof: ClosureProof =
     current?.requires_confirmation && ack
       ? { closure_ack: true, usage_digest: current.usage_digest }
@@ -146,7 +149,19 @@ export function useClosureReview(kind: Kind | null, id: string, date: string, ac
     setLoadedStamp("");
     setRetry((value) => value + 1);
   }, []);
-  return { data: current, error, loading, ready, proof, ack, setAck, refresh };
+  return {
+    data: current,
+    error,
+    loading,
+    ready,
+    proof,
+    ack,
+    setAck,
+    refresh,
+    onSwitchSaved: refresh,
+    switchContext: active && kind ? { sourceKind: kind, sourceId: id } : null,
+    setSwitching,
+  };
 }
 export function useAssetClosure(asset: Asset | undefined | null, date: string, active: boolean) {
   const api = useAccountsApi();
@@ -298,6 +313,15 @@ export function ClosureReview({
           )}
           <p className="muted">사용 종료는 기존 연결을 다른 결제수단으로 자동 변경하지 않아요.</p>
         </>
+      )}
+      {review.switchContext && (
+        <PaymentSwitch
+          key={`${review.switchContext.sourceKind}:${review.switchContext.sourceId}`}
+          {...review.switchContext}
+          disabled={disabled}
+          onBusy={review.setSwitching}
+          onSaved={review.onSwitchSaved}
+        />
       )}
     </section>
   );

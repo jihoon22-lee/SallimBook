@@ -11,6 +11,8 @@ export async function mockNativeCashflow(
   const calls: { method: string; args: Args }[] = [];
   const http: string[] = [];
   const mapping: Record<string, { method: string; path: (args: Args) => string }> = {
+    previewPaymentSwitch: { method: "POST", path: () => "/payment-switch/preview" },
+    applyPaymentSwitch: { method: "POST", path: (a) => `/payment-switch/rules/${a.ruleId}` },
     listOverdueObligations: { method: "GET", path: () => "/obligations/overdue" },
     listIncome: { method: "GET", path: () => "/income" },
     incomeSummary: { method: "GET", path: () => "/income/summary" },

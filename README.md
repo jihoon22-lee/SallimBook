@@ -8,6 +8,8 @@
 > 서버 권한·금액·충돌·멱등성, 실제 HTTPS, 브라우저와 네이티브 정책 검증을 수행하고 있습니다. [최종 통합 검증 기록](docs/testing/final-integration.md)과 [요구사항 추적표](docs/requirements-traceability.md)에 근거를 연결합니다.
 > 2026-10-18 사용자 결정으로 모바일·웹 실기기 테스트는 사용자가 직접 수행하고 발견한 문제만 새 이슈로 등록합니다. 테스트 대기 이슈는 개발 차단 조건에서 해제했습니다. 백업은 한동안 유예했으나, 2026-10-24 실사용 준비 요청에 따라 수동 백업·격리 복원 확인 후 일별 백업과 월별 복원 점검 예약을 재개했습니다. 기존 백업은 보존하며 별도 장비의 독립 사본 확보와는 구분합니다. 후속 UI/UX 변경과 배포 버전·검증 결과는 [#100](https://github.com/jihoon22-lee/SallimBook/issues/100)에서 추적합니다. 기능상 남은 작업은 Android 로컬 CVC의 배포 활성화([#39](https://github.com/jihoon22-lee/SallimBook/issues/39))입니다.
 
+카드·계좌 종료 검토에서 연결 정기 규칙의 결제수단을 선택하여 일괄 변경할 수 있습니다. 금액·주기·미래 조건과 납부/수동 예외 회차를 보존하고, 실패한 규칙만 다시 검토합니다. 금융기관의 실제 변경은 별도입니다. [범위와 검증](docs/testing/payment-method-switch.md).
+
 실제 기록 작업을 기준으로 개선한 화면과 동선은 [UI/UX 검증 기록](docs/testing/scenario-ux.md)에 정리합니다.
 
 남은 작업은 [v1 잔여 실행 계획](docs/v1-completion-plan.md), 클라우드 검증 작업은

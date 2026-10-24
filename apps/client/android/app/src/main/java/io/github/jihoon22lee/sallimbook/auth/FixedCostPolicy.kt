@@ -71,6 +71,8 @@ internal object FixedCostPolicy {
     }
     private data class Route(val method: String, val path: String, val version: Boolean = false, val query: Boolean = false, val status: Int = 200)
     private val routes = mapOf(
+        FinanceOperation.PREVIEW_PAYMENT_SWITCH to Route("POST", "/api/v1/payment-switch/preview", query = true),
+        FinanceOperation.APPLY_PAYMENT_SWITCH to Route("POST", "/api/v1/payment-switch/rules/{ruleId}", version = true),
         FinanceOperation.LIST_RECURRING_RULES to Route("GET", "/api/v1/recurring-rules", query = true),
         FinanceOperation.CREATE_RECURRING_RULE to Route("POST", "/api/v1/recurring-rules", status = 201),
         FinanceOperation.GET_RECURRING_RULE_INSURANCE_LINK to Route("GET", "/api/v1/recurring-rules/{ruleId}/insurance-link"),
@@ -105,7 +107,22 @@ internal object FixedCostPolicy {
             row["amount_mode"] == "fixed" && row["expected_amount_krw"] == null ||
             (row["currency_reference"] == null) != (row["foreign_amount_reference"] == null)) invalid()
     }
+    private val digest: FixedField = { if (it !is String || !Regex("[0-9a-f]{64}").matches(it)) invalid() }
+    private fun switchInput(value: Any?, apply: Boolean): Map<String, Any?> {
+        val fields = mapOf("source_kind" to choice("account", "card"), "source_id" to id,
+            "target_kind" to choice("account", "card"), "target_id" to id, "effective_on" to date) +
+            if (apply) mapOf("preview_digest" to digest, "reason" to reason) else emptyMap()
+        val row = shape(value, fields)
+        if (row["source_kind"] == row["target_kind"] && row["source_id"] == row["target_id"]) invalid()
+        return row
+    }
+    private fun switchRow(value: Any?): Map<String, Any?> = shape(value, mapOf("id" to id, "version" to positive,
+        "title" to text(120), "periods" to records(::ruleVersion, 10_000, 1), "unchanged_period_count" to count,
+        "update_occurrence_count" to count, "preserved_past_count" to count, "preserved_paid_count" to count,
+        "preserved_manual_count" to count, "blocked_reason" to nullable(choice("INITIAL_PERIOD_START")), "preview_digest" to digest))
     private fun input(operation: FinanceOperation, value: Any?): Map<String, Any?> = when (operation) {
+        FinanceOperation.PREVIEW_PAYMENT_SWITCH -> switchInput(value, false)
+        FinanceOperation.APPLY_PAYMENT_SWITCH -> switchInput(value, true)
         FinanceOperation.CREATE_RECURRING_RULE -> {
             val row = shape(value, termsFields() + mapOf("effective_from" to date, "effective_until" to nullable(date), "end_reason" to nullable(reason)), requiredTerms + "effective_from")
             terms(row)
@@ -147,16 +164,17 @@ internal object FixedCostPolicy {
         val args = obj(value)
         val variables = Regex("\\{([A-Za-z]+)\\}").findAll(route.path).map { it.groupValues[1] }.toList()
         val write = route.method != "GET"
+        val idem = write && operation != FinanceOperation.PREVIEW_PAYMENT_SWITCH
         // A delete is a write without a body: it still carries its version and key.
         val body = write && route.method != "DELETE"
         val required = variables.toSet() + (if (route.version) setOf("ifMatch") else emptySet()) +
-            (if (write) setOf("idempotencyKey") else emptySet()) + (if (body) setOf("input") else emptySet())
+            (if (idem) setOf("idempotencyKey") else emptySet()) + (if (body) setOf("input") else emptySet())
         if (!args.keys.containsAll(required) || !(required + if (route.query) setOf("query") else emptySet()).containsAll(args.keys)) invalid()
         var path = route.path
         variables.forEach { name -> path = path.replace("{$name}", FinancePolicy.id(args[name])) }
         if (route.query) path += query(operation, args["query"])
         return FinanceRequest(route.method, path, if (body) input(operation, args["input"]) else null,
-            if (route.version) tag(args["ifMatch"]) else null, if (write) key(args["idempotencyKey"]) else null)
+            if (route.version) tag(args["ifMatch"]) else null, if (idem) key(args["idempotencyKey"]) else null)
     }
     private fun parsedQuery(raw: String, operation: FinanceOperation): Map<String, Any?> {
         if (raw.isEmpty()) invalid()
@@ -180,10 +198,10 @@ internal object FixedCostPolicy {
                 if (!template.zip(segments).all { (expected, actual) ->
                     if (expected.startsWith('{')) { args[expected.substring(1, expected.length - 1)] = actual; true } else expected == actual
                 }) continue
-                if ((ifMatch != null) != route.version || (idempotencyKey != null) != (method != "GET")) return false
+                if ((ifMatch != null) != route.version || (idempotencyKey != null) != (method != "GET" && operation != FinanceOperation.PREVIEW_PAYMENT_SWITCH)) return false
                 if (route.version) args["ifMatch"] = ifMatch
                 if (method == "GET" || method == "DELETE") { if (body != null) return false } else args["input"] = body
-                if (method != "GET") args["idempotencyKey"] = idempotencyKey
+                if (method != "GET" && operation != FinanceOperation.PREVIEW_PAYMENT_SWITCH) args["idempotencyKey"] = idempotencyKey
                 uri.rawQuery?.let { if (!route.query) invalid(); args["query"] = parsedQuery(it, operation) }
                 val expected = prepare(operation, args)
                 return expected.path == path && expected.body == body && expected.ifMatch == ifMatch && expected.idempotencyKey == idempotencyKey
@@ -238,6 +256,17 @@ internal object FixedCostPolicy {
         if (operation == FinanceOperation.DELETE_RECURRING_RULE) { if (value != null) invalid(); return null }
         val uri = URI(request.path); val target = uri.path.split('/').getOrNull(4)
         return when (operation) {
+            FinanceOperation.PREVIEW_PAYMENT_SWITCH -> page(value, ::switchRow).also { row ->
+                val source = request.body ?: invalid()
+                (row["items"] as List<*>).forEach { item ->
+                    val periods = obj(item)["periods"] as List<*>
+                    periods.forEach { period -> val p = obj(period)
+                        if (p["${source["source_kind"]}_id"] != source["source_id"] ||
+                            p["effective_until"] != null && (p["effective_until"] as String) <= (source["effective_on"] as String)) invalid()
+                    }
+                }
+            }
+            FinanceOperation.APPLY_PAYMENT_SWITCH -> reference(value).also { if (it["id"] != uri.path.split('/').getOrNull(5)) invalid() }
             FinanceOperation.GET_RECURRING_RULE_INSURANCE_LINK -> shape(value, mapOf("rule_id" to id,
                 "link" to nullable { link -> shape(link, mapOf("id" to id, "policy_id" to id,
                     "product_name" to text(120), "insurer" to text(120), "policy_status" to choice("active", "ended", "lapsed"),

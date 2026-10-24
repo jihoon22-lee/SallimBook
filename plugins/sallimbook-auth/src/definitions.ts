@@ -642,6 +642,18 @@ export interface SallimBookAuth {
     ifMatch: string;
     idempotencyKey: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["SettlementResponse"]>>>;
+  previewPaymentSwitch(options: {
+    input: components["schemas"]["PaymentSwitchInput"];
+    query?: NonNullable<operations["previewPaymentSwitch"]["parameters"]["query"]>;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["PaymentSwitchPreview"]>>
+  >;
+  applyPaymentSwitch(options: {
+    ruleId: string;
+    input: components["schemas"]["PaymentSwitchApply"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
   getCardPaymentLinks(options: {
     resourceId: operations["getCardPaymentLinks"]["parameters"]["path"]["resource_id"];
     query?: NonNullable<operations["getCardPaymentLinks"]["parameters"]["query"]>;
