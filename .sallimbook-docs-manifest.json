@@ -66,8 +66,8 @@
       "git_sha1": "cf6e169a91995aa6b1a5122847a3f811b999d075"
     },
     "docs/api-contract.md": {
-      "sha256": "2ec48bb89441793a422d25d93b71aac43fb022b3f8370667e2534da7396ac6bc",
-      "git_sha1": "7c6884073851cce3daf3a044f2fe0ddb2151a822"
+      "sha256": "87a634ef10510a8fef14b18d215b66451ff949bbd87e6434f7898cb90d318e62",
+      "git_sha1": "59848fa9318e158a560016f014923ba5754b7143"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -242,8 +242,8 @@
       "git_sha1": "f07b1eb46c94ae67361845cdec929ec6f9f01791"
     },
     "docs/testing/monthly-assets-client.md": {
-      "sha256": "14fd3e289bf516f9f79488b669c63b088f4bdd0b6da74d8d442735184f39795e",
-      "git_sha1": "76e3aa469e5360ba83f0fa0c14c2e3cf62409715"
+      "sha256": "a8373467841ff2a89c439f99d7495eff5dfc2ac0ae40faad46ac24c9bceac091",
+      "git_sha1": "b379c36c003116bc77765a9a69db1977df34dbc4"
     },
     "docs/testing/assets-comparison-client.md": {
       "sha256": "3d7ace82877320270057c5a2547a85aa048b04261a1bfdac2b26066410b74da8",

@@ -255,6 +255,11 @@ export async function mockMonths(page: Page) {
         row.version++;
         current.version++;
         current.totals = total(current.values);
+        if (state.writeDelay) await new Promise((resolve) => setTimeout(resolve, state.writeDelay));
+        if (state.writeFailure === "after") {
+          state.writeFailure = "";
+          return route.abort("failed");
+        }
         return route.fulfill({
           json: { value: row, revision_version: current.version, totals: current.totals },
         });

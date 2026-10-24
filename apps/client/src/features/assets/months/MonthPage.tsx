@@ -19,6 +19,7 @@ import {
 } from "./MonthCommands";
 import { MonthError, MonthSummary } from "./MonthFeedback";
 import { snapshotOwner } from "./ScopeChanges";
+import { BatchMonthConfirm } from "./BatchMonthConfirm";
 import { MonthRowEditor } from "./MonthRowEditor";
 import type { EditingValue } from "./MonthRowEditor";
 import { carriedNote, formatKrw, monthStates, untouchedMissing, verificationStates } from "./model";
@@ -31,8 +32,10 @@ function SnapshotList({
   readOnly,
   locked,
   edit,
+  rows,
 }: {
   record: MonthRecord;
+  rows: MonthValue[];
   members: HouseholdMember[];
   readOnly: boolean;
   locked: boolean;
@@ -53,8 +56,12 @@ function SnapshotList({
           <Link to="/assets">자산 기본정보 확인</Link>
         </div>
       )}
+      <p className="muted">
+        표시 {rows.length} / 전체 {record.values.length}개 · 합계는 전체 기록 기준이에요.
+      </p>
+      {rows.length === 0 && record.values.length > 0 && <p>선택한 조건에 맞는 항목이 없어요.</p>}
       <ul className="finance-list task-records">
-        {record.values.map((row) => (
+        {rows.map((row) => (
           <li className="card month-value-card" key={row.asset_id}>
             <div className="item-heading">
               <h3>{row.name}</h3>
@@ -228,7 +235,7 @@ function MonthHistory({ month, refresh }: { month: string; refresh: string }) {
   );
 }
 
-type Panel = { type: "confirm" | "reopen" | "sync" | "carry"; initial: MonthRecord };
+type Panel = { type: "confirm" | "reopen" | "sync" | "carry" | "verify"; initial: MonthRecord };
 function MonthWorkspace({
   month,
   revisionNo,
@@ -247,6 +254,15 @@ function MonthWorkspace({
   const [editor, setEditor] = useState<EditingValue | null>(null);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [notice, setNotice] = useState("");
+  const [owner, setOwner] = useState("all");
+  const [verification, setVerification] = useState("all");
+  const [nextAfter, setNextAfter] = useState<string | null>(null);
+  const [nextError, setNextError] = useState(false);
+  const matchesOwner = (row: MonthValue) =>
+    owner === "all" ||
+    (owner === "joint"
+      ? row.ownership_kind === "joint"
+      : row.ownership_kind !== "joint" && row.owner_member_id === owner);
   const generation = useRef(0);
   // After the editor closes (cancel or save), focus returns to the row that opened it.
   const returnFocusTo = useRef<string | null>(null);
@@ -291,10 +307,10 @@ function MonthWorkspace({
     };
   }, [reload]);
   useEffect(() => {
-    setEditing(Boolean(editor || panel));
+    setEditing(Boolean(editor || panel || nextAfter));
     return () => setEditing(false);
-  }, [editor, panel, setEditing]);
-  function saved(result: components["schemas"]["MonthValueResult"], revisionId: string) {
+  }, [editor, panel, nextAfter, setEditing]);
+  function updateValue(result: components["schemas"]["MonthValueResult"], revisionId: string) {
     setRecord((current) =>
       current?.revision_id === revisionId
         ? {
@@ -307,9 +323,45 @@ function MonthWorkspace({
           }
         : current,
     );
-    closeEditor();
+  }
+  async function openNext(assetId: string) {
+    setNextAfter(assetId);
+    setNextError(false);
+    try {
+      const latest = await reload();
+      if (!mounted.current) return;
+      const next =
+        latest.state === "confirmed"
+          ? undefined
+          : latest.values.find(
+              (row) =>
+                row.asset_id !== assetId &&
+                row.inclusion_status === "included" &&
+                row.verification_state !== "verified" &&
+                matchesOwner(row),
+            );
+      setNextAfter(null);
+      if (next) setEditor({ revisionId: latest.revision_id, row: next });
+      else setNotice("금액을 저장했어요. 선택한 소유 조건에 다음 미확인 항목이 없어요.");
+    } catch {
+      if (mounted.current) setNextError(true);
+    }
+  }
+  function saved(
+    result: components["schemas"]["MonthValueResult"],
+    revisionId: string,
+    next: boolean,
+  ) {
+    updateValue(result, revisionId);
     setNotice("확인한 금액과 기준일을 저장했어요.");
-    void reload().catch(() => undefined);
+    if (next) {
+      returnFocusTo.current = null;
+      setEditor(null);
+      void openNext(result.value.asset_id);
+    } else {
+      closeEditor();
+      void reload().catch(() => undefined);
+    }
   }
   if (loading && !record) return <p role="status">월 기록을 불러오고 있어요.</p>;
   if (!record)
@@ -328,14 +380,34 @@ function MonthWorkspace({
       </>
     );
   const readOnly = revisionNo !== undefined || record.state === "confirmed";
-  const locked = Boolean(editor || panel || loading || error);
+  const locked = Boolean(editor || panel || loading || error || nextAfter);
   const nextUnverified = record.values.find(
-    (row) => row.inclusion_status === "included" && row.verification_state !== "verified",
+    (row) =>
+      row.inclusion_status === "included" &&
+      row.verification_state !== "verified" &&
+      matchesOwner(row),
   );
   return (
     <>
       {notice && <p role="status">{notice}</p>}
       <MonthError error={error} />
+      {nextAfter && (
+        <div role="status">
+          {nextError ? (
+            <>
+              금액은 저장했어요. 다음 항목을 불러오지 못했어요.{" "}
+              <button type="button" disabled={loading} onClick={() => void openNext(nextAfter)}>
+                다음 항목만 다시 확인
+              </button>
+              <button type="button" onClick={() => setNextAfter(null)}>
+                목록에서 계속하기
+              </button>
+            </>
+          ) : (
+            "저장 후 다음 미확인 항목을 찾고 있어요."
+          )}
+        </div>
+      )}
       {revisionNo !== undefined && (
         <section className="card">
           <h2>{record.revision_no}차 기록 조회</h2>
@@ -363,7 +435,7 @@ function MonthWorkspace({
           </span>
         </div>
       )}
-      <MonthSummary record={record} />
+      {panel?.type !== "confirm" && <MonthSummary record={record} />}
       {record.state === "reopened" && (
         <section className="card">
           <h2>과거 범위를 유지하는 정정본</h2>
@@ -390,7 +462,7 @@ function MonthWorkspace({
         )}
         <button
           type="button"
-          disabled={loading || Boolean(panel)}
+          disabled={loading || Boolean(panel) || Boolean(nextAfter)}
           onClick={() => void reload().catch(() => undefined)}
         >
           현재 월 기록 다시 불러오기
@@ -406,6 +478,20 @@ function MonthWorkspace({
             </button>
           ) : (
             <>
+              {record.values.some(
+                (row) =>
+                  row.inclusion_status === "included" &&
+                  row.verification_state === "carried_unconfirmed" &&
+                  row.input_amount_krw !== null,
+              ) && (
+                <button
+                  type="button"
+                  disabled={locked}
+                  onClick={() => setPanel({ type: "verify", initial: record })}
+                >
+                  선택한 항목 변동 없음 확인
+                </button>
+              )}
               {record.values.some(untouchedMissing) && (
                 <button
                   type="button"
@@ -447,6 +533,28 @@ function MonthWorkspace({
           close={closeEditor}
         />
       )}
+      {panel?.type === "verify" && (
+        <BatchMonthConfirm
+          initial={panel.initial}
+          saved={updateValue}
+          review={(row, date) => {
+            setPanel(null);
+            setEditor({
+              revisionId: panel.initial.revision_id,
+              row,
+              draft: {
+                mode: "unchanged",
+                amount: row.input_amount_krw ?? "",
+                asOf: date,
+                reason: "",
+              },
+              conflict: true,
+            });
+          }}
+          refresh={reload}
+          close={() => setPanel(null)}
+        />
+      )}
       {panel?.type === "confirm" && (
         <ConfirmMonth
           initial={panel.initial}
@@ -471,7 +579,47 @@ function MonthWorkspace({
           close={() => setPanel(null)}
         />
       )}
+      <fieldset className="finance-fields" disabled={Boolean(editor || panel || nextAfter)}>
+        <legend>월 자산 표시 조건</legend>
+        <div className="form-field">
+          <label htmlFor="month-owner-filter">소유 관계 필터</label>
+          <select
+            id="month-owner-filter"
+            value={owner}
+            onChange={(event) => setOwner(event.target.value)}
+          >
+            <option value="all">전체 소유 관계</option>
+            <option value="joint">공동 소유</option>
+            {members.members.map((member) => (
+              <option key={member.member_id} value={member.member_id}>
+                {member.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="month-verification-filter">확인 상태 필터</label>
+          <select
+            id="month-verification-filter"
+            value={verification}
+            onChange={(event) => setVerification(event.target.value)}
+          >
+            <option value="all">전체 확인 상태</option>
+            <option value="unverified">미확인 항목</option>
+            <option value="verified">확인 완료</option>
+            <option value="missing">미입력</option>
+          </select>
+        </div>
+      </fieldset>
       <SnapshotList
+        rows={record.values.filter(
+          (row) =>
+            matchesOwner(row) &&
+            (verification === "all" ||
+              (verification === "unverified"
+                ? row.verification_state !== "verified"
+                : row.verification_state === verification)),
+        )}
         record={record}
         members={members.members}
         readOnly={readOnly}

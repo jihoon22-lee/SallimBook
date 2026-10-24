@@ -174,6 +174,12 @@ draft·confirm·reopen·carry-previous 응답은 `month`, `revision_id`, `revisi
 확정할 때 `acknowledge_non_month_end_dates`, `acknowledge_scope_change`로 표시된 차이를 명시 확인한다.
 웹과 Android의 월 입력·확정·정정·과거 조회 화면, 비교·추이·홈 요약을 같은 월 기록에 연결했다. Android는 네이티브 인증 adapter를 사용한다.
 
+Issue #147의 선택 변동 없음 확인은 기존 값 PATCH를 항목별로 순차 호출하는 클라이언트 작업이다.
+기본 선택·기준일은 비어 있으며, 포함된 미확인 금액만 명시적으로 선택한다. 각 행의 revision/value ID·If-Match와
+기준일을 고정하고 성공한 행은 재전송하지 않는다. 원자적 일괄 API가 아니므로 일부만 저장될 수 있다.
+응답 유실 뒤 같은 버전으로 재시도하면 이미 반영된 행은 409가 되어 개별 검토가 필요하다. 자동으로 최신 버전을
+채워 덮어쓰지 않는다. 저장 후 다음 항목 이동 실패는 월 GET만 재시도한다. 월 확정은 별도 명령으로 유지한다.
+
 ### 9) 자산 비교·추이 (SB-013)
 
 두 endpoint는 현재 가계의 **현재 월 revision**을 읽는다. 정정 중인 달을 과거 확정본으로 자동 대체하지 않는다.

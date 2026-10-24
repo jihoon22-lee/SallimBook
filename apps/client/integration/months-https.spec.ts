@@ -113,7 +113,17 @@ test("real monthly workflow preserves null zero copied values scope and immutabl
   await page.getByRole("button", { name: "월 작성본 만들기", exact: true }).click();
   await expect(page.getByText("불러온 값 · 미확인", { exact: true })).toHaveCount(2);
   await expect(page.getByRole("button", { name: "월 확정 검토", exact: true })).toBeDisabled();
-  await observe(page, "합성 월 확인 주택", "unchanged", "2025-02-20");
+  await page.getByRole("button", { name: "선택한 항목 변동 없음 확인", exact: true }).click();
+  const batch = page.getByRole("region", { name: "선택한 항목 변동 없음", exact: true });
+  await batch.getByLabel("합성 월 확인 주택 선택", { exact: true }).check();
+  await batch.getByLabel("공통 실제 확인 기준일", { exact: true }).fill("2025-02-20");
+  await batch
+    .getByLabel("선택한 금액이 기준일에도 같음을 직접 확인했어요.", { exact: true })
+    .check();
+  await batch.getByRole("button", { name: "선택한 금액 확인 저장", exact: true }).click();
+  await expect(batch.getByRole("status")).toContainText("1 / 1개 저장 완료");
+  await batch.getByRole("button", { name: "결과 확인하고 닫기", exact: true }).click();
+  await expect(page.getByRole("button", { name: "월 확정 검토", exact: true })).toBeDisabled();
   await observe(page, "합성 월 확인 대출", "0", "2025-02-28");
   expect(await changeLiveShare(page, house, "0.75")).toBe(200);
   await page.getByRole("button", { name: "월 확정 검토", exact: true }).click();

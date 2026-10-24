@@ -24,7 +24,12 @@ import { AmountField } from "../../../shared/AmountField";
 import { FormError, useSubmitAttempt } from "../../../shared/formValidation";
 import { krwFieldError } from "../../../shared/krw";
 import { scrollBehavior } from "../../../shared/motion";
-export type EditingValue = { revisionId: string; row: MonthValue };
+export type EditingValue = {
+  revisionId: string;
+  row: MonthValue;
+  draft?: ValueDraft;
+  conflict?: boolean;
+};
 export function MonthRowEditor({
   month,
   initial,
@@ -37,20 +42,24 @@ export function MonthRowEditor({
   members: HouseholdMember[];
   initial: EditingValue;
   reload: () => Promise<MonthRecord>;
-  saved: (result: components["schemas"]["MonthValueResult"], revisionId: string) => void;
+  saved: (
+    result: components["schemas"]["MonthValueResult"],
+    revisionId: string,
+    next: boolean,
+  ) => void;
   close: () => void;
 }) {
   const api = useAssetMonthsApi();
   const command = useMonthCommand();
   const [base, setBase] = useState(initial);
-  const [draft, setDraft] = useState(() => valueDraft(initial.row));
-  const [conflict, setConflict] = useState(false);
+  const [draft, setDraft] = useState(() => initial.draft ?? valueDraft(initial.row));
+  const [conflict, setConflict] = useState(initial.conflict ?? false);
   const [latest, setLatest] = useState<MonthRecord | null>(null);
   const [ackScope, setAckScope] = useState(false);
   const [formError, setFormError] = useState("");
   const attempt = useSubmitAttempt();
-  const [dirty, setDirty] = useState(false);
-  useUnsavedChangesGuard(dirty);
+  const [dirty, setDirty] = useState(Boolean(initial.draft));
+  const guard = useUnsavedChangesGuard(dirty);
   const section = useRef<HTMLElement>(null);
   useEffect(() => {
     section.current?.focus();
@@ -68,6 +77,7 @@ export function MonthRowEditor({
         );
   async function submit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
+    const next = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "next";
     event.preventDefault();
     if (command.busy || conflict) return;
     const body = valueInput(base.revisionId, base.row, draft, month);
@@ -83,8 +93,10 @@ export function MonthRowEditor({
       api.update(month, base.row.asset_id, body, base.row.version, signal),
     );
     if (!command.mounted.current) return;
-    if (result.ok) saved(result.value, base.revisionId);
-    else if (result.error.status === 409 || result.error.code === "NOT_FOUND") setConflict(true);
+    if (result.ok) {
+      guard.release();
+      saved(result.value, base.revisionId, next);
+    } else if (result.error.status === 409 || result.error.code === "NOT_FOUND") setConflict(true);
   }
   async function compare() {
     const result = await command.run(() => reload());
@@ -347,6 +359,9 @@ export function MonthRowEditor({
         <div className="form-actions">
           <button type="submit" disabled={command.busy || conflict}>
             금액 확인 저장
+          </button>
+          <button type="submit" value="next" disabled={command.busy || conflict}>
+            저장 후 다음 미확인 항목
           </button>
           {command.busy && (
             <button type="button" onClick={command.cancel}>
