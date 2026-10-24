@@ -7,7 +7,7 @@ const KEEP = 50;
 const RESTORE_LIMIT_MS = 3000;
 const USER_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
 
-type HistoryLocation = { key: string; pathname: string; search?: string };
+type HistoryLocation = { key: string; pathname: string; search?: string; hash?: string };
 
 const saved = { scroll: new Map<string, number>(), pages: new Map<string, number>() };
 
@@ -102,4 +102,42 @@ export function useHistoryScroll(location: HistoryLocation, navigationType: Navi
     for (const type of USER_INPUT) window.addEventListener(type, stop, { passive: true });
     return stop;
   }, [entry]);
+
+  // Router navigation happens before async sections mount. Native fragment scrolling
+  // cannot find those elements yet; wait for the target without defeating back restoration.
+  useEffect(() => {
+    if (!location.hash || (navigationType === "POP" && saved.scroll.has(entry))) return;
+    let id: string;
+    try {
+      id = decodeURIComponent(location.hash.slice(1));
+    } catch {
+      return;
+    }
+    if (!id) return;
+    let active = true;
+    const reach = () => {
+      const target = document.getElementById(id);
+      if (!active || !target) return false;
+      if (!target.hasAttribute("tabindex")) target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: "start" });
+      return true;
+    };
+    const observer = new MutationObserver(() => {
+      if (reach()) observer.disconnect();
+    });
+    if (!reach()) observer.observe(document.body, { childList: true, subtree: true });
+    const cancel = () => {
+      active = false;
+      observer.disconnect();
+    };
+    const timer = window.setTimeout(cancel, RESTORE_LIMIT_MS);
+    for (const type of USER_INPUT) window.addEventListener(type, cancel, { passive: true });
+    void document.fonts.ready.then(() => reach());
+    return () => {
+      cancel();
+      window.clearTimeout(timer);
+      for (const type of USER_INPUT) window.removeEventListener(type, cancel);
+    };
+  }, [entry, location.hash, navigationType]);
 }

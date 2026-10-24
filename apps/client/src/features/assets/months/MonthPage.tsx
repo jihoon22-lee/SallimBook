@@ -383,6 +383,11 @@ function MonthWorkspace({
       )}
       <MemberLoadError error={members.error} retry={members.retry} />
       <div className="form-actions">
+        {record.state === "confirmed" && (
+          <Link className="button-link secondary-button" to={`/assets/compare?to=${month}`}>
+            확정한 월 비교
+          </Link>
+        )}
         <button
           type="button"
           disabled={loading || Boolean(panel)}
@@ -443,7 +448,14 @@ function MonthWorkspace({
         />
       )}
       {panel?.type === "confirm" && (
-        <ConfirmMonth initial={panel.initial} reload={reload} close={() => setPanel(null)} />
+        <ConfirmMonth
+          initial={panel.initial}
+          reload={reload}
+          close={() => setPanel(null)}
+          confirmed={() =>
+            setNotice("월 기록을 확정했어요. 확정한 금액과 비교 결과를 확인할 수 있어요.")
+          }
+        />
       )}
       {panel?.type === "reopen" && (
         <ReopenMonth initial={panel.initial} reload={reload} close={() => setPanel(null)} />

@@ -1,6 +1,6 @@
 import { Icon } from "../../shared/Icon";
 import { useCallback, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { ApiError } from "../../platform/api";
 import { SessionStatus } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
@@ -41,7 +41,22 @@ export async function completeToday(
 }
 function TodayList({ compact }: { compact: boolean }) {
   const api = useHomecareApi();
-  const [filter, setFilter] = useState<TodayFilter>("attention");
+  const [homeFilter, setHomeFilter] = useState<TodayFilter>("attention");
+  const [params, setParams] = useSearchParams();
+  const selected = params.get("care") ?? "attention";
+  const filter: TodayFilter = compact
+    ? homeFilter
+    : ["attention", "due", "soon", "purchase", "unknown", "all"].includes(selected)
+      ? (selected as TodayFilter)
+      : "attention";
+  const setFilter = (value: TodayFilter) => {
+    if (compact) setHomeFilter(value);
+    else {
+      const next = new URLSearchParams(params);
+      next.set("care", value);
+      setParams(next, { replace: true });
+    }
+  };
   const resource = useResource(
     useCallback(
       () => completeToday((cursor) => api.getHomecareStatus({ query: { cursor, limit: 200 } })),
@@ -77,7 +92,7 @@ function TodayList({ compact }: { compact: boolean }) {
             <p className="eyebrow">오늘 기준 · {dateLabel(resource.data.as_of)}</p>
             {compact && (
               <p className="care-count" role="status">
-                확인할 소모품 <strong>{attentionCount}개</strong>
+                기기별 확인 <strong>{attentionCount}건</strong>
               </p>
             )}
           </div>
@@ -144,7 +159,9 @@ function TodayList({ compact }: { compact: boolean }) {
           )}
           {compact && shown.length > 4 && (
             <p>
-              <Link to="/consumables">나머지 {shown.length - 4}개 확인할 소모품 보기</Link>
+              <Link to={`/consumables?care=${filter}#today-care`}>
+                나머지 {shown.length - 4}건의 기기별 확인 보기
+              </Link>
             </p>
           )}
           {compact && filterControl}
