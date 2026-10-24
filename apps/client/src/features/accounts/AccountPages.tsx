@@ -1,4 +1,5 @@
-import { FilterPanel } from "../../shared/TaskLayout";
+import { DateInput } from "../../shared/DateInput";
+import { FilterPanel, TaskPanel } from "../../shared/TaskLayout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -203,8 +204,13 @@ function useAccount(id: string) {
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
+  const loadedId = useRef(id);
   useEffect(() => {
     let active = true;
+    if (loadedId.current !== id) {
+      setAccount(null);
+      loadedId.current = id;
+    }
     setError(null);
     setLoading(true);
     if (!isUuid(id)) {
@@ -219,7 +225,6 @@ function useAccount(id: string) {
       })
       .catch((failure) => {
         if (active) {
-          setAccount(null);
           setError(toApiError(failure));
         }
       })
@@ -304,6 +309,13 @@ function AccountDetail({ id }: { id: string }) {
   return (
     <>
       {saved && <p role="status">계좌 정보를 저장했어요.</p>}
+      {state.loading && <p role="status">기존 내용을 유지하며 계좌 정보를 다시 확인하고 있어요.</p>}
+      <FinanceError error={state.error} />
+      {state.error && (
+        <button type="button" disabled={state.loading} onClick={state.reload}>
+          계좌 다시 확인
+        </button>
+      )}
       <section className="card">
         <h2>{account.asset.name}</h2>
         <dl className="metadata-grid">
@@ -354,6 +366,7 @@ function AccountDetail({ id }: { id: string }) {
           <button
             type="button"
             className="danger-button"
+            disabled={state.loading || Boolean(state.error)}
             onClick={() => {
               setError(null);
               setClosing(false);
@@ -378,15 +391,14 @@ function AccountDetail({ id }: { id: string }) {
       </section>
       <AssetMonthlyData assetId={account.asset_id} />
       {closing && (
-        <section className="card">
+        <TaskPanel label="계좌 사용 종료">
           <h2>계좌 사용 종료</h2>
           <p>연결된 금융 자산도 함께 사용 종료돼요. 계좌 정보와 과거 기록은 보존해요.</p>
           <form className="finance-form" onSubmit={(event) => void close(event)}>
             <div className="form-field">
               <label htmlFor="account-closed">계좌 종료일</label>
-              <input
+              <DateInput
                 id="account-closed"
-                type="date"
                 required
                 max={todaySeoul()}
                 min={
@@ -425,7 +437,7 @@ function AccountDetail({ id }: { id: string }) {
               </button>
             </div>
           </form>
-        </section>
+        </TaskPanel>
       )}
       {deleting && (
         <MisregistrationDelete
@@ -437,7 +449,10 @@ function AccountDetail({ id }: { id: string }) {
           remove={() => accounts.delete(account.id, account.version)}
           done={() => navigate("/accounts", { replace: true, state: { deleted: "account" } })}
           cancel={() => setDeleting(false)}
-          reload={state.reload}
+          reload={() => {
+            setDeleting(false);
+            state.reload();
+          }}
         >
           <p>
             다른 기록이 연결되지 않은 오등록 계좌만 실제로 삭제할 수 있어요. 연결된 금융 자산 「
@@ -451,7 +466,7 @@ function AccountDetail({ id }: { id: string }) {
 }
 function AccountEdit({ id }: { id: string }) {
   const state = useAccount(id);
-  if (state.loading) return <p role="status">수정할 계좌를 불러오고 있어요.</p>;
+  if (state.loading && !state.account) return <p role="status">수정할 계좌를 불러오고 있어요.</p>;
   return state.account ? (
     <AccountEditor initial={state.account} />
   ) : (

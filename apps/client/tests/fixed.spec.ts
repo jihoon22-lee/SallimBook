@@ -70,6 +70,7 @@ test("annual variable rule keeps unknown KRW separate from foreign reference and
   await page.getByRole("combobox", { name: "반복 주기", exact: true }).selectOption("annual");
   await page.getByLabel("주기 기준일", { exact: true }).fill("2024-02-29");
   await page.getByLabel("적용 시작일", { exact: true }).fill("2025-01-01");
+  await openDisclosure(page, "종료일·외화 참고·메모");
   await page.getByLabel("외화 참고 통화 (선택)", { exact: true }).fill("USD");
   await page.getByLabel("외화 참고금액 (선택)", { exact: true }).fill("20.12345678");
   await page.getByRole("button", { name: "납부 규칙 저장", exact: true }).click();

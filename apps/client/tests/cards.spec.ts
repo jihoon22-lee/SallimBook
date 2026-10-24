@@ -15,10 +15,12 @@ test("card filters retain metadata selection and creation never sends full numbe
   await page.getByRole("combobox", { name: "카드 소유자 필터", exact: true }).selectOption(uid(2));
   await page.getByRole("combobox", { name: "카드 유형 필터", exact: true }).selectOption("credit");
   await page.reload();
+  await openDisclosure(page, "카드 찾기");
   await expect(page.getByRole("combobox", { name: "카드 유형 필터", exact: true })).toHaveValue(
     "credit",
   );
   await expect(page.getByText("•••• 1111", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "필터 닫기", exact: true }).click();
   await page.getByRole("link", { name: "카드 등록", exact: true }).click();
   await page.getByRole("combobox", { name: "카드 소유자", exact: true }).selectOption(uid(5));
   await page.getByLabel("카드사", { exact: true }).fill("합성 새 카드사");

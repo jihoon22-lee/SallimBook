@@ -1,3 +1,4 @@
+import { openDisclosure } from "../tests/support/task-ui";
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -109,6 +110,7 @@ for (const viewport of [
       await page.getByLabel("금융기관", { exact: true }).fill("합성 HTTPS 금융기관");
       await page.getByLabel("계좌 유형", { exact: true }).selectOption("irp");
       await createAssetFields(page, `합성 HTTPS IRP ${viewport.name}`, true);
+      await openDisclosure(page, "계좌 용도·개설일");
       await page.getByLabel("개설일 (선택)", { exact: true }).fill("2025-01-01");
       await page.getByRole("button", { name: "계좌 등록", exact: true }).click();
       await expect(

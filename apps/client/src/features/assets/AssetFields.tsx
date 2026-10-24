@@ -1,3 +1,5 @@
+import { DateInput } from "../../shared/DateInput";
+import { OptionalFields } from "../../shared/OptionalFields";
 import { useId } from "react";
 import { Link } from "react-router";
 import { todaySeoul } from "../finance/dates";
@@ -225,9 +227,8 @@ export function AssetFields({
           <div className="form-pair">
             <div className="form-field">
               <label htmlFor={`${id}-start`}>보유 시작일</label>
-              <input
+              <DateInput
                 id={`${id}-start`}
-                type="date"
                 value={value.started_on}
                 onChange={(event) => set("started_on", event.target.value)}
                 min="0001-01-01"
@@ -236,11 +237,15 @@ export function AssetFields({
               />
               <p className="muted">등록한 날짜가 아닌, 실제 보유를 시작한 날짜를 선택해 주세요.</p>
             </div>
+          </div>
+          <OptionalFields
+            title="자산 종료일·메모"
+            hasValues={Boolean(value.ended_on || value.note)}
+          >
             <div className="form-field">
               <label htmlFor={`${id}-end`}>보유 종료일 (선택)</label>
-              <input
+              <DateInput
                 id={`${id}-end`}
-                type="date"
                 value={value.ended_on}
                 onChange={(event) => set("ended_on", event.target.value)}
                 min={value.started_on || "0001-01-01"}
@@ -255,20 +260,20 @@ export function AssetFields({
                 </p>
               )}
             </div>
-          </div>
-          <div className="form-field">
-            <label htmlFor={`${id}-note`}>메모 (선택)</label>
-            <textarea
-              id={`${id}-note`}
-              value={value.note}
-              onChange={(event) => set("note", event.target.value)}
-              maxLength={2000}
-              rows={4}
-            />
-            <p className="muted">
-              계좌번호나 카드번호는 메모에 입력하지 말고 전용 화면을 이용해 주세요.
-            </p>
-          </div>
+            <div className="form-field">
+              <label htmlFor={`${id}-note`}>메모 (선택)</label>
+              <textarea
+                id={`${id}-note`}
+                value={value.note}
+                onChange={(event) => set("note", event.target.value)}
+                maxLength={2000}
+                rows={4}
+              />
+              <p className="muted">
+                계좌번호나 카드번호는 메모에 입력하지 말고 전용 화면을 이용해 주세요.
+              </p>
+            </div>
+          </OptionalFields>
         </div>
       </div>
     </fieldset>

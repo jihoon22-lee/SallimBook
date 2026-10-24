@@ -1,3 +1,5 @@
+import { DateInput } from "../../../shared/DateInput";
+import { OptionalFields } from "../../../shared/OptionalFields";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
@@ -215,16 +217,6 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
             />
             <div className="form-field">
               <label>
-                수익자 메모
-                <textarea
-                  maxLength={1000}
-                  value={draft.beneficiary}
-                  onChange={(e) => change("beneficiary", e.target.value)}
-                />
-              </label>
-            </div>
-            <div className="form-field">
-              <label>
                 보험 계약 상태
                 <select value={draft.status} onChange={(e) => change("status", e.target.value)}>
                   {Object.entries(policyStatuses).map(([key, label]) => (
@@ -235,58 +227,104 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
                 </select>
               </label>
             </div>
-            {periods.map(([key, label, required]) => (
-              <div className="form-field" key={key}>
-                <label>
-                  {label}
-                  <input
-                    type="date"
-                    required={required}
-                    value={draft[key]}
-                    onChange={(e) => change(key, e.target.value)}
-                  />
-                </label>
-              </div>
-            ))}
             <div className="form-field">
               <label>
-                환급·적립 평가액 자산
-                <select
-                  value={draft.asset}
-                  disabled={assets.loading}
-                  onChange={(e) => change("asset", e.target.value)}
-                >
-                  <option value="">자산 연결 안 함</option>
-                  {assets.data
-                    ?.filter((a) => a.status === "active" || a.id === draft.asset)
-                    .map((a) => (
-                      <option key={a.id} value={a.id} disabled={a.status !== "active"}>
-                        {a.name}
-                        {a.status === "active" ? "" : " · 사용 종료"}
-                      </option>
-                    ))}
-                  {draft.asset && !assets.data?.some((a) => a.id === draft.asset) && (
-                    <option value={draft.asset}>현재 연결 자산 · 다시 확인 필요</option>
-                  )}
-                </select>
-              </label>
-              <InsuranceError error={assets.error} />
-              {assets.error && (
-                <button type="button" onClick={() => void assets.reload()}>
-                  평가액 자산 다시 확인
-                </button>
-              )}
-            </div>
-            <div className="form-field">
-              <label>
-                보험 계약 메모
-                <textarea
-                  maxLength={2000}
-                  value={draft.note}
-                  onChange={(e) => change("note", e.target.value)}
+                보장 시작일
+                <DateInput
+                  required
+                  value={draft.coverageStart}
+                  onChange={(e) => change("coverageStart", e.target.value)}
                 />
               </label>
             </div>
+            <OptionalFields
+              title="계약 기간·수익자·평가액·메모"
+              hasError={Boolean(validation)}
+              hasValues={Boolean(
+                draft.beneficiary ||
+                draft.contractStart ||
+                draft.contractEnd ||
+                draft.coverageEnd ||
+                draft.paymentStart ||
+                draft.paymentEnd ||
+                draft.asset ||
+                draft.note,
+              )}
+            >
+              <div className="form-field">
+                <label>
+                  수익자 메모
+                  <textarea
+                    maxLength={1000}
+                    value={draft.beneficiary}
+                    onChange={(e) => change("beneficiary", e.target.value)}
+                  />
+                </label>
+              </div>
+              {periods
+                .filter(([key]) => key !== "coverageStart")
+                .map(([key, label, required]) => (
+                  <div className="form-field" key={key}>
+                    <label>
+                      {label}
+                      <DateInput
+                        required={required}
+                        min={
+                          key === "contractEnd"
+                            ? draft.contractStart || undefined
+                            : key === "coverageEnd"
+                              ? draft.coverageStart || undefined
+                              : key === "paymentEnd"
+                                ? draft.paymentStart || undefined
+                                : undefined
+                        }
+                        max="9999-12-31"
+                        value={draft[key]}
+                        onChange={(e) => change(key, e.target.value)}
+                      />
+                    </label>
+                  </div>
+                ))}
+              <div className="form-field">
+                <label>
+                  환급·적립 평가액 자산
+                  <select
+                    value={draft.asset}
+                    disabled={assets.loading}
+                    onChange={(e) => change("asset", e.target.value)}
+                  >
+                    <option value="">자산 연결 안 함</option>
+                    {assets.data
+                      ?.filter((a) => a.status === "active" || a.id === draft.asset)
+                      .map((a) => (
+                        <option key={a.id} value={a.id} disabled={a.status !== "active"}>
+                          {a.name}
+                          {a.status === "active" ? "" : " · 사용 종료"}
+                        </option>
+                      ))}
+                    {draft.asset && !assets.data?.some((a) => a.id === draft.asset) && (
+                      <option value={draft.asset}>현재 연결 자산 · 다시 확인 필요</option>
+                    )}
+                  </select>
+                </label>
+                <InsuranceError error={assets.error} />
+                {assets.error && (
+                  <button type="button" onClick={() => void assets.reload()}>
+                    평가액 자산 다시 확인
+                  </button>
+                )}
+              </div>
+              <div className="form-field">
+                <label>
+                  보험 계약 메모
+                  <textarea
+                    maxLength={2000}
+                    value={draft.note}
+                    onChange={(e) => change("note", e.target.value)}
+                  />
+                </label>
+              </div>
+            </OptionalFields>
           </div>
         </fieldset>
         {validation && <p role="alert">{validation}</p>}

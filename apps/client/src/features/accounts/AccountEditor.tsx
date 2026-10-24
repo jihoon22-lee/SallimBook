@@ -1,3 +1,5 @@
+import { DateInput } from "../../shared/DateInput";
+import { OptionalFields } from "../../shared/OptionalFields";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
@@ -218,27 +220,6 @@ export function AccountEditor({ initial }: { initial?: Account }) {
               ))}
             </select>
           </div>
-          <div className="form-field">
-            <label htmlFor="account-purpose">용도 (선택)</label>
-            <input
-              id="account-purpose"
-              maxLength={500}
-              value={draft.purpose}
-              onChange={(event) => setDraft({ ...draft, purpose: event.target.value })}
-            />
-            <p className="muted">전체 계좌번호는 용도에 입력하지 마세요.</p>
-          </div>
-          <div className="form-field">
-            <label htmlFor="account-opened">개설일 (선택)</label>
-            <input
-              id="account-opened"
-              type="date"
-              min="0001-01-01"
-              max="9999-12-31"
-              value={draft.opened_on}
-              onChange={(event) => setDraft({ ...draft, opened_on: event.target.value })}
-            />
-          </div>
         </fieldset>
         {base ? (
           <p>
@@ -311,6 +292,34 @@ export function AccountEditor({ initial }: { initial?: Account }) {
             )}
           </>
         )}
+        <fieldset disabled={busy} className="finance-fields">
+          <OptionalFields
+            title="계좌 용도·개설일"
+            hasError={Boolean(formError)}
+            hasValues={Boolean(draft.purpose || draft.opened_on)}
+          >
+            <div className="form-field">
+              <label htmlFor="account-purpose">용도 (선택)</label>
+              <input
+                id="account-purpose"
+                maxLength={500}
+                value={draft.purpose}
+                onChange={(event) => setDraft({ ...draft, purpose: event.target.value })}
+              />
+              <p className="muted">전체 계좌번호는 용도에 입력하지 마세요.</p>
+            </div>
+            <div className="form-field">
+              <label htmlFor="account-opened">개설일 (선택)</label>
+              <DateInput
+                id="account-opened"
+                min="0001-01-01"
+                max={base?.closed_on || "9999-12-31"}
+                value={draft.opened_on}
+                onChange={(event) => setDraft({ ...draft, opened_on: event.target.value })}
+              />
+            </div>
+          </OptionalFields>
+        </fieldset>
         {formError && <p role="alert">{formError}</p>}
         <FinanceError error={error} />
         {conflict && (

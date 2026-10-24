@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { isNativeAuth, nativeAuth } from "../platform/nativeAuth";
 import {
   Link,
@@ -837,25 +837,38 @@ function ShellFrame() {
   }, [location.pathname, navigationType, title, screen]);
   useHistoryScroll(location, navigationType);
 
+  const backState = useRef({ navigate, pathname: location.pathname, parent, leave });
+  useLayoutEffect(() => {
+    backState.current = { navigate, pathname: location.pathname, parent, leave };
+  }, [navigate, location.pathname, parent, leave]);
+  // Keep one native subscription while routing and dialog state change.
   useEffect(
     () =>
       registerAndroidBackHandler(() => {
+        const { navigate, pathname, parent, leave } = backState.current;
         // A second back press while the leave prompt is open keeps the person editing.
         if (leave.open) {
           leave.stay();
+          return true;
+        }
+        const filter = document.querySelector<HTMLDialogElement>(
+          "dialog[data-filter-dialog][open]",
+        );
+        if (filter) {
+          filter.close();
           return true;
         }
         if (canGoBackWithinApp(window.history.state)) {
           navigate(-1);
           return true;
         }
-        if (location.pathname !== "/") {
+        if (pathname !== "/") {
           navigate(parent, { replace: true });
           return true;
         }
         return false;
       }),
-    [navigate, location.pathname, parent, leave],
+    [],
   );
 
   return (

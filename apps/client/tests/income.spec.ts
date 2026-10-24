@@ -29,10 +29,12 @@ test("income summary separates earned and insurance inflow and filters only the 
   await expect(page.getByRole("link", { name: "급여 · 3,000,000원", exact: true })).toBeVisible();
   await expect(summary).toContainText("4,000,000원");
   await page.reload();
+  await openDisclosure(page, "수입 기록 찾기");
   await expect(page.getByRole("combobox", { name: "수입 구성원 필터", exact: true })).toHaveValue(
     uid(2),
   );
   await page.getByRole("button", { name: "수입 필터 초기화", exact: true }).click();
+  await page.getByRole("button", { name: "필터 닫기", exact: true }).click();
   await page.getByRole("button", { name: "수입 더 보기", exact: true }).click();
   await expect(page.getByRole("link", { name: "상여 · 200,000원", exact: true })).toBeVisible();
   expect(state.writes).toHaveLength(0);

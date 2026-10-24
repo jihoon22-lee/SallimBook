@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 import { useUnsavedChangesGuard } from "./UnsavedChanges";
@@ -17,12 +17,20 @@ export function FilterPanel({
   defaultLabel?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(activeCount > 0);
+  const [open, setOpen] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    if (open && !dialog.current?.open) dialog.current?.showModal();
+  }, [open]);
   return (
     <details
       className="filter-panel"
       open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onToggle={(event) => {
+        // A dialog also emits toggle; only the disclosure owns this state.
+        if (event.target === event.currentTarget) setOpen(event.currentTarget.open);
+      }}
     >
       <summary>
         <span>
@@ -34,7 +42,21 @@ export function FilterPanel({
           <span aria-hidden="true">{open ? "−" : "+"}</span>
         </span>
       </summary>
-      <div className="filter-panel-body">{children}</div>
+      <dialog
+        ref={dialog}
+        className="filter-dialog"
+        data-filter-dialog
+        aria-labelledby={titleId}
+        onClose={() => setOpen(false)}
+      >
+        <div className="section-title">
+          <h2 id={titleId}>{title}</h2>
+          <button type="button" onClick={() => dialog.current?.close()}>
+            필터 닫기
+          </button>
+        </div>
+        <div className="filter-panel-body">{children}</div>
+      </dialog>
     </details>
   );
 }
@@ -50,8 +72,13 @@ export function TaskPanel({ label, children }: { label: string; children: ReactN
     setDirty(false);
   }, [guard]);
   useEffect(() => {
+    const opener = document.activeElement;
     ref.current?.focus({ preventScroll: true });
     ref.current?.scrollIntoView({ block: "start" });
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected)
+        opener.focus({ preventScroll: true });
+    };
   }, []);
   return (
     <TaskPanelRelease.Provider value={release}>

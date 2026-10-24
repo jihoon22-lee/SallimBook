@@ -76,6 +76,7 @@ async function createRule(
     })
     .selectOption(options.methodId);
   if (options.until) {
+    await openDisclosure(page, "종료일·외화 참고·메모");
     await page.getByLabel("처음 등록하는 종료 적용일 (선택)", { exact: true }).fill(options.until);
     await page.getByLabel("종료 사유", { exact: true }).fill("합성 예정 종료");
   }
@@ -156,6 +157,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
   await page.getByLabel("금융기관", { exact: true }).fill("합성 생활비 금융기관");
   await page.getByLabel("계좌 유형", { exact: true }).selectOption("checking");
   await basicAsset(page, "합성 생활비 계좌");
+  await openDisclosure(page, "계좌 용도·개설일");
   await page.getByLabel("개설일 (선택)", { exact: true }).fill("2025-01-01");
   await page.getByRole("button", { name: "계좌 등록", exact: true }).click();
   await expect(page.getByRole("heading", { name: "합성 생활비 계좌", exact: true })).toBeVisible();

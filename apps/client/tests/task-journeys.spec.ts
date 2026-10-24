@@ -86,6 +86,7 @@ test("income search shows its applied scope while the household summary remains 
   await page.getByRole("combobox", { name: "수입 구성원 필터", exact: true }).selectOption(uid(2));
   await expect(page.locator(".filter-panel > summary")).toContainText("조건 1개 적용");
   await page.reload();
+  await openDisclosure(page, "수입 기록 찾기");
   await expect(page.getByRole("combobox", { name: "수입 구성원 필터", exact: true })).toHaveValue(
     uid(2),
   );
@@ -123,6 +124,7 @@ test("a card type filter remains visible as applied even without an owner or set
 }) => {
   await mockCashflow(page);
   await page.goto("/cards?type=credit");
+  await page.locator(".filter-panel > summary").click();
   await expect(page.locator(".filter-panel > summary")).toContainText("조건 1개 적용");
   await expect(page.getByRole("combobox", { name: "카드 유형 필터", exact: true })).toHaveValue(
     "credit",

@@ -394,8 +394,8 @@
       "git_sha1": "3f4b07b8d692c4a30015430c6122d4d4c36f9a43"
     },
     "docs/testing/scenario-ux.md": {
-      "sha256": "3321a04e8b4524f6a619cfb6233bc1c4f4bcc7e92b21030ddbf4ec97725124e1",
-      "git_sha1": "65de9b95d2d34a08bb3c1e9721247e20896b548a"
+      "sha256": "eadf450c7270b651ef756a32a05c63d236b552c5ee23ec7893429313fedd2954",
+      "git_sha1": "bb2a00c2cba09f1bca5dcb8adde42f0df556f074"
     },
     "docs/adr/document-inspection-isolation.md": {
       "sha256": "7509deecc44c5d747a4b6a207ec1b4c6752c4de866d6b3acc24b81c9a873514b",

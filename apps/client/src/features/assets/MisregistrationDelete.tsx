@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ApiError, toApiError } from "../../platform/api";
 import { useMounted } from "../auth/AuthFeedback";
@@ -32,6 +32,16 @@ export function MisregistrationDelete({
   reload: () => void;
   children: ReactNode;
 }) {
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    panel.current?.focus({ preventScroll: true });
+    panel.current?.scrollIntoView({ block: "start" });
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected)
+        opener.focus({ preventScroll: true });
+    };
+  }, []);
   const mounted = useMounted();
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -54,7 +64,7 @@ export function MisregistrationDelete({
   // A version conflict or a reference stays visible; the user decides what to do next.
   const blocked = error?.code === "VERSION_CONFLICT" || error?.code === inUseCode;
   return (
-    <section className="card" aria-labelledby={`${id}-title`}>
+    <section ref={panel} tabIndex={-1} className="card task-panel" aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`}>{title}</h2>
       {children}
       <label className="checkbox-field">
@@ -77,9 +87,12 @@ export function MisregistrationDelete({
           {actionLabel}
         </button>
         {error?.code === "VERSION_CONFLICT" && (
-          <button type="button" disabled={busy} onClick={reload}>
-            다시 불러오기
-          </button>
+          <>
+            <p>최신 내용을 불러온 뒤 삭제 검토를 다시 열어 확인해 주세요.</p>
+            <button type="button" disabled={busy} onClick={reload}>
+              다시 불러오기
+            </button>
+          </>
         )}
         <button type="button" disabled={busy} onClick={cancel}>
           삭제 취소

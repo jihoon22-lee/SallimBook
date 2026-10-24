@@ -9,6 +9,11 @@ export function useSubmitAttempt() {
     const target =
       form.querySelector<HTMLElement>('[aria-invalid="true"]') ??
       form.querySelector<HTMLElement>("[data-form-error]");
+    let ancestor = target?.parentElement;
+    while (ancestor) {
+      if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }
     target?.focus();
   }, []);
   const reset = useCallback(() => setAttempted(false), []);
