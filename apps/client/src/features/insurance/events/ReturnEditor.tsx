@@ -212,7 +212,7 @@ export function ReturnEditor({
         />
         {base && (
           <p className="muted">
-            원래 {eventNames[kind]} 사유 “{base.reason}”은 그대로 남아요. 정정 사유는 금전 이력에
+            원래 {eventNames[kind]} 사유는 “{base.reason}” 그대로 남아요. 정정 사유는 금전 이력에
             기록돼요. 사유 자체가 틀렸다면 무효 처리 후 새로 기록해 주세요.
           </p>
         )}
@@ -229,7 +229,9 @@ export function ReturnEditor({
           </label>
         </div>
         {base && (
-          <p>기존 {eventNames[kind]}은 무효로 보존하고 같은 부모 원본의 새 기록으로 정정해요.</p>
+          <p>
+            기존 {eventNames[kind]} 기록은 무효로 보존하고 같은 부모 원본의 새 기록으로 정정해요.
+          </p>
         )}
         <InsuranceError error={command.error} />
         {needsCompare(command.error) && (

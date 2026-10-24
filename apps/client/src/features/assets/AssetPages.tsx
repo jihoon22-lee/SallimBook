@@ -579,7 +579,7 @@ function AssetEdit({ id }: { id: string }) {
 
 export function AssetListPage() {
   const { state } = useAuth();
-  const { month } = useMonth();
+  const { month, currentMonth } = useMonth();
   const deleted = useRouteNotice(stateFlag("deleted", "asset"));
   return (
     <>
@@ -590,9 +590,12 @@ export function AssetListPage() {
       </div>
       {deleted && <p role="status">자산이 삭제된 것을 확인했어요.</p>}
       <MonthPicker />
-      <p className="month-action">
+      <div className="form-actions month-action">
+        <Link className="button-link" to={`/assets/months/${currentMonth}`}>
+          이번 달 기록하기
+        </Link>
         <Link to={`/assets/months/${month}`}>{formatMonth(month)} 월 기록 확인</Link>
-      </p>
+      </div>
       {state.status === "authenticated" ? <AssetList /> : <SessionStatus />}
     </>
   );

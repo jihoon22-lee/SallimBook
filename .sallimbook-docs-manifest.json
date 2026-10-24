@@ -54,12 +54,12 @@
       "git_sha1": "6fb66782a3da6edd33defd4078d42e1c3e50047c"
     },
     "docs/architecture.md": {
-      "sha256": "ee9d38e6ae6f998c1adac3c932c1ff378c861a57ded75e627deae4f46d2bc16c",
-      "git_sha1": "a4291a2f5793fb24229dc2399dd586702b4ff941"
+      "sha256": "2f5325e56121b5e19f044d76df7e77f1e95add0db269c5059c6b7a0765dd1b74",
+      "git_sha1": "f7e85825fb1dbc259cfbb7a2b9865cd06c1435fd"
     },
     "docs/domain-and-calculation-rules.md": {
-      "sha256": "9337525111f4faa8e5b75841aeab6c9805f58719471a0045845a2718f13af381",
-      "git_sha1": "73402e2b2e77c705fe24639b7b3cea41e8f66118"
+      "sha256": "f42f501d3d89d1f6494ebff042082ea7b21bc5655258a8037fd40a68af0fd4c3",
+      "git_sha1": "2e755312eb2268b7f3f5c70006c69f128d4f4ddf"
     },
     "docs/data-model.md": {
       "sha256": "132c2eb2ac192256c7e2df116d4381e0cf3b47a1a5c2958ecc510760696743e3",
@@ -94,8 +94,8 @@
       "git_sha1": "23a6f147f34d836c0fbf141a772dc625dd23e94e"
     },
     "docs/deployment-backup-operations.md": {
-      "sha256": "025df7b8fd6dac2b8ca7286433249626b45a8e7aea05f9d143f05b5f72780f36",
-      "git_sha1": "8139365b2f64444fb86d84a1728d711f3b3c36ef"
+      "sha256": "01a5600bcd03a896c2ec5963b9c49078bf5a2886921ac8f94fbe80d94a0c01cf",
+      "git_sha1": "5a64d1fe3833546ecb2e17843c5a2ecc8ebaf5e0"
     },
     "docs/roadmap-and-milestones.md": {
       "sha256": "95dd42215c69f32da823697ea9779b74fc22bb7ac86001c227082c5870b7b4db",
@@ -106,8 +106,8 @@
       "git_sha1": "ef012269cc1891ba65bc869badbf5efed032294b"
     },
     "docs/design-system.md": {
-      "sha256": "a1e8da02f7fbcc446ba021fd45b02f6de2822442e965c8264a1fc14198a4ee4b",
-      "git_sha1": "b4354ece03397e646527ed737793e02378371d77"
+      "sha256": "15a5733bb0591ecdc88cd9d1193cc21c27f62d9a68b3ad2b98e3e601c424d1cb",
+      "git_sha1": "d922b9ef049956c86d9a4853edc26782beb612d8"
     },
     "docs/future-integrations.md": {
       "sha256": "9efb2233e7edebb057fe8c4ba6e557c86ba34d8085eb43998ac471f9adbf9689",
@@ -420,6 +420,10 @@
     "docs/testing/home-attention.md": {
       "sha256": "0b573b231ddf9445bbe8aeffd07d12dd55fcdb5c2dc131a2adeb9e445a513a01",
       "git_sha1": "bc7532abd9898540f0bf5cf3fa361152887e74ac"
+    },
+    "docs/testing/desktop-finish.md": {
+      "sha256": "16eaa53234c59c7ff17e3e1adcec25f46a20c07891147bb2d69f0c2eabebf601",
+      "git_sha1": "96a8a1411752e046277653fe57aef5801d64dd1c"
     }
   }
 }

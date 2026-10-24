@@ -46,6 +46,7 @@ export async function mockAudit(page: Page, native = false) {
     duplicateMore: false,
     nativeFailure: "",
     nativeThrows: false,
+    appInfoFailure: false,
     lockFailure: "",
     calls: [] as { method: string; args: Record<string, any> }[],
     http: [] as string[],
@@ -112,6 +113,10 @@ export async function mockAudit(page: Page, native = false) {
     "syntheticAuditNative",
     async (method: string, args: Record<string, any>) => {
       state.calls.push({ method, args });
+      if (method === "getInfo") {
+        if (state.appInfoFailure) throw new Error("Synthetic app info unavailable");
+        return { version: "0.9.8", build: "42" };
+      }
       if (method === "getSession")
         return { ok: true, value: { available: true, authenticated: true } };
       if (method === "request")
@@ -143,6 +148,14 @@ export async function mockAudit(page: Page, native = false) {
       CapacitorCustomPlatform: { name: "android" },
       Capacitor: {
         PluginHeaders: [
+          {
+            name: "App",
+            methods: [
+              { name: "getInfo", rtype: "promise" },
+              { name: "addListener", rtype: "callback" },
+              { name: "removeListener", rtype: "promise" },
+            ],
+          },
           {
             name: "SallimBookAuth",
             methods: ["getSession", "request", "listAuditEvents", "lockApp"]

@@ -1,3 +1,5 @@
+import { useWideLayout } from "../../../shared/useWideLayout";
+import { compareAmounts } from "../amountSort";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ApiError, toApiError } from "../../../platform/api";
@@ -106,19 +108,7 @@ export function ComparisonItemCard({
         <h3>
           <Link to={`/assets/${item.asset_id}`}>{name}</Link>
         </h3>
-        <span className="status-chip">
-          {item.membership === "added"
-            ? "범위 추가"
-            : item.membership === "removed"
-              ? "범위 제외"
-              : item.membership === "excluded"
-                ? "참고 항목"
-                : item.membership === "unavailable"
-                  ? "비교 대기"
-                  : item.share_changed
-                    ? "지분 변경"
-                    : "같은 비교 대상"}
-        </span>
+        <span className="status-chip">{comparisonLabel(item)}</span>
       </div>
       {item.scope_reason && <p className="month-warning">{scopeReasons[item.scope_reason]}</p>}
       <dl className="metadata-grid">
@@ -165,6 +155,150 @@ export function ComparisonItemCard({
         </div>
       </details>
     </li>
+  );
+}
+
+function comparisonGroup(item: ComparisonItem) {
+  return item.membership === "common"
+    ? item.share_changed
+      ? 1
+      : 0
+    : item.membership === "added" || item.membership === "removed"
+      ? 2
+      : 3;
+}
+function comparisonLabel(item: ComparisonItem) {
+  return item.membership === "added"
+    ? "범위 추가"
+    : item.membership === "removed"
+      ? "범위 제외"
+      : item.membership === "excluded"
+        ? "참고 항목"
+        : item.membership === "unavailable"
+          ? "비교 대기"
+          : item.share_changed
+            ? "지분 변경"
+            : "같은 비교 대상";
+}
+function ComparisonItems({ data, members }: { data: Comparison; members: HouseholdMember[] }) {
+  const wide = useWideLayout();
+  const [sort, setSort] = useState("name");
+  const items = [...data.items].sort(
+    (a, b) =>
+      comparisonGroup(a) - comparisonGroup(b) ||
+      (sort === "effect"
+        ? compareAmounts(a.net_assets_effect_krw, b.net_assets_effect_krw, true)
+        : 0) ||
+      (sort === "amount"
+        ? compareAmounts(a.after?.owned_amount_krw ?? null, b.after?.owned_amount_krw ?? null)
+        : 0) ||
+      (a.after?.name ?? a.before?.name ?? "").localeCompare(
+        b.after?.name ?? b.before?.name ?? "",
+        "ko",
+      ),
+  );
+  return (
+    <>
+      <div className="form-field table-sort">
+        <label htmlFor="comparison-sort">항목별 변화 정렬</label>
+        <select id="comparison-sort" value={sort} onChange={(event) => setSort(event.target.value)}>
+          <option value="name">비교 대상별 · 이름 순</option>
+          <option value="effect">비교 대상별 · 변화 큰 순</option>
+          <option value="amount">비교 대상별 · 확인 월 보유분 큰 순</option>
+        </select>
+      </div>
+      <p className="muted">
+        같은 대상, 지분 변경, 범위 추가·제외, 비교 대기·참고 항목을 나눠 정렬해요. 변화 크기는
+        순자산 영향의 절댓값이며 비교할 수 없는 값은 각 묶음의 마지막이에요. 부채 감소는 순자산
+        증가로 표시해요.
+      </p>
+      {wide ? (
+        <div
+          className="table-scroll asset-work-table"
+          tabIndex={0}
+          role="region"
+          aria-label="항목별 자산 비교 표"
+        >
+          <table>
+            <caption>가계 보유분과 순자산 영향 · 범위 변경은 저축·소비와 달라요</caption>
+            <thead>
+              <tr>
+                <th scope="col">항목·비교 구분</th>
+                <th scope="col" className="money-cell">
+                  이전 월 보유분
+                </th>
+                <th scope="col" className="money-cell">
+                  확인 월 보유분
+                </th>
+                <th scope="col" className="money-cell">
+                  보유금액 변화
+                </th>
+                <th scope="col" className="money-cell">
+                  순자산 영향
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr className="comparison-item" key={item.asset_id}>
+                  <th scope="row">
+                    <h3>
+                      <Link to={`/assets/${item.asset_id}`}>
+                        {item.after?.name ?? item.before?.name ?? "자산 항목"}
+                      </Link>
+                    </h3>
+                    <span className="status-chip">{comparisonLabel(item)}</span>
+                    {item.scope_reason && (
+                      <p className="muted">{scopeReasons[item.scope_reason]}</p>
+                    )}
+                    <details className="record-details">
+                      <summary>두 월 기록 비교</summary>
+                      <section>
+                        <h4>
+                          {data.from_month ? formatMonth(data.from_month) : "이전 비교월 없음"}
+                        </h4>
+                        <SnapshotObservation row={item.before} members={members} />
+                      </section>
+                      <section>
+                        <h4>{formatMonth(data.to_month)}</h4>
+                        <SnapshotObservation row={item.after} members={members} />
+                      </section>
+                    </details>
+                  </th>
+                  <td className="money-cell">
+                    {item.before ? formatKrw(item.before.owned_amount_krw) : "항목 없음"}
+                  </td>
+                  <td className="money-cell owned-amount">
+                    {item.after ? formatKrw(item.after.owned_amount_krw) : "항목 없음"}
+                  </td>
+                  <td className="money-cell">
+                    {item.amount_delta_krw === null
+                      ? "비교할 수 없음"
+                      : signedKrw(item.amount_delta_krw)}
+                  </td>
+                  <td className="money-cell">
+                    <DeltaText
+                      value={item.net_assets_effect_krw}
+                      text={
+                        item.net_assets_effect_krw === null
+                          ? "비교할 수 없음"
+                          : signedKrw(item.net_assets_effect_krw)
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <ul className="finance-list">
+          {items.map((item) => (
+            <ComparisonItemCard key={item.asset_id} item={item} data={data} members={members} />
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -368,16 +502,7 @@ function ComparisonWorkspace() {
             {data.items.length === 0 ? (
               <p>선택한 비교 범위에 항목이 없어요.</p>
             ) : (
-              <ul className="finance-list">
-                {data.items.map((item) => (
-                  <ComparisonItemCard
-                    key={item.asset_id}
-                    item={item}
-                    data={data}
-                    members={members.members}
-                  />
-                ))}
-              </ul>
+              <ComparisonItems data={data} members={members.members} />
             )}
           </section>
         </>

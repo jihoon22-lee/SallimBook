@@ -385,6 +385,7 @@ function AccountDetail({ id }: { id: string }) {
         </div>
       </section>
       <RecordActor memberId={account.updated_by_member_id} at={account.updated_at} />
+      <AssetMonthlyData assetId={account.asset_id} />
       <AccountNumber key={account.id} account={account} refresh={state.reload} />
       <section className="card">
         <h2>연결된 금융 자산</h2>
@@ -402,7 +403,6 @@ function AccountDetail({ id }: { id: string }) {
         id={id}
       />
       <AccountIncomeLinks accountId={id} />
-      <AssetMonthlyData assetId={account.asset_id} />
       {closing && (
         <TaskPanel label="계좌 사용 종료">
           <h2>계좌 사용 종료</h2>

@@ -1,3 +1,6 @@
+import { useWideLayout } from "../../../shared/useWideLayout";
+import { compareAmounts } from "../amountSort";
+import { MonthSnapshotTable } from "./MonthSnapshotTable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { components } from "@sallimbook/api-client";
@@ -41,6 +44,15 @@ function SnapshotList({
   locked: boolean;
   edit: (row: MonthValue) => void;
 }) {
+  const wide = useWideLayout();
+  const [sort, setSort] = useState("original");
+  const sorted = [...rows].sort((a, b) =>
+    sort === "amount"
+      ? compareAmounts(a.owned_amount_krw, b.owned_amount_krw)
+      : sort === "name"
+        ? a.name.localeCompare(b.name, "ko")
+        : 0,
+  );
   return (
     <section aria-labelledby="month-values-title">
       <h2 id="month-values-title" tabIndex={-1}>
@@ -60,90 +72,108 @@ function SnapshotList({
         표시 {rows.length} / 전체 {record.values.length}개 · 합계는 전체 기록 기준이에요.
       </p>
       {rows.length === 0 && record.values.length > 0 && <p>선택한 조건에 맞는 항목이 없어요.</p>}
-      <ul className="finance-list task-records">
-        {rows.map((row) => (
-          <li className="card month-value-card" key={row.asset_id}>
-            <div className="item-heading">
-              <h3>{row.name}</h3>
-              <span
-                className={`status-chip ${row.verification_state !== "verified" ? "unverified-chip" : ""}`}
-              >
-                {verificationStates[row.verification_state]}
-              </span>
-            </div>
-            <p className="record-subline">
-              {assetKinds[row.kind]} ·{" "}
-              {row.inclusion_status === "included" ? "합계 포함" : "합계 제외"} ·{" "}
-              {amountBases[row.amount_basis]}
-            </p>
-            <dl className="metadata-grid compact-metadata">
-              <div>
-                <dt>입력 금액</dt>
-                <dd>{formatKrw(row.input_amount_krw)}</dd>
-              </div>
-              <div>
-                <dt>가계 보유분</dt>
-                <dd>{formatKrw(row.owned_amount_krw)}</dd>
-              </div>
-              <div>
-                <dt>실제 기준일</dt>
-                <dd>{dateLabel(row.as_of_date)}</dd>
-              </div>
-            </dl>
-            {!readOnly && (
-              <div className="primary-action-row">
-                <button
-                  type="button"
-                  className={
-                    row.verification_state !== "verified" ? "primary-button" : "secondary-button"
-                  }
-                  disabled={locked}
-                  data-month-row={row.asset_id}
-                  onClick={() => edit(row)}
+      <div className="form-field table-sort">
+        <label htmlFor="month-row-sort">월 기록 정렬</label>
+        <select id="month-row-sort" value={sort} onChange={(event) => setSort(event.target.value)}>
+          <option value="original">등록 순</option>
+          <option value="name">이름 순</option>
+          <option value="amount">가계 보유분 큰 순 · 미입력은 마지막</option>
+        </select>
+      </div>
+      {wide ? (
+        <MonthSnapshotTable
+          rows={sorted}
+          members={members}
+          readOnly={readOnly}
+          locked={locked}
+          edit={edit}
+        />
+      ) : (
+        <ul className="finance-list task-records">
+          {sorted.map((row) => (
+            <li className="card month-value-card" key={row.asset_id}>
+              <div className="item-heading">
+                <h3>{row.name}</h3>
+                <span
+                  className={`status-chip ${row.verification_state !== "verified" ? "unverified-chip" : ""}`}
                 >
-                  {row.name} 금액 확인
-                </button>
+                  {verificationStates[row.verification_state]}
+                </span>
               </div>
-            )}
-            {carriedNote(row) && <p className="muted">{carriedNote(row)}</p>}
-            {row.change_reason && <p>값 변경 사유: {row.change_reason}</p>}
-            <details className="record-details">
-              <summary>이 기록의 소유·지분·보유기간</summary>
-              <dl className="metadata-grid">
-                <div>
-                  <dt>분류</dt>
-                  <dd>
-                    {assetKinds[row.kind]} · {categories[row.category]}
-                  </dd>
+              <p className="record-subline">
+                {assetKinds[row.kind]} ·{" "}
+                {row.inclusion_status === "included" ? "합계 포함" : "합계 제외"} ·{" "}
+                {amountBases[row.amount_basis]}
+              </p>
+              <dl className="metadata-grid compact-metadata">
+                <div className="owned-amount">
+                  <dt>가계 보유분</dt>
+                  <dd>{formatKrw(row.owned_amount_krw)}</dd>
                 </div>
                 <div>
-                  <dt>소유 관계</dt>
-                  <dd>{snapshotOwner(row, members)}</dd>
-                </div>
-                <div>
-                  <dt>가계 지분</dt>
-                  <dd>{shareToPercent(row.household_share)}%</dd>
-                </div>
-                <div>
-                  <dt>금액 입력 기준</dt>
-                  <dd>{amountBases[row.amount_basis]}</dd>
-                </div>
-                <div>
-                  <dt>합계 반영</dt>
-                  <dd>{row.inclusion_status === "included" ? "합계 포함" : "합계 제외"}</dd>
-                </div>
-                <div>
-                  <dt>보유 기간</dt>
-                  <dd>
-                    {dateLabel(row.started_on)} ~{" "}
-                    {row.ended_on ? dateLabel(row.ended_on) : "종료일 없음"}
-                  </dd>
+                  <dt>실제 기준일</dt>
+                  <dd>{dateLabel(row.as_of_date)}</dd>
                 </div>
               </dl>
-            </details>
-          </li>
-        ))}
-      </ul>
+              {!readOnly && (
+                <div className="primary-action-row">
+                  <button
+                    type="button"
+                    className={
+                      row.verification_state !== "verified" ? "primary-button" : "secondary-button"
+                    }
+                    disabled={locked}
+                    data-month-row={row.asset_id}
+                    onClick={() => edit(row)}
+                  >
+                    {row.name} 금액 확인
+                  </button>
+                </div>
+              )}
+              {carriedNote(row) && <p className="muted">{carriedNote(row)}</p>}
+              {row.change_reason && <p>값 변경 사유: {row.change_reason}</p>}
+              <details className="record-details">
+                <summary>이 기록의 소유·지분·보유기간</summary>
+                <dl className="metadata-grid">
+                  <div>
+                    <dt>입력 금액</dt>
+                    <dd>{formatKrw(row.input_amount_krw)}</dd>
+                  </div>
+                  <div>
+                    <dt>분류</dt>
+                    <dd>
+                      {assetKinds[row.kind]} · {categories[row.category]}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>소유 관계</dt>
+                    <dd>{snapshotOwner(row, members)}</dd>
+                  </div>
+                  <div>
+                    <dt>가계 지분</dt>
+                    <dd>{shareToPercent(row.household_share)}%</dd>
+                  </div>
+                  <div>
+                    <dt>금액 입력 기준</dt>
+                    <dd>{amountBases[row.amount_basis]}</dd>
+                  </div>
+                  <div>
+                    <dt>합계 반영</dt>
+                    <dd>{row.inclusion_status === "included" ? "합계 포함" : "합계 제외"}</dd>
+                  </div>
+                  <div>
+                    <dt>보유 기간</dt>
+                    <dd>
+                      {dateLabel(row.started_on)} ~{" "}
+                      {row.ended_on ? dateLabel(row.ended_on) : "종료일 없음"}
+                    </dd>
+                  </div>
+                </dl>
+              </details>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

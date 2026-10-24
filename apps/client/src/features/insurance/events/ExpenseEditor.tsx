@@ -367,12 +367,14 @@ export function ExpenseEditor({
                     <input
                       required
                       maxLength={40}
-                      value={line.type}
+                      value={line.type === "other" ? "기타" : line.type}
                       onChange={(e) =>
                         change(
                           "lines",
                           draft.lines.map((l, i) =>
-                            i === index ? { ...l, type: e.target.value } : l,
+                            i === index
+                              ? { ...l, type: e.target.value === "기타" ? "other" : e.target.value }
+                              : l,
                           ),
                         )
                       }

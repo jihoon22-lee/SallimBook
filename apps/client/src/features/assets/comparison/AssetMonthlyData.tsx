@@ -1,3 +1,4 @@
+import { formatKrw, verificationStates } from "../months/model";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { ApiError, toApiError } from "../../../platform/api";
@@ -66,6 +67,18 @@ function MonthlyData({ assetId }: { assetId: string }) {
         )}
         {data && (
           <>
+            <div className="selected-month-amount" aria-label="선택 월 가계 보유분">
+              <p>{formatMonth(month)} · 가계 보유분</p>
+              <strong>
+                {item?.after ? formatKrw(item.after.owned_amount_krw) : "월 기록 없음"}
+              </strong>
+              <p>
+                {item?.after
+                  ? verificationStates[item.after.verification_state]
+                  : "0원으로 입력한 기록과 달라요."}
+                {item?.after?.inclusion_status === "excluded" ? " · 합계 제외" : ""}
+              </p>
+            </div>
             <PeriodLabels data={data} />
             <ComparisonStatus data={data} />
             {item ? (

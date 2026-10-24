@@ -1,3 +1,4 @@
+import { formatFileSize } from "../../shared/format";
 import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useHouseholdMembers } from "../finance/FinanceSupport";
@@ -21,7 +22,7 @@ export function DocumentMetadata({ row }: { row: Document }) {
       <div>
         <dt>파일 형식·크기</dt>
         <dd>
-          {row.mime_type} · {row.size_bytes.toLocaleString("ko-KR")}바이트
+          {row.mime_type} · {formatFileSize(row.size_bytes)}
         </dd>
       </div>
       <div>

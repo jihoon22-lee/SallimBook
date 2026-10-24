@@ -349,7 +349,8 @@ export function ExpenseSummary({ row }: { row: Schema["ExpenseResponse"] }) {
         <ul>
           {row.lines.map((line) => (
             <li key={line.id}>
-              {line.label} · {line.detail_type} · {formatKrw(line.amount_krw)}
+              {line.label} · {line.detail_type === "other" ? "기타" : line.detail_type} ·{" "}
+              {formatKrw(line.amount_krw)}
             </li>
           ))}
         </ul>

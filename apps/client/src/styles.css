@@ -686,3 +686,21 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .home-summary-part { min-width: 0; }
 .home-summary-part h3 { font-size: 1rem; }
 @media (max-width: 600px) { .home-monthly-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* One table on PC, one card list on narrow screens; amounts remain server-owned KRW. */
+.table-sort { max-width: 28rem; margin-block: 16px; }
+.asset-work-table { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.asset-work-table table { width: 100%; }
+.asset-work-table th, .asset-work-table td { vertical-align: top; padding: 8px 14px; }
+.asset-work-table th[scope="row"] { font-weight: 400; min-width: 13rem; }
+.asset-work-table th[scope="row"] h3 { margin: 0 0 8px; }
+.asset-work-table th[scope="row"] p { font-size: .8125rem; }
+.asset-work-table .money-cell { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.owned-amount dd, td.owned-amount { font-size: 1.1rem; font-weight: 750; }
+.owned-amount small { display: block; font-size: .75rem; font-weight: 400; color: var(--muted); }
+.selected-month-amount { padding: 18px; margin-block: 16px; background: var(--selected); border-radius: var(--radius-small); }
+.selected-month-amount strong { font-size: clamp(1.6rem, 3vw, 2rem); font-variant-numeric: tabular-nums; }
+.selected-month-amount p { margin: 0; }
+.asset-work-table .record-details { margin-top: 0; border-top: 0; }
+.asset-work-table th[scope="row"] > p { margin-block: 4px; }
+.asset-work-table .comparison-item > th > h3 { display: inline; margin-right: 8px; }
