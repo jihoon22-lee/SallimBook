@@ -405,6 +405,33 @@ test("real income card recurring and closure workflow preserves cash facts and i
   );
   expect(invariant).toBe(true);
   console.log("SAFE_PHASE=CASHFLOW_ACTUALS");
+  await page.goto("/income/new");
+  await expect(page.getByRole("combobox", { name: "수입 구성원", exact: true })).not.toHaveValue(
+    "",
+  );
+  await page.getByLabel("수입 귀속월", { exact: true }).fill("2025-03");
+  await page.getByRole("button", { name: "지난달 수입에서 초안 불러오기", exact: true }).click();
+  await page.getByLabel("지난달 수입 기록", { exact: true }).selectOption(source.id);
+  await page.getByRole("button", { name: "선택한 기록으로 새 초안 만들기", exact: true }).click();
+  await expect(page.getByLabel("실제 입금일", { exact: true })).toHaveValue("");
+  const beforeCopy = await page.evaluate(
+    async () => (await fetch("/api/v1/income?month=2025-03").then((r) => r.json())).items.length,
+  );
+  expect(beforeCopy).toBe(0);
+  await page.getByLabel("실제 입금일", { exact: true }).fill("2025-03-20");
+  await page.getByRole("button", { name: "수입 기록 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "수입 상세", exact: true })).toBeVisible();
+  const copiedIncome = await page.evaluate(async () => {
+    const current = await fetch("/api/v1/income/summary?month=2025-03").then((r) => r.json());
+    const prior = await fetch("/api/v1/income/summary?month=2025-02").then((r) => r.json());
+    return {
+      current: current.totals.earned_net_krw,
+      prior: prior.totals.earned_net_krw,
+      count: current.totals.record_count,
+    };
+  });
+  expect(copiedIncome).toEqual({ current: "1000000", prior: "3000000", count: 1 });
+  console.log("SAFE_PHASE=CASHFLOW_INCOME_COPY");
 
   // Rule save prepares the current horizon; a chosen month is still prepared by an
   // explicit command. Both batch rows use the existing per-occurrence server checks.

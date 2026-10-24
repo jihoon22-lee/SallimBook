@@ -107,9 +107,8 @@ async function createPayout(
   await page.getByLabel("보험금 수령 실제 날짜", { exact: true }).fill("2025-02-15");
   const first = page.getByRole("region", { name: "보험금 배분 1", exact: true });
   await first.getByRole("combobox", { name: "배분 급부유형", exact: true }).selectOption(benefit);
-  await first
-    .getByLabel("사건 배분금액 (원)", { exact: true })
-    .fill(secondCase ? "300000" : amount);
+  if (secondCase) await first.getByLabel("사건 배분금액 (원)", { exact: true }).fill("300000");
+  else await page.getByRole("button", { name: "받은 전액을 이 사건에 배분", exact: true }).click();
   if (secondCase) {
     await page.getByRole("button", { name: "사건 배분 추가", exact: true }).click();
     const second = page.getByRole("region", { name: "보험금 배분 2", exact: true });

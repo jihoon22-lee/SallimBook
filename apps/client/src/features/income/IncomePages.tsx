@@ -58,12 +58,12 @@ function IncomeSummaryView({
         <>
           <dl className="metric-strip">
             <div className="metric-primary">
-              <dt>등록 유입 순액</dt>
-              <dd>{formatKrw(data.totals.net_inflow_krw)}</dd>
-            </div>
-            <div>
               <dt>근로·부수입 순액</dt>
               <dd>{formatKrw(data.totals.earned_net_krw)}</dd>
+            </div>
+            <div>
+              <dt>등록 유입 순액</dt>
+              <dd>{formatKrw(data.totals.net_inflow_krw)}</dd>
             </div>
             <div>
               <dt>보험금 순유입</dt>

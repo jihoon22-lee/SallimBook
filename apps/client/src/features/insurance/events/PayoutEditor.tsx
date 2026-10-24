@@ -319,6 +319,24 @@ export function PayoutEditor({
               />
             </label>
           </div>
+          {draft.allocations.length === 1 && (
+            <button
+              type="button"
+              disabled={
+                !isUuid(draft.allocations[0]!.caseId) ||
+                !parseKrw(draft.actual.amount) ||
+                parseKrw(draft.actual.amount) === "0"
+              }
+              onClick={() => {
+                change("allocations", [
+                  { ...draft.allocations[0]!, amount: parseKrw(draft.actual.amount)! },
+                ]);
+                setDirty(true);
+              }}
+            >
+              받은 전액을 이 사건에 배분
+            </button>
+          )}
           {draft.allocations.map((a, index) => (
             <section className="conversion-row" key={index} aria-label={`보험금 배분 ${index + 1}`}>
               <h3>배분 {index + 1}</h3>

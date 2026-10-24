@@ -212,7 +212,7 @@ test("native payout allocation correction and return lifecycle use all fifteen r
   await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("100");
   await page.getByRole("combobox", { name: "배분 사건", exact: true }).selectOption(uid(90));
   await page.getByRole("combobox", { name: "배분 보험계약", exact: true }).selectOption(uid(80));
-  await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("100");
+  await page.getByRole("button", { name: "받은 전액을 이 사건에 배분", exact: true }).click();
   await page
     .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
     .check();

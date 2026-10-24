@@ -43,7 +43,7 @@ export const incomeActions = {
   convert_source: "전환한 원본",
   convert_result: "전환 결과",
 };
-export function manualIncome(row: Income): boolean {
+export function manualIncome(row: Income): row is Income & { kind: keyof typeof manualKinds } {
   return Object.hasOwn(manualKinds, row.kind);
 }
 export function incomeDraft(month: string, row?: Income): IncomeDraft {
