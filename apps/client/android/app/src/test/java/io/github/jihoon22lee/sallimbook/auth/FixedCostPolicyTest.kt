@@ -283,4 +283,42 @@ class FixedCostPolicyTest {
         for(patch in listOf(mapOf("status" to "paid"),mapOf("scheduled_date" to "2026-02-01"),mapOf("scheduled_date" to "2026-02-02"),mapOf("skipped" to true),mapOf("manually_completed" to true),mapOf("schedule_state" to "superseded")))
             bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op,prepared,200,value+mapOf("items" to listOf(unpaid+patch))) }
     }
+
+    private fun switchInput() = mapOf<String, Any?>("source_kind" to "account", "source_id" to memberId,
+        "target_kind" to "card", "target_id" to paymentId, "effective_on" to "2026-02-01")
+    private fun switchRow() = mapOf<String, Any?>("id" to ruleId, "version" to 1, "title" to "합성 변경",
+        "periods" to listOf(version() + mapOf("account_id" to memberId)), "unchanged_period_count" to 1,
+        "update_occurrence_count" to 3, "preserved_past_count" to 1, "preserved_paid_count" to 2,
+        "preserved_manual_count" to 1, "blocked_reason" to null, "preview_digest" to "a".repeat(64))
+    @Test fun methodSwitchPreviewAndWriteUseFixedPathsAndDistinctHeaderRequirements() {
+        val preview = request(FinanceOperation.PREVIEW_PAYMENT_SWITCH, mapOf("input" to switchInput(), "query" to mapOf("limit" to 200)))
+        assertEquals("/api/v1/payment-switch/preview?limit=200", preview.path)
+        assertNull(preview.idempotencyKey); assertNull(preview.ifMatch)
+        assertTrue(FinancePolicy.metadataHttpAllowed(preview.method, preview.path, preview.body, null, null))
+        val apply = request(FinanceOperation.APPLY_PAYMENT_SWITCH, mutation("ruleId", ruleId,
+            switchInput() + mapOf("preview_digest" to "a".repeat(64), "reason" to "합성 연결 정리")))
+        assertEquals("/api/v1/payment-switch/rules/$ruleId", apply.path)
+        assertTrue(FinancePolicy.metadataHttpAllowed(apply.method, apply.path, apply.body, apply.ifMatch, apply.idempotencyKey))
+        assertFalse(FinancePolicy.metadataHttpAllowed(apply.method, apply.path, apply.body, null, apply.idempotencyKey))
+        assertFalse(FinancePolicy.metadataHttpAllowed(preview.method, preview.path, preview.body, null, "unexpected"))
+        FinancePolicy.response(FinanceOperation.APPLY_PAYMENT_SWITCH, apply, 200, mapOf("id" to ruleId, "version" to 2))
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.APPLY_PAYMENT_SWITCH, apply, 200, mapOf("id" to paymentId, "version" to 2)) }
+    }
+    @Test fun methodSwitchRejectsForgedFieldsDatesMethodsAndIdenticalTarget() {
+        for (extra in listOf(mapOf("cvc" to "123"), mapOf("effective_on" to "2026-02-30"), mapOf("effective_on" to "0000-01-01"),
+            mapOf("target_kind" to "cash"), mapOf("target_kind" to "account", "target_id" to memberId), mapOf("expected_amount_krw" to "999"))) {
+            bad { request(FinanceOperation.PREVIEW_PAYMENT_SWITCH, mapOf("input" to switchInput() + extra)) }
+        }
+        bad { request(FinanceOperation.APPLY_PAYMENT_SWITCH, mutation("ruleId", ruleId, switchInput() + mapOf("preview_digest" to "A".repeat(64), "reason" to "합성"))) }
+    }
+    @Test fun methodSwitchResponseBindsSourcePeriodAndPreservationCounts() {
+        val req = request(FinanceOperation.PREVIEW_PAYMENT_SWITCH, mapOf("input" to switchInput()))
+        val page = mapOf("items" to listOf(switchRow()), "next_cursor" to null)
+        FinancePolicy.response(FinanceOperation.PREVIEW_PAYMENT_SWITCH, req, 200, page)
+        for (extra in listOf(mapOf("preserved_paid_count" to -1), mapOf("preview_digest" to "forged"),
+            mapOf("periods" to listOf(version() + mapOf("account_id" to paymentId))),
+            mapOf("periods" to listOf(version() + mapOf("account_id" to memberId, "effective_until" to "2026-02-01"))))) {
+            bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.PREVIEW_PAYMENT_SWITCH, req, 200, mapOf("items" to listOf(switchRow() + extra), "next_cursor" to null)) }
+        }
+    }
 }

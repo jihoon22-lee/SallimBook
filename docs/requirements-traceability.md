@@ -45,3 +45,5 @@ Issue #87은 R-01/R-02의 처음 시작과 배우자 연결을 웹/Android에서
 SB-009/#18의 계정·보관함 복구 분리, CVC 외부 경로 부재와 키 흐름 검토는
 [위협모델 설계 리뷰](testing/threat-model-review.md)에 연결합니다. 설계 리뷰 완료는 G1~G6의
 실기기·운영 인수를 대신하지 않으며 각 미검증 가정의 담당 Issue를 계속 유지합니다.
+
+P18 / [#175](https://github.com/jihoon22-lee/SallimBook/issues/175): R-01·R-02·R-08·R-09·R-18·R-19·R-22의 추가 편의 흐름인 결제수단 일괄 변경. 기존 종료 영향 확인을 유지하며 현재·미래 조건 및 납부/수동 예외 원본을 보존한다. [구현·검증 근거](testing/payment-method-switch.md).

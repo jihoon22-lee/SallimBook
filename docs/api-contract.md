@@ -750,3 +750,11 @@ Issue #169. 일반 가계 권한과 원 단위 규칙을 따른다. 신규 API�
 상태는 planned → ordered → received이며 planned/ordered는 사유 있는 cancelled로 바꿀 수 있다. 단일 주문의 전체 수량만 입고하므로 일부 도착한 묶음은 입고 전에 주문 수량을 나누어 기록한다. 입고는 기존 `stock_movements` receipt 생성·재고 버전 갱신과 주문 완료를 같은 트랜잭션으로 처리한다. 완료·취소 주문은 수정·삭제하지 않는다. 기존 원장에서 receipt를 취소하면 주문 상세의 `receipt_reversed_by`에 보정 원본을 표시하며 같은 주문의 재입고는 거부한다. 금융 납부·수입·자산 스냅샷은 생성하거나 가감하지 않는다.
 
 Android는 생성 OpenAPI 타입에서 파생한 명명된 bridge와 고정 경로·입력/응답 검증을 사용한다. 감사의 `consumable_order`는 현재 소모품 이름·주문 경로와 원래 변경자를 연결한다. 구형 native의 감사 vocabulary는 기존 호환 필터로 유지한다. [계산·검증 기록](testing/consumable-orders.md)을 참고한다.
+
+### P18 결제수단 일괄 변경
+
+`POST /api/v1/payment-switch/preview`는 `source_kind/source_id`, `target_kind/target_id`, `effective_on`을 받아 직접 연결 규칙의 현재·미래 기간, 변경/보존 회차 수, 제한 사유와 `preview_digest`를 반환한다. `cursor`와 `limit=1..200`을 지원하며 미리보기에는 저장 부작용이나 멱등 키가 없다. 웹 POST의 CSRF 정책과 인증/no-store는 그대로 적용한다.
+
+`POST /api/v1/payment-switch/rules/{rule_id}`는 같은 입력에 `preview_digest`, `reason`을 추가하고 `If-Match`와 `Idempotency-Key`를 요구한다. 결과는 `MutationReference`와 ETag다. 가계 잠금 안에서 전체 해당 규칙 상태와 원본·목표 버전을 재검증하여 미리보기 이후 납부/예외/조건/수단 변경은 409로 거부한다. 행별 저장이므로 한 규칙의 성공이 다른 규칙의 digest를 바꾸지 않는다. 권한은 멱등 결과 조회 전에도 검증한다.
+
+현재/미래의 금액·주기·기간·메모·부채 연결은 보존하며 결제수단만 바꾼다. 과거/납부/수동 예외 회차는 기존 조건 snapshot을 유지한다. 첫 시작일 당일/이전은 미리보기의 `INITIAL_PERIOD_START`로 제한하고 적용은 409 `RULE_PERIOD_OVERLAP`다. 사용 종료한 목표는 422, 지난 적용일은 409 `PAST_RULE_CHANGE`, 가계 밖 ID/커서는 404다. 실제 금융기관 변경이나 카드 결제계좌 변경은 수행하지 않는다. [동작·검증](testing/payment-method-switch.md).

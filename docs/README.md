@@ -64,6 +64,7 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 
 - [보관함 상태·카드 진입 화면 검증](testing/vault-overview.md) — 안전한 metadata와 플랫폼별 보호 화면 연결
 
+- [결제수단 일괄 변경](testing/payment-method-switch.md) — 현재·미래 조건 보존, 예외 회차 유지, 실패/충돌 행 재검토
 - [읽기용 자료·연간 가족별 참고 요약](testing/readable-reports.md) — 영역·기간 선택, 이름·관계·서울 시각, 실제 금전 정산
 - [사용자 내보내기 화면 검증](testing/exports-client.md) — JSON·CSV·선택 문서 ZIP과 플랫폼별 저장 경계
 

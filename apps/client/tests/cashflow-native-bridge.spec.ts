@@ -52,6 +52,8 @@ const methods = [
   "settleObligation",
   "listObligationSettlements",
   "voidFixedSettlement",
+  "previewPaymentSwitch",
+  "applyPaymentSwitch",
   "getCardPaymentLinks",
   "getAccountPaymentLinks",
 ];
@@ -130,7 +132,7 @@ async function setup(
   await page.goto("/__cashflow-bridge");
 }
 
-test("48 named metadata commands retain DTO values and mutation keys without web HTTP", async ({
+test("named metadata commands retain DTO values and mutation keys without web HTTP", async ({
   page,
 }) => {
   await setup(page);
@@ -339,6 +341,35 @@ test("48 named metadata commands retain DTO values and mutation keys without web
         [
           "voidFixedSettlement",
           { settlementId: id, input: { reason: "합성 납부 취소" }, ...mutation },
+        ],
+        [
+          "previewPaymentSwitch",
+          {
+            input: {
+              source_kind: "card",
+              source_id: id,
+              target_kind: "account",
+              target_id: valueId,
+              effective_on: "2026-02-01",
+            },
+            query: { limit: 200 },
+          },
+        ],
+        [
+          "applyPaymentSwitch",
+          {
+            ruleId: id,
+            input: {
+              source_kind: "card",
+              source_id: id,
+              target_kind: "account",
+              target_id: valueId,
+              effective_on: "2026-02-01",
+              preview_digest: "a".repeat(64),
+              reason: "합성 변경",
+            },
+            ...mutation,
+          },
         ],
         [
           "getCardPaymentLinks",

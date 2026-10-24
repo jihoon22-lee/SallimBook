@@ -195,6 +195,8 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun deleteRecurringRule(call: PluginCall) = finance(call, FinanceOperation.DELETE_RECURRING_RULE)
     @PluginMethod fun voidFixedSettlement(call: PluginCall) = finance(call, FinanceOperation.VOID_FIXED_SETTLEMENT)
 
+    @PluginMethod fun previewPaymentSwitch(call: PluginCall) = finance(call, FinanceOperation.PREVIEW_PAYMENT_SWITCH)
+    @PluginMethod fun applyPaymentSwitch(call: PluginCall) = finance(call, FinanceOperation.APPLY_PAYMENT_SWITCH)
     @PluginMethod fun getCardPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_CARD_PAYMENT_LINKS)
     @PluginMethod fun getAccountPaymentLinks(call: PluginCall) = finance(call, FinanceOperation.GET_ACCOUNT_PAYMENT_LINKS)
 
