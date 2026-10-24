@@ -8,6 +8,9 @@ import { useIdempotencyKey, useMonthCommand } from "../assets/months/useMonthCom
 import { formatKrw } from "../assets/months/model";
 import { CashflowError, RecordedMoneyNotice, SaveControls } from "../finance/FinancialFeedback";
 import { dateLabel } from "../finance/dates";
+import { useAuth } from "../auth/AuthProvider";
+import { allPages } from "../finance/queries";
+import { PreviousIncome } from "./PreviousIncome";
 import { IncomeFields } from "./IncomeFields";
 import { useIncomeApi } from "./api";
 import { excludeSelf, incomeDraft, incomeInput, incomePatch, preserveIncomeChanges } from "./model";
@@ -22,8 +25,14 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
   const navigate = useNavigate();
   const { month } = useMonth();
   const command = useMonthCommand();
+  const { state } = useAuth();
   const [base, setBase] = useState(initial);
-  const [draft, setDraft] = useState(() => incomeDraft(month, initial));
+  const [draft, setDraft] = useState(() => ({
+    ...incomeDraft(month, initial),
+    ...(!initial && state.status === "authenticated" ? { member: state.member.member_id } : {}),
+  }));
+  const [showPrevious, setShowPrevious] = useState(false);
+  const [copySource, setCopySource] = useState<Income | null>(null);
   const [reason, setReason] = useState("");
   const [duplicates, setDuplicates] = useState<DuplicateResponse | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -55,7 +64,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
     setChecking(true);
     command.setError(null);
     try {
-      const result = excludeSelf(
+      let result = excludeSelf(
         await api.duplicates({
           month: input.period_month,
           member_id: input.member_id,
@@ -64,6 +73,22 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
         }),
         base?.id,
       );
+      if (copySource && !base) {
+        const existing = await allPages((cursor) =>
+          api.list({
+            month: input.period_month,
+            member_id: input.member_id,
+            kind: input.kind,
+            state: "active",
+            limit: 200,
+            ...(cursor ? { cursor } : {}),
+          }),
+        );
+        const items = [
+          ...new Map([...result.items, ...existing].map((row) => [row.id, row])).values(),
+        ];
+        result = { ...result, items, suspected: items.length > 0 || result.truncated };
+      }
       if (command.mounted.current) setDuplicates(result);
       return result;
     } catch (error) {
@@ -133,6 +158,37 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
     <section className="card">
       <h2>{base ? "수입 정정" : "새 수입 기록"}</h2>
       <RecordedMoneyNotice />
+      {!base && (
+        <>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={command.busy || checking}
+            onClick={() => setShowPrevious(true)}
+          >
+            지난달 수입에서 초안 불러오기
+          </button>
+          {showPrevious && !command.busy && !checking && (
+            <PreviousIncome
+              key={draft.month}
+              month={draft.month}
+              close={() => setShowPrevious(false)}
+              choose={(row) => {
+                change({ ...incomeDraft(draft.month, row), month: draft.month, date: "" });
+                setCopySource(row);
+                setShowPrevious(false);
+                setDirty(true);
+              }}
+            />
+          )}
+          {copySource && (
+            <p role="status">
+              {copySource.period_month} 수입을 새 초안으로 불러왔어요. 아직 저장하지 않았어요.{" "}
+              <Link to={`/income/${copySource.id}`}>불러온 원본 확인</Link>
+            </p>
+          )}
+        </>
+      )}
       <form onInput={() => setDirty(true)} onSubmit={(event) => void submit(event)}>
         <IncomeFields
           draft={draft}
@@ -171,8 +227,12 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
           <section className="review-panel" aria-label="수입 중복 검토">
             <h3>
               {duplicates.suspected
-                ? "월합계와 일별 기록이 함께 있어요"
-                : "날짜 정밀도가 다른 기존 기록은 없어요"}
+                ? copySource
+                  ? "이번 달에 같은 구성원·종류의 수입이 있어요"
+                  : "월합계와 일별 기록이 함께 있어요"
+                : copySource
+                  ? "이번 달에 같은 구성원·종류의 기존 수입은 없어요"
+                  : "날짜 정밀도가 다른 기존 기록은 없어요"}
             </h3>
             {duplicates.items.map((row) => (
               <p key={row.id}>
