@@ -756,6 +756,25 @@ PRIVATE_COLUMNS = {
 }
 
 PRIVATE_TABLES = {
+    "expense_import_batches": (
+        "id",
+        "household_id",
+        "source_id",
+        "manifest_hash",
+        "actor_member_id",
+        "baseline_date",
+        "row_count",
+        "created_at",
+    ),
+    "expense_import_rows": (
+        "household_id",
+        "source_id",
+        "source_key",
+        "payload_hash",
+        "created_rule_id",
+        "rule_id",
+        "state",
+    ),
     "card_stored_details": ("household_id", "card_id", "key_version", "nonce", "ciphertext"),
     "idempotency_records": (
         "household_id",

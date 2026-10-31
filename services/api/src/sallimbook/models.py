@@ -145,3 +145,5 @@ __all__ = [
     "StepUpGrant",
     "User",
 ]
+
+from sallimbook.cashflow import expense_import_models  # noqa: F401
