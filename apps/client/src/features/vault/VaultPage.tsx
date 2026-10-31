@@ -120,7 +120,9 @@ function VaultOverview({ memberId }: { memberId: string }) {
   };
   const active = row?.own_membership === "active";
   const ready = active && !row?.pending_rotation_id && !row?.rotation_required;
-  const missingCards = cards.items.filter((card) => !card.has_secret).slice(0, 20);
+  const missingCards = cards.items
+    .filter((card) => !card.has_secret && !card.has_stored_details)
+    .slice(0, 20);
   return (
     <VaultActionLauncher onCompleted={reload}>
       {(open, busy) => (
@@ -360,50 +362,54 @@ function VaultOverview({ memberId }: { memberId: string }) {
                           {card.masked_number || "마지막 네 자리 미입력"} ·{" "}
                           {card.status === "closed" ? "사용 종료" : "사용 중"}
                         </p>
-                        <div className="form-actions">
-                          <button
-                            disabled={busy || !active}
-                            onClick={() => open({ action: "view", cardId: card.id })}
-                          >
-                            전체 번호·유효기간 열람
-                          </button>
-                          <button
-                            disabled={busy || !ready}
-                            onClick={() => open({ action: "edit", cardId: card.id })}
-                          >
-                            카드 비밀 등록·수정
-                          </button>
-                          <button
-                            className="secondary-button"
-                            disabled={busy || !active || !!row.pending_rotation_id}
-                            onClick={() => open({ action: "purge", cardId: card.id })}
-                          >
-                            카드 비밀 제거
-                          </button>
-                          {native && (
-                            <>
-                              <button
-                                disabled={busy || !active}
-                                onClick={() => open({ action: "cvc-edit", cardId: card.id })}
-                              >
-                                이 기기의 CVC/CVV 입력·수정
-                              </button>
-                              <button
-                                disabled={busy || !active}
-                                onClick={() => open({ action: "cvc-view", cardId: card.id })}
-                              >
-                                이 기기의 CVC/CVV 열람
-                              </button>
-                              <button
-                                className="secondary-button"
-                                disabled={busy || !active}
-                                onClick={() => open({ action: "cvc-delete", cardId: card.id })}
-                              >
-                                이 기기의 CVC/CVV 삭제 검토
-                              </button>
-                            </>
-                          )}
-                        </div>
+                        {card.has_stored_details ? (
+                          <Link to={`/cards/${card.id}`}>암호 없이 저장한 카드정보 보기</Link>
+                        ) : (
+                          <div className="form-actions">
+                            <button
+                              disabled={busy || !active}
+                              onClick={() => open({ action: "view", cardId: card.id })}
+                            >
+                              전체 번호·유효기간 열람
+                            </button>
+                            <button
+                              disabled={busy || !ready}
+                              onClick={() => open({ action: "edit", cardId: card.id })}
+                            >
+                              카드 비밀 등록·수정
+                            </button>
+                            <button
+                              className="secondary-button"
+                              disabled={busy || !active || !!row.pending_rotation_id}
+                              onClick={() => open({ action: "purge", cardId: card.id })}
+                            >
+                              카드 비밀 제거
+                            </button>
+                            {native && (
+                              <>
+                                <button
+                                  disabled={busy || !active}
+                                  onClick={() => open({ action: "cvc-edit", cardId: card.id })}
+                                >
+                                  이 기기의 CVC/CVV 입력·수정
+                                </button>
+                                <button
+                                  disabled={busy || !active}
+                                  onClick={() => open({ action: "cvc-view", cardId: card.id })}
+                                >
+                                  이 기기의 CVC/CVV 열람
+                                </button>
+                                <button
+                                  className="secondary-button"
+                                  disabled={busy || !active}
+                                  onClick={() => open({ action: "cvc-delete", cardId: card.id })}
+                                >
+                                  이 기기의 CVC/CVV 삭제 검토
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>

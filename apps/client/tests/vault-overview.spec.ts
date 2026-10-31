@@ -152,6 +152,7 @@ test("card detail retains ordinary metadata operations and exposes separate prot
   await page.goto(`/cards/${uid(50)}`);
   await expect(page.getByRole("button", { name: "카드 사용 종료", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "카드 정보 수정", exact: true })).toBeVisible();
+  await page.getByText("암호 보관함 관리", { exact: true }).click();
   await expect(page.getByRole("button", { name: "카드 비밀 제거", exact: true })).toBeVisible();
   await expect(
     page.getByText(/공유 CVC\/CVV는 보관함에서 동의 후 암호화해 저장해요/),
@@ -197,4 +198,18 @@ test("new secret discovered during conflict supersedes stale last-four draft onl
   await page.getByRole("button", { name: "카드 변경 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "합성 유지 별칭", exact: true })).toBeVisible();
   expect(state.cashflow.writes.at(-1)!.body).not.toHaveProperty("last_four");
+});
+
+test("server-stored cards link to details instead of offering a second vault import", async ({
+  page,
+}) => {
+  const state = await mockVaultOverview(page);
+  Object.assign(state.cashflow.cards[0]!, { has_stored_details: true, has_secret: false });
+  await page.goto("/vault");
+  await expect(
+    page.getByRole("button", { name: "미등록 카드 비밀 일괄 입력", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "암호 없이 저장한 카드정보 보기", exact: true }),
+  ).toBeVisible();
 });
