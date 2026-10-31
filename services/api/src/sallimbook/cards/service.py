@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sallimbook.accounts.models import FinancialAccount
 from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
-from sallimbook.cards.models import Card
+from sallimbook.cards.models import Card, CardStoredDetails
 from sallimbook.cards.schemas import CardCreate, CardListResponse, CardPatch, CardResponse
 from sallimbook.cashflow.payment_link_schemas import CLOSURE_FIELDS
 from sallimbook.cashflow.payment_links import require_closure
@@ -47,12 +47,25 @@ def has_current_secret(session: Session, card: Card) -> bool:
     )
 
 
+def has_stored_details(session: Session, card: Card) -> bool:
+    return (
+        session.scalar(
+            select(CardStoredDetails.card_id).where(
+                CardStoredDetails.household_id == card.household_id,
+                CardStoredDetails.card_id == card.id,
+            )
+        )
+        is not None
+    )
+
+
 def card_response(
     session: Session,
     card: Card,
     *,
     account_statuses: Mapping[UUID, str] | None = None,
     secret_card_ids: set[UUID] | None = None,
+    stored_card_ids: set[UUID] | None = None,
 ) -> CardResponse:
     account_status = None
     if card.settlement_account_id is not None and account_statuses is not None:
@@ -81,6 +94,7 @@ def card_response(
                 "status",
                 "settlement_account_status",
                 "has_secret",
+                "has_stored_details",
                 "annual_fee_krw",
             }
         },
@@ -89,6 +103,9 @@ def card_response(
         has_secret=(card.id in secret_card_ids)
         if secret_card_ids is not None
         else has_current_secret(session, card),
+        has_stored_details=(card.id in stored_card_ids)
+        if stored_card_ids is not None
+        else has_stored_details(session, card),
         status="closed" if card.ended_on is not None else "active",
         settlement_account_status=account_status,
     )
@@ -161,7 +178,9 @@ def update_card(
     lock_asset_scope(session, principal)
     card = scoped_entity(session, Card, card_id, principal, for_update=True)
     require_version(card, if_match)
-    if "last_four" in payload.model_fields_set and has_current_secret(session, card):
+    if "last_four" in payload.model_fields_set and (
+        has_current_secret(session, card) or has_stored_details(session, card)
+    ):
         raise DomainError(
             "CARD_SECRET_PROTECTED", "카드 끝자리는 보관함에서 함께 수정해 주세요.", 409
         )
@@ -296,6 +315,18 @@ def list_cards(
         if page_ids
         else set()
     )
+    stored_card_ids = (
+        set(
+            session.scalars(
+                select(CardStoredDetails.card_id).where(
+                    CardStoredDetails.household_id == principal.household_id,
+                    CardStoredDetails.card_id.in_(page_ids),
+                )
+            )
+        )
+        if page_ids
+        else set()
+    )
     account_ids = {
         row.settlement_account_id for row in rows if row.settlement_account_id is not None
     }
@@ -319,7 +350,11 @@ def list_cards(
     result = CardListResponse(
         items=[
             card_response(
-                session, row, account_statuses=account_statuses, secret_card_ids=secret_card_ids
+                session,
+                row,
+                account_statuses=account_statuses,
+                secret_card_ids=secret_card_ids,
+                stored_card_ids=stored_card_ids,
             )
             for row in rows
         ],

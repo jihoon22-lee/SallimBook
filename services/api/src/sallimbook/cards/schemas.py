@@ -1,8 +1,17 @@
+import re
 from datetime import date, datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic.json_schema import SkipJsonSchema
 
 from sallimbook.assets.schemas import DateOnly
@@ -96,6 +105,7 @@ class CardResponse(BaseModel):
     last_four: str | None
     masked_number: str | None
     has_secret: bool
+    has_stored_details: bool = False
     settlement_day: int | None
     settlement_account_id: UUID | None
     settlement_account_status: Literal["active", "closed"] | None
@@ -113,3 +123,38 @@ class CardResponse(BaseModel):
 class CardListResponse(BaseModel):
     items: list[CardResponse]
     next_cursor: UUID | None
+
+
+class CardStoredDetailsInput(InputModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    pan: SecretStr = Field(repr=False)
+    expiry_year: Annotated[int, Field(strict=True, ge=2000, le=2199)] = Field(repr=False)
+    expiry_month: Annotated[int, Field(strict=True, ge=1, le=12)] = Field(repr=False)
+    cvc: SecretStr | None = Field(repr=False)
+
+    @field_validator("pan")
+    @classmethod
+    def normalize_pan(cls, value: SecretStr) -> SecretStr:
+        raw = value.get_secret_value().replace(" ", "").replace("-", "")
+        if not re.fullmatch(r"[0-9]{13,19}", raw):
+            raise ValueError("Card number must contain 13 to 19 ASCII digits")
+        return SecretStr(raw)
+
+    @field_validator("cvc")
+    @classmethod
+    def validate_cvc(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not re.fullmatch(r"[0-9]{3,4}", value.get_secret_value()):
+            raise ValueError("CVC must contain 3 or 4 ASCII digits")
+        return value
+
+
+class CardStoredDetailsResponse(BaseModel):
+    card_id: UUID
+    household_id: UUID
+    pan: str = Field(repr=False)
+    expiry_year: int = Field(repr=False)
+    expiry_month: int = Field(repr=False)
+    cvc: str | None = Field(repr=False)
+    checksum_valid: bool
+    version: int

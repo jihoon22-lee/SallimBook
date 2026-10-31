@@ -170,6 +170,7 @@ KNOWN_FIELDS = (
         "key_check",
         "cards",
         "secret_envelope",
+        "stored_details",
         "formats",
         "selected_documents",
         "account_number",

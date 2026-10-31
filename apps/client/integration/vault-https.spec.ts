@@ -57,6 +57,7 @@ async function ackRun(page: Page) {
 }
 async function editCard(page: Page, id: string, password: string) {
   await page.goto(`/cards/${id}`);
+  await page.getByText("암호 보관함 관리", { exact: true }).click();
   await page.getByRole("button", { name: "카드 비밀 등록·수정", exact: true }).click();
   await page.getByLabel("현재 보관함 암호", { exact: true }).fill(password);
   await page.getByLabel("전체 카드 번호 (숫자만)").fill("4242424242424242");
@@ -71,6 +72,7 @@ async function editCard(page: Page, id: string, password: string) {
 async function viewCard(page: Page, id: string, password: string) {
   await page.bringToFront();
   await page.goto(`/cards/${id}`);
+  await page.getByText("암호 보관함 관리", { exact: true }).click();
   await page.getByRole("button", { name: "전체 번호·유효기간 열람", exact: true }).click();
   await page.getByLabel("현재 보관함 암호", { exact: true }).fill(password);
   await page.getByRole("button", { name: "보관함 암호로 30초 보기", exact: true }).click();
@@ -280,6 +282,7 @@ test("real HTTPS WebCrypto setup sharing recovery all-card rotation revocation a
     await viewCard(page, setup.card, finalPw);
     console.log("SAFE_PHASE=VAULT_ABORT_REVOKE_ROTATE");
     await page.goto(`/cards/${setup.card}`);
+    await page.getByText("암호 보관함 관리", { exact: true }).click();
     await page.getByRole("button", { name: "카드 비밀 제거", exact: true }).click();
     await ackRun(page);
     await expect(page.getByRole("region", { name: "보관함 보호 작업", exact: true })).toHaveCount(

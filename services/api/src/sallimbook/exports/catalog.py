@@ -751,6 +751,7 @@ PRIVATE_COLUMNS = {
 }
 
 PRIVATE_TABLES = {
+    "card_stored_details": ("household_id", "card_id", "key_version", "nonce", "ciphertext"),
     "idempotency_records": (
         "household_id",
         "actor_id",

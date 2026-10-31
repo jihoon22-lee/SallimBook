@@ -33,6 +33,7 @@ test("a finished vault action keeps its message and the card section while the c
 }) => {
   const state = await mockVaultOverview(page, true);
   await page.goto(`/cards/${uid(50)}`);
+  await page.getByText("암호 보관함 관리", { exact: true }).click();
   const vault = page.getByRole("region", { name: "카드 보관함", exact: true });
   await expect(vault).toBeVisible();
   const handle = await vault.elementHandle();
@@ -57,6 +58,7 @@ test("a finished vault action keeps its message and the card section while the c
 test("a finished vault action keeps its message when the card reload fails", async ({ page }) => {
   const state = await mockVaultOverview(page, true);
   await page.goto(`/cards/${uid(50)}`);
+  await page.getByText("암호 보관함 관리", { exact: true }).click();
   await expect(page.getByRole("region", { name: "카드 보관함", exact: true })).toBeVisible();
   state.failRead = "getCard";
   await page.getByRole("button", { name: "전체 번호·유효기간 열람", exact: true }).click();

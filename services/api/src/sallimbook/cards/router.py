@@ -1,15 +1,17 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Query, Response
+from fastapi import APIRouter, Header, Query, Request, Response
 
-from sallimbook.cards import service
+from sallimbook.cards import service, stored_service
 from sallimbook.cards.schemas import (
     CardArchive,
     CardCreate,
     CardListResponse,
     CardPatch,
     CardResponse,
+    CardStoredDetailsInput,
+    CardStoredDetailsResponse,
     CardType,
 )
 from sallimbook.core.name_search import NameQuery
@@ -135,4 +137,62 @@ def delete(
     card_id: UUID, principal: PrincipalDependency, session: SessionDependency, if_match: IfMatch
 ):
     service.delete_card(session, principal, card_id, if_match)
+    return Response(status_code=204)
+
+
+@router.put(
+    "/{card_id}/stored-details",
+    response_model=CardResponse,
+    operation_id="putCardStoredDetails",
+    responses={200: {"headers": ETAG_HEADERS}},
+)
+def put_stored_details(
+    card_id: UUID,
+    payload: CardStoredDetailsInput,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    request: Request,
+    response: Response,
+    if_match: IfMatch,
+):
+    return _etag(
+        response,
+        stored_service.put_details(
+            session,
+            principal,
+            card_id,
+            payload,
+            if_match,
+            request.app.state.settings.field_encryption_key_file,
+            request.state.request_id,
+        ),
+    )
+
+
+@router.post(
+    "/{card_id}/stored-details/reveal",
+    response_model=CardStoredDetailsResponse,
+    operation_id="revealCardStoredDetails",
+)
+def reveal_stored_details(
+    card_id: UUID, principal: PrincipalDependency, session: SessionDependency, request: Request
+):
+    return stored_service.reveal_details(
+        session,
+        principal,
+        card_id,
+        request.app.state.settings.field_encryption_key_file,
+        request.state.request_id,
+    )
+
+
+@router.delete("/{card_id}/stored-details", status_code=204, operation_id="deleteCardStoredDetails")
+def delete_stored_details(
+    card_id: UUID,
+    principal: PrincipalDependency,
+    session: SessionDependency,
+    request: Request,
+    if_match: IfMatch,
+):
+    stored_service.delete_details(session, principal, card_id, if_match, request.state.request_id)
     return Response(status_code=204)

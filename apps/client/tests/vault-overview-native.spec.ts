@@ -155,6 +155,7 @@ test("native card details use native protected actions while ordinary metadata r
 }) => {
   const state = await mockVaultOverview(page, true);
   await page.goto(`/cards/${uid(50)}`);
+  await page.getByText("암호 보관함 관리", { exact: true }).click();
   await page.getByRole("button", { name: "전체 번호·유효기간 열람", exact: true }).click();
   await expect(page.getByRole("button", { name: "카드 사용 종료", exact: true })).toBeVisible();
   await expect

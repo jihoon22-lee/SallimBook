@@ -1,5 +1,7 @@
 # API 계약
 
+> 2026-10-31 #186: 카드 상세정보에 별도 암호 없는 서버 관리 경로를 추가합니다. 아래 기존 클라이언트 보관함 규칙은 기존 경로에 적용하며, 새 경로의 로그인·암호화 경계는 [최신 사용자 결정](adr/passwordless-card-details.md)을 따릅니다.
+
 상태: 구현 명세. health/readiness·공통 계약, SB-005/007 계정·가계 권한과 SB-006 패스키 서버 API를 구현했다.
 패스키의 PC/Android 인증 UI와 금융·보험·재고·보관함 업무 API는 후속 구현 대상이다.
 기본 경로 `/api/v1`, JSON UTF-8, 원화는 정수 문자열, ID는 UUID.
@@ -790,3 +792,11 @@ received=true는 지급월과 세후 현금을 확인하고 현금 연결에 동
 응답 snapshot을 income_planning_revisions에 남겨 최초 응답을 재현한다. 목록은 가계 범위
 UUID cursor, limit1~200이다. 일반 감사에는 필드명만 남긴다. 내보내기의 revision snapshot은
 JSON 문자열로 보존한다. 웹과 Android는 같은 생성 API 계약을 사용한다.
+
+## 별도 암호 없는 카드 상세정보 (#186)
+
+- `PUT /api/v1/cards/{card_id}/stored-details`: `If-Match` 카드 버전, pan/expiry_year/expiry_month/cvc 전체 교체. cvc는 문자열 또는 명시적 null. 일반 CardResponse 반환.
+- `POST /api/v1/cards/{card_id}/stored-details/reveal`: 현재 가계 로그인으로 보호된 상세정보와 checksum_valid, version 반환. 별도 암호/재인증 없음.
+- `DELETE /api/v1/cards/{card_id}/stored-details`: `If-Match`, 기본 카드정보를 보존하고 상세정보만 삭제.
+- 일반 CardResponse는 `has_stored_details`만 추가. 번호·유효기간·CVC는 전용 경로 외에 반환하지 않음.
+- 기존 client vault와 동일 카드 중복 저장, 마지막 네 자리 불일치 수정은 409. 다른 가계는 404. 웹 mutation은 기존 Origin/CSRF 필수.

@@ -28,6 +28,7 @@ import { useCardsApi } from "./api";
 import { cardEndDateError, cardTypes } from "./model";
 import type { Card, CardQuery } from "./model";
 import { CardEditor } from "./CardEditor";
+import { StoredCardDetails } from "./StoredCardDetails";
 import { CardVaultActions } from "../vault/CardVaultActions";
 export function CardSummary({
   card,
@@ -385,7 +386,11 @@ function CardDetail({ id, edit }: { id: string; edit: boolean }) {
             {!resource.error && (
               <PaymentConnections key={`links:${card.version}`} kind="card" id={id} />
             )}
-            <CardVaultActions cardId={id} onCompleted={() => void resource.reload()} />
+            <StoredCardDetails card={card} onCompleted={() => void resource.reload()} />
+            <details>
+              <summary>암호 보관함 관리</summary>
+              <CardVaultActions cardId={id} onCompleted={() => void resource.reload()} />
+            </details>
             {action && !resource.error && (
               <section className="card">
                 <h2>{action === "close" ? "사용 종료 확인" : "오등록 삭제 확인"}</h2>

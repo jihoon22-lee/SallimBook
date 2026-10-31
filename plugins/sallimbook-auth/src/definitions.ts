@@ -64,7 +64,13 @@ export type NativeVaultEntry =
   | { action: "accept-share" | "cancel-share"; offerId: string }
   | { action: "resume-rotation" | "abort-rotation"; rotationId: string };
 
+export type NativeStoredCardEntry = { action: "view" | "edit" | "delete"; cardId: string };
+
 export interface SallimBookAuth {
+  /** Protected native card form. No card secrets cross the JavaScript bridge. */
+  openCardDetailsUI(
+    options: NativeStoredCardEntry,
+  ): Promise<NativeAuthResult<{ status: "completed" | "cancelled" }>>;
   /** First-account availability only; no setup secret or operator token crosses the bridge. */
   getSetupStatus(): Promise<NativeAuthResult<components["schemas"]["SetupStatusResponse"]>>;
   /** Native UI owns name/password/confirmation and installs the resulting session. */
