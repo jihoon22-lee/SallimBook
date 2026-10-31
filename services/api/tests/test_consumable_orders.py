@@ -559,8 +559,7 @@ def test_migration_preserves_existing_stock_and_refuses_to_drop_order_history(
         assert get(client, actor, order)["state"] == "planned"
         with db_engine.connect() as connection:
             assert (
-                connection.scalar(text("SELECT version_num FROM alembic_version"))
-                == original_head
+                connection.scalar(text("SELECT version_num FROM alembic_version")) == original_head
             )
 
 
