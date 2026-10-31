@@ -144,3 +144,71 @@ test("simple plan save needs no payment day and reloads the registered item", as
   });
   expect(saved).not.toHaveProperty("anchor_date");
 });
+
+test("refresh while editing keeps the draft's original version and rejects an intervening spouse edit", async ({
+  page,
+}) => {
+  await mockCashflow(page);
+  let version = 1,
+    reads = 0,
+    sentVersion: string | undefined;
+  await page.route("**/api/v1/expense-plans**", async (route) => {
+    if (route.request().method() === "PATCH") {
+      sentVersion = route.request().headers()["if-match"];
+      return route.fulfill({
+        status: 409,
+        json: { error: { code: "VERSION_CONFLICT", message: "합성 충돌" } },
+      });
+    }
+    reads++;
+    const v = {
+      title: "합성 공유 계획",
+      category: "생활비",
+      amount_mode: "fixed",
+      economic_type: "expense",
+      frequency: "monthly",
+      interval_count: 1,
+      tracking_mode: "plan_only",
+      plan_kind: "recurring",
+      budget_treatment: "included",
+      expected_amount_krw: version === 1 ? "12000" : "50000",
+      monthly_equivalent_krw: version === 1 ? "12000" : "50000",
+      id: uid(301),
+      effective_from: "2025-02-20",
+      effective_until: null,
+      created_at: "2025-02-20T03:00:00Z",
+      revoked_at: null,
+      reason: null,
+      anchor_date: null,
+    };
+    return route.fulfill({
+      json: {
+        items: [
+          {
+            id: uid(401),
+            household_id: uid(3),
+            version,
+            ended_on: null,
+            end_reason: null,
+            versions: [v],
+            history: [v],
+          },
+        ],
+        next_cursor: null,
+      },
+    });
+  });
+  await page.goto("/fixed-payments");
+  await page.getByRole("button", { name: "합성 공유 계획", exact: true }).click();
+  await page.getByLabel("계획 금액 (미정이면 비워두기)", { exact: true }).fill("15000");
+  version = 2;
+  const previousReads = reads;
+  await page.getByRole("button", { name: "월 계획 새로고침", exact: true }).click();
+  await expect.poll(() => reads).toBeGreaterThan(previousReads);
+  await expect(page.getByRole("button", { name: "월 계획 새로고침", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "계획 저장", exact: true }).click();
+  await expect.poll(() => sentVersion).toBe('"1"');
+  await expect(page.getByLabel("계획 금액 (미정이면 비워두기)", { exact: true })).toHaveValue(
+    "15000",
+  );
+});
