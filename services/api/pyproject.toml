@@ -14,7 +14,7 @@ dependencies = [
   "webauthn==3.0.1",
   "cryptography==50.0.2",
   "pillow==13.0.0",
-  "pypdf==6.21.2",
+  "pypdf==6.21.4",
 ]
 
 [build-system]
