@@ -382,8 +382,8 @@
       "git_sha1": "ca5a0f50d029e9a600739c3703e78f64cc225c4d"
     },
     "docs/testing/android-ci.md": {
-      "sha256": "e84ca638b3af31df2cf3a0d3fa15e2a52e391878f0dedd3595f19e0f1cddc4f6",
-      "git_sha1": "07ec6996c104dc7e22001767073a4a9c2f4792b7"
+      "sha256": "c3effb9164184e6307d5ef28a9b79b996209051d0d043d8a8c5d8ad7e1ff333b",
+      "git_sha1": "dd48db8a81bc3b9cf3b2e7c18d9130e8a8d80005"
     },
     "docs/testing/android-cloud-results.md": {
       "sha256": "738ccc2a9de11a8e12ba124392aa7211329af489b3501448a4bed581e0fdb602",
