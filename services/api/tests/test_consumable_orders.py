@@ -552,13 +552,15 @@ def test_migration_preserves_existing_stock_and_refuses_to_drop_order_history(
             == 200
         )
         order = create(client, actor, stock)
+        with db_engine.connect() as connection:
+            original_head = connection.scalar(text("SELECT version_num FROM alembic_version"))
         with pytest.raises(DBAPIError, match="retain purchase order history"):
             migrate("downgrade", "0020_insurance_misregistration")
         assert get(client, actor, order)["state"] == "planned"
         with db_engine.connect() as connection:
             assert (
                 connection.scalar(text("SELECT version_num FROM alembic_version"))
-                == "0021_consumable_orders"
+                == original_head
             )
 
 

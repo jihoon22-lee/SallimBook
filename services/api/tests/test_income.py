@@ -1329,4 +1329,5 @@ class TestIncomeDatabase:
                     event.remove(db_engine, "before_cursor_execute", capture)
                 counts.append(len(statements))
             assert counts[0] == counts[1]
-            assert counts[1] <= 5
+            # One bounded batch read protects cash rows linked to bonus details.
+            assert counts[1] <= 6
