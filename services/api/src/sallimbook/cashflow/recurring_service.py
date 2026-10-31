@@ -337,6 +337,17 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
         _validate_method(
             session, principal, payload.account_id, payload.card_id, payload.loan_asset_id
         )
+        from pydantic import ValidationError
+
+        from sallimbook.cashflow.expense_plan_schemas import PLAN_FIELDS, PlanTerms
+
+        terms = _term_values(payload) | {name: getattr(anchor, name) for name in PLAN_FIELDS}
+        try:
+            PlanTerms.model_validate(terms | {"expected_amount_krw": payload.expected_amount_krw})
+        except ValidationError:
+            raise DomainError(
+                "PLAN_CLIENT_REQUIRED", "월 계획 화면에서 주기와 결제월을 함께 변경해 주세요.", 409
+            ) from None
         _revoke(session, principal, pending)
         # The trigger only lets a period end move earlier, so equal values are not reassigned.
         if anchor.effective_until != payload.effective_from:
@@ -344,17 +355,7 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
         session.flush()  # Close the old range before the exclusion constraint sees its successor.
         session.add(
             RecurringRuleVersion(
-                **_term_values(payload),
-                **{
-                    name: getattr(anchor, name)
-                    for name in (
-                        "tracking_mode",
-                        "plan_kind",
-                        "budget_treatment",
-                        "subject_member_id",
-                        "annual_month",
-                    )
-                },
+                **terms,
                 household_id=principal.household_id,
                 rule_id=row.id,
                 effective_from=payload.effective_from,
