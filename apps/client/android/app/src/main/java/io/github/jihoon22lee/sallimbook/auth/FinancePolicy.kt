@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 
 internal enum class FinanceOperation {
+    LIST_EXPENSE_PLANS, GET_EXPENSE_PLAN, CREATE_EXPENSE_PLAN, CHANGE_EXPENSE_PLAN, END_EXPENSE_PLAN, DELETE_EXPENSE_PLAN, EXPENSE_PLAN_SUMMARY, PREVIEW_EXPENSE_PLAN_PAYMENT_SWITCH, APPLY_EXPENSE_PLAN_PAYMENT_SWITCH,
     LIST_EXPECTED_INCOME, CREATE_EXPECTED_INCOME, CHANGE_EXPECTED_INCOME, LIST_BONUS_AWARDS, CREATE_BONUS_AWARD, CHANGE_BONUS_AWARD,
     GET_PURCHASE_PLAN, LIST_CONSUMABLE_ORDERS, CREATE_CONSUMABLE_ORDER, GET_CONSUMABLE_ORDER, UPDATE_CONSUMABLE_ORDER, SUBMIT_CONSUMABLE_ORDER, RECEIVE_CONSUMABLE_ORDER, CANCEL_CONSUMABLE_ORDER,
     LIST_HOUSEHOLD_PEOPLE, CREATE_HOUSEHOLD_PERSON, UPDATE_HOUSEHOLD_PERSON,
@@ -167,6 +168,7 @@ internal object FinancePolicy {
         if (CashflowPolicy.supports(operation)) return CashflowPolicy.prepare(operation, value)
         if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.prepare(operation, value)
         if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
+        if (ExpensePlanPolicy.supports(operation)) return ExpensePlanPolicy.prepare(operation, value)
         if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.prepare(operation, value)
         if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.prepare(operation, value)
         if (NativeDocumentPolicy.supports(operation)) return NativeDocumentPolicy.prepare(operation, value)
@@ -214,6 +216,7 @@ internal object FinancePolicy {
     fun metadataHttpAllowed(method: String, path: String, body: Any?, ifMatch: String?, idempotencyKey: String? = null): Boolean { return try {
         if (HouseholdPeoplePolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (CashflowPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
+        if (ExpensePlanPolicy.httpAllowed(method,path,body,ifMatch,idempotencyKey)) return true
         if (FixedCostPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (NativeDocumentPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (NativeHomecarePolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
@@ -342,6 +345,7 @@ internal object FinancePolicy {
             if (CashflowPolicy.supports(operation)) return CashflowPolicy.response(operation, request, status, value)
             if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.response(operation, request, status, value)
             if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
+            if (ExpensePlanPolicy.supports(operation)) return ExpensePlanPolicy.response(operation,request,status,value)
             if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.response(operation, request, status, value)
             if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.response(operation, request, status, value)
             if (NativeDocumentPolicy.supports(operation)) return NativeDocumentPolicy.response(operation, request, status, value)

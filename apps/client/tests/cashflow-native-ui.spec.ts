@@ -122,7 +122,7 @@ test("native rule creation revision end and explicit generation use typed DTO an
     .check();
   await page.getByRole("button", { name: "납부 규칙 종료 저장", exact: true }).click();
   await expect(page.getByText("종료 사유: 합성 앱 종료", { exact: true })).toBeVisible();
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
   await expect(

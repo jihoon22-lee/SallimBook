@@ -722,3 +722,13 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 
 .month-picker-lock { border: 0; margin: 0; padding: 0; min-width: 0; }
 .portfolio-balance dd, .expected-income-summary dd { overflow-wrap: anywhere; }
+
+.expense-plans { min-width: 0; }
+.expense-plans label { display: grid; gap: .4rem; min-width: 0; max-width: 100%; }
+.expense-plans input, .expense-plans select, .expense-plans textarea { box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; min-height: 44px; padding: .55rem; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--foreground); font: inherit; }
+.expense-plans .form-actions > label { flex: 1 1 12rem; }
+.expense-plans .record-list { list-style: none; padding: 0; }
+.expense-plans .record-list > li { padding: 1rem 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.expense-plans details { margin-block: .75rem; }
+.expense-plans details[open] > label { margin-block: .75rem; }
+.expense-plans .link-button { color: var(--accent); background: none; border: 0; padding: 0; font: inherit; text-align: left; overflow-wrap: anywhere; }

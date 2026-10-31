@@ -13,6 +13,7 @@ export function FinanceError({ error }: { error: ApiError | null }) {
   const messages: Partial<Record<ApiError["code"], string>> = {
     PERSON_UNAVAILABLE:
       "보관된 가족은 새 기록에 지정할 수 없어요. 가족 관리에서 다시 사용으로 바꿔 주세요.",
+    PLAN_CLIENT_REQUIRED: "월 계획 화면에서 변경해 주세요.",
     PEOPLE_CLIENT_REQUIRED: "가족 정보를 바꾸려면 앱을 업데이트하거나 웹을 새로 열어 주세요.",
     MEMBER_PERSON_MANAGED: "로그인 구성원 정보는 계정 설정에서 바꿔 주세요.",
     PAYMENT_LINK_CONFIRMATION_REQUIRED: "선택한 종료일 이후의 연결된 납부 계획을 확인해 주세요.",

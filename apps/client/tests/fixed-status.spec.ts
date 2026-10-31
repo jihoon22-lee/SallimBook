@@ -27,7 +27,7 @@ for (const native of [false, true]) {
     ];
     state.obligations.forEach((row) => state.rememberObligation(row, "create"));
     const bridge = native ? await mockNativeCashflow(page, state) : null;
-    await page.goto("/fixed-payments");
+    await page.goto("/fixed-payments?view=payments");
     for (const [title, status] of [
       ["합성 미래 예정", "납부 예정"],
       ["합성 지난 예정", "예정일 지남 · 확인 필요"],
@@ -64,7 +64,7 @@ test("a fixed refresh keeps the list and summary but a different month never sho
     if (armed) await gate;
     await route.fallback();
   });
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   const summary = page.getByRole("region", { name: "고정 납부 월 요약", exact: true });
   await expect(summary).toContainText("1,033,000원");
   const link = page.getByRole("link", { name: "합성 AI 구독", exact: true });

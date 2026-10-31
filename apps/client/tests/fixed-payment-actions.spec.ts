@@ -69,7 +69,7 @@ for (const nativeMode of [false, true]) {
     const native = nativeMode ? await mockNativeCashflow(page, state) : null;
     state.failure = "after";
     state.failurePath = `/api/v1/obligations/${transfer.id}/settlements`;
-    await page.goto("/fixed-payments");
+    await page.goto("/fixed-payments?view=payments");
     expect(state.writes).toHaveLength(0);
     await page.getByRole("button", { name: "여러 회차 납부 입력 열기", exact: true }).click();
     const panel = page.getByRole("region", { name: "선택 납부 입력", exact: true });
@@ -121,7 +121,7 @@ test("batch conflict keeps the saved result and requires individual review", asy
   state.rememberObligation(extra, "create");
   state.conflict = true;
   state.conflictPath = `/api/v1/obligations/${extra.id}/settlements`;
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByRole("button", { name: "여러 회차 납부 입력 열기", exact: true }).click();
   const panel = page.getByRole("region", { name: "선택 납부 입력", exact: true });
   await panel.getByRole("checkbox", { name: new RegExp(state.obligations[0]!.title) }).check();
@@ -222,7 +222,7 @@ for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ colorScheme: "dark" });
     const state = await mockCashflow(page);
-    await page.goto("/fixed-payments");
+    await page.goto("/fixed-payments?view=payments");
     const record = page.getByRole("link", { name: state.obligations[0]!.title, exact: true });
     await expect(record).toBeVisible();
     const management = page.getByRole("link", { name: "규칙과 적용기간 관리", exact: true });

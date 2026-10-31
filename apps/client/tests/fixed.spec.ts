@@ -13,7 +13,7 @@ test("fixed summary separates known plans, unknown amounts and actuals without a
   page,
 }) => {
   const state = await mockCashflow(page);
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   const summary = page.getByRole("region", { name: "고정 납부 월 요약", exact: true });
   await expect(summary).toContainText("1,033,000원");
   await expect(summary).toContainText("예정액 미정1개");
@@ -33,7 +33,7 @@ test("explicit generation retries the same key after a committed response is los
 }) => {
   const state = await mockCashflow(page);
   state.failure = "after";
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("처리 결과를 확인하지 못했어요");
@@ -275,7 +275,7 @@ test("calendar loads every page and places occurrences by scheduled day without 
   state.pageSize = 1;
   state.obligations[0]!.scheduled_date = "2025-02-25";
   state.obligations[0]!.manual_override = true;
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByRole("button", { name: "달력 보기", exact: true }).click();
   const calendar = page.getByRole("region", { name: "월 납부 달력", exact: true });
   await expect(calendar).toContainText("이 달의 생성된 회차 3개");
@@ -532,7 +532,7 @@ test("a paid occurrence asks before recording an additional payment", async ({ p
       member_id: null,
     }),
   });
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   const paidRow = page
     .getByRole("listitem")
     .filter({ has: page.getByRole("link", { name: "합성 AI 구독", exact: true }) });
@@ -686,7 +686,7 @@ test("actual payment accepts grouped amounts and sends digits only", async ({ pa
 });
 test("the occurrence list title names the selected month", async ({ page }) => {
   await mockCashflow(page);
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByLabel("확인할 월").fill("2025-01");
   await expect(
     page.getByRole("heading", { name: "2025년 1월 납부 목록", exact: true }),

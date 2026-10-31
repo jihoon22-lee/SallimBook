@@ -34,7 +34,7 @@ async function setup(page: Page, native = false) {
   };
   const original = state.handle;
   const handler: typeof state.handle = async (method, path, query, body, headers) => {
-    if (!path.startsWith("/api/v1/payment-switch"))
+    if (!path.startsWith("/api/v1/expense-plan-payment-switch"))
       return original(method, path, query, body, headers);
     if (path.endsWith("/preview")) {
       model.previews++;
@@ -58,7 +58,7 @@ async function setup(page: Page, native = false) {
     return { status: 200, body: { id, version: 2 } };
   };
   state.handle = handler;
-  await page.route("**/api/v1/payment-switch/**", async (route) => {
+  await page.route("**/api/v1/expense-plan-payment-switch/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
     const response = await handler(
@@ -109,7 +109,7 @@ for (const native of [false, true])
     ).toBeDisabled();
     if (bridge) {
       expect(bridge.http).toEqual([]);
-      expect(bridge.calls.filter((r) => r.method === "applyPaymentSwitch")).toHaveLength(3);
+      expect(bridge.calls.filter((r) => r.method === "applyExpensePlanPaymentSwitch")).toHaveLength(3);
     }
   });
 test("invalid date, same source and blocked rows cannot save; changing target discards the preview", async ({

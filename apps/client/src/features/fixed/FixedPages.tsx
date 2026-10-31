@@ -1,3 +1,4 @@
+import { ExpensePlans } from "./ExpensePlans";
 import { LastAuditActor } from "../audit/LastAuditActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { RuleInsuranceLink, NamedReference } from "../finance/RelatedRecords";
@@ -1158,9 +1159,35 @@ function ObligationDetail({ id }: { id: string }) {
   );
 }
 export function FixedListPage() {
+  const [params, setParams] = useSearchParams();
+  const actual = params.get("view") === "payments";
   return (
-    <AuthenticatedFinance title="고정 납부" description="예정 회차와 실제 납부를 나누어 확인해요.">
-      <FixedList />
+    <AuthenticatedFinance title="고정 지출" description="월 계획을 한눈에 보고 필요할 때 수정해요.">
+      <nav className="form-actions" aria-label="고정 지출 보기">
+        <button
+          aria-pressed={!actual}
+          onClick={() =>
+            setParams((old) => {
+              old.delete("view");
+              return old;
+            })
+          }
+        >
+          월 계획
+        </button>
+        <button
+          aria-pressed={actual}
+          onClick={() =>
+            setParams((old) => {
+              old.set("view", "payments");
+              return old;
+            })
+          }
+        >
+          예정·실제 납부
+        </button>
+      </nav>
+      {actual ? <FixedList /> : <ExpensePlans />}
     </AuthenticatedFinance>
   );
 }
