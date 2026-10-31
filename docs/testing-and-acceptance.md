@@ -108,3 +108,5 @@ trace·screenshot·video를 끄며 실제 사용자 데이터는 사용하지 �
 7개 영역 중 하나라도 빠지면 전체 v1 인수를 완료하지 않는다.
 
 P18 결제수단 일괄 변경: [검증 기록](testing/payment-method-switch.md). 미래 요금·기간·메모 및 납부/수동 예외 원본 보존, 다른 가계 접근 거부, 행별 digest·If-Match·멱등 재전송, 부부 동시 저장, 웹/Android에서 성공 행 유지와 충돌 행 재검토를 확인한다.
+
+월 계획의 합성 월 환산/제외/null·0 예제는 `packages/test-fixtures/expense-plans.json`이며 `test_expense_plans.py`에서 API 응답과 대조한다. 등록 당일 정정/종료, 새 계획의 회차 미생성, 일정→계획 전환 시 납부·수동 회차 보존, 기존 DTO 투영과 결제수단 변경도 함께 검증한다. 실제 가계 자료는 시험 fixture로 사용하지 않는다.

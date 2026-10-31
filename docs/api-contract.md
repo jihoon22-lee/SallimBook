@@ -800,3 +800,7 @@ JSON 문자열로 보존한다. 웹과 Android는 같은 생성 API 계약을 �
 - `DELETE /api/v1/cards/{card_id}/stored-details`: `If-Match`, 기본 카드정보를 보존하고 상세정보만 삭제.
 - 일반 CardResponse는 `has_stored_details`만 추가. 번호·유효기간·CVC는 전용 경로 외에 반환하지 않음.
 - 기존 client vault와 동일 카드 중복 저장, 마지막 네 자리 불일치 수정은 409. 다른 가계는 404. 웹 mutation은 기존 Origin/CSRF 필수.
+
+## 월 지출 계획 (#189)
+
+날짜 없는 계획 CRUD, 월 환산 집계, 계획의 결제수단 변경 및 기존 일정 API 호환 규칙은 [월 지출 계획 계약](expense-plans.md)을 따른다. OpenAPI의 `PlanCreate`/`PlanChange`/`PlanResponse`와 `PlanSummaryResponse`가 계약 원본이며 `/expense-plans`와 `/expense-plan-summary`에서 사용한다. 실제 납부 집계와 자산 스냅샷 의미는 변경하지 않는다.

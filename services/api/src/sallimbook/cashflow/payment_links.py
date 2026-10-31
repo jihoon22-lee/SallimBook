@@ -118,6 +118,7 @@ def usage(
             period="future" if row.effective_from > as_of_date else "current",
         )
         for row, version in rule_rows
+        if row.tracking_mode == "scheduled"
     ]
     actuals = (
         select(
@@ -194,6 +195,16 @@ def usage(
         resource_version=resource_version,
         as_of_date=as_of_date.isoformat(),
         rules=[row.model_dump(mode="json") for row in rules],
+        plan_versions=[
+            dict(
+                id=str(row.id),
+                rule_version=version,
+                account_id=str(row.account_id),
+                card_id=str(row.card_id),
+            )
+            for row, version in rule_rows
+            if row.tracking_mode == "plan_only"
+        ],
         obligations=[row.model_dump(mode="json") for row in obligations],
         cards=[row.model_dump(mode="json") for row in cards],
     )
@@ -213,7 +224,7 @@ def usage(
         as_of_date=as_of_date,
         usage_digest=digest,
         requires_confirmation=bool(
-            rules or obligations or any(c.active_for_closure for c in cards)
+            rule_rows or obligations or any(c.active_for_closure for c in cards)
         ),
         rules=_page(rules, rule_cursor, limit, LinkedRulePage),
         obligations=_page(obligations, obligation_cursor, limit, LinkedObligationPage),

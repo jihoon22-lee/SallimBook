@@ -148,7 +148,11 @@ def _rule_response(session, principal, row, *, versions=None):
     if versions is None:
         versions = _versions(session, principal, row.id)
     # Callers with their own queries (list_rules, insurance premiums) pass revoked rows too.
-    versions = [version for version in versions if version.revoked_at is None]
+    versions = [
+        version
+        for version in versions
+        if version.revoked_at is None and version.tracking_mode == "scheduled"
+    ]
     return RuleResponse(
         id=row.id,
         household_id=row.household_id,
@@ -298,12 +302,27 @@ def _revoke(session, principal, versions):
     session.flush()  # Free the start date and period before a replacement version is added.
 
 
+def _require_legacy(session, principal, rule_id):
+    has_plan = session.scalar(
+        select(RecurringRuleVersion.id)
+        .where(
+            RecurringRuleVersion.household_id == principal.household_id,
+            RecurringRuleVersion.rule_id == rule_id,
+            RecurringRuleVersion.tracking_mode == "plan_only",
+        )
+        .limit(1)
+    )
+    if has_plan is not None:
+        raise DomainError("PLAN_CLIENT_REQUIRED", "월 계획 화면에서 변경해 주세요.", 409)
+
+
 def change_rule(session, principal, rule_id, payload, if_match, key):
     cash.lock_cash_household(session, principal)
 
     def execute():
         row = scoped_entity(session, RecurringRule, rule_id, principal, for_update=True)
         require_version(row, if_match)
+        _require_legacy(session, principal, row.id)
         versions = _versions(session, principal, row.id)
         if row.ended_on is not None and payload.effective_from >= row.ended_on:
             raise DomainError(
@@ -326,6 +345,16 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
         session.add(
             RecurringRuleVersion(
                 **_term_values(payload),
+                **{
+                    name: getattr(anchor, name)
+                    for name in (
+                        "tracking_mode",
+                        "plan_kind",
+                        "budget_treatment",
+                        "subject_member_id",
+                        "annual_month",
+                    )
+                },
                 household_id=principal.household_id,
                 rule_id=row.id,
                 effective_from=payload.effective_from,
@@ -355,12 +384,14 @@ def change_rule(session, principal, rule_id, payload, if_match, key):
     )
 
 
-def end_rule(session, principal, rule_id, payload, if_match, key):
+def end_rule(session, principal, rule_id, payload, if_match, key, *, plan=False):
     cash.lock_cash_household(session, principal)
 
     def execute():
         row = scoped_entity(session, RecurringRule, rule_id, principal, for_update=True)
         require_version(row, if_match)
+        if not plan:
+            _require_legacy(session, principal, row.id)
         versions = _versions(session, principal, row.id)
         # A future cutoff can only move earlier. Together with today's lower bound,
         # this cannot reopen an elapsed rule or rewrite an earlier version's period.
@@ -373,9 +404,14 @@ def end_rule(session, principal, rule_id, payload, if_match, key):
         if payload.effective_on < today():
             raise DomainError("PAST_RULE_CHANGE", "지난 규칙은 변경할 수 없습니다.", 409)
         # Ending before a not-yet-started version withdraws it.
-        anchor, pending = _split_at(versions, payload.effective_on)
+        if plan:
+            from sallimbook.cashflow.expense_plan_service import split_plan_at
+
+            anchor, pending = split_plan_at(session, principal, versions, payload.effective_on)
+        else:
+            anchor, pending = _split_at(versions, payload.effective_on)
         _revoke(session, principal, pending)
-        if anchor.effective_until != payload.effective_on:
+        if anchor is not None and anchor.effective_until != payload.effective_on:
             anchor.effective_until = payload.effective_on
         row.ended_on = payload.effective_on
         row.end_reason = payload.reason
@@ -393,7 +429,7 @@ def end_rule(session, principal, rule_id, payload, if_match, key):
         run_idempotent(
             session,
             principal,
-            "recurring.end",
+            "expense_plan.end" if plan else "recurring.end",
             key,
             {"id": str(rule_id), "if_match": if_match, "body": payload.model_dump(mode="json")},
             execute,
@@ -442,12 +478,14 @@ def _rule_in_use(session, principal, rule, obligations):
     return any(session.scalar(check.limit(1)) is not None for check in checks)
 
 
-def delete_rule(session, principal, rule_id, if_match, key):
+def delete_rule(session, principal, rule_id, if_match, key, *, plan=False):
     cash.lock_cash_household(session, principal)
 
     def execute():
         row = scoped_entity(session, RecurringRule, rule_id, principal, for_update=True)
         require_version(row, if_match)
+        if not plan:
+            _require_legacy(session, principal, row.id)
         obligations = list(
             session.scalars(
                 select(ScheduledObligation)
@@ -512,7 +550,7 @@ def delete_rule(session, principal, rule_id, if_match, key):
     run_idempotent(
         session,
         principal,
-        "recurring.delete",
+        "expense_plan.delete" if plan else "recurring.delete",
         key,
         {"id": str(rule_id), "if_match": if_match},
         execute,
@@ -525,6 +563,8 @@ def get_rule(session, principal, rule_id):
     response = _rule_response(
         session, principal, scoped_entity(session, RecurringRule, rule_id, principal)
     )
+    if not response.versions:
+        _require_legacy(session, principal, rule_id)
     session.commit()
     return response
 
@@ -532,6 +572,18 @@ def get_rule(session, principal, rule_id):
 def list_rules(session, principal, *, q=None, cursor=None, limit=50):
     cash.lock_cash_household(session, principal)
     query = select(RecurringRule).where(RecurringRule.household_id == principal.household_id)
+    latest_mode = (
+        select(RecurringRuleVersion.tracking_mode)
+        .where(
+            RecurringRuleVersion.household_id == principal.household_id,
+            RecurringRuleVersion.rule_id == RecurringRule.id,
+            RecurringRuleVersion.revoked_at.is_(None),
+        )
+        .order_by(RecurringRuleVersion.effective_from.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    query = query.where(latest_mode == "scheduled")
     if q is not None:
         matching = search_names(
             select(RecurringRuleVersion.rule_id).where(
@@ -659,6 +711,8 @@ def _generate_rows(session, principal, start, end, rules):
     for rule in rules:
         desired = {}
         for version in _versions(session, principal, rule.id):
+            if version.tracking_mode != "scheduled":
+                continue
             lower = max(start, version.effective_from)
             upper = (
                 min(end, version.effective_until - timedelta(days=1))

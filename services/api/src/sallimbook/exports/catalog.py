@@ -500,6 +500,11 @@ PUBLIC_COLUMNS = {
         "decision_note",
     ),
     "recurring_rule_versions": (
+        "tracking_mode",
+        "plan_kind",
+        "budget_treatment",
+        "subject_member_id",
+        "annual_month",
         "id",
         "created_at",
         "household_id",
