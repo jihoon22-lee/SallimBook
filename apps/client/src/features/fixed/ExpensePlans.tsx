@@ -261,7 +261,7 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
   );
 }
 function PlanEditor({
-  row,
+  row: serverRow,
   onSaved,
   onCancel,
 }: {
@@ -271,6 +271,8 @@ function PlanEditor({
 }) {
   const api = useExpensePlanApi();
   const members = useHouseholdMembers();
+  // Keep the source revision with the draft; a background refresh must not rebase unsaved input.
+  const [row] = useState(serverRow);
   const version = row && (currentPlan(row) ?? row.versions[0] ?? row.history.at(-1));
   const [draft, setDraft] = useState<S["PlanCreate"]>(() => termsOf(version));
   const [paymentKind, setPaymentKind] = useState<"none" | "card" | "account">(
