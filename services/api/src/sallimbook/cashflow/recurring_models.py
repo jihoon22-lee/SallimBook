@@ -114,7 +114,8 @@ class RecurringRuleVersion(ScheduleFields, Base):
             "tracking_mode <> 'scheduled' OR anchor_date IS NOT NULL", name="scheduled_anchor"
         ),
         CheckConstraint(
-            "annual_month IS NULL OR (frequency = 'annual' AND annual_month BETWEEN 1 AND 12)",
+            "annual_month IS NULL OR (frequency = 'annual' AND annual_month BETWEEN 1 AND 12 "
+            "AND (anchor_date IS NULL OR extract(month from anchor_date) = annual_month))",
             name="annual_month",
         ),
         CheckConstraint(

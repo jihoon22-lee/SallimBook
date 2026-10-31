@@ -346,3 +346,26 @@ def test_legacy_scheduled_edit_preserves_new_metadata(env):
     assert v["budget_treatment"] == "external_support" and v["subject_member_id"] == str(
         a.member_id
     )
+
+
+@pytest.mark.parametrize("frequency,anchor", [("annual", "2026-07-15"), ("monthly", "2026-06-15")])
+def test_legacy_edit_rejects_conflict_with_preserved_annual_metadata(env, frequency, anchor):
+    c, a, _ = env
+    r = create(
+        c,
+        a,
+        tracking_mode="scheduled",
+        frequency="annual",
+        annual_month=6,
+        anchor_date="2026-06-15",
+        effective_from="2026-01-01",
+    )
+    body = payload(frequency=frequency, anchor_date=anchor, reason="합성 구 일정 변경")
+    del body["tracking_mode"]
+    response = c.patch(
+        "/api/v1/recurring-rules/" + r["id"], headers=headers(a, version=1), json=body
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "PLAN_CLIENT_REQUIRED"
+    assert get(c, a, r["id"])["version"] == 1
+    assert c.get("/api/v1/expense-plans", headers=a.headers).status_code == 200
