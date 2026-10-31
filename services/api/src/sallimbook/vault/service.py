@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from sallimbook.assets.locking import lock_asset_scope
-from sallimbook.cards.models import Card
+from sallimbook.cards.models import Card, CardStoredDetails
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import Principal, require_version, scoped_entity
 from sallimbook.core.errors import DomainError
@@ -482,6 +482,10 @@ def write_card_secret(session, principal, card_id, payload, if_match, idempotenc
         _unfrozen(context, state, requires_rotated_key=True)
         _current_key(state, payload.key_version)
         require_version(card, if_match)
+        if session.get(CardStoredDetails, (card.household_id, card.id)) is not None:
+            raise DomainError(
+                "CARD_SECRET_PROTECTED", "직접 저장한 카드 정보를 먼저 삭제해 주세요.", 409
+            )
         previous = _envelope(context, state.current_key_version, card.id)
         if (
             previous is not None

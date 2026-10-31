@@ -1,10 +1,17 @@
-"""Household card metadata; secrets belong only to separate encrypted vault envelopes."""
+"""Household card metadata and separately encrypted server-managed card details."""
 
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKeyConstraint,
+    Index,
+    LargeBinary,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sallimbook.core.database import Base, EntityMixin
@@ -72,3 +79,23 @@ class Card(EntityMixin, Base):
     note: Mapped[str | None] = mapped_column(String(500))
     created_by_member_id: Mapped[UUID]
     updated_by_member_id: Mapped[UUID]
+
+
+class CardStoredDetails(Base):
+    __tablename__ = "card_stored_details"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["household_id", "card_id"],
+            ["cards.household_id", "cards.id"],
+            name="fk_card_stored_details_card",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("key_version > 0", name="positive_key_version"),
+        CheckConstraint("octet_length(nonce) = 12", name="nonce_length"),
+        CheckConstraint("octet_length(ciphertext) = 144", name="ciphertext_length"),
+    )
+    household_id: Mapped[UUID] = mapped_column(primary_key=True)
+    card_id: Mapped[UUID] = mapped_column(primary_key=True)
+    key_version: Mapped[int]
+    nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)

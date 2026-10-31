@@ -611,6 +611,34 @@ internal class NativeAuthSession private constructor(context: Context) {
         return NativeAccountNumber(FinancePolicy.readNumber(response.body, accountId))
     }
 
+    /** Native screen only; no card data is ever placed in AuthOutcome. */
+    fun storedCard(action: String, cardId: String, version: Long?, details: NativeStoredCard?, gate: ForegroundRequest,
+        callback: (AuthOutcome, NativeStoredCard?) -> Unit) {
+        executor.execute {
+            var revealed: NativeStoredCard? = null
+            val outcome = try {
+                authorize(gate); requireAvailable(); gate.check()
+                val response = NativeStoredCardHttp(origin ?: throw AuthFailure(AuthCode.AUTH_UNAVAILABLE))
+                    .send(action, cardId, version, details, access(gate), gate)
+                if (response.status != if (action == "delete") 204 else 200) {
+                    if (response.status == 422) throw AuthFailure(AuthCode.INVALID_REQUEST)
+                    accountNumberFailure(response)
+                }
+                if (action == "view") revealed = NativeStoredCardPolicy.reveal(response.body, cardId)
+                if (action == "edit") {
+                    val request = FinancePolicy.prepare(FinanceOperation.GET_CARD, mapOf("cardId" to cardId))
+                    val safe = FinancePolicy.response(FinanceOperation.GET_CARD, request, 200, response.body) as? Map<*, *>
+                    if (safe?.get("has_stored_details") != true) throw AuthFailure(AuthCode.ACCESS_DENIED)
+                }
+                gate.check()
+                AuthOutcome.success(mapOf("status" to "completed"))
+            } catch (failure: AuthFailure) { revealed?.discard(); revealed = null; AuthOutcome.failure(failure.code) }
+            catch (_: Exception) { revealed?.discard(); revealed = null; AuthOutcome.failure(AuthCode.AUTH_UNAVAILABLE) }
+            finally { details?.discard() }
+            try { callback(outcome, revealed) } catch (_: Exception) { revealed?.discard() }
+        }
+    }
+
     fun editAccountNumber(
         accountId: String, ifMatch: String, number: CharArray?, gate: ForegroundRequest, callback: (AuthOutcome) -> Unit,
     ) {

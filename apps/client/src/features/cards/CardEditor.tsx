@@ -47,7 +47,9 @@ export function CardEditor({ initial }: { initial?: Card }) {
     event.preventDefault();
     if (flight.current || conflict || !closure.ready) return;
     const input = cardInput(
-      base?.has_secret ? { ...draft, lastFour: base.last_four ?? "" } : draft,
+      base?.has_secret || base?.has_stored_details
+        ? { ...draft, lastFour: base.last_four ?? "" }
+        : draft,
     );
     if (!input) {
       setValidation(
@@ -213,13 +215,17 @@ export function CardEditor({ initial }: { initial?: Card }) {
                   pattern="[0-9]{4}"
                   maxLength={4}
                   autoComplete="off"
-                  disabled={base?.has_secret}
-                  aria-describedby={base?.has_secret ? "card-last-four-vault" : undefined}
+                  disabled={base?.has_secret || base?.has_stored_details}
+                  aria-describedby={
+                    base?.has_secret || base?.has_stored_details
+                      ? "card-last-four-vault"
+                      : undefined
+                  }
                   value={draft.lastFour}
                   onChange={(event) => change("lastFour", event.target.value)}
                 />
               </label>
-              {base?.has_secret && (
+              {(base?.has_secret || base?.has_stored_details) && (
                 <p id="card-last-four-vault">
                   보관함에 카드 비밀이 있어 마지막 네 자리는 여기서 수정할 수 없어요.{" "}
                   <Link to={`/cards/${base.id}`}>카드 보관함에서 번호 수정</Link>을 이용해 주세요.
@@ -369,7 +375,9 @@ export function CardEditor({ initial }: { initial?: Card }) {
                   onClick={() => {
                     setDraft({
                       ...preserveCardChanges(cardDraft(base), draft, cardDraft(latest)),
-                      ...(latest.has_secret ? { lastFour: latest.last_four ?? "" } : {}),
+                      ...(latest.has_secret || latest.has_stored_details
+                        ? { lastFour: latest.last_four ?? "" }
+                        : {}),
                     });
                     setBase(latest);
                     setLatest(null);

@@ -19,6 +19,13 @@ class CardMetadataPolicyTest {
         catch (failure: AuthFailure) { assertEquals(code, failure.code); assertNull(failure.message) }
     }
 
+    @Test fun storedDetailsMetadataIsProjectedButCannotClaimMissingLastFour() {
+        val request = FinancePolicy.prepare(FinanceOperation.GET_CARD, mapOf("cardId" to id))
+        val row = FinancePolicy.response(FinanceOperation.GET_CARD, request, 200, card() + ("has_stored_details" to true)) as Map<*, *>
+        assertEquals(true, row["has_stored_details"])
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(FinanceOperation.GET_CARD, request, 200,
+            card() + mapOf("has_stored_details" to true, "last_four" to null, "masked_number" to null)) }
+    }
     @Test fun secretPresenceIsTypedMetadataWithoutAnEnvelope() {
         val get = request(FinanceOperation.GET_CARD, mapOf("cardId" to id))
         assertNotNull(FinancePolicy.response(FinanceOperation.GET_CARD, get, 200, card() + mapOf("has_secret" to true)))
