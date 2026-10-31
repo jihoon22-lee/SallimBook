@@ -234,6 +234,7 @@ export async function mockNativeHomecare(page: Page, state: State) {
     delayMethod: "",
     delayMs: 0,
     delayAllMs: 0,
+    metadataGate: null as Promise<void> | null,
     maxPending: Infinity,
     pending: 0,
     peakPending: 0,
@@ -295,6 +296,11 @@ export async function mockNativeHomecare(page: Page, state: State) {
     control.pending++;
     control.peakPending = Math.max(control.peakPending, control.pending);
     try {
+      if (
+        control.metadataGate &&
+        !["getSession", "request", "listHouseholdPeople"].includes(method)
+      )
+        await control.metadataGate;
       if (control.delayAllMs)
         await new Promise((resolve) => setTimeout(resolve, control.delayAllMs));
       return await respond(method, args);

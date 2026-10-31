@@ -246,12 +246,16 @@ test("locking the app discards queued dashboard reads before another native call
   const { mockNativeHomecare } = await import("./support/homecare-native");
   const native = await mockNativeHomecare(page, await mockHomecare(page));
   native.control.maxPending = 8;
-  native.control.delayAllMs = 250;
+  let release!: () => void;
+  native.control.metadataGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   await page.goto("/");
   await expect.poll(() => native.control.pending).toBe(4);
   const started = native.control.started;
   await native.lock();
   await expect(page.getByRole("status").filter({ hasText: "앱이 잠겨 있어요" })).toBeVisible();
+  release();
   await expect.poll(() => native.control.pending).toBe(0);
   expect(native.control.started).toBe(started);
   expect(native.control.rejected).toBe(0);
