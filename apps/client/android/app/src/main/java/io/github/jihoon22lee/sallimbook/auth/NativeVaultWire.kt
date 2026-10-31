@@ -71,7 +71,7 @@ internal object NativeVaultWire {
     }
     fun card(value: Any?, response: Boolean): VaultRecord {
         val row = record(value, cardFields + if (response) wrappingResource + setOf("card_id", "revision", "card_version") else emptySet())
-        base(row); one(row["payload_schema_version"]); opaque(row["ciphertext"], 43)
+        base(row); val schema=version(row["payload_schema_version"]); if(schema !in 1L..2L) invalid(); opaque(row["ciphertext"], if(schema==1L) 43 else 48)
         if ((row["last_four"] as? String)?.matches(Regex("[0-9]{4}")) != true) invalid()
         if (response) { id(row["id"]); id(row["household_id"]); id(row["card_id"])
             version(row["version"]); version(row["revision"]); version(row["card_version"]) }

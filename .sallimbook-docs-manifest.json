@@ -30,8 +30,8 @@
       "git_sha1": "d7d3d15f34946c5f61cb5a643d5f341798cbeb75"
     },
     "AGENTS.md": {
-      "sha256": "c79dddb1d08201b1469dcfcd22e4da4f1ba2925701e8bb95a1bf1cad925b15ed",
-      "git_sha1": "689b19f2d5ea2772f0757aeb03887a9b799c9e8d"
+      "sha256": "7a2e5b53e29a42769bdb8460e6127ed984a249401e039cb94648e509c9874b31",
+      "git_sha1": "f2cc974ed8188c2571d957483cf72111c4a11695"
     },
     "CHANGELOG.md": {
       "sha256": "a699c9a27cc15268a8d9beb6a6b2335ff5aaa8258995e0edc136c06eaf742c03",
@@ -42,44 +42,44 @@
       "git_sha1": "e9a38f5ee6fed120d1a0d0ae69eb9e6084fcc510"
     },
     "README.md": {
-      "sha256": "d8b7fb6e4bc74ae41310150395f782b12414991dc879377e51a85c6aca95d324",
-      "git_sha1": "cdc8591e342fcf890159a204579c1853e531b27a"
+      "sha256": "a577284e2168c869102fc9ae109c851b3392c2cd82647074ebfaf1222e20f04a",
+      "git_sha1": "e06d024c2d615b023c094916caf73cd05962c39f"
     },
     "SECURITY.md": {
       "sha256": "153a26fb2f4c755ba30b745b15afbc267a45c996cded4d17416b8d5becd39175",
       "git_sha1": "022a000a8757c9e2e3303849ef0a68bd233fba4d"
     },
     "docs/product-requirements.md": {
-      "sha256": "44be90a74a845c34596e1c5d76bd209f4dda2996c1ba1556e7cd25a4593b2f46",
-      "git_sha1": "be6e99e028fea0943191a4e53289d501b4e2a882"
+      "sha256": "b2a01577cb144c6ecbaf3a1aaea4e3c62f7d39e3a1d9a81d6e71f8af7e46f1af",
+      "git_sha1": "24c153e66b4f847275e06ad929500c8edb7c52b7"
     },
     "docs/architecture.md": {
-      "sha256": "2f5325e56121b5e19f044d76df7e77f1e95add0db269c5059c6b7a0765dd1b74",
-      "git_sha1": "f7e85825fb1dbc259cfbb7a2b9865cd06c1435fd"
+      "sha256": "2ff54d8739c60d43169715d4c097357cf6baa46c6bf0335fd5cd9523dfe22a06",
+      "git_sha1": "ed65b068f975aeceb291ba2b6ed2e6b9af7f5e6f"
     },
     "docs/domain-and-calculation-rules.md": {
       "sha256": "9c7f4250762a9b5b4d2918520a7e170faf1dd10e51fcea94fc7014faf894af2f",
       "git_sha1": "9fdf109a6339876f6dc5db320c49b57adc393669"
     },
     "docs/data-model.md": {
-      "sha256": "d2058291ed9fb53963dc3a7f24d0be2109f9cddd524770e0d130d96c79c10b1f",
-      "git_sha1": "a5615891a49b648616fd7feef7faacae72fbf40e"
+      "sha256": "6b4180d166ac9ca8fd362fec630af7ac3e2801c58bf0884ae7ad1add65ac9e04",
+      "git_sha1": "8c672582b7beacba1503c19efe65372c32956149"
     },
     "docs/api-contract.md": {
-      "sha256": "406da0f6aa21c4ebb7653ea230d4f33d257b6306905bc788e4d3aa831a5da345",
-      "git_sha1": "4365601c51b977e43bff23b4f09eca53f719df44"
+      "sha256": "2b7ab95de6e5e745f2716fb4a758d4d9b95a59aded1e79b6460ec32d2df3a781",
+      "git_sha1": "dd29c269b5f00ab9862876ced1de23f295657faf"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
       "git_sha1": "e6616c15a275ad01ef2eb9181b3ac400c6fccfbc"
     },
     "docs/security-authentication.md": {
-      "sha256": "b689c99c5f971285a55c35ec3e52789d5d497f9317315c234f7b7402603c572c",
-      "git_sha1": "24b2eec7ee73e0f35cf1383343139d0b597dfabd"
+      "sha256": "ffc5ed8ed5402cdbb055ff92a9354b3f25824ca02ab2551ea68d98e5d585d443",
+      "git_sha1": "915baf614bacd480076c8604549f8d651d46b3d1"
     },
     "docs/vault-key-lifecycle.md": {
-      "sha256": "cb0e2739d497744a4d2825d9e3f24899b80b129dad985cff94be6cd39a66a090",
-      "git_sha1": "7e9827ebf39404d2d5cb7db850a7bfec0cf53d64"
+      "sha256": "48175e526c270ce7453596a968796420d34857e5e592f527ae725a36dedbb2ca",
+      "git_sha1": "bb5983bc0c7f889fdde74a7cc4efd84430d6c595"
     },
     "docs/insurance-workflows.md": {
       "sha256": "25d86a6c14562ef9c0dde133365fdc12f128d4e16c50a6bb17d5bc994c5c4aa6",
@@ -90,12 +90,12 @@
       "git_sha1": "4b9d6f91a74d1efef01967749a02f08be25b0951"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "f2af1eb63bdda5d2ca70ea092d386d81b1df4b0d15d46fe6dc574f16ed88a55c",
-      "git_sha1": "c418eda7a671877fdb4315fd052b3f6df928d37c"
+      "sha256": "9092343b803ad71a07f631bfe7ed39d1fda04b775574329210749e78960bffde",
+      "git_sha1": "9868d14aab85f4633d0b3086d656597f50468291"
     },
     "docs/deployment-backup-operations.md": {
-      "sha256": "01a5600bcd03a896c2ec5963b9c49078bf5a2886921ac8f94fbe80d94a0c01cf",
-      "git_sha1": "5a64d1fe3833546ecb2e17843c5a2ecc8ebaf5e0"
+      "sha256": "7f9da2bb360ed86824f3c4cca3b6afd0a54bf7fb5c05f26ca37ad4157e9ab0ae",
+      "git_sha1": "6023e46a36097ff65712996a39ad3d8e130d2891"
     },
     "docs/roadmap-and-milestones.md": {
       "sha256": "95dd42215c69f32da823697ea9779b74fc22bb7ac86001c227082c5870b7b4db",
@@ -142,8 +142,8 @@
       "git_sha1": "ed5565e1d168a291b0cb84c0348e2eaccd4c631c"
     },
     "docs/adr/vault-and-local-cvc.md": {
-      "sha256": "61254d411ee40e28fbee456398b7bfd7ebb89e06306d2baf234595ffedfaecb5",
-      "git_sha1": "ed245e26d8825961b53b0b5b244d27e56a57f141"
+      "sha256": "dd1e189527bb0850c9b6ee82d610519b4aaca9d8efe8713fd5f01f0a24195bbd",
+      "git_sha1": "0d9f12f53b22bf60e78dc971d6b84870fadbcc3a"
     },
     "docs/adr/authoritative-server-online-first.md": {
       "sha256": "e177e2ba9dbf08398ae93d69807e7c88aaa883da2f261ba2b8912d6a0658a939",
@@ -274,12 +274,12 @@
       "git_sha1": "8884c470fba6e769560eb9c75e57cef33cb1405e"
     },
     "docs/operations-runbook.md": {
-      "sha256": "d8b574db4a15cdd90c417a5d462b6f82cbe07e83f1c5a0d45a7c1f26d8a62a59",
-      "git_sha1": "b19172222bf810a5e66c70bf5ce5bfee68ed280c"
+      "sha256": "68d93283c1e958635bfcdbda25517df5f8ec636b03c44482a7e02f05f52bc514",
+      "git_sha1": "a1bf3d84dd2dd010ade14b2332ac51d1756f7261"
     },
     "docs/adr/vault-format-v1.md": {
-      "sha256": "b5f9d8a70e1ad82b1590beacfb11da11480c19a2cdc4e95ab5c6e1e4cfef323f",
-      "git_sha1": "fabbab67a6dc7f221de5e5e269b43d8550f7ec7a"
+      "sha256": "b3fc4a6057210832b367f5bdb41bdfe8f4400ee5edfae4923320bbe0ccfa251a",
+      "git_sha1": "90bcdfd9d06c9a88bd1a5b1c3d07a929e13cee8b"
     },
     "docs/testing/native-vault-crypto.md": {
       "sha256": "0fcd76d8aa1c97b3e9c4748efd0a74e7a9cba6a08f87945d0f22da3050fb99f1",
@@ -314,8 +314,8 @@
       "git_sha1": "96aeab1a04c03ec1ea8d206d74173320f028e2f7"
     },
     "scripts/generate_vault_vectors.py": {
-      "sha256": "1c562545fc2d1dc8ec3e863ccfa632395b8d8fdfd8527a1092a1f948241a0913",
-      "git_sha1": "cee6563e6b1f449757cba5e178b742b8c4039964"
+      "sha256": "986a17febbd00cbc83a91c600443c9f73b2c5b72f8f65662a5b9dd7c09f67bd7",
+      "git_sha1": "eead7ab82979f4c8c8dbe64f0005142d3c1d1276"
     },
     "docs/testing/vault-web.md": {
       "sha256": "87d6339bf610d4e00bcc9384e634283d3d97a949ecdbf2b96a5583138ed227c9",
@@ -382,8 +382,8 @@
       "git_sha1": "ca5a0f50d029e9a600739c3703e78f64cc225c4d"
     },
     "docs/testing/android-ci.md": {
-      "sha256": "e84ca638b3af31df2cf3a0d3fa15e2a52e391878f0dedd3595f19e0f1cddc4f6",
-      "git_sha1": "07ec6996c104dc7e22001767073a4a9c2f4792b7"
+      "sha256": "c3effb9164184e6307d5ef28a9b79b996209051d0d043d8a8c5d8ad7e1ff333b",
+      "git_sha1": "dd48db8a81bc3b9cf3b2e7c18d9130e8a8d80005"
     },
     "docs/testing/android-cloud-results.md": {
       "sha256": "738ccc2a9de11a8e12ba124392aa7211329af489b3501448a4bed581e0fdb602",
@@ -438,12 +438,28 @@
       "git_sha1": "c734b957740b5c75095db80e9a8d7fd233aeda8d"
     },
     "docs/testing/local-cvc-release.md": {
-      "sha256": "a3daeaefd577c5b234e3d18bc148082adca0356564c1a79bf8d418e7f058dac9",
-      "git_sha1": "9975154541ca1c79a593b9037c70b4f60d1dd064"
+      "sha256": "0e95d5f7b4963427730d62ee288b742e65d441b87907f7f8d8ef9b7c09c31463",
+      "git_sha1": "cb38dba2ad357977be80954569098cdb861ac20d"
     },
     "docs/testing/current-upgrade-rehearsal.md": {
       "sha256": "605129604595b7591e9530a6c165d492fbe40a36e26f49442ea549afa80fab33",
       "git_sha1": "1115e1a985a2511ad47ac5afb40c90fb667bdabb"
+    },
+    "docs/adr/web-cvc-vault-v2.md": {
+      "sha256": "58c68b3f4b22a7c596c633036ebc02b03b2b163eec9efe4d6fa6ec616d235ef1",
+      "git_sha1": "d4848bbb5f81f1f32fce822418fbd3c18165ee07"
+    },
+    "docs/superpowers/plans/2026-10-31-financial-first-import.md": {
+      "sha256": "2aed6602103901ceaf84712d330e49048df20811aa0ae85357a600d16f8ea950",
+      "git_sha1": "c84a66db064cbe464aa8883caebccaf02940e24d"
+    },
+    "docs/superpowers/specs/2026-10-31-financial-first-import.md": {
+      "sha256": "276d48a9bcec2509859c00d2e0a9e74ff87962e76d21d6efce7e869aedfa3201",
+      "git_sha1": "659ce8e128f5a3b47e2f355817718a9c021f6356"
+    },
+    "docs/testing/financial-first-import.md": {
+      "sha256": "617c0c7aebc1a6d7ad000844ea0d197c2b713078c2f68ac2ab02abfe2edebf33",
+      "git_sha1": "19e48105d71273c9b2c9d925c244e51dbdb1e2aa"
     }
   }
 }

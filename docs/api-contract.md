@@ -238,6 +238,12 @@ missing_value/unconfirmed/verified 금액 상태를 구분한다. `observed_amou
 
 ### 10) 카드 일반정보와 결제수단 (SB-017)
 
+Issue #180: 카드 생성·수정·응답에 `annual_fee_krw`(0 이상 정수 원 단위 십진 문자열 또는 null)와
+`is_family_card`(true/false/null)를 추가한다. 생략은 생성 시 미확인, PATCH 시 기존 값 유지이고
+명시적 null은 미확인으로 되돌린다. 0원·false를 null과 구분하며 메모를 자동 해석하거나 지우지 않는다.
+등록된 연회비는 상품 관리정보이며 실제 납부나 월 잔액에 자동 반영하지 않는다.
+
+
 `GET/POST /cards`, `GET/PATCH/DELETE /cards/{id}`, `POST /cards/{id}/archive`를 제공한다.
 일반 요청·응답에는 소유자·카드사·상품명·별칭·신용/체크·마지막 4자리·결제일·결제계좌·사용 시작/종료일만 있다.
 PAN·유효기간·CVC·암호문 필드는 일반 입력에서 거부한다. 카드 전체 정보 보관함과 Android 로컬 CVC는 별도 보안 경로에서 구현한다.
@@ -342,7 +348,7 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 납부 확인 | POST /obligations/{id}/settlements, /skip | actual 금액·수단·분할 |
 | 카드 | GET/POST /cards, GET/PATCH/DELETE /cards/{id} | metadata only, 영향 확인 |
 | 보관함 | GET /vault/status, GET /vault/wrappings/me | 암호문과 키 파라미터만 |
-| 보관함 | GET/PUT /cards/{id}/secret-envelope | PAN/expiry 암호문만, CVC schema 없음 |
+| 보관함 | GET/PUT /cards/{id}/secret-envelope | PAN/expiry 및 선택적 CVC 암호문, payload schema 1/2 |
 | 키 관리 | POST /vault/initialize, /vault/recover, /vault/rotations(+ `/{id}/prepare`, `/finalize`, `/abort`); GET /vault/recovery-wrap; GET/POST /vault/shares, POST /vault/shares/{offer_id}/accept·cancel; POST /vault/members/{member_id}/revoke | 계정 step-up, 원자적 버전 전환 |
 | 계약 | GET/POST /insurance/policies, GET/PATCH /insurance/policies/{id} | 보험료는 연결 규칙 참조 |
 | 사건 | GET/POST /insurance/cases, GET/PATCH /insurance/cases/{id} | 치료·정산 상태 분리 |
@@ -359,7 +365,7 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 내보내기 | POST /exports | 재인증, 기본 카드비밀·CVC 제외 |
 
 보험료 금액 편집은 별도 독립 API가 아니라 recurring-rules의 적용일 변경 서비스를 재사용한다.
-CVC의 업로드/동기화/다운로드 API는 **존재하지 않는다**.
+독립 CVC 평문 API는 **존재하지 않는다**. 선택적 공유 CVC는 secret-envelope v2에만 암호화되어 포함된다. [포맷 ADR](adr/web-cvc-vault-v2.md).
 
 ## 3. 홈 응답 설계
 
@@ -403,7 +409,7 @@ CVC의 업로드/동기화/다운로드 API는 **존재하지 않는다**.
 ## 5. 비밀 API와 플랫폼 어댑터
 
 일반 카드 응답: card id, 소유자, 카드명, 마지막 4자리, has_secret.
-전체 카드번호·유효기간은 일반 응답에 없다. secret-envelope의 ciphertext에는 CVC가 포함되지 않는다.
+전체 카드번호·유효기간은 일반 응답에 없다. secret-envelope의 v2 ciphertext에는 선택적 CVC가 포함될 수 있다. v1은 43바이트, v2는 48바이트이며 schema와 길이 조합을 검증한다. v2에서 v1으로 덮어쓰기는 409 VAULT_CLIENT_UPGRADE_REQUIRED, 회전 schema 불일치도 거부한다.
 Android 네이티브 모듈이 별도로 인증된 경로로 암호문을 가져와 로컬 인증 후 표시한다.
 PC 웹에서는 별도 vault adapter가 암호문을 복호화하며 일반 Query cache나 URL로 전달하지 않는다.
 
@@ -758,3 +764,27 @@ Android는 생성 OpenAPI 타입에서 파생한 명명된 bridge와 고정 경�
 `POST /api/v1/payment-switch/rules/{rule_id}`는 같은 입력에 `preview_digest`, `reason`을 추가하고 `If-Match`와 `Idempotency-Key`를 요구한다. 결과는 `MutationReference`와 ETag다. 가계 잠금 안에서 전체 해당 규칙 상태와 원본·목표 버전을 재검증하여 미리보기 이후 납부/예외/조건/수단 변경은 409로 거부한다. 행별 저장이므로 한 규칙의 성공이 다른 규칙의 digest를 바꾸지 않는다. 권한은 멱등 결과 조회 전에도 검증한다.
 
 현재/미래의 금액·주기·기간·메모·부채 연결은 보존하며 결제수단만 바꾼다. 과거/납부/수동 예외 회차는 기존 조건 snapshot을 유지한다. 첫 시작일 당일/이전은 미리보기의 `INITIAL_PERIOD_START`로 제한하고 적용은 409 `RULE_PERIOD_OVERLAP`다. 사용 종료한 목표는 422, 지난 적용일은 409 `PAST_RULE_CHANGE`, 가계 밖 ID/커서는 404다. 실제 금융기관 변경이나 카드 결제계좌 변경은 수행하지 않는다. [동작·검증](testing/payment-method-switch.md).
+
+### 예상 월 수입과 성과연도 상여 (#182)
+
+`/api/v1/income-planning/expected` GET/POST, `/{record_id}` PUT은 현재 예상 기준을
+관리하며 현금 기록을 생성하지 않는다. member_id·label은 가계 내 고유하다.
+`amount_krw=null`과 `"0"`을 구분한다. active=false는 기준 종료이며 삭제하지 않는다.
+
+`/api/v1/income-planning/bonuses` GET/POST, `/{record_id}` PUT은 구성원·성과연도·
+award_kind(tai_h1/tai_h2/opi)당 한 항목이다. payment_month와 performance_year를 분리하며
+지급일은 만들지 않는다. gross_krw, net_cash_krw, stock_grant_value_krw는 nullable 원 문자열이다.
+주식은 수령 당시 평가액이며 현재 평가액·현금·자산 스냅샷에 합산하지 않는다.
+payout_rate_percent는 최대 소수 두 자리 십진 문자열(100% 초과 허용), null은 미확인이다.
+
+received=true는 지급월과 세후 현금을 확인하고 현금 연결에 동의한 상태다. active이며
+양수 현금인 경우만 해당 지급월의 month 정밀도 bonus cash를 같은 트랜잭션에서 생성한다.
+동일 구성원·지급월 활성 상여가 이미 있으면 중복 합산을 막기 위해409를 반환한다.
+0원은 보상 항목에만 남긴다. 정정으로 현금 조건이 바뀌면 기존 cash를 void하고 새 cash를
+만든다. 반환이 있으면 먼저 원본을 확인하도록409로 차단한다. 연결 cash의 일반 정정·무효·
+정밀도 전환은 차단하고 상세 상여에서 수행한다. 계좌·자산 스냅샷을 가감하지 않는다.
+
+모든 생성/정정은 Idempotency-Key, 정정은 If-Match와 reason이 필수다. 변경마다 검증된
+응답 snapshot을 income_planning_revisions에 남겨 최초 응답을 재현한다. 목록은 가계 범위
+UUID cursor, limit1~200이다. 일반 감사에는 필드명만 남긴다. 내보내기의 revision snapshot은
+JSON 문자열로 보존한다. 웹과 Android는 같은 생성 API 계약을 사용한다.

@@ -483,6 +483,15 @@ def write_card_secret(session, principal, card_id, payload, if_match, idempotenc
         _current_key(state, payload.key_version)
         require_version(card, if_match)
         previous = _envelope(context, state.current_key_version, card.id)
+        if (
+            previous is not None
+            and payload.payload_schema_version < previous.payload_schema_version
+        ):
+            raise DomainError(
+                "VAULT_CLIENT_UPGRADE_REQUIRED",
+                "새 보관함 형식을 지원하는 앱으로 업데이트해 주세요.",
+                409,
+            )
         if previous is not None:
             previous.is_current = False
             touch(previous, principal)
@@ -1182,7 +1191,11 @@ def stage_card(
                 "VAULT_ROTATION_SNAPSHOT_CONFLICT", "원본 카드 버전을 확인해 주세요.", 409
             )
         source = scoped_entity(session, CardSecretEnvelope, target.source_envelope_id, principal)
-        if payload.envelope.last_four != source.last_four or card.last_four != source.last_four:
+        if (
+            payload.envelope.payload_schema_version != source.payload_schema_version
+            or payload.envelope.last_four != source.last_four
+            or card.last_four != source.last_four
+        ):
             raise DomainError(
                 "VAULT_ROTATION_SNAPSHOT_CONFLICT", "카드 표시 정보가 변경됐습니다.", 409
             )

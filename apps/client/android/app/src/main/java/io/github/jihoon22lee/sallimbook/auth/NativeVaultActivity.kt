@@ -21,6 +21,8 @@ import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -316,21 +318,44 @@ class NativeVaultActivity : AppCompatActivity() {
         button("기기 등록 또는 재등록") { navigate("register-device") }
     }
     private fun showCard(secret:VaultCardSecret) {
-        try { secretOutput.text=String(secret.pan)+"\n%02d/%04d".format(secret.expiryMonth,secret.expiryYear); showing=true; completed=true
+        try { secretOutput.text=String(secret.pan)+"\n%02d/%04d".format(secret.expiryMonth,secret.expiryYear)+(if(secret.schemaVersion==2) "\n공유 CVC: "+(if(secret.cvc.isEmpty()) "미입력" else String(secret.cvc)) else ""); showing=true; completed=true
             status.text="최대 30초 표시합니다. 화면 이탈·잠금 시 즉시 가립니다." }
         finally { secret.discard() }
     }
     private fun editForm() {
         passwordHint(); val password=input("보관함 암호"); val pan=input("전체 카드번호 · 숫자만",true,19)
         val year=input("유효기간 연도 · 네 자리",true,4); val month=input("유효기간 월",true,2)
-        button("카드번호·유효기간 저장") {
-            val pw=take(password); val p=take(pan); val y=take(year); val m=take(month)
+        label("공유 CVC는 보관함 공유 구성원과 복구 수단 소유자가 볼 수 있고 암호문이 서버·백업에 포함됩니다. 삭제해도 이전 백업에 남을 수 있습니다. 기기 로컬 CVC는 별개이며 카드 비밀 변경 시 무효화될 수 있습니다.",14f)
+        val modes=RadioGroup(this).apply { isSaveEnabled=false; column.addView(this) }
+        val choices=listOf("기존 공유 CVC 유지","공유 CVC 입력·교체","공유 CVC 삭제").map { text ->
+            RadioButton(this).apply { id=View.generateViewId(); this.text=text; isSaveEnabled=false; filterTouchesWhenObscured=true; modes.addView(this) }
+        }
+        modes.check(choices[0].id)
+        val code=input("공유 CVC · 3~4자리",true,4).apply { isEnabled=false }
+        val consent=checkbox("공유 CVC의 접근·백업·삭제 범위를 확인했어요")
+        modes.setOnCheckedChangeListener { _, id -> code.text?.clear(); code.isEnabled=id==choices[1].id; consent.isChecked=false }
+        button("카드번호·유효기간·공유 CVC 저장") {
+            val mode=choices.indexOfFirst { it.id==modes.checkedRadioButtonId }
+            if(mode !in 0..2 || mode!=0 && !consent.isChecked) { status.text="공유 CVC 변경 범위를 확인해 주세요."; return@button }
+            val pw=take(password); val p=take(pan); val y=take(year); val m=take(month); val cv=take(code)
             val yearValue=String(y).toIntOrNull(); val monthValue=String(m).toIntOrNull(); y.fill('\u0000'); m.fill('\u0000')
-            if(yearValue==null || monthValue==null) { pw.fill('\u0000'); p.fill('\u0000'); failure("INVALID_FORMAT"); return@button }
-            runNative(discard=NativeVaultPrepared::discard,supplied=listOf(pw,p),task={ c ->
-                val (material,_)=unlock(c,pw,target); val secret=VaultCardSecret(p,yearValue,monthValue)
-                try { NativeVaultActions.writeCard(material,secret) } catch(failure:Exception) { material.discard(); throw failure }
-                finally { secret.discard() }
+            if(yearValue==null || monthValue==null || mode==1 && (cv.size !in 3..4 || cv.any { it !in '0'..'9' })) {
+                listOf(pw,p,cv).forEach { it.fill('\u0000') }; failure("INVALID_FORMAT"); return@button
+            }
+            runNative(discard=NativeVaultPrepared::discard,supplied=listOf(pw,p,cv),task={ c ->
+                val (material,_)=unlock(c,pw,target)
+                var old:VaultCardSecret?=null; var secret:VaultCardSecret?=null
+                try {
+                    val savedCard=material.snapshot.card ?: throw NativeVaultFailure("INVALID_REQUEST")
+                    if(mode==0 && savedCard["has_secret"]==true) {
+                        val envelope=c.cardEnvelope(material.snapshot,target!!)
+                        if(NativeVaultWire.version(envelope["card_version"])!=NativeVaultWire.version(savedCard["version"])) throw NativeVaultFailure("VERSION_CONFLICT")
+                        old=NativeVaultActions.openCard(material.key,envelope,material.snapshot.householdId,material.snapshot.keyVersion)
+                    }
+                    secret=VaultCardSecret(p,yearValue,monthValue,if(mode==0) old?.cvc?.copyOf() ?: charArrayOf() else if(mode==1) cv.copyOf() else charArrayOf(),2)
+                    NativeVaultActions.writeCard(material,secret)
+                } catch(failure:Exception) { material.discard(); throw failure }
+                finally { old?.discard(); secret?.discard() }
             },done=::prepared)
         }
     }
@@ -671,7 +696,7 @@ class NativeVaultActivity : AppCompatActivity() {
                         var newSecret:VaultCardSecret?=null
                         try {
                             newSecret=NativeVaultActions.openCard(newKey,staged,fresh.householdId,NativeVaultWire.version(manifest["key_version"]))
-                            if(!oldSecret.pan.contentEquals(newSecret.pan) || oldSecret.expiryMonth!=newSecret.expiryMonth || oldSecret.expiryYear!=newSecret.expiryYear) throw NativeVaultFailure("VAULT_ROTATION_SNAPSHOT_CONFLICT")
+                            if(!oldSecret.pan.contentEquals(newSecret.pan) || oldSecret.expiryMonth!=newSecret.expiryMonth || oldSecret.expiryYear!=newSecret.expiryYear || oldSecret.schemaVersion!=newSecret.schemaVersion || !oldSecret.cvc.contentEquals(newSecret.cvc)) throw NativeVaultFailure("VAULT_ROTATION_SNAPSHOT_CONFLICT")
                         } finally { oldSecret.discard(); newSecret?.discard() }
                     } else {
                         failedCommand=NativeVaultActions.stageCard(material,manifest,source)

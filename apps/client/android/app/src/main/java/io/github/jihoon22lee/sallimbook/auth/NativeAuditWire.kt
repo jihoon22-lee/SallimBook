@@ -143,6 +143,7 @@ internal object NativeAuditWire {
 
     // Exact reviewed server metadata names, not values. Source: core/audit.py and audit/service.py.
     val entityTypes=setOf(
+        "expected_income", "bonus_award",
         "household_person",
         "appliance","appliance_consumable","asset","asset_month","card","card_secret_envelope",
         "cash_record","consumable","consumable_replacement","consumable_order","document","document_link","financial_account",
@@ -159,6 +160,7 @@ internal object NativeAuditWire {
         "void_settlement","login","revoke","accept",
     )
     val knownFields=setOf(
+        "annual_fee_krw", "is_family_card", "performance_year", "award_kind", "payment_month", "gross_krw", "net_cash_krw", "stock_grant_value_krw", "payout_rate_percent", "received", "resource_id", "snapshot", "actor_member_id",
         "ordered_on","ordered_by_member_id","received_on","received_by_member_id","cancel_reason",
         "relation",
         "aaguid","aborted_at","access_expires_at","account_id","account_number","account_number_ciphertext",

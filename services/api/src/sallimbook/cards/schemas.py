@@ -7,6 +7,7 @@ from pydantic.json_schema import SkipJsonSchema
 
 from sallimbook.assets.schemas import DateOnly
 from sallimbook.cashflow.payment_link_schemas import CLOSURE_FIELDS, ClosureFields
+from sallimbook.core.types import KrwString
 
 type CardType = Literal["credit", "debit"]
 Name = Annotated[
@@ -30,6 +31,8 @@ class CardCreate(InputModel):
     product_name: Name
     alias: Alias | None = None
     card_type: CardType
+    annual_fee_krw: KrwString | None = None
+    is_family_card: bool | None = Field(default=None, strict=True)
     last_four: LastFour | None = None
     settlement_day: SettlementDay | None = None
     settlement_account_id: UUID | None = None
@@ -54,6 +57,8 @@ class CardPatch(InputModel, ClosureFields):
     product_name: Name | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     alias: Alias | None = None
     card_type: CardType | SkipJsonSchema[None] = Field(default_factory=lambda: None)
+    annual_fee_krw: KrwString | None = None
+    is_family_card: bool | None = Field(default=None, strict=True)
     last_four: LastFour | None = None
     settlement_day: SettlementDay | None = None
     settlement_account_id: UUID | None = None
@@ -86,6 +91,8 @@ class CardResponse(BaseModel):
     product_name: str
     alias: str | None
     card_type: CardType
+    annual_fee_krw: KrwString | None
+    is_family_card: bool | None
     last_four: str | None
     masked_number: str | None
     has_secret: bool

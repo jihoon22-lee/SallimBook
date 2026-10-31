@@ -75,14 +75,16 @@ internal object NativeVaultActions {
     }
     fun openCard(key: ByteArray, envelope: VaultRecord, household: String, version: Long): VaultCardSecret {
         if(envelope["household_id"] != household || number(envelope,"key_version") != version) throw NativeVaultFailure("ACCESS_DENIED")
-        val encrypted=sealed(envelope,"ciphertext",43)
-        val result=try { NativeVaultCrypto.openCard(key,encrypted,household,NativeVaultWire.id(envelope["card_id"]),version) } finally { encrypted.discard() }
+        val schema=NativeVaultWire.version(envelope["payload_schema_version"]).toInt()
+        if(schema !in 1..2) throw NativeVaultFailure("INVALID_FORMAT")
+        val encrypted=sealed(envelope,"ciphertext",if(schema==1) 43 else 48)
+        val result=try { NativeVaultCrypto.openCard(key,encrypted,household,NativeVaultWire.id(envelope["card_id"]),version,schema) } finally { encrypted.discard() }
         if(!result.pan.takeLast(4).toCharArray().contentEquals((envelope["last_four"] as String).toCharArray())) { result.discard(); throw NativeVaultFailure("ACCESS_DENIED") }
         return result
     }
     private fun cardInput(key: ByteArray, secret: VaultCardSecret, household: String, cardId: String, version: Long): VaultRecord {
         val encrypted=crypto.sealCard(key,secret,household,cardId,version)
-        return try { base(version,encrypted)+mapOf("payload_schema_version" to 1,"last_four" to String(secret.pan,secret.pan.size-4,4),"ciphertext" to NativeVaultCrypto.encode(encrypted.ciphertext)) }
+        return try { base(version,encrypted)+mapOf("payload_schema_version" to secret.schemaVersion,"last_four" to String(secret.pan,secret.pan.size-4,4),"ciphertext" to NativeVaultCrypto.encode(encrypted.ciphertext)) }
         finally { encrypted.discard() }
     }
     private fun command(op: VaultOperation, body: VaultRecord?, version: Long? = null, id: String? = null, childId: String? = null) =

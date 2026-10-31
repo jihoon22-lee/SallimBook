@@ -6,6 +6,26 @@ test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
 });
+test("card annual fee and family status preserve zero, unknown and original notes", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  state.cards[0]!.note = "합성 원본 메모";
+  await page.goto(`/cards/${uid(50)}/edit`);
+  await page.getByLabel("연회비 (원, 선택)", { exact: true }).fill("0");
+  await page.getByLabel("가족카드 여부", { exact: true }).selectOption("yes");
+  await page.getByRole("button", { name: "카드 변경 저장", exact: true }).click();
+  await expect(page.getByText("0원", { exact: true })).toBeVisible();
+  await expect(page.getByText("가족카드", { exact: true })).toBeVisible();
+  expect(state.writes.at(-1)!.body).toMatchObject({ annual_fee_krw: "0", is_family_card: true });
+  expect(state.cards[0]!.note).toBe("합성 원본 메모");
+  await page.goto(`/cards/${uid(50)}/edit`);
+  await page.getByLabel("연회비 (원, 선택)", { exact: true }).fill("");
+  await page.getByLabel("가족카드 여부", { exact: true }).selectOption("");
+  await page.getByRole("button", { name: "카드 변경 저장", exact: true }).click();
+  await expect(page.getByText("연회비 미확인", { exact: true })).toBeVisible();
+  expect(state.writes.at(-1)!.body).toMatchObject({ annual_fee_krw: null, is_family_card: null });
+});
 test("card filters retain metadata selection and creation never sends full number expiry or security code", async ({
   page,
 }) => {

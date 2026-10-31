@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
-from sqlalchemy import select, text
+from sqlalchemy import Text, cast, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -112,7 +112,14 @@ def prepare(engine, principal, payload, token, settings, request_id, budget):
                         table = Base.metadata.tables[name]
                         scope = table.c.id if name == "households" else table.c.household_id
                         query = (
-                            select(*(table.c[column] for column in columns))
+                            select(
+                                *(
+                                    cast(table.c[column], Text).label(column)
+                                    if name == "income_planning_revisions" and column == "snapshot"
+                                    else table.c[column]
+                                    for column in columns
+                                )
+                            )
                             .where(scope == principal.household_id)
                             .order_by(*table.primary_key.columns)
                         )

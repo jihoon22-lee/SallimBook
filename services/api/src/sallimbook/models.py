@@ -5,6 +5,7 @@ from sallimbook.assets.models import Asset
 from sallimbook.assets.month_models import AssetMonthRecord, AssetMonthRevision, AssetMonthValue
 from sallimbook.cards.models import Card
 from sallimbook.cashflow.models import CashRecord, CashRecordRevision, IncomeConversion
+from sallimbook.cashflow.planning_models import BonusAward, ExpectedIncome, IncomePlanningRevision
 from sallimbook.cashflow.recurring_models import (
     FixedSettlement,
     ObligationGeneration,
@@ -73,6 +74,9 @@ from sallimbook.vault.models import (
 )
 
 __all__ = [
+    "BonusAward",
+    "ExpectedIncome",
+    "IncomePlanningRevision",
     "CardSecretEnvelope",
     "VaultKeyCheck",
     "VaultMemberWrapping",

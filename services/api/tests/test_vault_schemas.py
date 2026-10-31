@@ -83,6 +83,22 @@ def card_envelope():
     }
 
 
+@pytest.mark.parametrize("schema,size", [(1, 43), (2, 48)])
+def test_card_payload_versions_have_fixed_ciphertext_sizes(schema, size):
+    value = card_envelope() | {"payload_schema_version": schema, "ciphertext": opaque(size)}
+    assert CardEnvelopeInput.model_validate(value).model_dump(mode="json") == value
+
+
+@pytest.mark.parametrize(
+    "schema,size", [(1, 48), (2, 43), (3, 48), (True, 43), (2.0, 48), ("2", 48)]
+)
+def test_card_payload_version_size_mismatch_or_coercion_rejected(schema, size):
+    with pytest.raises(ValidationError):
+        CardEnvelopeInput.model_validate(
+            card_envelope() | {"payload_schema_version": schema, "ciphertext": opaque(size)}
+        )
+
+
 def test_initialization_round_trip_has_only_opaque_envelopes():
     payload = initialization()
     parsed = VaultInitialize.model_validate(payload)

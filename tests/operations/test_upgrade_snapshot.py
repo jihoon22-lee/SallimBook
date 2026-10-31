@@ -5,17 +5,17 @@ from ops.test_upgrade import application_services, same_with_empty_extensions, s
 
 class UpgradeSnapshotTests(unittest.TestCase):
     def test_current_release_compares_all_preexisting_columns(self):
-        query = snapshot_query("0018_install_device")
+        query = snapshot_query("0024_income_planning")
         self.assertIn("(to_jsonb(t))::text", query)
         self.assertNotIn(" - %L", query)
         self.assertIn("',', '', c.relname", query)
 
     def test_older_release_excludes_only_later_columns(self):
         old = snapshot_query("0014_vault")
-        self.assertEqual(old.count(" - %L"), 6)
+        self.assertEqual(old.count(" - %L"), 8)
         self.assertIn("'manual_override'", old)
         middle = snapshot_query("0016_replacement_override")
-        self.assertEqual(middle.count(" - %L"), 2)
+        self.assertEqual(middle.count(" - %L"), 4)
         self.assertNotIn("'manual_override'", middle)
         self.assertNotIn("'cleared_link_version'", middle)
         self.assertIn("'install_key_hash'", middle)
@@ -62,3 +62,17 @@ class UpgradeNewTableTests(unittest.TestCase):
         self.assertFalse(same_with_empty_extensions(
             before, {"consumable_orders": (0, "empty")}, "0021_consumable_orders"
         ))
+
+    def test_only_empty_new_planning_tables_are_exempt(self):
+        before = {"cards": (1, "unchanged")}
+        for name in ("expected_incomes", "bonus_awards", "income_planning_revisions"):
+            after = {**before, name: (0, "empty")}
+            self.assertTrue(same_with_empty_extensions(before, after, "0021_consumable_orders"))
+            self.assertFalse(same_with_empty_extensions(before, after, "0024_income_planning"))
+            self.assertFalse(same_with_empty_extensions(
+                before, {**before, name: (1, "unexpected")}, "0021_consumable_orders"
+            ))
+        query = snapshot_query("0021_consumable_orders")
+        self.assertEqual(query.count(" - %L"), 2)
+        self.assertIn("'annual_fee_krw'", query)
+        self.assertIn("'is_family_card'", query)

@@ -52,6 +52,12 @@ def _one(value: object) -> int:
     return 1
 
 
+def _card_schema(value: object) -> int:
+    if type(value) is not int or value not in (1, 2):
+        raise ValueError("Unsupported card payload schema")
+    return value
+
+
 def _confirmed(value: object) -> bool:
     if value is not True:
         raise ValueError("Explicit key-check confirmation is required")
@@ -94,7 +100,8 @@ Confirmed = Annotated[Literal[True], BeforeValidator(_confirmed)]
 Nonce = _opaque(NONCE_BYTES)
 Salt = _opaque(SALT_BYTES)
 WrappedHvk = _opaque(WRAPPED_HVK_BYTES)
-CardCiphertext = _opaque(CARD_CIPHERTEXT_BYTES)
+CardCiphertext = _opaque(CARD_CIPHERTEXT_BYTES) | _opaque(48)
+CardSchema = Annotated[Literal[1, 2], BeforeValidator(_card_schema)]
 KeyCheckCiphertext = _opaque(KEY_CHECK_CIPHERTEXT_BYTES)
 LastFour = Annotated[
     str, StringConstraints(strict=True, min_length=4, max_length=4, pattern=r"^[0-9]{4}$")
@@ -137,9 +144,15 @@ class RecoveryWrappingInput(OpaqueEnvelope):
 
 
 class CardEnvelopeInput(OpaqueEnvelope):
-    payload_schema_version: FormatOne
+    payload_schema_version: CardSchema
     last_four: LastFour
     ciphertext: CardCiphertext = Field(repr=False)
+
+    @model_validator(mode="after")
+    def schema_length(self) -> Self:
+        if len(decode_opaque(self.ciphertext)) != (43 if self.payload_schema_version == 1 else 48):
+            raise ValueError("Card schema and ciphertext length must match")
+        return self
 
 
 def _bundle(key_check, members, recovery):

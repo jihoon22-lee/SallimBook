@@ -120,6 +120,7 @@ function VaultOverview({ memberId }: { memberId: string }) {
   };
   const active = row?.own_membership === "active";
   const ready = active && !row?.pending_rotation_id && !row?.rotation_required;
+  const missingCards = cards.items.filter((card) => !card.has_secret).slice(0, 20);
   return (
     <VaultActionLauncher onCompleted={reload}>
       {(open, busy) => (
@@ -335,6 +336,16 @@ function VaultOverview({ memberId }: { memberId: string }) {
               </section>
               <section className="card">
                 <h2>카드 비밀</h2>
+                {!native && missingCards.length > 0 && (
+                  <button
+                    disabled={busy || !ready || cards.loading || !!cards.error}
+                    onClick={() =>
+                      open({ action: "batch-edit", cardIds: missingCards.map((card) => card.id) })
+                    }
+                  >
+                    미등록 카드 비밀 일괄 입력
+                  </button>
+                )}
                 <p>목록에는 마지막 네 자리만 표시해요. 유효기간 **/** · CVC/CVV ***</p>
                 <AuthError error={cards.error} />
                 {cards.loading && <p role="status">카드 목록 확인 중…</p>}
@@ -418,8 +429,8 @@ function VaultOverview({ memberId }: { memberId: string }) {
             <h2>기기와 복구 안내</h2>
             <p>
               {native
-                ? "이 Android 기기에서 비밀 입력·열람은 네이티브 보호 화면으로 열려요. 새 기기에서는 보관함을 등록하고 CVC/CVV를 다시 입력해야 해요. CVC/CVV 저장은 선택 사항이며 네이티브 화면에서 동의한 뒤 입력해요. 저장·열람마다 생체인증이 필요하고 이 기기에서 삭제할 수 있어요."
-                : "PC 웹은 카드번호와 유효기간을 별도 보관함 화면에서 다뤄요. CVC/CVV 입력·열람·저장은 지원하지 않아요. 웹에서는 화면 캡처를 막을 수 없어요."}
+                ? "이 Android 기기에서 비밀 입력·열람은 네이티브 보호 화면으로 열려요. 새 기기에서는 보관함을 등록하고 로컬 CVC/CVV를 다시 입력해야 해요. 공유 CVC는 보관함 인증 후 읽을 수 있어요. CVC/CVV 저장은 선택 사항이며 네이티브 화면에서 동의한 뒤 입력해요. 저장·열람마다 생체인증이 필요하고 이 기기에서 삭제할 수 있어요."
+                : "PC 웹은 카드번호·유효기간·선택적 공유 CVC/CVV를 별도 보관함 화면에서 다뤄요. 웹에서는 화면 캡처를 막을 수 없어요."}
             </p>
             <p>
               보관함 암호·복구코드·잠금 해제 가능한 신뢰 기기를 모두 잃으면 기존 카드 비밀을 복원할

@@ -739,3 +739,50 @@ def test_web_cookie_export_requires_origin_and_csrf(export_app, actors, db_engin
                 },
             )
         )
+
+
+def test_income_planning_exports_exact_values_and_revision_json(export_app, actors, db_engine):
+    from sallimbook.cashflow import planning_service
+    from sallimbook.cashflow.planning_schemas import BonusInput, ExpectedInput
+
+    actor = actors[0]
+    with Session(db_engine) as session:
+        planning_service.create_expected(
+            session,
+            actor.principal,
+            ExpectedInput(
+                member_id=actor.member_id, label="합성 월급", amount_krw="9007199254740993"
+            ),
+            "forecast",
+        )
+        planning_service.create_bonus(
+            session,
+            actor.principal,
+            BonusInput(
+                member_id=actor.member_id,
+                performance_year=2022,
+                award_kind="opi",
+                payment_month="2023-01",
+                gross_krw="5000000",
+                net_cash_krw="3000000",
+                stock_grant_value_krw="1000000",
+                payout_rate_percent="37.5",
+                received=True,
+            ),
+            "award",
+        )
+    with TestClient(export_app) as client:
+        data = decoded(export(client, actor, formats=["json", "csv"]))
+        assert data["json/expected_incomes.json"][0]["amount_krw"] == "9007199254740993"
+        assert data["json/bonus_awards.json"][0]["stock_grant_value_krw"] == "1000000"
+        revisions = data["json/income_planning_revisions.json"]
+        assert len(revisions) == 2
+        award = next(json.loads(r["snapshot"]) for r in revisions if r["kind"] == "bonus")
+        assert award["payout_rate_percent"] == "37.5" and award["net_cash_krw"] == "3000000"
+        response = export(client, actor, formats=[], readable={"domains": ["income"]})
+        assert response.status_code == 200, response.text[:1000]
+        with ZipFile(io.BytesIO(response.content)) as archive:
+            html = archive.read("readable/index.html").decode()
+        assert "합성 월급" in html and "9,007,199,254,740,993원" in html
+        assert "연결현금기록" in html and "3,000,000원" in html
+        assert "1,000,000원" in html and "수령당시주식평가액" in html

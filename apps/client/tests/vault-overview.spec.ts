@@ -6,6 +6,27 @@ test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-18T00:00:00Z"));
 });
 
+test("opening setup brings the protected form into view and gives it keyboard focus", async ({
+  page,
+}) => {
+  const state = await mockVaultOverview(page);
+  Object.assign(state.status, {
+    initialized: false,
+    id: null,
+    version: null,
+    current_key_version: null,
+    own_membership: "not_enrolled",
+    members: [],
+  });
+  await page.goto("/vault");
+  await page.getByRole("button", { name: "보관함 처음 설정", exact: true }).click();
+  const region = page.getByRole("region", { name: "보관함 보호 작업", exact: true });
+  await expect(region).toBeFocused();
+  const top = await region.evaluate((element) => element.getBoundingClientRect().top);
+  expect(top).toBeGreaterThanOrEqual(0);
+  expect(top).toBeLessThan(page.viewportSize()!.height - 100);
+});
+
 test("overview exposes safe status and masks only with no secret inputs or persistence", async ({
   page,
 }) => {
@@ -14,7 +35,7 @@ test("overview exposes safe status and masks only with no secret inputs or persi
   await expect(page.getByText("현재 키 버전 1 · 내 보관함 권한: 접근 가능")).toBeVisible();
   await expect(page.getByText("•••• 1111", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "이 구성원에게 공유", exact: true })).toBeEnabled();
-  await expect(page.getByText(/CVC\/CVV 입력·열람·저장은 지원하지 않아요/)).toBeVisible();
+  await expect(page.getByText(/선택적 공유 CVC\/CVV/)).toBeVisible();
   await expect(page.getByRole("button", { name: /이 기기의 CVC\/CVV/ })).toHaveCount(0);
   await expect(
     page.locator('input[type="password"], input[name="pan"], input[name="cvc"]'),
@@ -132,7 +153,9 @@ test("card detail retains ordinary metadata operations and exposes separate prot
   await expect(page.getByRole("button", { name: "카드 사용 종료", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "카드 정보 수정", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "카드 비밀 제거", exact: true })).toBeVisible();
-  await expect(page.getByText(/CVC\/CVV는 PC 웹에서 입력·열람·저장하지 않아요/)).toBeVisible();
+  await expect(
+    page.getByText(/공유 CVC\/CVV는 보관함에서 동의 후 암호화해 저장해요/),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: /이 기기의 CVC\/CVV/ })).toHaveCount(0);
 });
 

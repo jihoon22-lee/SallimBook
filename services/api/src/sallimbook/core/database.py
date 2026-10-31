@@ -17,7 +17,7 @@ CONVENTIONS = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
-REQUIRED_SCHEMA_REVISION = "0021_consumable_orders"
+REQUIRED_SCHEMA_REVISION = "0024_income_planning"
 
 
 class Base(DeclarativeBase):

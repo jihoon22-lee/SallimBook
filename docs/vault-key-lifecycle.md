@@ -39,7 +39,7 @@ card envelope = {schema_version, key_version, nonce, ciphertext_with_tag}
 member wrap   = {member_id, key_version, kdf, params, salt, nonce, wrapped_hvk}
 ```
 
-CVC와 계좌번호는 이 카드 envelope 포맷에 끼워 넣지 않는다.
+계좌번호는 카드 envelope에 넣지 않는다. 선택적 공유 CVC는 [v2 포맷](adr/web-cvc-vault-v2.md)에만 포함한다. 회전은 v1/v2 schema와 평문 bytes를 그대로 보존한다.
 키는 문자열로 출력·로깅하지 않는다. JS/Kotlin의 메모리 소거에는 제약이 있음을 인정하고 참조 수명을 최소화한다.
 
 ## 3. 첫 설정
@@ -81,7 +81,7 @@ HVK/평문은 localStorage/IndexedDB/Service Worker/일반 Query cache에 저장
 카드 암호문 전체를 바꿀 필요는 없다. 로그인 암호 변경은 이 wrapping을 자동 변경하지 않는다.
 
 새 Android 기기: 서버 로그인/기기등록 → 보관함 암호로 본인 wrapping 해제 → 새 Device KEK 생성 → 로컬 wrapping.
-기존 기기의 non-exportable key를 복사하지 않는다. CVC는 새 기기에서 수동 재입력한다.
+기존 기기의 non-exportable key를 복사하지 않는다. 로컬 CVC는 새 기기에서 수동 재입력한다. 공유 CVC는 해당 보관함을 정상 해제한 기기에서 읽을 수 있다.
 
 지문 등록 변경/키 무효화: 자동 우회하지 않고 로컬 wrapping을 무효 상태로 표시 → 보관함 암호/복구 절차로 재등록.
 기기 잠금 해제 방식 제거, 앱 데이터 초기화, 공장 초기화도 동일하게 처리한다([S03, S04](references.md)).

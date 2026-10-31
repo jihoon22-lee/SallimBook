@@ -48,7 +48,7 @@ Android의 x86_64 VM 가속은 호스트 CPU와 맞는 시스템 이미지 및 L
 | Gradle | 저장소 wrapper 8.14.3 및 `distributionSha256Sum` |
 | Android command-line tools | build 15859902 및 기존 설치기의 SHA-256 |
 | Android platform / build-tools | API 36 revision 2 / 36.0.0 |
-| platform-tools / emulator | 37.0.1 / 37.2.12, build 16428233 |
+| platform-tools / emulator | 37.0.1 / 37.2.13, build 16740729 |
 | AVD system image | `system-images;android-36;google_apis;x86_64`, revision 7 |
 | PostgreSQL | 기존 합성 Compose의 18.6-bookworm 및 이미지 digest |
 | artifact action | upload-artifact 7.0.2, `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
@@ -410,3 +410,5 @@ WP03에서 `NativeDocumentImageDeviceTest` 3개(방향 적용, 메타데이터·
 
 WP14에서 `NativeDocumentImageDeviceTest.ultraHdrGainmapIsNotUploaded`(API 34 이상)를 더해 기존 계측 묶음은
 정확히 **19개**를 요구한다. 가입 1개와 생체인증 조건부 skip 하나만 허용하는 규칙은 그대로다.
+
+2026-10-31: emulator 37.2.13의 revision, archive size와 SHA-1을 [Google SDK 저장소](https://dl.google.com/android/repository/repository2-3.xml)와 대조해 고정했다. 이전 실행 증거는 당시 버전을 유지한다.

@@ -168,6 +168,66 @@ def version(actor, number=1):
     return {**actor.headers, "If-Match": f'"{number}"'}
 
 
+def test_card_optional_fee_and_family_schema_preserves_unknown_zero_and_false():
+    empty = CardCreate.model_validate(payload())
+    assert empty.annual_fee_krw is None and empty.is_family_card is None
+    zero = CardCreate.model_validate(payload(annual_fee_krw="0", is_family_card=False))
+    assert zero.annual_fee_krw == "0" and zero.is_family_card is False
+    assert CardPatch(annual_fee_krw=None, is_family_card=None).model_dump(exclude_unset=True) == {
+        "annual_fee_krw": None,
+        "is_family_card": None,
+    }
+
+
+@pytest.mark.parametrize("fee", [0, True, 1.5, "-1", "1.5", "01", "1,000", "1" * 21])
+def test_card_fee_rejects_noncanonical_or_inexact_amounts(fee):
+    with pytest.raises(ValidationError):
+        CardCreate.model_validate(payload(annual_fee_krw=fee))
+    with pytest.raises(ValidationError):
+        CardPatch.model_validate({"annual_fee_krw": fee})
+
+
+@pytest.mark.parametrize("flag", [0, 1, "true", "false", "unknown"])
+def test_card_family_flag_requires_boolean_or_null(flag):
+    with pytest.raises(ValidationError):
+        CardCreate.model_validate(payload(is_family_card=flag))
+    with pytest.raises(ValidationError):
+        CardPatch.model_validate({"is_family_card": flag})
+
+
+def test_card_fee_family_roundtrip_permissions_conflict_and_memo(client, actor, db_engine):
+    card = create_card(
+        client,
+        actor,
+        annual_fee_krw="99999999999999999999",
+        is_family_card=True,
+        note="합성 원본 메모",
+    )
+    url = "/api/v1/cards/" + card["id"]
+    assert card["annual_fee_krw"] == "99999999999999999999"
+    assert card["is_family_card"] is True
+    other = make_actor(db_engine)
+    assert (
+        client.patch(url, headers=version(other), json={"annual_fee_krw": "0"}).status_code == 404
+    )
+    changed = client.patch(
+        url, headers=version(actor), json={"annual_fee_krw": "0", "is_family_card": False}
+    )
+    assert changed.status_code == 200
+    assert changed.json()["annual_fee_krw"] == "0"
+    assert changed.json()["is_family_card"] is False
+    assert changed.json()["note"] == "합성 원본 메모"
+    assert (
+        client.patch(url, headers=version(actor), json={"annual_fee_krw": None}).status_code == 409
+    )
+    cleared = client.patch(
+        url, headers=version(actor, 2), json={"annual_fee_krw": None, "is_family_card": None}
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["annual_fee_krw"] is None and cleared.json()["is_family_card"] is None
+    assert client.get(url, headers=actor.headers).json() == cleared.json()
+
+
 def test_household_can_manage_both_owners_without_secret_metadata(client, actor, db_engine):
     spouse = make_actor(db_engine, actor.household_id)
     account = create_account(client, actor, account_number=None)

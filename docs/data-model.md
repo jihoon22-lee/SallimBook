@@ -111,9 +111,9 @@ draft/확정/재개방의 멱등 응답은 원래 revision ID·번호·version�
 | vault_versions | household_id, key_version, state, created_by | unique(household_id,key_version) |
 | vault_member_wrappings | member_id, key_version, kdf_name, kdf_params, salt, wrap_nonce, wrapped_key | unique(member_id,key_version); 각 구성원의 별도 암호 |
 | vault_recovery_wrappings | household_id, key_version, wrap_nonce, wrapped_key, recovery_generation | 서버에 복구코드 원문 없음 |
-| card_secret_envelopes | card_id, key_version, schema_version, nonce, ciphertext | 카드/버전 유일성; PAN·유효기간만 payload에 포함 |
+| card_secret_envelopes | card_id, key_version, schema_version, nonce, ciphertext | 카드/버전 유일성; v1 PAN·유효기간, v2 선택적 CVC 포함 |
 
-서버에는 CVC 칼럼도 CVC blob도 존재하지 않는다.
+서버에는 독립 CVC 칼럼이나 평문 CVC blob이 없다. 공유 보관함 v2는 CVC를 포함할 수 있는 불투명 고정 길이 암호문이다.
 Android 로컬 저장: card_id → encrypted_cvc + nonce + local_key_alias + local_schema_version.
 Android의 HVK wrapping도 로컬에만 존재하며 서버의 device 행에 원본키를 넣지 않는다.
 보관함 새 키 버전의 전체 카드 재암호화가 완료되기 전 current version을 전환하지 않는다.
@@ -367,3 +367,21 @@ DB trigger는 예정에서 시작하는 상태 전이·버전 증가·불변 신
 
 기존 자료의 변환은 없다. 0021에서 주문 행이 생기면 downgrade는 자료 유실을 막기 위해 거부하며,
 빈 상태의 migration 왕복과 이전 revision의 재고 자료 보존을 검사한다. 주문의 취소는 판매처 취소나 환불을 자동 처리하지 않는다.
+
+### 카드 연회비와 가족카드 여부 (#180)
+
+`0022_card_terms`는 cards에 nullable `annual_fee_krw numeric(20,0)`와
+`is_family_card boolean`을 추가한다. 연회비는 음수를 금지하며 기존 행은 두 값 모두 null이다.
+가족카드 여부는 본카드 관계나 결제계좌를 추론하지 않는다. 기존 메모를 보존하며 확정한 값만
+버전 조건이 있는 카드 PATCH로 옮긴다. downgrade는 전용 열의 값을 제거하므로 운영 복귀 전
+해당 값의 보존 여부를 확인한다. 카드 번호·유효기간·CVC 저장 경계는 바뀌지 않는다.
+
+### 0024 예상 수입과 상여 원본
+
+expected_incomes는 구성원·label별 현재 예상 월 수입(amount_krw/active/note), bonus_awards는
+구성원·성과연도·상여 종류별 세전/세후 현금/주식 수령가액/지급률/지급월/확인 여부를 보존한다.
+금액 null과0은 다르다. 지급률은 정확한 소수 문자열이다. 동일 가계 구성원과 cash_record_id는
+복합 FK로 연결하며 상여 원본과 현금 연결은 각각 unique다.
+income_planning_revisions는 가계·resource_id·version별 검증된 응답 snapshot과 정정 사유다.
+일반 감사에는 개인 금액이 아닌 변경 필드명만 기록한다. 예상 기준은 cash를 생성하지 않고,
+상여의 확인된 양수 현금만 명시적 수령 확인 후 현금으로 연결한다.

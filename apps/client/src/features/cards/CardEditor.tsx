@@ -1,3 +1,7 @@
+import { AmountField } from "../../shared/AmountField";
+import { krwFieldError } from "../../shared/krw";
+import { formatKrw } from "../assets/months/model";
+import { familyCardLabel } from "./model";
 import { RecordActor } from "../../shared/RecordActor";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -179,6 +183,27 @@ export function CardEditor({ initial }: { initial?: Card }) {
                 </select>
               </label>
             </div>
+            <AmountField
+              label="연회비 (원, 선택)"
+              value={draft.annualFee}
+              onChange={(value) => change("annualFee", value)}
+              error={krwFieldError(draft.annualFee, { required: false, positive: false })}
+              hint="모르면 비워두고, 연회비가 없으면 0을 입력해 주세요. 실제 납부 기록은 따로 입력해요."
+            />
+            <div className="form-field">
+              <label>
+                가족카드 여부
+                <select
+                  aria-label="가족카드 여부"
+                  value={draft.family}
+                  onChange={(event) => change("family", event.target.value as CardDraft["family"])}
+                >
+                  <option value="">미확인</option>
+                  <option value="yes">가족카드</option>
+                  <option value="no">가족카드 아님</option>
+                </select>
+              </label>
+            </div>
             <div className="form-field">
               <label>
                 마지막 네 자리 (선택)
@@ -316,6 +341,15 @@ export function CardEditor({ initial }: { initial?: Card }) {
                     <dt>현재 시작일 / 종료일</dt>
                     <dd>
                       {dateLabel(latest.started_on)} / {dateLabel(latest.ended_on)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>현재 연회비·가족카드 여부</dt>
+                    <dd>
+                      {latest.annual_fee_krw == null
+                        ? "연회비 미확인"
+                        : formatKrw(latest.annual_fee_krw)}{" "}
+                      · {familyCardLabel(latest.is_family_card)}
                     </dd>
                   </div>
                   <div>

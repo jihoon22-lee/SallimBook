@@ -1,3 +1,5 @@
+import { formatKrw } from "../assets/months/model";
+import { familyCardLabel } from "./model";
 import { LastModified } from "../../shared/RecordActor";
 import { SearchableSelect } from "../../shared/SearchableSelect";
 import { NameSearch } from "../../shared/NameSearch";
@@ -55,6 +57,14 @@ export function CardSummary({
         <div>
           <dt>카드 유형</dt>
           <dd>{cardTypes[card.card_type]}</dd>
+        </div>
+        <div>
+          <dt>연회비</dt>
+          <dd>{card.annual_fee_krw == null ? "연회비 미확인" : formatKrw(card.annual_fee_krw)}</dd>
+        </div>
+        <div>
+          <dt>가족카드 여부</dt>
+          <dd>{familyCardLabel(card.is_family_card)}</dd>
         </div>
         {showMask && (
           <div>

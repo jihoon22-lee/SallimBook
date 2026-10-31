@@ -21,7 +21,7 @@ from sallimbook.core.authorization import Principal, require_version, scoped_ent
 from sallimbook.core.errors import DomainError
 from sallimbook.core.name_search import search_names
 from sallimbook.core.pagination import keyset_page
-from sallimbook.core.types import SEOUL
+from sallimbook.core.types import SEOUL, decimal_krw, krw_string
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.service import utcnow
 from sallimbook.vault.models import CardSecretEnvelope, VaultState
@@ -75,8 +75,16 @@ def card_response(
         **{
             name: getattr(card, name)
             for name in CardResponse.model_fields
-            if name not in {"masked_number", "status", "settlement_account_status", "has_secret"}
+            if name
+            not in {
+                "masked_number",
+                "status",
+                "settlement_account_status",
+                "has_secret",
+                "annual_fee_krw",
+            }
         },
+        annual_fee_krw=krw_string(card.annual_fee_krw) if card.annual_fee_krw is not None else None,
         masked_number="**** " + card.last_four if card.last_four is not None else None,
         has_secret=(card.id in secret_card_ids)
         if secret_card_ids is not None
@@ -112,7 +120,14 @@ def create_card(session: Session, principal: Principal, payload: CardCreate) -> 
     lock_asset_scope(session, principal)
     _validate_links(session, principal, payload)
     card = Card(
-        **payload.model_dump(),
+        **(
+            payload.model_dump()
+            | {
+                "annual_fee_krw": decimal_krw(payload.annual_fee_krw)
+                if payload.annual_fee_krw is not None
+                else None
+            }
+        ),
         household_id=principal.household_id,
         created_by_member_id=principal.member_id,
         updated_by_member_id=principal.member_id,
@@ -151,6 +166,8 @@ def update_card(
             "CARD_SECRET_PROTECTED", "카드 끝자리는 보관함에서 함께 수정해 주세요.", 409
         )
     values = {name: getattr(card, name) for name in CardCreate.model_fields}
+    if values["annual_fee_krw"] is not None:
+        values["annual_fee_krw"] = krw_string(values["annual_fee_krw"])
     try:
         candidate = CardCreate.model_validate(
             values | payload.model_dump(exclude_unset=True, exclude=CLOSURE_FIELDS)
@@ -164,7 +181,10 @@ def update_card(
         require_closure(session, principal, "card", card.id, payload, candidate.ended_on)
     previous_version = card.version
     for name in payload.model_fields_set - CLOSURE_FIELDS:
-        setattr(card, name, getattr(candidate, name))
+        value = getattr(candidate, name)
+        if name == "annual_fee_krw" and value is not None:
+            value = decimal_krw(value)
+        setattr(card, name, value)
     card.version += 1
     card.updated_by_member_id = principal.member_id
     card.updated_at = datetime.now(UTC)

@@ -24,8 +24,8 @@ internal class VaultSealed(val nonce: ByteArray, val ciphertext: ByteArray) {
 }
 
 /** Owned by a native protected screen; never place in AuthOutcome, Intent or saved state. */
-internal class VaultCardSecret(val pan: CharArray, val expiryYear: Int, val expiryMonth: Int) {
-    fun discard() = pan.fill('\u0000')
+internal class VaultCardSecret(val pan: CharArray, val expiryYear: Int, val expiryMonth: Int, val cvc: CharArray = charArrayOf(), val schemaVersion: Int = 1) {
+    fun discard() { pan.fill('\u0000'); cvc.fill('\u0000') }
     override fun toString() = "VaultCardSecret(redacted)"
 }
 
@@ -58,8 +58,10 @@ internal class NativeVaultCrypto(private val random: SecureRandom = SecureRandom
             return ByteBuffer.allocate(16).putLong(id.mostSignificantBits).putLong(id.leastSignificantBits).array()
         }
         private fun prefix(purpose: String) = "SallimBook/vault/$purpose/v1\u0000".toByteArray(Charsets.US_ASCII)
-        fun cardAad(householdId: String, cardId: String, keyVersion: Long): ByteArray =
-            prefix("card") + uuid(householdId) + uuid(cardId) + ByteBuffer.allocate(12).putLong(version(keyVersion)).putInt(1).array()
+        fun cardAad(householdId: String, cardId: String, keyVersion: Long, schema: Int = 1): ByteArray {
+            if (schema !in 1..2) invalid()
+            return prefix("card") + uuid(householdId) + uuid(cardId) + ByteBuffer.allocate(12).putLong(version(keyVersion)).putInt(schema).array()
+        }
         fun memberAad(householdId: String, memberId: String, keyVersion: Long, generation: Long, count: Int, salt: ByteArray): ByteArray =
             prefix("member") + uuid(householdId) + uuid(memberId) + ByteBuffer.allocate(20).putLong(version(keyVersion))
                 .putLong(version(generation)).putInt(iterations(count)).array() + sized(salt, 16)
@@ -108,20 +110,30 @@ internal class NativeVaultCrypto(private val random: SecureRandom = SecureRandom
         }
         fun cardPayload(secret: VaultCardSecret): ByteArray {
             if (!validPan(secret.pan) || secret.expiryYear !in 2000..2199 || secret.expiryMonth !in 1..12) invalid()
-            val bytes = ByteBuffer.allocate(27).put(byteArrayOf(83, 66, 86, 49)).put(secret.pan.size.toByte())
+            if (secret.schemaVersion !in 1..2 || secret.cvc.size !in setOf(0,3,4) || secret.cvc.any { it !in '0'..'9' } || (secret.schemaVersion == 1 && secret.cvc.isNotEmpty())) invalid()
+            val bytes = ByteBuffer.allocate(if(secret.schemaVersion == 1) 27 else 32).put(byteArrayOf(83, 66, 86, (48+secret.schemaVersion).toByte())).put(secret.pan.size.toByte())
             for (index in 0 until 19) bytes.put(if (index < secret.pan.size) secret.pan[index].code.toByte() else 0)
-            return bytes.putShort(secret.expiryYear.toShort()).put(secret.expiryMonth.toByte()).array()
+            bytes.putShort(secret.expiryYear.toShort()).put(secret.expiryMonth.toByte())
+            if(secret.schemaVersion == 2) {
+                bytes.put(secret.cvc.size.toByte())
+                for(index in 0 until 4) bytes.put(if(index < secret.cvc.size) secret.cvc[index].code.toByte() else 0)
+            }
+            return bytes.array()
         }
         fun readCardPayload(bytes: ByteArray): VaultCardSecret {
-            sized(bytes, 27)
-            if (!bytes.copyOfRange(0, 4).contentEquals(byteArrayOf(83, 66, 86, 49))) invalid()
+            if(bytes.size !in setOf(27,32)) invalid()
+            val schema=if(bytes.size==27) 1 else 2
+            if (!bytes.copyOfRange(0, 4).contentEquals(byteArrayOf(83, 66, 86, (48+schema).toByte()))) invalid()
+            val cvcSize=if(schema==2) bytes[27].toInt() and 255 else 0
+            if(cvcSize !in setOf(0,3,4)) invalid()
+            if(schema==2 && ((28 until 28+cvcSize).any { bytes[it].toInt() !in 48..57 } || (28+cvcSize until 32).any { bytes[it] != 0.toByte() })) invalid()
             val length = bytes[4].toInt() and 255
             if (length !in 13..19 || (5 + length until 24).any { bytes[it] != 0.toByte() }) invalid()
             val pan = CharArray(length) { (bytes[5 + it].toInt() and 255).toChar() }
             val year = ((bytes[24].toInt() and 255) shl 8) or (bytes[25].toInt() and 255)
             val month = bytes[26].toInt() and 255
             if (!validPan(pan) || year !in 2000..2199 || month !in 1..12) { pan.fill('\u0000'); invalid() }
-            return VaultCardSecret(pan, year, month)
+            return VaultCardSecret(pan, year, month, CharArray(cvcSize) { bytes[28+it].toInt().toChar() }, schema)
         }
         private fun decrypt(key: ByteArray, sealed: VaultSealed, aad: ByteArray, expected: Int): ByteArray {
             sized(key, 32); sized(sealed.nonce, 12); sized(sealed.ciphertext, expected + 16)
@@ -132,9 +144,9 @@ internal class NativeVaultCrypto(private val random: SecureRandom = SecureRandom
                 return cipher.doFinal(sealed.ciphertext).also { if (it.size != expected) { it.fill(0); invalid() } }
             } catch (_: Exception) { throw VaultCryptoFailure(VaultCryptoCode.DECRYPTION_FAILED) }
         }
-        fun openCard(key: ByteArray, sealed: VaultSealed, householdId: String, cardId: String, keyVersion: Long): VaultCardSecret {
-            val bytes = decrypt(key, sealed, cardAad(householdId, cardId, keyVersion), 27)
-            return try { readCardPayload(bytes) } finally { bytes.fill(0) }
+        fun openCard(key: ByteArray, sealed: VaultSealed, householdId: String, cardId: String, keyVersion: Long, schema: Int = 1): VaultCardSecret {
+            val bytes = decrypt(key, sealed, cardAad(householdId, cardId, keyVersion, schema), if(schema==1) 27 else 32)
+            return try { readCardPayload(bytes).also { if(it.schemaVersion != schema) { it.discard(); invalid() } } } finally { bytes.fill(0) }
         }
         fun unwrapMember(key: ByteArray, sealed: VaultSealed, householdId: String, memberId: String, keyVersion: Long,
             generation: Long, count: Int, salt: ByteArray): ByteArray =
@@ -161,7 +173,7 @@ internal class NativeVaultCrypto(private val random: SecureRandom = SecureRandom
     }
     fun sealCard(key: ByteArray, secret: VaultCardSecret, householdId: String, cardId: String, keyVersion: Long): VaultSealed {
         val bytes = cardPayload(secret)
-        return try { encrypt(key, bytes, cardAad(householdId, cardId, keyVersion)) } finally { bytes.fill(0) }
+        return try { encrypt(key, bytes, cardAad(householdId, cardId, keyVersion, secret.schemaVersion)) } finally { bytes.fill(0) }
     }
     fun wrapMember(key: ByteArray, hvk: ByteArray, householdId: String, memberId: String, keyVersion: Long,
         generation: Long, count: Int, salt: ByteArray): VaultSealed =

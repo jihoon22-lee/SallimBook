@@ -48,6 +48,8 @@ export const sampleCard: S["CardResponse"] = {
   product_name: "합성 생활 카드",
   alias: "합성 구독 카드",
   card_type: "credit",
+  annual_fee_krw: null,
+  is_family_card: null,
   last_four: "1111",
   masked_number: "•••• 1111",
   has_secret: false,

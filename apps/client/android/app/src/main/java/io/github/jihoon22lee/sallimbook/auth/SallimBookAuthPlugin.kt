@@ -151,6 +151,12 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun reopenAssetMonth(call: PluginCall) = finance(call, FinanceOperation.REOPEN_ASSET_MONTH)
     @PluginMethod fun carryPreviousAssetMonth(call: PluginCall) = finance(call, FinanceOperation.CARRY_PREVIOUS_ASSET_MONTH)
 
+    @PluginMethod fun listExpectedIncome(call: PluginCall) = finance(call, FinanceOperation.LIST_EXPECTED_INCOME)
+    @PluginMethod fun createExpectedIncome(call: PluginCall) = finance(call, FinanceOperation.CREATE_EXPECTED_INCOME)
+    @PluginMethod fun changeExpectedIncome(call: PluginCall) = finance(call, FinanceOperation.CHANGE_EXPECTED_INCOME)
+    @PluginMethod fun listBonusAwards(call: PluginCall) = finance(call, FinanceOperation.LIST_BONUS_AWARDS)
+    @PluginMethod fun createBonusAward(call: PluginCall) = finance(call, FinanceOperation.CREATE_BONUS_AWARD)
+    @PluginMethod fun changeBonusAward(call: PluginCall) = finance(call, FinanceOperation.CHANGE_BONUS_AWARD)
     @PluginMethod fun listIncome(call: PluginCall) = finance(call, FinanceOperation.LIST_INCOME)
     @PluginMethod fun incomeSummary(call: PluginCall) = finance(call, FinanceOperation.INCOME_SUMMARY)
     @PluginMethod fun incomeDuplicateCandidates(call: PluginCall) = finance(call, FinanceOperation.INCOME_DUPLICATE_CANDIDATES)

@@ -29,6 +29,7 @@ ADDED_COLUMNS = {
     15: ("revoked_at", "manual_override"),
     16: ("cleared_link_version", "cleared_next_check_override"),
     18: ("install_key_hash", "install_session_id"),
+    22: ("annual_fee_krw", "is_family_card"),
 }
 
 CLIENT = """
@@ -197,10 +198,16 @@ def application_services(rendered):
 def same_with_empty_extensions(before, after, old_schema):
     """Only known new empty tables are exempt; all existing rows/hashes stay exact."""
     compared = dict(after)
-    if int(old_schema.split("_", 1)[0]) < 21 and "consumable_orders" not in before:
-        orders = compared.get("consumable_orders")
-        if orders is not None and orders[0] == 0:
-            del compared["consumable_orders"]
+    additions = {
+        21: ("consumable_orders",),
+        24: ("expected_incomes", "bonus_awards", "income_planning_revisions"),
+    }
+    for revision, tables in additions.items():
+        if int(old_schema.split("_", 1)[0]) >= revision:
+            continue
+        for table in tables:
+            if table not in before and table in compared and compared[table][0] == 0:
+                del compared[table]
     return before == compared
 
 
