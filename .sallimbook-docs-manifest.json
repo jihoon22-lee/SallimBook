@@ -58,16 +58,16 @@
       "git_sha1": "ed65b068f975aeceb291ba2b6ed2e6b9af7f5e6f"
     },
     "docs/domain-and-calculation-rules.md": {
-      "sha256": "9c7f4250762a9b5b4d2918520a7e170faf1dd10e51fcea94fc7014faf894af2f",
-      "git_sha1": "9fdf109a6339876f6dc5db320c49b57adc393669"
+      "sha256": "11844fa02a30375748a8f50e101b92923f1e3c810e76f6781f1576cd1b942eb6",
+      "git_sha1": "3e7ae0754bf87c9b4f4ed6fdbd143f30b559ed31"
     },
     "docs/data-model.md": {
       "sha256": "6b4180d166ac9ca8fd362fec630af7ac3e2801c58bf0884ae7ad1add65ac9e04",
       "git_sha1": "8c672582b7beacba1503c19efe65372c32956149"
     },
     "docs/api-contract.md": {
-      "sha256": "5ce2a7a185eece4cd5c05f7cea277595b2a6410fbcc33858c70064bef230e8b3",
-      "git_sha1": "69bab16562f1715668d53d06700601d7416fce49"
+      "sha256": "e4667a76c70b9060084c586897f714100c5403b538815de15e25c4b36fc16937",
+      "git_sha1": "58af308aa7a9d29d5fcb5be1ea8a2de419441409"
     },
     "docs/screen-specifications.md": {
       "sha256": "1669762d02abfdde0a4c66709d416a114c77133cf8c4c828ec23375a62ae6d66",
@@ -90,8 +90,8 @@
       "git_sha1": "4b9d6f91a74d1efef01967749a02f08be25b0951"
     },
     "docs/testing-and-acceptance.md": {
-      "sha256": "9092343b803ad71a07f631bfe7ed39d1fda04b775574329210749e78960bffde",
-      "git_sha1": "9868d14aab85f4633d0b3086d656597f50468291"
+      "sha256": "a38f5085d59e821cb96b56d245112b38ba63ceab9e574ca869115fa276f9fadd",
+      "git_sha1": "8ee0f0a3b3380d4465cc233e59e0644a17e15d95"
     },
     "docs/deployment-backup-operations.md": {
       "sha256": "7f9da2bb360ed86824f3c4cca3b6afd0a54bf7fb5c05f26ca37ad4157e9ab0ae",
