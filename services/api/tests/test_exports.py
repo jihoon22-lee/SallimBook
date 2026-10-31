@@ -779,3 +779,10 @@ def test_income_planning_exports_exact_values_and_revision_json(export_app, acto
         assert len(revisions) == 2
         award = next(json.loads(r["snapshot"]) for r in revisions if r["kind"] == "bonus")
         assert award["payout_rate_percent"] == "37.5" and award["net_cash_krw"] == "3000000"
+        response = export(client, actor, formats=[], readable={"domains": ["income"]})
+        assert response.status_code == 200, response.text[:1000]
+        with ZipFile(io.BytesIO(response.content)) as archive:
+            html = archive.read("readable/index.html").decode()
+        assert "합성 월급" in html and "9,007,199,254,740,993원" in html
+        assert "연결현금기록" in html and "3,000,000원" in html
+        assert "1,000,000원" in html and "수령당시주식평가액" in html

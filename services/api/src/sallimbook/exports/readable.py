@@ -514,6 +514,15 @@ class Names:
             self.cache[name][identifier] = value
 
 
+def cash_field(field):
+    """Only joined value aliases use cash_; cash_record_id is a real FK."""
+    return field.startswith("cash_") and field != "cash_record_id"
+
+
+def base_field(field):
+    return field.removeprefix("cash_") if cash_field(field) else field
+
+
 def query_for(section, household_id, scope):
     tables = Base.metadata.tables
     t = tables[section.table]
@@ -521,7 +530,7 @@ def query_for(section, household_id, scope):
     source = t
     columns = []
     cash = None
-    if any(field.startswith("cash_") for field in fields) or section.date_field in {
+    if any(cash_field(field) for field in fields) or section.date_field in {
         "_cash",
         "_payout",
     }:
@@ -555,7 +564,7 @@ def query_for(section, household_id, scope):
                     )
                 ).label(field)
             )
-        elif field.startswith("cash_"):
+        elif cash_field(field):
             column = field.removeprefix("cash_")
             assert column in PUBLIC_COLUMNS["cash_records"]
             columns.append(cash.c[column].label(field))
@@ -720,7 +729,7 @@ def write_readable(session, builder, scope):
                 "선택 기간 적용" if section.date_field else "기간과 무관한 기본정보·연결·현재 상태"
             )
             fields = section.fields.split()
-            headers = [LABELS[field.removeprefix("cash_")] for field in fields]
+            headers = [LABELS[base_field(field)] for field in fields]
 
             def rows(section=section, fields=fields):
                 for row in session.execute(
@@ -730,7 +739,7 @@ def write_readable(session, builder, scope):
                     yield [
                         names.resolve(REFS[field], row[field])
                         if field in REFS
-                        else display(row[field], field.removeprefix("cash_"))
+                        else display(row[field], base_field(field))
                         for field in fields
                     ]
 
