@@ -145,4 +145,8 @@ test("care diagnostics return only known public classifications, excluding warra
   }
   await page.locator('section > [role="alert"]').evaluate((alert) => alert.remove());
   expect(await page.evaluate(careError)).toBe("NONE");
+  await page.setContent(
+    '<section aria-labelledby="consumables-title"><div aria-busy="false"><div role="alert"><p>앱의 네이티브 인증을 준비하고 있어요. 지금은 앱에서 로그인할 수 없어요.</p></div></div><details><div role="alert"><p>이 작업을 할 권한이 없어요.</p></div></details></section>',
+  );
+  expect(await page.evaluate(careError)).toBe("NATIVE_UNAVAILABLE");
 });

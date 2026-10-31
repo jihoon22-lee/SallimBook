@@ -1,7 +1,7 @@
 // Test-only exact public messages -> fixed enum. Never return text or API data.
 (() => {
   const care = document.querySelector('section[aria-labelledby="consumables-title"]');
-  const alert = care?.querySelector(':scope > [role="alert"]');
+  const alert = care?.querySelector(':scope > [role="alert"], :scope > [aria-busy] [role="alert"]');
   if (!alert) return 'NONE';
   const messages = {
     '서버 연결을 확인하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요.': 'NETWORK',

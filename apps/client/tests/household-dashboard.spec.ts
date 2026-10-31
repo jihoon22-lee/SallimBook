@@ -187,10 +187,21 @@ test("Android dashboard shows the same current income without browser API reques
     return response;
   };
   const native = await mockNativeHomecare(page, state);
+  native.control.maxPending = 8;
+  native.control.delayAllMs = 80;
   await page.goto("/");
   await expect(page.getByRole("region", { name: "현재 예상 월 수입", exact: true })).toContainText(
     "6,300,000원",
   );
+  await expect(page.getByLabel("오늘 소모품 보기")).toBeVisible();
+  await expect(page.getByRole("region", { name: "계좌·연금", exact: true })).toContainText(
+    "아직 등록한 항목이 없어요",
+  );
+  await expect(page.getByRole("region", { name: "부동산", exact: true })).toContainText(
+    "아직 등록한 항목이 없어요",
+  );
+  expect(native.control.rejected).toBe(0);
+  expect(native.control.peakPending).toBeLessThanOrEqual(4);
   expect(native.http).toEqual([]);
   expect(native.calls.some((call) => call.method === "incomeSummary")).toBe(true);
 });
@@ -226,4 +237,23 @@ test("an open amount draft survives a list reload and the Seoul month rollover",
   await expect(editor).toHaveCount(0);
   expect(months.record!.month).toBe("2025-02");
   expect(months.record!.values[0]!.input_amount_krw).toBe("3000");
+});
+
+test("locking the app discards queued dashboard reads before another native call starts", async ({
+  page,
+}) => {
+  const { mockHomecare } = await import("./support/homecare");
+  const { mockNativeHomecare } = await import("./support/homecare-native");
+  const native = await mockNativeHomecare(page, await mockHomecare(page));
+  native.control.maxPending = 8;
+  native.control.delayAllMs = 250;
+  await page.goto("/");
+  await expect.poll(() => native.control.pending).toBe(4);
+  const started = native.control.started;
+  await native.lock();
+  await expect(page.getByRole("status").filter({ hasText: "앱이 잠겨 있어요" })).toBeVisible();
+  await expect.poll(() => native.control.pending).toBe(0);
+  expect(native.control.started).toBe(started);
+  expect(native.control.rejected).toBe(0);
+  expect(native.http).toEqual([]);
 });
