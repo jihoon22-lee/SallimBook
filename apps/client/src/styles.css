@@ -712,7 +712,7 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .overview-items { padding-left: 1.2rem; }
 .overview-items li { margin: .6rem 0; overflow-wrap: anywhere; }
 .expected-income-total strong { font-size: clamp(1.5rem, 3vw, 2.2rem); font-variant-numeric: tabular-nums; }
-.expected-income-summary .metric-strip { margin-bottom: .5rem; }
+.expected-income-summary .metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: .5rem; }
 .saved-amount { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; flex-wrap: wrap; }
 .saved-amount strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .dashboard-history > summary { cursor: pointer; font-weight: 600; padding: .4rem 0; }
