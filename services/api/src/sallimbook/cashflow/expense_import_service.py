@@ -10,6 +10,7 @@ from sallimbook.cashflow import service as cash
 from sallimbook.cashflow.expense_import_models import ExpenseImportBatch, ExpenseImportRow
 from sallimbook.cashflow.expense_import_schemas import ImportResult, ImportResultRow
 from sallimbook.cashflow.expense_plan_service import _validate, create_plan_in_transaction
+from sallimbook.cashflow.recurring_models import RecurringRule
 from sallimbook.core.authorization import scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.identity.auth_models import HouseholdMember
@@ -23,6 +24,15 @@ def digest(value):
 
 def manifest_digest(rows):
     return digest([r.model_dump(mode="json") for r in sorted(rows, key=lambda r: r.source_key)])
+
+
+def rules_fingerprint(session, principal):
+    rows = session.execute(
+        select(RecurringRule.id, RecurringRule.version)
+        .where(RecurringRule.household_id == principal.household_id)
+        .order_by(RecurringRule.id)
+    )
+    return digest([[str(identity), version] for identity, version in rows])
 
 
 def _authorize(session, principal, payload):
@@ -87,6 +97,7 @@ def preview_import(session, principal, payload):
         _validate(session, principal, row.plan, for_update=False)
     return ImportResult(
         status="preview",
+        rules_fingerprint=rules_fingerprint(session, principal),
         baseline_date=recurring.today(),
         created_count=0,
         row_count=len(payload.rows),
@@ -102,6 +113,14 @@ def apply_import(session, principal, payload):
         if existing is not None:
             result = _result(session, principal, existing)
         else:
+            if payload.expected_rules_fingerprint is None:
+                raise DomainError(
+                    "IMPORT_BASELINE_REQUIRED", "등록 전 기준 상태가 필요합니다.", 409
+                )
+            if rules_fingerprint(session, principal) != payload.expected_rules_fingerprint:
+                raise DomainError(
+                    "IMPORT_BASELINE_CHANGED", "기존 계획이 변경되어 일괄 등록하지 않았습니다.", 409
+                )
             baseline = recurring.today()
             batch = ExpenseImportBatch(
                 household_id=principal.household_id,

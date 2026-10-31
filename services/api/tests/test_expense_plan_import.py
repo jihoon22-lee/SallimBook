@@ -1,5 +1,6 @@
 """Synthetic atomic bootstrap replay and user-owned edit/delete behavior."""
 
+import hashlib
 from datetime import date
 from uuid import uuid4
 
@@ -40,6 +41,7 @@ def request(actor, **kw):
         source_id="synthetic-bootstrap",
         rows=rows,
         manifest_hash=manifest_digest(rows),
+        expected_rules_fingerprint=hashlib.sha256(b"[]").hexdigest(),
         **kw,
     )
 
@@ -167,3 +169,61 @@ def test_preview_works_in_database_read_only_transaction(db_engine):
         result = preview_import(session, actor.principal, req)
         assert result.status == "preview" and result.row_count == 2
     assert count(db_engine) == 0
+
+
+def test_initial_import_rejects_user_creation_after_preview(db_engine):
+    from sallimbook.cashflow.expense_plan_service import create_plan
+
+    actor = make_actor(db_engine)
+    req = request(actor)
+    with Session(db_engine) as s:
+        preview_import(s, actor.principal, req)
+    with Session(db_engine) as s:
+        create_plan(s, actor.principal, req.rows[0].plan, str(uuid4()))
+    with Session(db_engine) as s, pytest.raises(DomainError) as failure:
+        apply_import(s, actor.principal, req)
+    assert failure.value.code == "IMPORT_BASELINE_CHANGED"
+    assert count(db_engine) == 1
+
+
+def test_first_apply_requires_explicit_preview_baseline(db_engine):
+    actor = make_actor(db_engine)
+    req = request(actor).model_copy(update={"expected_rules_fingerprint": None})
+    with Session(db_engine) as s:
+        preview = preview_import(s, actor.principal, req)
+    assert preview.rules_fingerprint == hashlib.sha256(b"[]").hexdigest()
+    with Session(db_engine) as s, pytest.raises(DomainError) as failure:
+        apply_import(s, actor.principal, req)
+    assert failure.value.code == "IMPORT_BASELINE_REQUIRED"
+    assert count(db_engine) == 0
+    with Session(db_engine) as s:
+        result = apply_import(
+            s,
+            actor.principal,
+            req.model_copy(update={"expected_rules_fingerprint": preview.rules_fingerprint}),
+        )
+    assert result.created_count == 2
+
+
+def test_first_import_rejects_changed_existing_rule_without_overwrite(db_engine):
+    from sallimbook.cashflow.expense_plan_service import create_plan
+
+    actor = make_actor(db_engine)
+    req = request(actor)
+    with Session(db_engine) as s:
+        existing = create_plan(s, actor.principal, req.rows[0].plan, str(uuid4()))
+        preview = preview_import(s, actor.principal, req)
+    req = req.model_copy(update={"expected_rules_fingerprint": preview.rules_fingerprint})
+    with Session(db_engine) as s:
+        change_plan(
+            s,
+            actor.principal,
+            existing.id,
+            PlanChange(**(req.rows[0].plan.model_dump() | {"expected_amount_krw": "25000"})),
+            '"1"',
+            str(uuid4()),
+        )
+    with Session(db_engine) as s, pytest.raises(DomainError) as failure:
+        apply_import(s, actor.principal, req)
+    assert failure.value.code == "IMPORT_BASELINE_CHANGED"
+    assert count(db_engine) == 1

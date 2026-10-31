@@ -29,6 +29,7 @@ class ImportRequest(InputModel):
     actor_member_id: UUID
     source_id: SourceKey
     manifest_hash: Hash
+    expected_rules_fingerprint: Hash | None = None
     rows: list[ImportRow] = Field(min_length=1, max_length=1000)
 
     @model_validator(mode="after")
@@ -50,4 +51,5 @@ class ImportResult(BaseModel):
     baseline_date: date
     created_count: int
     row_count: int
+    rules_fingerprint: Hash | None = None
     rows: list[ImportResultRow]

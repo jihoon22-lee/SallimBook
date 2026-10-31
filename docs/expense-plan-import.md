@@ -6,7 +6,7 @@ R-08/R-18 · Issue #189. 공개 예제에는 합성 자료만 사용한다. 원�
 
 `ops.import_expense_plans`는 기존 서비스 검증과 감사 생성을 재사용한다. HTTP 요청을 행마다 보내 중간 저장하는 방식이 아니다. `create_plan_in_transaction`은 commit하지 않고 전체 batch가 한 번 commit된다. 기본 명령은 읽기 전용 preview이며 `--apply`를 명시한 경우에만 기록한다.
 
-JSON 입력은 `ImportRequest`(household_id, actor_member_id, source_id, manifest_hash, rows)이며 각 행은 고유 source_key와 `PlanCreate` 본문이다. 최초 적용일은 서버의 서울 기준 실행일이고 실제 계약 시작일을 의미하지 않는다. 호출자가 임의 effective_from이나 scheduled를 공급하면 거부한다. 회원은 현재 대상 가계의 활성 회원이어야 하고 결제수단/관련 구성원도 그 가계에 속해야 한다.
+JSON 입력은 `ImportRequest`(household_id, actor_member_id, source_id, manifest_hash, rows, expected_rules_fingerprint)이며 각 행은 고유 source_key와 `PlanCreate` 본문이다. 최초 적용일은 서버의 서울 기준 실행일이고 실제 계약 시작일을 의미하지 않는다. 호출자가 임의 effective_from이나 scheduled를 공급하면 거부한다. preview receipt의 `rules_fingerprint`를 최초 apply 입력의 `expected_rules_fingerprint`로 고정한다. 이는 기존 모든 규칙 ID와 버전의 해시다. 가계 잠금 안에서 다시 비교하므로 preview 이후 일반 사용자가 생성·수정·삭제하면 전체 적용을 거부한다. 자동 병합하거나 새 fingerprint로 무조건 재시도하지 않는다. 기존 내용과 입력의 중복 여부를 다시 대조한 뒤에만 기준을 갱신한다. 이미 완료된 동일 출처 재실행은 이 기준 비교를 건너뛰고 원래 결과를 돌려준다. 회원은 현재 대상 가계의 활성 회원이어야 하고 결제수단/관련 구성원도 그 가계에 속해야 한다.
 
 `manifest_digest(rows)`는 source_key 정렬과 스키마 기본값을 적용한 JSON의 SHA-256이다. actor와 실행일은 digest에서 제외하므로 다음날이나 배우자가 재실행해도 같은 최초 자료다. source_id는 등록 작업의 영구 식별자이며 재시도 때 바꾸지 않는다.
 
