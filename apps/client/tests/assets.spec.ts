@@ -42,9 +42,7 @@ test("asset filters use metadata fields and show each joint asset once without m
     .getByText("소유·지분·보유기간 자세히", { exact: true })
     .click();
   await expect(page.getByText("50%", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("아직 금액을 조회하지 않았어요.", { exact: false }).first(),
-  ).toBeVisible();
+  await expect(page.getByText("미입력", { exact: true }).first()).toBeVisible();
   await page.locator(".asset-filter-panel > summary").click();
   await page.getByLabel("소유자 필터", { exact: true }).selectOption(uid(5));
   await expect(page.getByRole("link", { name: "합성 공동 주택", exact: true })).toHaveCount(0);

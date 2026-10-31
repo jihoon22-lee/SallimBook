@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { mockFinance } from "./support/finance";
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/v1/household/setup", (route) =>
@@ -135,11 +136,12 @@ test("month selection follows monthly records while consumables remain today-bas
   page,
 }) => {
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await page.getByLabel("확인할 월").fill("2025-02");
   await expect(page.getByText("월간 기록 · 2025년 2월")).toBeVisible();
   await expect(page.getByText("오늘 기준", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "자산 관리", exact: true }).click();
-  await expect(page.getByLabel("확인할 월")).toHaveValue("2025-02");
+  await expect(page.getByRole("link", { name: "2025년 2월 월 기록 확인" })).toBeVisible();
   await page.getByRole("link", { name: "2025년 2월 월 기록 확인" }).click();
   await expect(page).toHaveURL(/\/assets\/months\/2025-02$/);
   await expect(page.getByText("서울 기준 · 2025년 2월", { exact: true })).toBeVisible();
@@ -149,6 +151,7 @@ for (const reload of [false, true]) {
   test(`a monthly deep link synchronizes the shared selector after back${reload ? " and reload" : ""}`, async ({
     page,
   }) => {
+    await mockFinance(page);
     await page.goto("/assets/months/2025-02");
     await expect(page.getByText("서울 기준 · 2025년 2월", { exact: true })).toBeVisible();
     if (reload) {
@@ -198,6 +201,7 @@ test("selected month follows the Seoul month at midnight unless another month wa
   // 2026-12-31 23:59:30 Asia/Seoul
   await page.clock.install({ time: new Date("2026-12-31T14:59:30Z") });
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   const picker = page.getByLabel("확인할 월");
   await expect(picker).toHaveValue("2026-12");
   // 2027-01-01 00:00:30 Asia/Seoul crosses the year and month boundary.

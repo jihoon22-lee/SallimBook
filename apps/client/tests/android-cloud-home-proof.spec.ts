@@ -68,7 +68,9 @@ for (const mode of ["signed-out", "loading", "error", "ready"] as const) {
     });
     try {
       await page.goto("/");
-      await expect(page.locator("#assets-title")).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "우리 집 보유 현황", exact: true }),
+      ).toBeVisible();
       await expect(page.locator("#consumables-title")).toBeVisible();
       // The previous native assertion would falsely pass all four states.
       expect(
