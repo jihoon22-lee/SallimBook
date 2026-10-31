@@ -336,14 +336,14 @@ def test_downgrade_preserves_populated_details_and_allows_empty_table(client, ac
     with db_engine.connect() as connection:
         config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
         config.attributes["connection"] = connection
+        original_revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
         with pytest.raises(RuntimeError, match="Cannot downgrade while stored card details exist"):
             command.downgrade(config, "0024_income_planning")
         connection.rollback()
         assert inspect(connection).has_table("card_stored_details")
         assert connection.scalar(text("SELECT count(*) FROM card_stored_details")) == 1
         assert (
-            connection.scalar(text("SELECT version_num FROM alembic_version"))
-            == "0025_card_stored_details"
+            connection.scalar(text("SELECT version_num FROM alembic_version")) == original_revision
         )
     assert reveal(client, actor, card).json()["pan"] == PAN
     assert client.delete(path(card), headers=version(actor, 2)).status_code == 204
