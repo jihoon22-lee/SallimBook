@@ -70,6 +70,27 @@ function metadataOnly(input: NativeAccountCreate | NativeAccountPatch): void {
 
 /** Tokenless, generated-schema metadata operations. No URL, bearer token or raw body API. */
 export const nativeFinance = {
+  listExpensePlans: (options: Parameters<SallimBookAuth["listExpensePlans"]>[0]) =>
+    metadata(() => plugin.listExpensePlans(options)),
+  getExpensePlan: (options: Parameters<SallimBookAuth["getExpensePlan"]>[0]) =>
+    metadata(() => plugin.getExpensePlan(options)),
+  createExpensePlan: (options: Parameters<SallimBookAuth["createExpensePlan"]>[0]) =>
+    metadata(() => plugin.createExpensePlan(options)),
+  changeExpensePlan: (options: Parameters<SallimBookAuth["changeExpensePlan"]>[0]) =>
+    metadata(() => plugin.changeExpensePlan(options)),
+  endExpensePlan: (options: Parameters<SallimBookAuth["endExpensePlan"]>[0]) =>
+    metadata(() => plugin.endExpensePlan(options)),
+  deleteExpensePlan: (options: Parameters<SallimBookAuth["deleteExpensePlan"]>[0]) =>
+    metadata(() => plugin.deleteExpensePlan(options)),
+  expensePlanSummary: (options: Parameters<SallimBookAuth["expensePlanSummary"]>[0]) =>
+    metadata(() => plugin.expensePlanSummary(options)),
+  previewExpensePlanPaymentSwitch: (
+    options: Parameters<SallimBookAuth["previewExpensePlanPaymentSwitch"]>[0],
+  ) => metadata(() => plugin.previewExpensePlanPaymentSwitch(options)),
+  applyExpensePlanPaymentSwitch: (
+    options: Parameters<SallimBookAuth["applyExpensePlanPaymentSwitch"]>[0],
+  ) => metadata(() => plugin.applyExpensePlanPaymentSwitch(options)),
+
   listHouseholdPeople: (options: Parameters<SallimBookAuth["listHouseholdPeople"]>[0]) =>
     metadata(() => plugin.listHouseholdPeople(options)),
   createHouseholdPerson: (options: Parameters<SallimBookAuth["createHouseholdPerson"]>[0]) =>

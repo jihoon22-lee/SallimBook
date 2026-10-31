@@ -85,7 +85,7 @@ async function createRule(
   return new URL(page.url()).pathname.split("/").at(-1)!;
 }
 async function generate(page: Page, ruleId: string, title: string, span = false) {
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByLabel("확인할 월", { exact: true }).fill(month);
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   if (span) {
@@ -469,7 +469,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
     );
     expect(prepared).toBe(1);
   }
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByLabel("확인할 월", { exact: true }).fill("2025-03");
   await page.getByRole("button", { name: "이달 예정 준비", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "이달 예정 회차" })).toBeVisible();

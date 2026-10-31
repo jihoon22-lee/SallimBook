@@ -37,6 +37,8 @@ async function nativeFinanceMock(
                 "deleteAsset",
                 "getAccountPaymentLinks",
                 "listIncome",
+                "listExpensePlans",
+                "expensePlanSummary",
                 "listAccounts",
                 "getAccount",
                 "createAccount",
@@ -67,6 +69,22 @@ async function nativeFinanceMock(
             if (method === "request" && args.path === "/api/v1/me") return metadata(household[0]);
             if (method === "request" && args.path === "/api/v1/household/members")
               return metadata(household);
+            if (method === "listExpensePlans") return metadata({ items: [], next_cursor: null });
+            if (method === "expensePlanSummary")
+              return metadata({
+                as_of: "2025-02-20",
+                fixed_known_krw: "0",
+                budget_known_krw: "0",
+                combined_known_krw: "0",
+                excluded_known_krw: "0",
+                included_unknown_count: 0,
+                excluded_unknown_count: 0,
+                unconverted_count: 0,
+                plan_count: 0,
+                categories: [],
+                treatments: [],
+                economic_types: [],
+              });
             if (method === "listIncome") return metadata({ items: [], next_cursor: null });
             if (method === "getAccountPaymentLinks")
               return metadata({

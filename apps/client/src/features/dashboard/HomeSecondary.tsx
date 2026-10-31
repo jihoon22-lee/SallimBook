@@ -1,3 +1,4 @@
+import { CurrentExpensePlanSummary } from "../fixed/ExpensePlanSummary";
 import { ExpectedIncomeSummary } from "../income/ExpectedIncomeSummary";
 import { useHouseholdMembers } from "../finance/FinanceSupport";
 import { useCallback } from "react";
@@ -52,33 +53,38 @@ function FixedSummary() {
   const ready = result.data && !result.loading && !result.error;
   return (
     <section className="home-summary-part" aria-label="홈 고정 납부 요약">
-      <h3>{formatMonth(month)} 고정 지출·납부</h3>
-      <CashflowError error={result.error} />
-      {result.loading && <p role="status">고정 납부 확인 중</p>}
-      {result.error && <button onClick={() => void result.reload()}>홈 고정 납부 다시 확인</button>}
-      {ready && (
-        <>
-          <dl className="metadata-grid compact-metadata">
-            <div>
-              <dt>금액이 정해진 예정</dt>
-              <dd>
-                {result.data!.obligation_count
-                  ? formatKrw(result.data!.expected_known_krw)
-                  : "예정 회차 없음"}
-              </dd>
-            </div>
-            <div>
-              <dt>실제 납부</dt>
-              <dd>{formatKrw(result.data!.actual_amount_krw)}</dd>
-            </div>
-          </dl>
-          <p className="muted">
-            예정액 미정 {result.data!.unknown_expected_count}회차 · 예정{" "}
-            {result.data!.obligation_count}회차
-          </p>
-        </>
-      )}
-      <Link to="/fixed-payments">예정·실제 납부 확인</Link>
+      <CurrentExpensePlanSummary />
+      <details>
+        <summary>{formatMonth(month)} 예정·실제 납부</summary>
+        <CashflowError error={result.error} />
+        {result.loading && <p role="status">고정 납부 확인 중</p>}
+        {result.error && (
+          <button onClick={() => void result.reload()}>홈 고정 납부 다시 확인</button>
+        )}
+        {ready && (
+          <>
+            <dl className="metadata-grid compact-metadata">
+              <div>
+                <dt>금액이 정해진 예정</dt>
+                <dd>
+                  {result.data!.obligation_count
+                    ? formatKrw(result.data!.expected_known_krw)
+                    : "예정 회차 없음"}
+                </dd>
+              </div>
+              <div>
+                <dt>실제 납부</dt>
+                <dd>{formatKrw(result.data!.actual_amount_krw)}</dd>
+              </div>
+            </dl>
+            <p className="muted">
+              예정액 미정 {result.data!.unknown_expected_count}회차 · 예정{" "}
+              {result.data!.obligation_count}회차
+            </p>
+          </>
+        )}
+      </details>
+      <Link to="/fixed-payments">월 지출 계획 보기</Link>
     </section>
   );
 }

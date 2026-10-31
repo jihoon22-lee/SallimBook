@@ -118,7 +118,7 @@ test("a money void reason being typed asks before leaving", async ({ page }) => 
 
 test("generating occurrences releases the guard so back does not ask", async ({ page }) => {
   const state = await mockCashflow(page);
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   await page.getByLabel("회차 생성 종료일", { exact: true }).fill("2025-02-27");
   await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();

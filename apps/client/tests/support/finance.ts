@@ -143,6 +143,25 @@ export async function mockFinance(page: Page) {
     const url = new URL(route.request().url());
     const path = url.pathname;
     const method = route.request().method();
+    if (path === "/api/v1/expense-plans" && method === "GET")
+      return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (path === "/api/v1/expense-plan-summary" && method === "GET")
+      return route.fulfill({
+        json: {
+          as_of: "2025-02-20",
+          fixed_known_krw: "0",
+          budget_known_krw: "0",
+          combined_known_krw: "0",
+          excluded_known_krw: "0",
+          included_unknown_count: 0,
+          excluded_unknown_count: 0,
+          unconverted_count: 0,
+          plan_count: 0,
+          categories: [],
+          treatments: [],
+          economic_types: [],
+        },
+      });
     if (path === "/api/v1/me")
       return state.signedIn
         ? route.fulfill({ json: members[0] })

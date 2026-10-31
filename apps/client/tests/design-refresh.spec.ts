@@ -297,7 +297,7 @@ test("narrow home keeps the month label, 12px status text and 48px segmented but
     for (const size of sizes) expect(size).toBeGreaterThanOrEqual(12);
   }
   await mockCashflow(page);
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   for (const button of await page.locator(".segmented-control button").all())
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
 });

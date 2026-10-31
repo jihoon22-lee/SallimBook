@@ -29,7 +29,7 @@ test("a monthly payment opens directly from its list and saves one actual princi
   page,
 }) => {
   const state = await mockCashflow(page);
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   const loan = page
     .getByRole("listitem")
     .filter({ has: page.getByRole("link", { name: "합성 대출 원리금", exact: true }) });
