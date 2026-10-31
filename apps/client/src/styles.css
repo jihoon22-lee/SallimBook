@@ -704,3 +704,21 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .asset-work-table .record-details { margin-top: 0; border-top: 0; }
 .asset-work-table th[scope="row"] > p { margin-block: 4px; }
 .asset-work-table .comparison-item > th > h3 { display: inline; margin-right: 8px; }
+
+/* Registered household facts are the first view; workflows remain in details. */
+.household-overview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.household-category { min-width: 0; }
+.household-category .item-heading { align-items: baseline; flex-wrap: wrap; }
+.overview-items { padding-left: 1.2rem; }
+.overview-items li { margin: .6rem 0; overflow-wrap: anywhere; }
+.expected-income-total strong { font-size: clamp(1.5rem, 3vw, 2.2rem); font-variant-numeric: tabular-nums; }
+.expected-income-summary .metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: .5rem; }
+.saved-amount { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; flex-wrap: wrap; }
+.saved-amount strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.dashboard-history > summary { cursor: pointer; font-weight: 600; padding: .4rem 0; }
+.dashboard-history > .card { margin-top: 1rem; }
+@media (max-width: 1000px) { .household-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .household-overview-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.month-picker-lock { border: 0; margin: 0; padding: 0; min-width: 0; }
+.portfolio-balance dd, .expected-income-summary dd { overflow-wrap: anywhere; }

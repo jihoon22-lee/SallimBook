@@ -200,7 +200,22 @@ class MemberIncomeSummary(BaseModel):
     totals: IncomeTotalsResponse
 
 
+class ExpectedMemberSummary(BaseModel):
+    member_id: UUID
+    known_amount_krw: KrwString
+    record_count: int
+    unknown_count: int
+
+
+class ExpectedIncomeSummary(BaseModel):
+    known_amount_krw: KrwString
+    record_count: int
+    unknown_count: int
+    members: list[ExpectedMemberSummary]
+
+
 class IncomeSummaryResponse(BaseModel):
     period_month: YearMonth
     totals: IncomeTotalsResponse
     members: list[MemberIncomeSummary]
+    expected: ExpectedIncomeSummary

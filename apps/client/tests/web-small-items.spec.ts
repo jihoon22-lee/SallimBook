@@ -158,6 +158,7 @@ test("home says the previous month is what to confirm when only it is unconfirme
   state.mode = "unconfirmed";
   state.previousOnly = true;
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   const assets = page.getByRole("region", { name: "자산의 변화", exact: true });
   await expect(assets.getByText("전월 확정 후 비교", { exact: true })).toBeVisible();
   await expect(assets.getByText("확정 후 비교", { exact: true })).toHaveCount(0);

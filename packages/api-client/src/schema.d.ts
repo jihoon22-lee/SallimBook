@@ -5660,6 +5660,17 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** ExpectedIncomeSummary */
+        ExpectedIncomeSummary: {
+            /** Known Amount Krw */
+            known_amount_krw: string;
+            /** Members */
+            members: components["schemas"]["ExpectedMemberSummary"][];
+            /** Record Count */
+            record_count: number;
+            /** Unknown Count */
+            unknown_count: number;
+        };
         /** ExpectedInput */
         ExpectedInput: {
             /**
@@ -5685,6 +5696,20 @@ export interface components {
             items: components["schemas"]["ExpectedResponse"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** ExpectedMemberSummary */
+        ExpectedMemberSummary: {
+            /** Known Amount Krw */
+            known_amount_krw: string;
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /** Record Count */
+            record_count: number;
+            /** Unknown Count */
+            unknown_count: number;
         };
         /** ExpectedResponse */
         ExpectedResponse: {
@@ -6317,6 +6342,7 @@ export interface components {
         };
         /** IncomeSummaryResponse */
         IncomeSummaryResponse: {
+            expected: components["schemas"]["ExpectedIncomeSummary"];
             /** Members */
             members: components["schemas"]["MemberIncomeSummary"][];
             /** Period Month */

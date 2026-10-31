@@ -824,6 +824,46 @@ def duplicates(session, principal, *, month, kind, member_id, date_precision):
     return response
 
 
+def expected_summary(session, principal):
+    """Current baseline, independent of the selected historical cash month."""
+    from sallimbook.cashflow.planning_models import ExpectedIncome
+    from sallimbook.cashflow.schemas import ExpectedIncomeSummary, ExpectedMemberSummary
+
+    rows = list(
+        session.scalars(
+            select(ExpectedIncome).where(
+                ExpectedIncome.household_id == principal.household_id,
+                ExpectedIncome.active.is_(True),
+            )
+        )
+    )
+
+    def values(records):
+        try:
+            amount = krw_string(
+                sum(int(row.amount_krw) for row in records if row.amount_krw is not None)
+            )
+        except ValueError:
+            raise DomainError(
+                "AMOUNT_OUT_OF_RANGE", "집계 금액이 지원 범위를 초과합니다.", 422
+            ) from None
+        return dict(
+            known_amount_krw=amount,
+            record_count=len(records),
+            unknown_count=sum(row.amount_krw is None for row in records),
+        )
+
+    return ExpectedIncomeSummary(
+        **values(rows),
+        members=[
+            ExpectedMemberSummary(
+                member_id=member, **values([r for r in rows if r.member_id == member])
+            )
+            for member in sorted({r.member_id for r in rows}, key=str)
+        ],
+    )
+
+
 def summary(session, principal, month):
     rows = list(
         session.scalars(
@@ -851,6 +891,7 @@ def summary(session, principal, month):
     members = sorted({row.member_id for row in rows}, key=lambda value: str(value or ""))
     response = IncomeSummaryResponse(
         period_month=month,
+        expected=expected_summary(session, principal),
         totals=totals(rows),
         members=[
             MemberIncomeSummary(

@@ -1,3 +1,4 @@
+import { useAuth } from "../auth/AuthProvider";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "@sallimbook/api-client";
@@ -212,7 +213,10 @@ function PlanningEditor({
     command = useMonthCommand();
   const expected = source && "label" in source ? source : undefined,
     bonus = source && "award_kind" in source ? source : undefined;
-  const [member, setMember] = useState(source?.member_id ?? "");
+  const { state: auth } = useAuth();
+  const [member, setMember] = useState(
+    source?.member_id ?? (auth.status === "authenticated" ? auth.member.member_id : ""),
+  );
   const [label, setLabel] = useState(expected?.label ?? "");
   const [amount, setAmount] = useState(expected?.amount_krw ?? "");
   const [year, setYear] = useState(bonus?.performance_year.toString() ?? "");
@@ -251,7 +255,7 @@ function PlanningEditor({
     const common = { member_id: member, active, note: note.trim() || null };
     if (
       !member ||
-      (source && !reason.trim()) ||
+      (source && (kind === "bonus" || !active) && !reason.trim()) ||
       (kind === "expected"
         ? !label.trim() || parse(amount) === undefined
         : !/^[0-9]{4}$/.test(year) ||
@@ -270,7 +274,7 @@ function PlanningEditor({
         ? api.saveExpected(
             { ...common, label: label.trim(), amount_krw: parse(amount) ?? null },
             expected,
-            reason.trim(),
+            reason.trim() || "예상 월 수입 수정",
             key,
             signal,
           )
@@ -408,11 +412,11 @@ function PlanningEditor({
           </label>
           {source && (
             <label>
-              정정 사유
+              {kind === "expected" && active ? "변경 메모 (선택)" : "정정 사유"}
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                required
+                required={kind !== "expected" || !active}
                 maxLength={500}
               />
             </label>

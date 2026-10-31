@@ -6,6 +6,10 @@ import type { mockHomecare } from "./homecare";
 type State = Awaited<ReturnType<typeof mockHomecare>>;
 type Args = Record<string, any>;
 const mapping: Record<string, { method: string; path: string; fields: Record<string, string> }> = {
+  listAssets: { method: "GET", path: "/api/v1/assets", fields: {} },
+  listAccounts: { method: "GET", path: "/api/v1/accounts", fields: {} },
+  listCards: { method: "GET", path: "/api/v1/cards", fields: {} },
+  listInsurancePolicies: { method: "GET", path: "/api/v1/insurance/policies", fields: {} },
   getPurchasePlan: { method: "GET", path: "/api/v1/homecare/purchase-plan", fields: {} },
   listConsumableOrders: { method: "GET", path: "/api/v1/consumable-orders", fields: {} },
   createConsumableOrder: { method: "POST", path: "/api/v1/consumable-orders", fields: {} },
@@ -229,12 +233,18 @@ export async function mockNativeHomecare(page: Page, state: State) {
     method: "",
     delayMethod: "",
     delayMs: 0,
+    delayAllMs: 0,
+    maxPending: Infinity,
+    pending: 0,
+    peakPending: 0,
+    rejected: 0,
+    started: 0,
   };
   const metadata = (body: unknown, status = 200) => ({ ok: true, value: { status, body } });
   page.on("request", (request) => {
     if (new URL(request.url()).pathname.startsWith("/api/")) http.push(request.url());
   });
-  await page.exposeFunction("syntheticHomecareNative", async (method: string, args: Args) => {
+  const respond = async (method: string, args: Args) => {
     calls.push({ method, args });
     if (method === "getSession")
       return { ok: true, value: { available: true, authenticated: true } };
@@ -243,6 +253,8 @@ export async function mockNativeHomecare(page: Page, state: State) {
     if (method === "request") return metadata(args.path === "/api/v1/me" ? members[0] : members);
     if (control.failure && (!control.method || control.method === method))
       return { ok: false, code: control.failure };
+    if (method === "listAssets" || method === "listAccounts")
+      return metadata({ items: [], next_cursor: null });
     if (method === "getAssetComparison") return metadata(homeComparison(args.query.to));
     if (method === "getAssetTrends")
       return metadata(state.trendResponse(new URLSearchParams(args.query)));
@@ -273,31 +285,61 @@ export async function mockNativeHomecare(page: Page, state: State) {
       : result
         ? metadata(result.body, result.status)
         : { ok: false, code: "INVALID_REQUEST" };
+  };
+  await page.exposeFunction("syntheticHomecareNative", async (method: string, args: Args) => {
+    if (control.pending >= control.maxPending) {
+      control.rejected++;
+      return { ok: false, code: "AUTH_UNAVAILABLE" };
+    }
+    control.started++;
+    control.pending++;
+    control.peakPending = Math.max(control.peakPending, control.pending);
+    try {
+      if (control.delayAllMs)
+        await new Promise((resolve) => setTimeout(resolve, control.delayAllMs));
+      return await respond(method, args);
+    } finally {
+      control.pending--;
+    }
   });
-  await page.addInitScript(
-    (methods) =>
-      Object.assign(window, {
-        CapacitorCustomPlatform: { name: "android" },
-        Capacitor: {
-          PluginHeaders: [
-            {
-              name: "SallimBookAuth",
-              methods: [...methods, "listHouseholdPeople", "getSession", "request"]
-                .map((name) => ({ name, rtype: "promise" }))
-                .concat([
-                  { name: "addListener", rtype: "callback" },
-                  { name: "removeListener", rtype: "promise" },
-                ]),
-            },
-          ],
-          nativeCallback: () => "synthetic-listener",
-          nativePromise: (_plugin: string, method: string, args = {}) =>
-            method === "removeListener"
-              ? Promise.resolve()
-              : (window as any).syntheticHomecareNative(method, args),
+  await page.addInitScript((methods) => {
+    const listeners = new Map<string, (event: { locked: boolean }) => void>();
+    Object.assign(window, {
+      syntheticCareLock: () => listeners.forEach((listener) => listener({ locked: true })),
+      CapacitorCustomPlatform: { name: "android" },
+      Capacitor: {
+        PluginHeaders: [
+          {
+            name: "SallimBookAuth",
+            methods: [...methods, "listHouseholdPeople", "getSession", "request"]
+              .map((name) => ({ name, rtype: "promise" }))
+              .concat([
+                { name: "addListener", rtype: "callback" },
+                { name: "removeListener", rtype: "promise" },
+              ]),
+          },
+        ],
+        nativeCallback: (
+          _plugin: string,
+          _method: string,
+          _args: unknown,
+          listener: (event: { locked: boolean }) => void,
+        ) => {
+          const id = String(listeners.size + 1);
+          listeners.set(id, listener);
+          return id;
         },
-      }),
-    Object.keys(mapping),
-  );
-  return { calls, http, control };
+        nativePromise: (_plugin: string, method: string, args = {}) =>
+          method === "removeListener"
+            ? Promise.resolve()
+            : (window as any).syntheticHomecareNative(method, args),
+      },
+    });
+  }, Object.keys(mapping));
+  return {
+    calls,
+    http,
+    control,
+    lock: () => page.evaluate(() => (window as any).syntheticCareLock()),
+  };
 }

@@ -171,12 +171,13 @@ test("home shows full totals before today's consumables even when requesting onl
   const state = await mockComparison(page);
   await page.clock.setFixedTime(new Date("2025-02-20T00:00:00Z"));
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   const summary = page.getByRole("region", { name: "자산의 변화", exact: true });
   await expect(summary).toContainText("+1,340원");
   expect(state.queries.at(-1)?.get("limit")).toBe("1");
   const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
-  expect(headings[0]).toBe("자산의 변화");
-  expect(headings[1]).toContain("소모품");
+  expect(headings[0]).toBe("수입·지출");
+  expect(headings).toContain("우리 집 보유 현황");
 });
 
 for (const mode of ["available", "unconfirmed"] as const)
@@ -277,6 +278,7 @@ test("net asset decreases are marked negative on home and comparison screens", a
   state.after[0]!.owned_amount_krw = "0";
   state.after[3]!.owned_amount_krw = "0";
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   const hero = page.locator(".asset-hero-change .money-delta");
   await expect(hero).toHaveText("-660원");
   await expect(hero).toHaveAttribute("data-sign", "negative");
@@ -332,6 +334,7 @@ test("home switches between this month and the latest confirmed comparison", asy
   const state = await mockComparison(page);
   await page.clock.setFixedTime(new Date("2025-03-05T03:00:00Z"));
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   const summary = page.getByRole("region", { name: "자산의 변화", exact: true });
   const views = summary.getByRole("group", { name: "자산 변화 보기" });
   await expect(views.getByRole("button", { name: "이번 달", exact: true })).toHaveAttribute(
@@ -361,6 +364,7 @@ test("home switches between this month and the latest confirmed comparison", asy
     summary.getByText("최근 24개월 안에 연속으로 확정한 두 달이 없어요", { exact: false }),
   ).toBeVisible();
   await page.reload();
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await expect(views.getByRole("button", { name: "이번 달", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -374,6 +378,7 @@ test("home record action starts or continues the month and asks for an asset fir
   await page.clock.setFixedTime(new Date("2025-03-05T03:00:00Z"));
   state.mode = "current_missing";
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   const summary = page.getByRole("region", { name: "자산의 변화", exact: true });
   const start = summary.getByRole("link", { name: "이번 달 기록 시작", exact: true });
   await expect(start).toHaveAttribute("href", "/assets/months/2025-03");
@@ -383,6 +388,7 @@ test("home record action starts or continues the month and asks for an asset fir
   ).toHaveCount(0);
   state.mode = "unconfirmed";
   await page.reload();
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await expect(
     summary.getByRole("link", { name: "이번 달 기록 이어서 확인", exact: true }),
   ).toBeVisible();
@@ -393,6 +399,7 @@ test("home record action starts or continues the month and asks for an asset fir
   state.mode = "current_missing";
   state.finance.assets.length = 0;
   await page.reload();
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await expect(summary.getByRole("link", { name: "자산 등록", exact: true })).toHaveAttribute(
     "href",
     "/assets/new",

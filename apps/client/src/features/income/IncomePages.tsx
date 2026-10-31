@@ -1,3 +1,4 @@
+import { ExpectedIncomeSummary } from "./ExpectedIncomeSummary";
 import { formatSeoulDateTime } from "../../shared/format";
 import { RecordActor } from "../../shared/RecordActor";
 import { IncomeInsuranceLinks } from "../finance/RelatedRecords";
@@ -49,7 +50,7 @@ function IncomeSummaryView({
   const data = summary.data;
   return (
     <section className="card task-summary" aria-label="등록 수입 요약">
-      <h2>{formatMonth(month)} 등록 수입</h2>
+      <h2>{formatMonth(month)}분 수입</h2>
       {!combined && <CashflowError error={summary.error} />}
       {summary.loading && <p role="status">수입 요약을 확인하고 있어요.</p>}
       {summary.error && !combined && (
@@ -240,6 +241,15 @@ function IncomeList() {
   const reloadIncome = () => Promise.all([summary.reload(), list.reload()]);
   return (
     <>
+      <section className="card">
+        {summary.loading ? (
+          <p role="status">월 수입 불러오는 중</p>
+        ) : (
+          !summary.error && (
+            <ExpectedIncomeSummary data={summary.data?.expected} members={members.members} />
+          )
+        )}
+      </section>
       <MonthPicker />
       <div className="form-actions">
         <Link className="button-link" to="/income/new">
@@ -323,7 +333,7 @@ function IncomeList() {
         </p>
       )}
       {!list.loading && !list.error && list.items.length === 0 && (
-        <p>조건에 맞는 수입 기록이 없어요.</p>
+        <p>선택한 달에 귀속된 수입 기록이 없어요. 예상 월 수입은 위에서 볼 수 있어요.</p>
       )}
       <ul className="finance-list task-records">
         {list.items.map((row) => (

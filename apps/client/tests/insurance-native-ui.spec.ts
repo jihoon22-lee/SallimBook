@@ -213,17 +213,11 @@ test("native payout allocation correction and return lifecycle use all fifteen r
   await page.getByRole("combobox", { name: "배분 사건", exact: true }).selectOption(uid(90));
   await page.getByRole("combobox", { name: "배분 보험계약", exact: true }).selectOption(uid(80));
   await page.getByRole("button", { name: "받은 전액을 이 사건에 배분", exact: true }).click();
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
   await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
   await page.getByRole("link", { name: "보험금 수령 원본 정정", exact: true }).click();
   await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("101");
   await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("101");
   await page.getByLabel("보험금 수령 정정 사유", { exact: true }).fill("합성 앱 입금 정정");
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
   await page.getByRole("button", { name: "보험금 수령 정정 저장", exact: true }).click();
   await page.getByRole("button", { name: "배분 1 청구 연결 정정", exact: true }).click();
   state.conflict = true;

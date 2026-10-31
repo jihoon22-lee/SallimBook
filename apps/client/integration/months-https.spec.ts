@@ -265,6 +265,7 @@ test("real monthly workflow preserves null zero copied values scope and immutabl
       "미확정 참고값",
     );
     await page.getByRole("link", { name: "홈", exact: true }).click();
+    await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
     await expect(page.getByRole("region", { name: "자산의 변화", exact: true })).toContainText(
       "두 월을 확정하기 전에는 증감을 계산하지 않아요",
     );

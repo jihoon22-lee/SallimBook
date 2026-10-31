@@ -1,3 +1,8 @@
+import {
+  useSavedAmounts,
+  SavedAmountsStatus,
+  SavedAmount,
+} from "../assets/comparison/SavedAmounts";
 import { RecordActor } from "../../shared/RecordActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { PaymentConnections, AccountIncomeLinks } from "../finance/RelatedRecords";
@@ -16,7 +21,6 @@ import {
   isDateOnly,
   isUuid,
   MemberLoadError,
-  MissingAmount,
   todaySeoul,
   useHouseholdMembers,
 } from "../finance/FinanceSupport";
@@ -34,6 +38,7 @@ import type { Account, AccountQuery } from "./model";
 import { usePagedList } from "../finance/queries";
 
 function AccountList() {
+  const amounts = useSavedAmounts();
   const api = useAccountsApi();
   const members = useHouseholdMembers();
   const [params, setParams] = useSearchParams();
@@ -74,6 +79,7 @@ function AccountList() {
   }
   return (
     <>
+      <SavedAmountsStatus result={amounts} members={members.members} />
       <NameSearch label="계좌 이름·금융기관 검색" />
       <Link className="button-link" to="/accounts/new">
         계좌 등록
@@ -160,7 +166,6 @@ function AccountList() {
           <p>필터를 바꾸거나 계좌를 등록해 주세요.</p>
         </section>
       )}
-      {items.length > 0 && <MissingAmount />}
       <ul className="finance-list task-records">
         {items.map((account) => (
           <li className="card" key={account.id}>
@@ -172,6 +177,7 @@ function AccountList() {
                 {account.status === "closed" ? "종료" : "사용 중"}
               </span>
             </div>
+            <SavedAmount result={amounts} assetId={account.asset.id} />
             <dl className="metadata-grid compact-metadata">
               <div>
                 <dt>금융기관·유형</dt>

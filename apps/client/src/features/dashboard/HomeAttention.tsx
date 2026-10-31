@@ -2,10 +2,7 @@ import { useCallback, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { components } from "@sallimbook/api-client";
 import { ApiError } from "../../platform/api";
-import { formatMonth, useMonth } from "../../shared/MonthContext";
 import { useAuth } from "../auth/AuthProvider";
-import { useAssetComparisonApi } from "../assets/comparison/api";
-import { monthsBefore } from "../assets/comparison/model";
 import { formatKrw } from "../assets/months/model";
 import { dateLabel, FinanceError } from "../finance/FinanceSupport";
 import { allPages, useResource } from "../finance/queries";
@@ -113,43 +110,7 @@ function OverdueTasks() {
     </TaskSection>
   );
 }
-function PreviousMonthTask() {
-  const { currentMonth } = useMonth();
-  const previous = monthsBefore(currentMonth, 1);
-  const api = useAssetComparisonApi();
-  const result = useResource(
-    useCallback(async () => {
-      const data = await api.trend({ from: previous, to: previous });
-      const point = data.points.find((row) => row.month === previous);
-      if (!point) throw new ApiError(0, "REQUEST_FAILED");
-      return point;
-    }, [api, previous]),
-  );
-  useSeoulDayRefresh(result.reload);
-  return (
-    <TaskSection
-      title="지난달 월 기록"
-      result={result}
-      count={(point) => (point.state === "confirmed" ? 0 : 1)}
-      empty={`${formatMonth(previous)} 기록을 확정했어요.`}
-    >
-      {(point) => (
-        <p>
-          <Link to={`/assets/months/${previous}`}>{formatMonth(previous)} 기록 확인</Link>
-          <span className="muted">
-            {" "}
-            ·{" "}
-            {point.state === "missing"
-              ? "아직 작성하지 않았어요"
-              : point.state === "reopened"
-                ? "정정본 확인이 필요해요"
-                : "아직 확정하지 않았어요"}
-          </span>
-        </p>
-      )}
-    </TaskSection>
-  );
-}
+
 function DocumentTasks() {
   const api = useInsuranceEventsApi();
   const result = useResource(
@@ -237,7 +198,6 @@ export function HomeAttention() {
       </p>
       <div className="home-attention-grid">
         <OverdueTasks />
-        <PreviousMonthTask />
         <DocumentTasks />
         <ExpenseTasks />
       </div>

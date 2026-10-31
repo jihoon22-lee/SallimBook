@@ -1,3 +1,5 @@
+import { ExpectedIncomeSummary } from "../income/ExpectedIncomeSummary";
+import { useHouseholdMembers } from "../finance/FinanceSupport";
 import { useCallback } from "react";
 import { Link } from "react-router";
 import { formatMonth, useMonth } from "../../shared/MonthContext";
@@ -11,19 +13,21 @@ import { useIncomeApi } from "../income/api";
 
 function IncomeSummary() {
   const api = useIncomeApi();
+  const members = useHouseholdMembers();
   const { month } = useMonth();
   const result = useResource(useCallback(() => api.summary(month), [api, month]));
   const ready = result.data && !result.loading && !result.error;
   return (
     <section className="home-summary-part" aria-label="홈 등록 수입 요약">
-      <h3>등록 수입</h3>
+      {ready && <ExpectedIncomeSummary data={result.data!.expected} members={members.members} />}
+      <h3>{formatMonth(month)}분 수입</h3>
       <CashflowError error={result.error} />
       {result.loading && <p role="status">등록 수입 확인 중</p>}
       {result.error && <button onClick={() => void result.reload()}>홈 수입 다시 확인</button>}
       {ready &&
         (result.data!.totals.record_count === 0 ? (
           <p>
-            이 달에 등록한 수입 기록이 없어요. <Link to="/income/new">수입 입력</Link>
+            이 달에 귀속된 실제 수입 기록은 아직 없어요. <Link to="/income/new">수입 입력</Link>
           </p>
         ) : (
           <dl className="metadata-grid compact-metadata">
@@ -37,7 +41,7 @@ function IncomeSummary() {
             </div>
           </dl>
         ))}
-      <Link to="/income">수입 원본 확인</Link>
+      <Link to="/income">수입 내역 보기</Link>
     </section>
   );
 }
@@ -48,7 +52,7 @@ function FixedSummary() {
   const ready = result.data && !result.loading && !result.error;
   return (
     <section className="home-summary-part" aria-label="홈 고정 납부 요약">
-      <h3>등록된 고정 납부</h3>
+      <h3>{formatMonth(month)} 고정 지출·납부</h3>
       <CashflowError error={result.error} />
       {result.loading && <p role="status">고정 납부 확인 중</p>}
       {result.error && <button onClick={() => void result.reload()}>홈 고정 납부 다시 확인</button>}
@@ -80,10 +84,9 @@ function FixedSummary() {
 }
 export function HomeSecondary() {
   const { state } = useAuth();
-  const { month, currentMonth } = useMonth();
   return (
     <section className="card secondary-summary" aria-label="다른 기록 살펴보기">
-      <h2>{month === currentMonth ? "이번 달 요약" : `${formatMonth(month)} 요약`}</h2>
+      <h2>수입·지출</h2>
       {state.status === "authenticated" ? (
         <>
           <div className="home-monthly-grid">
@@ -94,8 +97,8 @@ export function HomeSecondary() {
             등록한 기록 기준 · 예정과 실제는 별도이며 계좌 잔액에 자동 반영하지 않아요.
           </p>
           <div className="form-actions">
-            <Link to="/insurance/claims">보험 청구 작업함</Link>
-            <Link to="/insurance/cases?financial=open">사건과 청구 원본 확인</Link>
+            <Link to="/insurance/claims">보험 청구 내역</Link>
+            <Link to="/insurance/cases?financial=open">진행 중인 보험 기록</Link>
           </div>
         </>
       ) : (

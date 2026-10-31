@@ -37,9 +37,11 @@ export function MonthRowEditor({
   saved,
   close,
   members,
+  offerNext = true,
 }: {
   month: string;
   members: HouseholdMember[];
+  offerNext?: boolean;
   initial: EditingValue;
   reload: () => Promise<MonthRecord>;
   saved: (
@@ -137,9 +139,9 @@ export function MonthRowEditor({
       ref={section}
       tabIndex={-1}
       className="card month-row-editor"
-      aria-labelledby="month-row-editor-title"
+      aria-labelledby={`month-row-editor-title-${base.row.asset_id}`}
     >
-      <h2 id="month-row-editor-title">{base.row.name} 금액 확인</h2>
+      <h2 id={`month-row-editor-title-${base.row.asset_id}`}>{base.row.name} 금액 확인</h2>
       <p>
         이 기록의 지분 {shareToPercent(base.row.household_share)}% ·{" "}
         {amountBases[base.row.amount_basis]} ·{" "}
@@ -153,9 +155,9 @@ export function MonthRowEditor({
         <fieldset className="finance-fields" disabled={command.busy}>
           <legend>확인한 금액과 날짜</legend>
           <div className="form-field">
-            <label htmlFor="month-value-mode">입력 방식</label>
+            <label htmlFor={`month-value-mode-${base.row.asset_id}`}>입력 방식</label>
             <select
-              id="month-value-mode"
+              id={`month-value-mode-${base.row.asset_id}`}
               value={draft.mode}
               onChange={(event) =>
                 setDraft({ ...draft, mode: event.target.value as ValueDraft["mode"] })
@@ -193,9 +195,9 @@ export function MonthRowEditor({
             <p>금액과 기준일을 지우고 미입력 상태로 남겨요. 0원으로 저장하지 않아요.</p>
           ) : (
             <div className="form-field">
-              <label htmlFor="month-value-date">실제 확인 기준일</label>
+              <label htmlFor={`month-value-date-${base.row.asset_id}`}>실제 확인 기준일</label>
               <input
-                id="month-value-date"
+                id={`month-value-date-${base.row.asset_id}`}
                 type="date"
                 required
                 min={`${month}-01`}
@@ -209,9 +211,9 @@ export function MonthRowEditor({
             </div>
           )}
           <div className="form-field">
-            <label htmlFor="month-value-reason">값 변경 사유 (선택)</label>
+            <label htmlFor={`month-value-reason-${base.row.asset_id}`}>값 변경 사유 (선택)</label>
             <textarea
-              id="month-value-reason"
+              id={`month-value-reason-${base.row.asset_id}`}
               maxLength={1000}
               rows={3}
               value={draft.reason}
@@ -360,9 +362,11 @@ export function MonthRowEditor({
           <button type="submit" disabled={command.busy || conflict}>
             금액 확인 저장
           </button>
-          <button type="submit" value="next" disabled={command.busy || conflict}>
-            저장 후 다음 미확인 항목
-          </button>
+          {offerNext && (
+            <button type="submit" value="next" disabled={command.busy || conflict}>
+              저장 후 다음 미확인 항목
+            </button>
+          )}
           {command.busy && (
             <button type="button" onClick={command.cancel}>
               요청 대기 중단

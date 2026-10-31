@@ -229,17 +229,15 @@ export function PayoutEditor({
   const [base, setBase] = useState(initial);
   const [draft, setDraft] = useState(() => draftOf(initial, caseId, policyId, claimId));
   const [reason, setReason] = useState("");
-  const [ack, setAck] = useState(false);
   const [latest, setLatest] = useState<Schema["PayoutResponse"] | null>(null);
   const [message, setMessage] = useState("");
   const attempt = useSubmitAttempt();
   const input = payoutInput(draft);
   const sum = exactSum(draft.allocations.map((a) => a.amount));
   const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, input, reason.trim()]));
-  const ready = !!input && ack && (!base || (base.cash.state === "active" && !!reason.trim()));
+  const ready = !!input && (!base || (base.cash.state === "active" && !!reason.trim()));
   const change = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
-    setAck(false);
     setMessage("");
   };
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -253,8 +251,8 @@ export function PayoutEditor({
         mismatch
           ? ""
           : base
-            ? "보험금 수령 금액·날짜·계좌, 사건별 배분, 확인란을 확인해 주세요. 정정 사유도 입력해 주세요."
-            : "보험금 수령 금액·날짜·계좌, 사건별 배분, 확인란을 확인해 주세요.",
+            ? "보험금 수령 금액·날짜·계좌, 사건별 배분을 확인해 주세요. 정정 사유도 입력해 주세요."
+            : "보험금 수령 금액·날짜·계좌, 사건별 배분을 확인해 주세요.",
       );
       attempt.reject(form);
       return;
@@ -394,16 +392,12 @@ export function PayoutEditor({
                   value={reason}
                   onChange={(e) => {
                     setReason(e.target.value);
-                    setAck(false);
                   }}
                 />
               </label>
             </div>
           )}
-          <label className="checkbox-field">
-            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
-            실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.
-          </label>
+          <p className="muted">실제 입금 한 건과 같은 합계의 사건별 배분을 저장해요.</p>
           {base && (
             <p>
               기존 수령은 무효로 보존하고 새 원본으로 정정해요. 활성 반환이 있으면 먼저 반환 기록을
@@ -435,7 +429,6 @@ export function PayoutEditor({
                 });
                 setBase(latest);
                 setLatest(null);
-                setAck(false);
                 command.setError(null);
               }}
             >

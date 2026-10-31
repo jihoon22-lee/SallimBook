@@ -68,7 +68,6 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
   const [latest, setLatest] = useState<Rule | null>(null);
   const [conflict, setConflict] = useState(false);
   const [validation, setValidation] = useState("");
-  const [reviewAck, setReviewAck] = useState(false);
   const attempt = useSubmitAttempt();
   const input = ruleInput(draft);
   const changed: components["schemas"]["RuleChange"] | null = input
@@ -85,8 +84,7 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         reason.length <= 500 &&
         draft.from >= todaySeoul() &&
         draft.from > plan!.floor &&
-        (!base.ended_on || draft.from < base.ended_on) &&
-        reviewAck));
+        (!base.ended_on || draft.from < base.ended_on)));
   const payload = base ? changed : input;
   const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, payload]));
   function change(field: keyof RuleDraft, value: string) {
@@ -101,7 +99,6 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         ? preserveRuleChanges(changeDraft(base, old.from), next, changeDraft(base, value))
         : next;
     });
-    setReviewAck(false);
     setValidation("");
   }
   async function prepareSaved(task: NonNullable<typeof prepare>) {
@@ -318,7 +315,6 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
               id={draft.methodId}
               onChange={(method, methodId) => {
                 setDraft((old) => ({ ...old, method, methodId }));
-                setReviewAck(false);
               }}
             />
             <OptionalFields
@@ -407,15 +403,9 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
                   />
                 </label>
               </div>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={reviewAck}
-                  onChange={(event) => setReviewAck(event.target.checked)}
-                />
-                새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을
-                확인했어요.
-              </label>
+              <p className="muted">
+                적용일 이후의 미납 예정 내역이 바뀝니다. 과거 납부 내역과 직접 바꾼 일정은 유지돼요.
+              </p>
             </>
           )}
         </fieldset>
@@ -466,7 +456,6 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
                     setBase(latest);
                     setLatest(null);
                     setConflict(false);
-                    setReviewAck(false);
                     command.setError(null);
                   }}
                 >

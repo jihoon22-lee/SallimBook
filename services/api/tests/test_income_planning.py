@@ -229,3 +229,41 @@ def test_existing_manual_cash_duplicate_and_failed_correction_roll_back(db_sessi
         )
     db_session.rollback()
     assert cash.get_income(db_session, actor.principal, manual.id).amount_krw == "40"
+
+
+def test_dashboard_baseline_is_current_scoped_exact_and_never_actual_cash(db_session, db_engine):
+    from sallimbook.assets.month_models import AssetMonthRecord
+    from sallimbook.cashflow.service import summary
+
+    actor, stranger = make_actor(db_engine), make_actor(db_engine)
+    for number, amount in enumerate(["9007199254740993", "0", None]):
+        service.create_expected(
+            db_session,
+            actor.principal,
+            ExpectedInput(
+                member_id=actor.member_id, label=f"합성 수입 {number}", amount_krw=amount
+            ),
+            f"dashboard-{number}",
+        )
+    service.create_expected(
+        db_session,
+        actor.principal,
+        ExpectedInput(member_id=actor.member_id, label="합성 종료", amount_krw="100", active=False),
+        "ended",
+    )
+    service.create_expected(
+        db_session,
+        stranger.principal,
+        ExpectedInput(member_id=stranger.member_id, label="다른 가계", amount_krw="999"),
+        "foreign",
+    )
+    for month in ["2020-01", "2026-10"]:
+        result = summary(db_session, actor.principal, month)
+        assert result.totals.earned_net_krw == "0" and result.totals.record_count == 0
+        assert result.expected.known_amount_krw == "9007199254740993"
+        assert result.expected.record_count == 3 and result.expected.unknown_count == 1
+        assert len(result.expected.members) == 1
+        assert result.expected.members[0].member_id == actor.member_id
+        assert result.expected.members[0].known_amount_krw == "9007199254740993"
+    assert db_session.scalar(select(func.count()).select_from(CashRecord)) == 0
+    assert db_session.scalar(select(func.count()).select_from(AssetMonthRecord)) == 0

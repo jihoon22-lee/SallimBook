@@ -114,7 +114,6 @@ test("native receipt cancellation and replacement cancellation call eight stock 
   await expect(page.getByText("취소 보정 · -2 개")).toBeVisible();
   await page.goto(`${device}/replace`);
   await page.getByLabel("실제 교체일", { exact: true }).fill("2025-03-02");
-  await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
   await page.getByRole("button", { name: "실제 교체·재고 사용 저장" }).click();
   await page.getByRole("link", { name: /2025.03.02.*반영됨/ }).click();
   await cancelRecord(page, "교체 기록 취소 검토");
@@ -143,6 +142,7 @@ test("native dashboard uses status asset comparison and secondary source APIs wi
   const state = await mockHomecare(page);
   const native = await mockNativeHomecare(page, state);
   await page.goto("/");
+  await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
   await page.getByLabel("확인할 월").fill("2025-01");
   await expect(page.getByText("오늘 기준 · 2026.10.17", { exact: true })).toBeVisible();
   await called(native, [
@@ -151,7 +151,6 @@ test("native dashboard uses status asset comparison and secondary source APIs wi
     "incomeSummary",
     "fixedCostSummary",
     "listOverdueObligations",
-    "getAssetTrends",
     "listMedicalExpenses",
     "listInsuranceClaims",
   ]);

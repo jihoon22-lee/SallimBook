@@ -114,7 +114,6 @@ function LinkEditor({
   const [draft, setDraft] = useState(() => linkDraft(initial));
   const [latest, setLatest] = useState<DeviceLink | null>(null);
   const [selected, setSelected] = useState("");
-  const [clearAck, setClearAck] = useState(false);
   const [message, setMessage] = useState("");
   const attempt = useSubmitAttempt();
   const choices = useResource(
@@ -137,7 +136,6 @@ function LinkEditor({
   const clearing = !!base?.next_check_override && !draft.override;
   const change = <K extends keyof LinkDraft>(key: K, value: LinkDraft[K]) => {
     setDraft((old) => ({ ...old, [key]: value }));
-    if (key === "override") setClearAck(false);
     if (!base && !command.uncertain) command.setError(null);
   };
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -149,11 +147,9 @@ function LinkEditor({
         ? "연결할 소모품이나 가전을 선택해 주세요."
         : !input
           ? "확인 주기 간격·교체당 사용 수량·다음 확인일을 확인해 주세요."
-          : clearing && !clearAck
-            ? "직접 지정한 다음 확인일 해제 확인란을 선택해 주세요."
-            : base && !Object.keys(changed ?? {}).length
-              ? "바꾼 설정이 없어요."
-              : "";
+          : base && !Object.keys(changed ?? {}).length
+            ? "바꾼 설정이 없어요."
+            : "";
     if (problem || !input) {
       setMessage(problem);
       attempt.reject(form);
@@ -196,7 +192,6 @@ function LinkEditor({
     setBase(latest);
     setLatest(null);
     command.setError(null);
-    setClearAck(false);
   }
   if (creating)
     return (
@@ -358,14 +353,7 @@ function LinkEditor({
             이 기기에서 소모품 연결 사용
           </label>
           {clearing && (
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={clearAck}
-                onChange={(e) => setClearAck(e.target.checked)}
-              />
-              직접 지정한 다음 확인일을 해제하고 교체 기록 기준을 적용해요
-            </label>
+            <p className="muted">직접 지정한 다음 확인일을 해제하고 교체 기록 기준을 적용해요</p>
           )}
         </fieldset>
         <FormError message={message} />

@@ -36,7 +36,6 @@ export function ReplacementEditor({
   const [amount, setAmount] = useState(String(initial.link.quantity_per_replacement));
   const [override, setOverride] = useState(initial.link.next_check_override ? "" : "keep");
   const [note, setNote] = useState("");
-  const [ack, setAck] = useState(false);
   const [message, setMessage] = useState("");
   const attempt = useSubmitAttempt();
   const parsed = quantity(amount, true);
@@ -48,7 +47,6 @@ export function ReplacementEditor({
     parsed !== null &&
     !!override &&
     note.length <= 2000 &&
-    ack &&
     base.link.active &&
     base.appliance.status === "active" &&
     base.consumable.status === "active";
@@ -134,7 +132,6 @@ export function ReplacementEditor({
                   value={date}
                   onChange={(e) => {
                     setDate(e.target.value);
-                    setAck(false);
                   }}
                 />
               </label>
@@ -148,7 +145,6 @@ export function ReplacementEditor({
                   value={amount}
                   onChange={(e) => {
                     setAmount(e.target.value);
-                    setAck(false);
                   }}
                 />
               </label>
@@ -166,7 +162,6 @@ export function ReplacementEditor({
                     value={override}
                     onChange={(e) => {
                       setOverride(e.target.value);
-                      setAck(false);
                     }}
                   >
                     <option value="">직접 선택해 주세요</option>
@@ -186,10 +181,7 @@ export function ReplacementEditor({
               </label>
             </div>
           </div>
-          <label className="checkbox-field">
-            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
-            실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요
-          </label>
+          <p className="muted">실제 교체일·사용 수량과 다음 확인일 적용 방식을 저장해요</p>
         </fieldset>
         <HomecareError error={command.error} />
         {command.error?.status === 409 && (
@@ -209,7 +201,6 @@ export function ReplacementEditor({
                     setBase(latest);
                     setLatest(null);
                     setOverride(latest.link.next_check_override ? "" : "keep");
-                    setAck(false);
                     command.setError(null);
                   }}
                 >

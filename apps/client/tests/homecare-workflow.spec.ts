@@ -91,7 +91,6 @@ for (const native of [false, true]) {
     await page.goto("/?care=all");
     await page.getByRole("link", { name: "교체 기록", exact: true }).first().click();
     await page.getByLabel("실제 교체일", { exact: true }).fill("2025-03-01");
-    await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
     await page.getByRole("button", { name: "실제 교체·재고 사용 저장" }).click();
     await expect(page).toHaveURL(/\/\?care=all$/);
     await expect(page.getByLabel("오늘 소모품 보기")).toHaveValue("all");

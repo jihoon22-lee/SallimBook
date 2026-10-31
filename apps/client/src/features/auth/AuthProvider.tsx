@@ -21,6 +21,7 @@ import {
   toApiError,
 } from "../../platform/api";
 import { isNativeAuth, nativeAuth, nativeRequest } from "../../platform/nativeAuth";
+import { createNativeReadQueue } from "../../platform/nativeReadQueue";
 import { createPasskey, getPasskey } from "../../platform/webauthn";
 
 export type Member = components["schemas"]["MemberResponse"];
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const restoreFlight = useRef<Promise<void> | null>(null);
   const nativeRegistration = useRef<{ restoreRequested: boolean } | null>(null);
   const csrfFlight = useRef<{ generation: number; promise: Promise<string> } | null>(null);
+  const nativeReads = useMemo(() => createNativeReadQueue(), []);
 
   const ensureCurrent = useCallback((requestGeneration: number) => {
     if (!mounted.current || generation.current !== requestGeneration)
@@ -770,10 +772,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         web: ((client: Pick<typeof apiClient, "GET">) => Promise<ApiResult<T>>) | undefined,
         native?: () => Promise<T>,
       ) =>
-        authenticatedRequest(() => {
+        authenticatedRequest((requestGeneration) => {
           if (isNativeAuth()) {
             if (!native) throw new ApiError(0, "NATIVE_AUTH_UNAVAILABLE");
-            return native();
+            return nativeReads(() => {
+              // A queued read must not cross logout, app lock, or a new account session.
+              ensureCurrent(requestGeneration);
+              return native();
+            });
           }
           if (!web) throw new ApiError(0, "REQUEST_FAILED");
           return requestApi(() => web({ GET: apiClient.GET }));
@@ -817,7 +823,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : mutation((token) => action(token), !options?.clearOnExpiry);
       },
     }),
-    [authenticatedRequest, mutation, scopedOperation],
+    [authenticatedRequest, ensureCurrent, mutation, nativeReads, scopedOperation],
   );
 
   const dismissExpiry = useCallback(() => setExpiry((old) => (old ? "dismissed" : old)), []);

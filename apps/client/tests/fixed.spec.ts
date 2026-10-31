@@ -98,24 +98,12 @@ test("future scheduled end permits new terms before the cutoff without rewriting
   await page.getByLabel("원화 예정금액 (원)", { exact: true }).fill("34000");
   await page.getByLabel("적용 시작일", { exact: true }).fill("2025-12-31");
   await page.getByLabel("규칙 변경 사유", { exact: true }).fill("합성 요금 변경");
-  await page
-    .getByLabel(
-      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
-      { exact: true },
-    )
-    .check();
   await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "필수 정보·날짜·금액과 적용 범위를 확인해 주세요.",
   );
   expect(state.writes).toHaveLength(0);
   await page.getByLabel("적용 시작일", { exact: true }).fill("2025-03-01");
-  await page
-    .getByLabel(
-      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
-      { exact: true },
-    )
-    .check();
   await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
   expect(state.rules[0]!.ended_on).toBe("2025-12-31");
@@ -350,12 +338,6 @@ test("a pending amount typo is replaced at its own start date", async ({ page })
     page.getByText("2025.12.01 적용 예정 변경은 함께 철회돼요.", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("규칙 변경 사유", { exact: true }).fill("합성 금액 오타 수정");
-  await page
-    .getByLabel(
-      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
-      { exact: true },
-    )
-    .check();
   await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
   expect(
@@ -380,12 +362,6 @@ test("the rule change form starts from the terms in effect today", async ({ page
 async function confirmRuleChange(page: Page, reason = "합성 이후 변경") {
   // Role names leave out a textarea's own value; label text would include it.
   await page.getByRole("textbox", { name: "규칙 변경 사유", exact: true }).fill(reason);
-  await page
-    .getByLabel(
-      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
-      { exact: true },
-    )
-    .check();
 }
 test("a change dated after a pending change starts from the pending terms", async ({ page }) => {
   const state = await mockCashflow(page);

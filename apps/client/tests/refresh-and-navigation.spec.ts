@@ -19,7 +19,8 @@ test("home insurance destination preserves its open financial state", async ({ p
   cases[1]!.financial_state = "settled";
   cases[1]!.title = "합성 정산 완료 사건";
   await page.goto("/");
-  await page.getByRole("link", { name: "사건과 청구 원본 확인", exact: true }).click();
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
+  await page.getByRole("link", { name: "진행 중인 보험 기록", exact: true }).click();
   await openDisclosure(page, "사건 찾기");
   await expect(page.getByRole("combobox", { name: "정산 상태 필터", exact: true })).toHaveValue(
     "open",
@@ -160,12 +161,13 @@ test("first confirmed home offers its record and distinguishes no income from ze
     }),
   );
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await expect(page.locator(".home-assets .asset-detail-actions > a.button-link")).toHaveAttribute(
     "href",
     "/assets/months/2025-02",
   );
   await expect(page.locator(".home-assets")).toContainText("서로 다른 기준일");
   const income = page.getByRole("region", { name: "홈 등록 수입 요약", exact: true });
-  await expect(income).toContainText("이 달에 등록한 수입 기록이 없어요");
+  await expect(income).toContainText("이 달에 귀속된 실제 수입 기록은 아직 없어요");
   await expect(income).not.toContainText("0원");
 });
