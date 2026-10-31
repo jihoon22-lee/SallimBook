@@ -393,6 +393,7 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
   const beforeHome = await read<S["HomecareStatusResponse"]>(page, "/api/v1/homecare/status");
   await page.goto("/");
   await page.getByLabel("확인할 월").fill("2025-02");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await expect(
     page.getByText(`오늘 기준 · ${beforeHome.as_of.replaceAll("-", ".")}`, { exact: true }),
   ).toBeVisible();
