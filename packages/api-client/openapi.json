@@ -7605,6 +7605,39 @@
         "title": "ExpectedChange",
         "type": "object"
       },
+      "ExpectedIncomeSummary": {
+        "properties": {
+          "known_amount_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Known Amount Krw",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ExpectedMemberSummary"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "record_count": {
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "unknown_count": {
+            "title": "Unknown Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "known_amount_krw",
+          "record_count",
+          "unknown_count",
+          "members"
+        ],
+        "title": "ExpectedIncomeSummary",
+        "type": "object"
+      },
       "ExpectedInput": {
         "additionalProperties": false,
         "properties": {
@@ -7685,6 +7718,37 @@
           "next_cursor"
         ],
         "title": "ExpectedList",
+        "type": "object"
+      },
+      "ExpectedMemberSummary": {
+        "properties": {
+          "known_amount_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Known Amount Krw",
+            "type": "string"
+          },
+          "member_id": {
+            "format": "uuid",
+            "title": "Member Id",
+            "type": "string"
+          },
+          "record_count": {
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "unknown_count": {
+            "title": "Unknown Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "member_id",
+          "known_amount_krw",
+          "record_count",
+          "unknown_count"
+        ],
+        "title": "ExpectedMemberSummary",
         "type": "object"
       },
       "ExpectedResponse": {
@@ -9450,6 +9514,9 @@
       },
       "IncomeSummaryResponse": {
         "properties": {
+          "expected": {
+            "$ref": "#/components/schemas/ExpectedIncomeSummary"
+          },
           "members": {
             "items": {
               "$ref": "#/components/schemas/MemberIncomeSummary"
@@ -9469,7 +9536,8 @@
         "required": [
           "period_month",
           "totals",
-          "members"
+          "members",
+          "expected"
         ],
         "title": "IncomeSummaryResponse",
         "type": "object"

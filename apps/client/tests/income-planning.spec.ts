@@ -64,3 +64,45 @@ test("expected baseline and stock award keep exact money and distinct cash confi
     received: true,
   });
 });
+
+test("editing an expected baseline saves once without a mandatory explanation", async ({
+  page,
+}) => {
+  await mockFinance(page);
+  const stamp = "2026-01-01T00:00:00Z";
+  let row = {
+    id: uid(960),
+    household_id: uid(3),
+    member_id: uid(2),
+    label: "합성 월급",
+    amount_krw: "2500000",
+    active: true,
+    note: null,
+    version: 1,
+    created_at: stamp,
+    updated_at: stamp,
+    created_by_member_id: uid(2),
+    updated_by_member_id: uid(2),
+  };
+  const writes: any[] = [];
+  await page.route("**/api/v1/income-planning/**", (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({
+        json: {
+          items: route.request().url().includes("/expected") ? [row] : [],
+          next_cursor: null,
+        },
+      });
+    const body = route.request().postDataJSON();
+    writes.push(body);
+    row = { ...row, ...body, version: 2 };
+    return route.fulfill({ json: row });
+  });
+  await page.goto("/income/planning");
+  await page.getByRole("button", { name: "예상 수입 수정", exact: true }).click();
+  await page.getByLabel("예상 월 금액", { exact: true }).fill("2700000");
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText(/확인된 예상 합계 2,700,000원/)).toBeVisible();
+  expect(writes).toHaveLength(1);
+  expect(writes[0].reason).toBe("예상 월 수입 수정");
+});

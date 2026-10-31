@@ -343,7 +343,10 @@ internal object CashflowPolicy {
             }
             FinanceOperation.INCOME_SUMMARY -> {
                 val row = shape(value, mapOf("period_month" to month, "totals" to record(incomeTotalsFields()),
-                    "members" to list(record(mapOf("member_id" to nullable(id), "totals" to record(incomeTotalsFields()))))))
+                    "members" to list(record(mapOf("member_id" to nullable(id), "totals" to record(incomeTotalsFields())))),
+                    "expected" to record(mapOf("known_amount_krw" to money, "record_count" to count, "unknown_count" to count,
+                        "members" to list(record(mapOf("member_id" to id, "known_amount_krw" to money, "record_count" to count, "unknown_count" to count)))))),
+                    required = setOf("period_month", "totals", "members"))
                 if (row["period_month"] != uri.rawQuery.removePrefix("month=")) invalid()
                 row
             }

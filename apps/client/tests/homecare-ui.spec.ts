@@ -8,7 +8,6 @@ const appliance = `/appliances/${uid(100)}`,
   stock = `/consumables/${uid(200)}`,
   device = `/appliance-consumables/${uid(300)}`;
 const saveReplacement = async (page: import("@playwright/test").Page) => {
-  await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
   await page.getByRole("button", { name: "실제 교체·재고 사용 저장", exact: true }).click();
 };
 test("appliance creation preserves missing versus zero and warranty metadata without asset writes", async ({
@@ -176,12 +175,8 @@ test("clearing a device override is explicit and conflict retains only edited in
   await page.getByLabel("다음 확인일 직접 지정").fill("");
   const writesBeforeClear = state.writes.length;
   await page.getByRole("button", { name: "기기별 소모품 설정 저장" }).click();
-  await expect(page.getByRole("alert")).toHaveText(
-    "직접 지정한 다음 확인일 해제 확인란을 선택해 주세요.",
-  );
-  expect(state.writes).toHaveLength(writesBeforeClear);
-  await page.getByLabel("직접 지정한 다음 확인일을 해제하고 교체 기록 기준을 적용해요").check();
-  await page.getByRole("button", { name: "기기별 소모품 설정 저장" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(state.writes).toHaveLength(writesBeforeClear + 1);
   await expect(page.getByText("2025.03.31 · 교체 기록 기준")).toBeVisible();
   expect(state.writes.at(-1)!.body).toEqual({ interval_count: 2, next_check_override: null });
   expect(state.links[0]!.note).toBe("배우자가 작성한 합성 메모");
@@ -261,7 +256,6 @@ test("replacement requires explicit override choice and missed cycles never mult
   state.links[0]!.next_check_override = "2025-02-01";
   await page.goto(`${device}/replace`);
   await page.getByLabel("실제 교체일", { exact: true }).fill("2025-03-02");
-  await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
   await page.getByRole("button", { name: "실제 교체·재고 사용 저장" }).click();
   await expect(page.getByLabel("직접 지정한 다음 확인일 처리")).toBeFocused();
   expect(state.writes).toHaveLength(0);
@@ -292,7 +286,7 @@ test("replacement link conflict keeps typed date and amount and requires reviewi
   await page.getByRole("button", { name: "교체 입력 유지하고 현재 상태 적용" }).click();
   await expect(
     page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요"),
-  ).not.toBeChecked();
+  ).toHaveCount(0);
   await saveReplacement(page);
   await expect(page.getByText("2025.03.02", { exact: true })).toBeVisible();
   expect(state.writes.at(-1)!.body.link_version).toBe(4);
@@ -384,13 +378,23 @@ test("T24 dashboard keeps today status independent of selected asset month and u
   state.links[0]!.next_check_override = t24.inputs.next_check_on;
   state.consumables[0]!.stock_quantity = t24.inputs.stock;
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
+  await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
   await page.getByLabel("확인할 월").fill(t24.inputs.selected_asset_month);
   await expect(page.getByText("오늘 기준 · 2026.10.17", { exact: true })).toBeVisible();
   await expect(
     page.getByText("임시 합계 · 확인 1/3개 · 미입력 1개 · 전월값 미확인 1개"),
   ).toBeVisible();
-  await expect(page.getByText("5,000,000원", { exact: true })).toBeVisible();
-  await expect(page.getByText("1,000,000원", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "저장된 자산 금액" })
+      .getByText("5,000,000원", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "저장된 자산 금액" })
+      .getByText("1,000,000원", { exact: true }),
+  ).toBeVisible();
   expect(
     state.reads
       .filter((r) => r.path === "/api/v1/homecare/status")
@@ -402,7 +406,8 @@ test("T24 dashboard keeps today status independent of selected asset month and u
     ),
   ).toBe(true);
   const h2 = await page.getByRole("heading", { level: 2 }).allTextContents();
-  expect(h2.slice(0, 2)).toEqual(["자산의 변화", "살펴볼 소모품"]);
+  expect(h2[0]).toBe("수입·지출");
+  expect(h2).toContain("우리 집 보유 현황");
   await expect(page.getByRole("link", { name: /SYNTHETIC-CLAIM-1200/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

@@ -20,6 +20,7 @@ test("home keeps date and scope cautions visible before expanding precise compar
 }) => {
   await homeData(page);
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await page.getByLabel("확인할 월").fill("2025-02");
   const assets = page.getByRole("region", { name: "자산의 변화", exact: true });
   await expect(assets.getByText("2,040원", { exact: true })).toBeVisible();
@@ -31,23 +32,18 @@ test("home keeps date and scope cautions visible before expanding precise compar
   await expect(assets.getByText("서로 다른 기준일이 섞여 있어요", { exact: false })).toBeVisible();
 });
 
-test("390px home presents consumable attention count and first status above the bottom navigation", async ({
+test("390px home prioritizes registered household information and keeps consumables accessible", async ({
   page,
 }) => {
-  // The month being looked at is the current one, so the "이번 달" shortcut needs no row.
   await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
   await page.setViewportSize({ width: 390, height: 844 });
   await homeData(page);
   await page.goto("/");
-  await page.getByLabel("확인할 월").fill("2025-02");
-  await expect(page.getByText("서로 다른 기준일", { exact: true })).toBeVisible();
-  await page.evaluate(() => document.fonts.ready);
-  const today = await page.locator(".home-today .care-status").first().boundingBox();
+  await expect(page.getByRole("heading", { name: "수입·지출", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "우리 집 보유 현황", exact: true })).toBeVisible();
   await expect(page.locator(".home-today .care-count")).toHaveText("기기별 확인 2건");
-  const nav = await page.getByRole("navigation", { name: "주 메뉴", exact: true }).boundingBox();
-  expect(today!.y + today!.height).toBeLessThan(nav!.y);
-  for (const link of await page.locator(".asset-detail-actions > a").all())
-    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+  await page.locator(".home-today").scrollIntoViewIfNeeded();
+  await expect(page.locator(".home-today .care-status").first()).toBeVisible();
   const settings = await page.getByRole("link", { name: "설정", exact: true }).boundingBox();
   expect(settings!.width).toBeGreaterThanOrEqual(48);
   expect(settings!.height).toBeGreaterThanOrEqual(48);
@@ -71,6 +67,7 @@ for (const currentState of ["draft", "reopened"] as const)
       return route.fulfill({ json: data });
     });
     await page.goto("/");
+    await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
     const assets = page.getByRole("region", { name: "자산의 변화", exact: true });
     await expect(assets.locator("details")).not.toHaveAttribute("open", "");
     await expect(
@@ -126,8 +123,13 @@ test("dark enlarged narrow layouts retain exact large money and insurance conten
     return route.fulfill({ json: data });
   });
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await page.addStyleTag({ content: "html { font-size: 200%; }" });
-  await expect(page.getByText("9,007,199,254,740,993원", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "저장된 자산 금액" })
+      .getByText("9,007,199,254,740,993원", { exact: true }),
+  ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(
     "dark",
@@ -163,6 +165,7 @@ for (const mode of ["zero", "negative", "unconfirmed"] as const)
     if (mode === "negative") state.negativePrevious = true;
     if (mode === "unconfirmed") state.mode = "unconfirmed";
     await page.goto("/");
+    await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
     const assets = page.getByRole("region", { name: "자산의 변화", exact: true });
     await assets.getByText("비교 기준과 상세 금액", { exact: true }).click();
     await expect(
@@ -195,6 +198,7 @@ test("failed home comparison retains navigation to month records and asset manag
     }),
   );
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await expect(
     page.getByRole("button", { name: "홈 자산 정보 다시 확인", exact: true }),
   ).toBeVisible();
@@ -208,6 +212,7 @@ test("390px enlarged home moves the month selector to its own readable row", asy
   await page.setViewportSize({ width: 390, height: 844 });
   await homeData(page);
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await page.addStyleTag({ content: "html { font-size: 200%; }" });
   await page.evaluate(() => document.fonts.ready);
   const title = await page.getByRole("heading", { level: 1 }).boundingBox();
@@ -282,6 +287,7 @@ test("narrow home keeps the month label, 12px status text and 48px segmented but
   await page.setViewportSize({ width: 390, height: 844 });
   await homeData(page);
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   const label = page.locator(".dashboard-heading .month-control label");
   expect((await label.boundingBox())!.width).toBeGreaterThan(20);
   for (const selector of [".snapshot-check", ".dashboard-heading .month-picker > .muted"]) {
@@ -315,6 +321,7 @@ for (const [width, actions] of [
     await page.setViewportSize({ width, height: 900 });
     await mockOnboarding(page);
     await page.goto("/");
+    await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
     await page.locator(".home-card-actions").first().waitFor();
     for (const style of await styleOf(page, ".home-card-actions", Object.keys(actions)))
       expect(style).toEqual(actions);
@@ -329,6 +336,7 @@ for (const [width, actions] of [
 test("cleanup keeps computed sizes of formerly important homecare rules", async ({ page }) => {
   await homeData(page);
   await page.goto("/");
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await page.locator(".care-item-actions a").first().waitFor();
   for (const style of await styleOf(page, ".care-intro", ["font-size", "margin-bottom"]))
     expect(style).toEqual({ "font-size": "12px", "margin-bottom": "10px" });

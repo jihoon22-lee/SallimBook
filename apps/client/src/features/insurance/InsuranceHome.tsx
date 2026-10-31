@@ -1,3 +1,4 @@
+import { InsuranceOverview } from "../dashboard/HouseholdOverview";
 import { Link } from "react-router";
 import { InsurancePage } from "./InsuranceSupport";
 export function InsuranceHome() {
@@ -29,8 +30,9 @@ export function InsuranceHome() {
       description="계약과 독립 사건, 실제 의료비·청구·수령을 함께 기록해요."
       navigation={navigation}
     >
-      <section className="card">
-        <h2>기록하는 순서</h2>
+      <InsuranceOverview />
+      <details className="card">
+        <summary>보험 기록 도움말</summary>
         <ol>
           <li>계약·보장과 보험료 납부 규칙을 연결해요.</li>
           <li>사건과 진료·처방·약국을 기록해요.</li>
@@ -38,7 +40,7 @@ export function InsuranceHome() {
           <li>실제 보험금 입금을 사건별로 배분하고 환불·반환을 별도 기록해요.</li>
         </ol>
         <p>청구가 없어도 실제 수령부터 기록할 수 있어요. 치료 종료와 정산 종료는 각각 확인해요.</p>
-      </section>
+      </details>
     </InsurancePage>
   );
 }

@@ -144,7 +144,9 @@ export async function mockComparison(page: Page) {
       const inAfter = right.some((r) => r.asset_id === id);
       const share = !!(b && a && b.household_share !== a.household_share);
       const raw =
-        b && a ? (BigInt(a.owned_amount_krw!) - BigInt(b.owned_amount_krw!)).toString() : null;
+        b?.owned_amount_krw != null && a?.owned_amount_krw != null
+          ? (BigInt(a.owned_amount_krw) - BigInt(b.owned_amount_krw)).toString()
+          : null;
       return {
         asset_id: id,
         before: b,

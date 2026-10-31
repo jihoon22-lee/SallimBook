@@ -110,7 +110,7 @@ function MonthlyData({ assetId }: { assetId: string }) {
           </>
         )}
         <div className="form-actions">
-          <Link to={`/assets/months/${month}`}>월 기록 입력·정정</Link>
+          <Link to={`/assets/months/${month}?asset_id=${assetId}`}>월 기록 입력·정정</Link>
           <Link to={`/assets/compare?to=${month}&asset_id=${assetId}`}>이 자산의 비교 상세</Link>
         </div>
       </section>

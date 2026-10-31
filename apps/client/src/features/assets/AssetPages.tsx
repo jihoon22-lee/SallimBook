@@ -1,3 +1,8 @@
+import {
+  useSavedAmounts,
+  SavedAmountsStatus,
+  SavedAmount,
+} from "../assets/comparison/SavedAmounts";
 import { LastModified } from "../../shared/RecordActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { TaskPanel } from "../../shared/TaskLayout";
@@ -10,7 +15,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { stateFlag, useRouteNotice } from "../../shared/routeNotice";
 import { ApiError, toApiError } from "../../platform/api";
-import { MonthPicker, useMonth, formatMonth } from "../../shared/MonthContext";
+import { useMonth, formatMonth } from "../../shared/MonthContext";
 import { SessionStatus, useMounted } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import {
@@ -19,7 +24,6 @@ import {
   isDateOnly,
   isUuid,
   MemberLoadError,
-  MissingAmount,
   todaySeoul,
   useHouseholdMembers,
 } from "../finance/FinanceSupport";
@@ -84,6 +88,7 @@ export function AssetSummary({ asset, members }: { asset: Asset; members: Househ
 }
 
 function AssetList() {
+  const amounts = useSavedAmounts();
   const api = useAssetsApi();
   const members = useHouseholdMembers();
   const [params, setParams] = useSearchParams();
@@ -144,6 +149,7 @@ function AssetList() {
   ].filter(Boolean).length;
   return (
     <>
+      <SavedAmountsStatus result={amounts} members={members.members} />
       <NameSearch label="자산·부채 이름 검색" />
       <div className="form-actions">
         <Link className="button-link" to="/assets/new">
@@ -280,7 +286,6 @@ function AssetList() {
           <span className="muted">불러온 항목 {items.length}개</span>
         </div>
       )}
-      {items.length > 0 && <MissingAmount />}
       <ul className="finance-list asset-records">
         {items.map((asset) => (
           <li key={asset.id} className="card asset-record">
@@ -302,6 +307,7 @@ function AssetList() {
                 {asset.status === "archived" ? "사용 종료" : "사용 중"}
               </span>
             </div>
+            <SavedAmount result={amounts} assetId={asset.id} />
             <details className="record-details">
               <summary>소유·지분·보유기간 자세히</summary>
               <AssetSummary asset={asset} members={members.members} />
@@ -589,7 +595,6 @@ export function AssetListPage() {
         <p>소유자와 지분, 보유 기간을 함께 관리해요.</p>
       </div>
       {deleted && <p role="status">자산이 삭제된 것을 확인했어요.</p>}
-      <MonthPicker />
       <div className="form-actions month-action">
         <Link className="button-link" to={`/assets/months/${currentMonth}`}>
           이번 달 기록하기

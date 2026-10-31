@@ -287,7 +287,27 @@ function MonthWorkspace({
   const [owner, setOwner] = useState("all");
   const [verification, setVerification] = useState("all");
   const [nextAfter, setNextAfter] = useState<string | null>(null);
+  const [search] = useSearchParams();
+  const targetAsset = search.get("asset_id");
+  const openedTarget = useRef<string | null>(null);
   const [nextError, setNextError] = useState(false);
+  useEffect(() => {
+    if (
+      !record ||
+      loading ||
+      revisionNo !== undefined ||
+      record.state === "confirmed" ||
+      !targetAsset ||
+      openedTarget.current === targetAsset
+    )
+      return;
+    const row = record.values.find((value) => value.asset_id === targetAsset);
+    if (row) {
+      openedTarget.current = targetAsset;
+      setEditor({ revisionId: record.revision_id, row });
+    }
+  }, [record, loading, revisionNo, targetAsset]);
+
   const matchesOwner = (row: MonthValue) =>
     owner === "all" ||
     (owner === "joint"

@@ -25,9 +25,6 @@ test("claim payout-list action preserves its case policy and claim through recei
   );
   await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("10000");
   await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("10000");
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
   await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "보험금 수령 상세", exact: true })).toBeVisible();
   expect(state.payouts).toHaveLength(1);
@@ -260,9 +257,6 @@ test("T-18 one 500000 receipt requires T-19 equal multi-case allocation before s
   const second = page.getByRole("region", { name: "보험금 배분 2", exact: true });
   await second.getByRole("combobox", { name: "배분 사건", exact: true }).selectOption(uid(95));
   await second.getByLabel("사건 배분금액 (원)", { exact: true }).fill("150000");
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
   await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
   await expect(
     page.getByText("배분 합계가 실제 입금액과 같아야 해요.", { exact: true }),
@@ -271,10 +265,7 @@ test("T-18 one 500000 receipt requires T-19 equal multi-case allocation before s
   await second.getByLabel("사건 배분금액 (원)", { exact: true }).fill("200000");
   await expect(
     page.getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true }),
-  ).not.toBeChecked();
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "보험금 수령 상세", exact: true })).toBeVisible();
   expect(state.payouts).toHaveLength(1);
@@ -386,9 +377,6 @@ test("payout correction uses the domain version and preserves the prior original
   await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("610000");
   await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("610000");
   await page.getByLabel("보험금 수령 정정 사유", { exact: true }).fill("합성 입금액 보완");
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
   await page.getByRole("button", { name: "보험금 수령 정정 저장", exact: true }).click();
   await expect(page.getByRole("link", { name: "정정 전 원본 확인", exact: true })).toBeVisible();
   expect(state.payouts[0]!.cash.state).toBe("void");

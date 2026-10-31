@@ -113,12 +113,6 @@ test("native rule creation revision end and explicit generation use typed DTO an
   await page.getByLabel("원화 예정금액 (원)", { exact: true }).fill("101");
   await page.getByLabel("적용 시작일", { exact: true }).fill("2025-03-01");
   await page.getByLabel("규칙 변경 사유", { exact: true }).fill("합성 앱 새 요금");
-  await page
-    .getByLabel(
-      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
-      { exact: true },
-    )
-    .check();
   await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
   await page.getByRole("button", { name: "납부 규칙 종료 검토", exact: true }).click();
   await page.getByLabel("규칙 종료 적용일", { exact: true }).fill("2025-04-01");

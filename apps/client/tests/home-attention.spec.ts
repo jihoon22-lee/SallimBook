@@ -51,6 +51,7 @@ for (const native of [false, true]) {
     setup(state);
     const device = native ? await mockNativeHomecare(page, state) : null;
     await page.goto("/");
+    await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
     const overdue = group(page, "지난 예정일 납부 확인");
     await expect(overdue).toContainText("5건");
     await expect(overdue.getByRole("link", { name: "합성 미납 0", exact: true })).toHaveAttribute(
@@ -60,11 +61,7 @@ for (const native of [false, true]) {
     await expect(overdue.getByText("합성 오늘 예정", { exact: true })).toHaveCount(0);
     await overdue.getByText("나머지 2건 보기", { exact: true }).click();
     await expect(overdue.getByRole("link", { name: "합성 미납 4", exact: true })).toBeVisible();
-    await expect(group(page, "지난달 월 기록").getByRole("link")).toHaveAttribute(
-      "href",
-      "/assets/months/2026-09",
-    );
-    await expect(group(page, "지난달 월 기록")).toContainText("정정본 확인이 필요해요");
+    await expect(group(page, "지난달 월 기록")).toHaveCount(0);
     await expect(group(page, "추가 서류 필요 청구")).toContainText("4건");
     await expect(group(page, "청구 연결 검토 비용")).toContainText("1건");
     await expect(group(page, "청구 연결 검토 비용").getByRole("link")).toHaveAttribute(
@@ -74,12 +71,8 @@ for (const native of [false, true]) {
     await expect(page.locator(".home-warranties")).not.toHaveAttribute("open", "");
     await expect(page.getByText("30일 내 보증 만료 2개", { exact: true })).toBeVisible();
     await page.getByLabel("확인할 월", { exact: true }).fill("2025-01");
-    await expect(group(page, "지난달 월 기록").getByRole("link")).toHaveAttribute(
-      "href",
-      "/assets/months/2026-09",
-    );
     await expect(overdue).toContainText("5건");
-    const primary = await page.locator(".dashboard-grid").boundingBox();
+    const primary = await page.getByRole("region", { name: "우리 집 보유 현황" }).boundingBox();
     const attention = await group(page, "확인할 일").boundingBox();
     expect(primary!.y + primary!.height).toBeLessThan(attention!.y + 1);
     expect(state.cashflow.writes).toHaveLength(0);
@@ -121,6 +114,7 @@ for (const native of [false, true]) {
         return route.fulfill({ status: response!.status, json: response!.body });
       });
     await page.goto("/");
+    await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
     const overdue = group(page, "지난 예정일 납부 확인");
     await expect(overdue).toContainText("5건");
     failed = true;
@@ -141,8 +135,7 @@ for (const native of [false, true]) {
     await overdue.getByRole("button", { name: "지난 예정일 납부 확인 새로고침" }).click();
     await expect(overdue).toContainText("지난 예정일의 미납·부분 납부가 없어요");
     state.previousMonthState = "confirmed";
-    await group(page, "지난달 월 기록").getByRole("button").click();
-    await expect(group(page, "지난달 월 기록")).toContainText("기록을 확정했어요");
+    await expect(group(page, "지난달 월 기록")).toHaveCount(0);
     state.insurance.claims.forEach((row) => {
       row.claim_state = "reviewing";
     });

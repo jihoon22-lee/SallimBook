@@ -123,6 +123,16 @@ class IncomePolicyTest {
             FinancePolicy.response(FinanceOperation.INCOME_SUMMARY, summary, 200, body + change)
         }
     }
+    @Test fun currentExpectedSummaryIsExactAndSeparateFromActualCash() {
+        val req = request(FinanceOperation.INCOME_SUMMARY, mapOf("query" to mapOf("month" to "2026-01")))
+        val expected = mapOf("known_amount_krw" to "9007199254740993", "record_count" to 2, "unknown_count" to 1,
+            "members" to listOf(mapOf("member_id" to id, "known_amount_krw" to "9007199254740993", "record_count" to 2, "unknown_count" to 1)))
+        val body = mapOf("period_month" to "2026-01", "totals" to totals(), "members" to emptyList<Any>(), "expected" to expected)
+        assertEquals(body, FinancePolicy.response(FinanceOperation.INCOME_SUMMARY, req, 200, body))
+        bad(AuthCode.ACCESS_DENIED) {
+            FinancePolicy.response(FinanceOperation.INCOME_SUMMARY, req, 200, body + mapOf("expected" to expected + mapOf("known_amount_krw" to 10)))
+        }
+    }
     @Test fun duplicateAndConversionResultsRemainBoundedPublicRecords() {
         val d = request(FinanceOperation.INCOME_DUPLICATE_CANDIDATES, mapOf("query" to mapOf("month" to "2026-01", "kind" to "salary", "member_id" to id, "date_precision" to "day")))
         val duplicates = mapOf("suspected" to true, "items" to listOf(cash()), "truncated" to false)
