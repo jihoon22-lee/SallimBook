@@ -109,7 +109,9 @@ for (const native of [false, true])
     ).toBeDisabled();
     if (bridge) {
       expect(bridge.http).toEqual([]);
-      expect(bridge.calls.filter((r) => r.method === "applyExpensePlanPaymentSwitch")).toHaveLength(3);
+      expect(bridge.calls.filter((r) => r.method === "applyExpensePlanPaymentSwitch")).toHaveLength(
+        3,
+      );
     }
   });
 test("invalid date, same source and blocked rows cannot save; changing target discards the preview", async ({
