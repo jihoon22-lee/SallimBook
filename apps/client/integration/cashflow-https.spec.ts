@@ -302,6 +302,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
     }),
   ).toBeVisible();
   await page.goto("/");
+  await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
   const homeOverdue = page.getByRole("region", { name: "지난 예정일 납부 확인", exact: true });
   await expect(homeOverdue.locator(`a[href="/fixed-payments/${obligationId}"]`)).toBeVisible();
   await expect(homeOverdue).toContainText("3건");
@@ -312,6 +313,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
   await settle(page, obligationId, "25000");
   await expect(page.getByText("+2,000원", { exact: true })).toBeVisible();
   await page.goto("/");
+  await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
   await expect(homeOverdue).toContainText("2건");
   await expect(homeOverdue.locator(`a[href="/fixed-payments/${obligationId}"]`)).toHaveCount(0);
   console.log("SAFE_PHASE=HOME_ATTENTION_ORIGINAL_PAYMENT");
@@ -319,12 +321,6 @@ test("real income card recurring and closure workflow preserves cash facts and i
   await page.getByLabel("원화 예정금액 (원)", { exact: true }).fill("34000");
   await page.getByLabel("적용 시작일", { exact: true }).fill(dayAfter(today, 1));
   await page.getByLabel("규칙 변경 사유", { exact: true }).fill("합성 미래 요금 변경");
-  await page
-    .getByLabel(
-      "새 적용기간의 미래 미납 회차가 바뀌며, 과거·실제 납부·수동 예외는 보존됨을 확인했어요.",
-      { exact: true },
-    )
-    .check();
   await page.getByRole("button", { name: "새 적용기간 저장", exact: true }).click();
   await page.getByRole("button", { name: "규칙 종료일 앞당기기 검토", exact: true }).click();
   await page.getByLabel("규칙 종료 적용일", { exact: true }).fill(dayAfter(today, 20));

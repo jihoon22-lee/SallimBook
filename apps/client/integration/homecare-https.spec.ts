@@ -84,7 +84,6 @@ async function replace(page: Page, id: string, date: string, override?: string) 
   await page.goto(`/appliance-consumables/${id}/replace`);
   await page.getByLabel("실제 교체일", { exact: true }).fill(date);
   if (override) await page.getByLabel("직접 지정한 다음 확인일 처리").selectOption(override);
-  await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
   await page.getByRole("button", { name: "실제 교체·재고 사용 저장" }).click();
   await expect(
     page.getByRole("heading", { name: "기기별 소모품 관리", exact: true }),
@@ -310,7 +309,6 @@ test("homecare real HTTPS shared stock device cycles history dashboard and uncha
   const second = await page.context().newPage();
   const secondReplacement = await replace(second, linkB, "2025-03-04");
   await second.close();
-  await page.getByLabel("실제 교체일·사용 수량과 다음 확인일 적용 방식을 확인했어요").check();
   await page.getByRole("button", { name: "실제 교체·재고 사용 저장" }).click();
   await expect(page.getByRole("alert")).toContainText("공용 재고가 부족해요");
   await expect(page.getByLabel("실제 교체일", { exact: true })).toHaveValue("2025-03-04");

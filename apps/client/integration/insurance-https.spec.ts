@@ -124,9 +124,6 @@ async function createPayout(
     const second = page.getByRole("region", { name: "보험금 배분 2", exact: true });
     await second.getByRole("combobox", { name: "배분 사건", exact: true }).selectOption(secondCase);
     await second.getByLabel("사건 배분금액 (원)", { exact: true }).fill("150000");
-    await page
-      .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-      .check();
     // A mismatched total keeps save enabled and explains the reason on submit.
     await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
     await expect(
@@ -134,9 +131,6 @@ async function createPayout(
     ).toBeFocused();
     await second.getByLabel("사건 배분금액 (원)", { exact: true }).fill("200000");
   }
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
   await page.getByRole("button", { name: "실제 보험금 수령 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "보험금 수령 상세", exact: true })).toBeVisible();
   return lastId(page);
@@ -445,9 +439,6 @@ test("real insurance policies cases medical originals claims receipts correction
   await page.getByLabel("보험금 수령 금액 (원)", { exact: true }).fill("101");
   await page.getByLabel("사건 배분금액 (원)", { exact: true }).fill("101");
   await page.getByLabel("보험금 수령 정정 사유", { exact: true }).fill("합성 HTTPS 수령 정정");
-  await page
-    .getByLabel("실제 입금 한 건과 같은 합계의 사건별 배분을 확인했어요.", { exact: true })
-    .check();
   await page.getByRole("button", { name: "보험금 수령 정정 저장", exact: true }).click();
   await expect(page.getByRole("link", { name: "정정 전 원본 확인", exact: true })).toBeVisible();
   const correctedPayout = lastId(page);
