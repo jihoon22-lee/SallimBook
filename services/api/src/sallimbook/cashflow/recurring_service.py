@@ -90,7 +90,9 @@ def _audit(session, principal, row, entity, action, fields, before=None, after=N
     )
 
 
-def _validate_method(session, principal, account_id, card_id, loan_asset_id=None, *, on=None):
+def _validate_method(
+    session, principal, account_id, card_id, loan_asset_id=None, *, on=None, for_update=True
+):
     # Plans (on=None) need a method still in use; an actual payment only needs it on that day.
     def closed(ended_on):
         return ended_on is not None and (on is None or ended_on < on)
@@ -103,7 +105,7 @@ def _validate_method(session, principal, account_id, card_id, loan_asset_id=None
     if loan_asset_id is not None:
         asset_ids.add(loan_asset_id)
     assets = {
-        asset_id: scoped_entity(session, Asset, asset_id, principal, for_update=True)
+        asset_id: scoped_entity(session, Asset, asset_id, principal, for_update=for_update)
         for asset_id in sorted(asset_ids)
     }
     if loan_asset_id is not None:
@@ -111,13 +113,13 @@ def _validate_method(session, principal, account_id, card_id, loan_asset_id=None
         if loan.kind != "liability" or loan.ended_on is not None:
             raise DomainError("LOAN_UNAVAILABLE", "사용 중인 부채를 선택해 주세요.", 422)
     if account is not None:
-        scoped_entity(session, FinancialAccount, account_id, principal, for_update=True)
+        scoped_entity(session, FinancialAccount, account_id, principal, for_update=for_update)
         if closed(assets[account.asset_id].ended_on):
             raise DomainError("ACCOUNT_UNAVAILABLE", "사용 중인 납부 계좌를 선택해 주세요.", 422)
     if card_id is not None:
         from sallimbook.cards.models import Card
 
-        card = scoped_entity(session, Card, card_id, principal, for_update=True)
+        card = scoped_entity(session, Card, card_id, principal, for_update=for_update)
         if closed(card.ended_on):
             raise DomainError("CARD_UNAVAILABLE", "사용 중인 납부 카드를 선택해 주세요.", 422)
 
@@ -541,6 +543,9 @@ def delete_rule(session, principal, rule_id, if_match, key, *, plan=False):
             ),
         ):
             session.execute(statement.execution_options(synchronize_session=False))
+        from sallimbook.cashflow.expense_import_service import detach_deleted_rule
+
+        detach_deleted_rule(session, principal, row.id)
         version = row.version
         session.delete(row)
         session.flush()

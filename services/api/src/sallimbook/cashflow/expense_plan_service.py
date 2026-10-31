@@ -40,9 +40,14 @@ def monthly_equivalent(version):
     )
 
 
-def _validate(session, principal, payload):
+def _validate(session, principal, payload, *, for_update=True):
     recurring._validate_method(
-        session, principal, payload.account_id, payload.card_id, payload.loan_asset_id
+        session,
+        principal,
+        payload.account_id,
+        payload.card_id,
+        payload.loan_asset_id,
+        for_update=for_update,
     )
     if payload.subject_member_id is not None:
         scoped_entity(session, HouseholdMember, payload.subject_member_id, principal)
