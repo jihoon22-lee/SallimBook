@@ -132,9 +132,28 @@ def _current_responses(
         if ids
         else set()
     )
-    return [
+    from sallimbook.cashflow.planning_models import BonusAward
+
+    linked = (
+        set(
+            session.scalars(
+                select(BonusAward.cash_record_id).where(
+                    BonusAward.household_id == principal.household_id,
+                    BonusAward.cash_record_id.in_(ids),
+                )
+            )
+        )
+        if ids
+        else set()
+    )
+    result = [
         _response(row, current=True, has_returns=row.cash_record_id in returned_ids) for row in rows
     ]
+    for item in result:
+        if item.id in linked:
+            item.editable = False
+            item.voidable = False
+    return result
 
 
 def _revision(session: Session, principal: Principal, record_id: UUID, version: int):
@@ -448,6 +467,9 @@ def correct_income(session, principal, record_id, payload: IncomePatch, if_match
     def execute():
         row = _income_record(session, principal, record_id, lock=True)
         require_version(row, if_match)
+        from sallimbook.cashflow.planning_service import guard_linked_cash
+
+        guard_linked_cash(session, principal, row.id)
         _manual_active(row)
         _no_returns(session, principal, row)
         values = {name: getattr(row, name) for name in IncomeInput.model_fields}
@@ -526,6 +548,9 @@ def void_income(session, principal, record_id, payload: IncomeVoid, if_match, ke
     def execute():
         row = _income_record(session, principal, record_id, lock=True)
         require_version(row, if_match)
+        from sallimbook.cashflow.planning_service import guard_linked_cash
+
+        guard_linked_cash(session, principal, row.id)
         _manual_active(row, allow_return=True)
         _no_returns(session, principal, row)
         _void(session, principal, row, payload.reason)
@@ -590,6 +615,9 @@ def convert_income(session, principal, payload: IncomeConvert, key):
         ]
         for row in sources:
             require_version(row, f'"{versions[row.id]}"')
+            from sallimbook.cashflow.planning_service import guard_linked_cash
+
+            guard_linked_cash(session, principal, row.id)
             _manual_active(row)
             _no_returns(session, principal, row)
         first = sources[0]

@@ -27,7 +27,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sallimbook.core.database import Base, EntityMixin
 from sallimbook.insurance.models import ActorFields, actor_constraints, household_fk
 from sallimbook.vault.formats import (
-    CARD_CIPHERTEXT_BYTES,
     KEY_CHECK_CIPHERTEXT_BYTES,
     MAX_PBKDF2_ITERATIONS,
     MAX_SAFE_INTEGER,
@@ -297,10 +296,12 @@ class CardSecretEnvelope(OpaqueFields, ActorFields, EntityMixin, Base):
         _version_fk("card_secret_envelopes"),
         *_nonce_constraints("card_secret_envelopes", "card"),
         _bounded("revision"),
-        CheckConstraint("payload_schema_version = 1", name="payload_schema"),
+        CheckConstraint("payload_schema_version IN (1, 2)", name="payload_schema"),
         CheckConstraint("last_four ~ '^[0-9]{4}$'", name="last_four"),
         CheckConstraint(
-            f"ciphertext IS NULL OR octet_length(ciphertext) = {CARD_CIPHERTEXT_BYTES}",
+            "ciphertext IS NULL OR (payload_schema_version = 1 AND "
+            "octet_length(ciphertext) = 43) OR (payload_schema_version = 2 AND "
+            "octet_length(ciphertext) = 48)",
             name="ciphertext_length",
         ),
         CheckConstraint("(ciphertext IS NULL) = (purged_at IS NOT NULL)", name="purged_ciphertext"),

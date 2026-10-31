@@ -248,6 +248,32 @@ def write_secret(client, actor, row, *, payload=None, key=None, version=None):
     )
 
 
+def test_v2_secret_retry_permissions_and_legacy_overwrite_rejection(vault_app, actors):
+    first, partner, foreign = actors
+    with TestClient(vault_app) as client:
+        initialize(client, first)
+        initialize(client, foreign)
+        row = card(client, first)
+        v2 = card_secret() | {"payload_schema_version": 2, "ciphertext": opaque(48, 20)}
+        saved = write_secret(client, first, row, payload=v2, key="v2-save-once")
+        assert saved.status_code == 200
+        assert (
+            write_secret(client, first, row, payload=v2, key="v2-save-once").json() == saved.json()
+        )
+        for actor in (partner, foreign):
+            assert client.get(
+                f"/api/v1/cards/{row['id']}/secret-envelope", headers=actor.headers
+            ).status_code in (403, 404)
+        old = write_secret(
+            client, first, row, payload=card_secret(seed=21), version=saved.json()["version"]
+        )
+        assert old.status_code == 409
+        assert old.json()["error"]["code"] == "VAULT_CLIENT_UPGRADE_REQUIRED"
+        fetched = client.get(f"/api/v1/cards/{row['id']}/secret-envelope", headers=first.headers)
+        assert fetched.status_code == 200
+        assert fetched.json()["payload_schema_version"] == 2
+
+
 def own_wrap(client, actor):
     response = client.get("/api/v1/vault/wrappings/me", headers=actor.headers)
     assert response.status_code == 200, response.text

@@ -14,6 +14,7 @@ import { ReturnLoginLink } from "../auth/ReturnLoginLink";
 
 const titles = {
   setup: "보관함 처음 설정",
+  "batch-edit": "미등록 카드 비밀 일괄 입력",
   view: "보호된 카드 정보 보기",
   edit: "카드 번호·유효기간 입력",
   purge: "저장된 카드 비밀 삭제",
@@ -66,10 +67,15 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
     code = useRef<HTMLInputElement>(null);
   const pan = useRef<HTMLInputElement>(null),
     year = useRef<HTMLInputElement>(null),
-    month = useRef<HTMLInputElement>(null);
+    month = useRef<HTMLInputElement>(null),
+    cvc = useRef<HTMLInputElement>(null);
   const newPasswords = useRef(
     new Map<string, { first: HTMLInputElement | null; second: HTMLInputElement | null }>(),
   );
+  const batchFields = useRef(
+    new Map<string, Partial<Record<"pan" | "year" | "month" | "cvc", HTMLInputElement | null>>>(),
+  );
+  const [completedCards, setCompletedCards] = useState(0);
   const lifetime = useRef<VaultLifetime | null>(null),
     workflow = useRef<VaultWorkflow | null>(null),
     flight = useRef(false);
@@ -90,12 +96,22 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
   const [notice, setNotice] = useState(""),
     [reauthRequired, setReauthRequired] = useState(false);
   const [reason, setReason] = useState<VaultInputs["reason"]>("routine");
+  const [cvcAction, setCvcAction] = useState<"keep" | "replace" | "remove">("keep");
+  const [cvcConsent, setCvcConsent] = useState(false);
   const requestKey = JSON.stringify(request);
+
+  useLayoutEffect(() => {
+    root.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    root.current?.focus({ preventScroll: true });
+  }, [requestKey]);
 
   useEffect(() => {
     if (!me || !root.current || isNativeAuth()) return;
     requireWebAuth();
     let active = true;
+    setCompletedCards(0);
+    setCvcAction("keep");
+    setCvcConsent(false);
     setLocked(false);
     setCanRetry(false);
     setBusy(true);
@@ -166,6 +182,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
   }, [api, me?.household_id, me?.member_id, me?.user_id, requestKey, reload]);
 
   const needsPassword = [
+    "batch-edit",
     "view",
     "edit",
     "change-password",
@@ -175,6 +192,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
     "resume-rotation",
   ].includes(request.action);
   const needsAck = [
+    "batch-edit",
     "purge",
     "share",
     "cancel-share",
@@ -226,12 +244,34 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
           if (code.current) code.current.value = "";
         }
       }
+      if (request.action === "batch-edit") {
+        input.cards = new Map();
+        for (const card of context?.cards ?? []) {
+          const fields = batchFields.current.get(card.id);
+          const y = fields?.year?.value ?? "",
+            m = fields?.month?.value ?? "";
+          if (!/^\d{4}$/.test(y) || !/^(?:[1-9]|0[1-9]|1[0-2])$/.test(m))
+            throw new VaultCryptoError();
+          input.cards.set(
+            card.id,
+            life.ownBytes(
+              cardPayload(fields?.pan?.value ?? "", Number(y), Number(m), fields?.cvc?.value ?? ""),
+            ),
+          );
+        }
+      }
       if (request.action === "edit") {
         const y = year.current?.value ?? "",
           m = month.current?.value ?? "";
         if (!/^\d{4}$/.test(y) || !/^(?:[1-9]|0[1-9]|1[0-2])$/.test(m))
           throw new VaultCryptoError();
-        input.card = life.ownBytes(cardPayload(pan.current?.value ?? "", Number(y), Number(m)));
+        if (cvcAction !== "keep" && !cvcConsent) throw new VaultCryptoError();
+        const code = cvcAction === "replace" ? (cvc.current?.value ?? "") : "";
+        if (cvcAction === "replace" && !/^[0-9]{3,4}$/.test(code)) throw new VaultCryptoError();
+        input.cvcAction = cvcAction;
+        input.card = life.ownBytes(
+          cardPayload(pan.current?.value ?? "", Number(y), Number(m), code),
+        );
       }
       return input;
     } catch (failure) {
@@ -251,7 +291,8 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
       !context ||
       locked ||
       (kind === "run" && needsAck && !ack) ||
-      (kind === "confirm" && !backupAck)
+      (kind === "confirm" && !backupAck) ||
+      (request.action === "edit" && cvcAction !== "keep" && !cvcConsent)
     )
       return;
     flight.current = true;
@@ -290,6 +331,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
       }
     } catch (failure) {
       life.clearSecrets();
+      setCompletedCards(work.completedCards);
       if (!life.signal.aborted && workflow.current === work) {
         life.waitForInput();
         setContext(work.context);
@@ -305,6 +347,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
         input?.stagedPassword,
         input?.recoveryCode,
         input?.card,
+        ...(input?.cards?.values() ?? []),
         ...(input?.newPasswords.values() ?? []),
       ]) {
         if (bytes) {
@@ -366,11 +409,16 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
   if (isNativeAuth()) return <p role="alert">Android 보관함은 전용 보호 화면에서 열어 주세요.</p>;
   if (!me) return <p role="status">보관함을 사용하려면 로그인해 주세요.</p>;
   return (
-    <section className="card vault-private" ref={root} aria-label="보관함 보호 작업">
+    <section className="card vault-private" ref={root} tabIndex={-1} aria-label="보관함 보호 작업">
+      {request.action === "batch-edit" && (
+        <p role="status">
+          {context?.cards?.length ?? request.cardIds.length}건 중 {completedCards}건 저장 완료
+        </p>
+      )}
       <h2>{titles[request.action]}</h2>
       <p>
         이 화면을 떠나거나 다른 창으로 이동하면 입력과 표시를 지워요. PC 웹은 화면 캡처를 막을 수
-        없어요. CVC/CVV는 입력하지 마세요.
+        없어요. 공유 CVC는 별도 선택과 동의 후 입력할 수 있어요.
       </p>
       {notice && <p role="status">{notice}</p>}
       {context?.card && (
@@ -388,7 +436,7 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
         ref={cardOutput}
         data-vault-output
         className="revealed-number"
-        aria-label="일시적으로 표시하는 카드 번호와 유효기간"
+        aria-label="일시적으로 표시하는 카드 번호·유효기간·공유 CVC"
         hidden={phase !== "displayed"}
       />
       {phase === "displayed" && (
@@ -533,6 +581,54 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
                 </div>
               </div>
             ))}
+            {request.action === "batch-edit" && (
+              <>
+                <p>
+                  최대20건의 비밀 미등록 카드만 입력해요. 소유자와 끝자리를 확인해 주세요. 공유
+                  CVC는 선택이며 보관함 공유 구성원과 복구 수단 소유자가 볼 수 있어요. 암호문은
+                  서버·백업에 포함되고 이전 백업은 소급 삭제되지 않아요.
+                </p>
+                {(context.cards ?? []).map((card, index) => (
+                  <fieldset key={card.id}>
+                    <legend>
+                      {index + 1}번 · {card.alias || card.product_name} ·{" "}
+                      {
+                        context.members.find((m) => m.member_id === card.owner_member_id)
+                          ?.display_name
+                      }{" "}
+                      · {card.masked_number || "끝자리 미입력"}
+                    </legend>
+                    {(
+                      [
+                        ["pan", "카드번호", 19],
+                        ["year", "유효기간 연도", 4],
+                        ["month", "유효기간 월", 2],
+                        ["cvc", "공유 CVC (선택)", 4],
+                      ] as const
+                    ).map(([key, label, max]) => (
+                      <div className="form-field" key={key}>
+                        <label>
+                          {index + 1}번 {label}
+                          <input
+                            ref={(node) => {
+                              const row = batchFields.current.get(card.id) ?? {};
+                              row[key] = node;
+                              batchFields.current.set(card.id, row);
+                            }}
+                            data-vault-secret
+                            type="password"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            maxLength={max}
+                            required={key !== "cvc"}
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </fieldset>
+                ))}
+              </>
+            )}
             {request.action === "edit" && (
               <div className="form-grid">
                 <div className="form-field">
@@ -579,6 +675,60 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
                   </label>
                 </div>
               </div>
+            )}
+            {request.action === "edit" && (
+              <section aria-label="공유 CVC 설정">
+                <div className="form-field">
+                  <label>
+                    공유 CVC 처리
+                    <select
+                      aria-label="공유 CVC 처리"
+                      value={cvcAction}
+                      onChange={(event) => {
+                        if (cvc.current) cvc.current.value = "";
+                        setCvcConsent(false);
+                        setCvcAction(event.target.value as "keep" | "replace" | "remove");
+                      }}
+                    >
+                      <option value="keep">기존 공유 CVC 유지</option>
+                      <option value="replace">공유 CVC 입력·교체</option>
+                      <option value="remove">공유 CVC 삭제</option>
+                    </select>
+                  </label>
+                </div>
+                {cvcAction === "replace" && (
+                  <div className="form-field">
+                    <label>
+                      공유 CVC (3~4자리)
+                      <input
+                        ref={cvc}
+                        data-vault-secret
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={4}
+                        pattern="[0-9]{3,4}"
+                        required
+                      />
+                    </label>
+                  </div>
+                )}
+                <p>
+                  공유 CVC는 보관함 공유를 받은 구성원과 복구 수단 소유자가 열 수 있어요. 암호문은
+                  서버·운영 백업에 포함되며, 삭제해도 이전 백업을 소급 삭제하지 않아요. 카드 비밀
+                  변경으로 Android의 기존 로컬 CVC가 무효화될 수 있어요.
+                </p>
+                {cvcAction !== "keep" && (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={cvcConsent}
+                      onChange={(event) => setCvcConsent(event.target.checked)}
+                    />
+                    공유 CVC의 접근·백업·삭제 범위를 확인했어요.
+                  </label>
+                )}
+              </section>
             )}
             {request.action === "rotate" && (
               <div className="form-field">
@@ -632,11 +782,23 @@ export function WebVaultAction({ request, onClose, onCompleted }: WebVaultAction
                   checked={ack}
                   onChange={(event) => setAck(event.target.checked)}
                 />
-                대상과 작업 내용을 확인했어요
+                {request.action === "batch-edit"
+                  ? "공유 CVC의 접근·백업·삭제 범위와 입력 대상을 확인했어요"
+                  : "대상과 작업 내용을 확인했어요"}
               </label>
             )}
           </fieldset>
-          <button type="submit" disabled={busy || !!error || canRetry || (needsAck && !ack)}>
+          <button
+            type="submit"
+            disabled={
+              busy ||
+              !!error ||
+              canRetry ||
+              (request.action === "batch-edit" && !context?.cards?.length) ||
+              (needsAck && !ack) ||
+              (request.action === "edit" && cvcAction !== "keep" && !cvcConsent)
+            }
+          >
             {request.action === "view" ? "보관함 암호로 30초 보기" : "보호 작업 진행"}
           </button>
         </form>

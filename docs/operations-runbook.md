@@ -12,7 +12,7 @@
 | `python3 -m ops.build_context NEW_DIRECTORY --commit SHA` | 깨끗한 commit의 최소 이미지 빌드 입력 생성, frozen 의존성 및 웹 빌드 | 이미지 게시, 운영 배포 |
 | `uv run --project services/api python -m ops.preflight CONFIG_DIRECTORY` | 생성 설정·전용 DB·파일 소유권·이미지 확인, APK가 있으면 --sdk로 실제 서명/ID/버전 검사 | 서비스 시작, 노드 등록 |
 | `… -m ops.database provision …` / `verify-runtime` | 전용 migration/admin 역할과 제한된 API 역할 분리·권한 확인 | 업무 스키마 변경, 기존 역할 비밀번호 덮어쓰기 |
-| `uv run --project services/api python -m ops.backup create …` | 일관된 DB/첨부 스냅샷을 age로 암호화하고 완료 receipt 생성 | 서버 암호화키·서명키·Tailscale 상태·CVC 포함 |
+| `uv run --project services/api python -m ops.backup create …` | 일관된 DB/첨부 스냅샷을 age로 암호화하고 완료 receipt 생성 | 서버 암호화키·서명키·Tailscale 상태·로컬 CVC 포함 |
 | `… -m ops.backup restore …` | 빈 전용 `*_restorecheck` DB와 새 디렉터리로 복원 | 기존 DB 덮어쓰기, API 시작, 운영 승격 |
 | `… -m ops.recovery prepare …` | 격리 복원 DB의 인증 폐기와 두 계정 비밀번호 재설정 | 보관함/금전/진료 기록 삭제 |
 | `… -m ops.recovery verify …` | 새 인증·키 회전·첨부 AEAD·운영 인수 증거 검사 | QUARANTINE 제거, 서비스 시작 |

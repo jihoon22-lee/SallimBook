@@ -2,6 +2,16 @@
 // Not a second API schema: a name this table does not know shows as "기타 항목" instead of the
 // raw identifier. Secret and key material is only ever named, never shown, as "보안 정보".
 const groups: [label: string, names: string[]][] = [
+  ["연회비", ["annual_fee_krw"]],
+  ["가족카드 여부", ["is_family_card"]],
+  ["성과연도", ["performance_year"]],
+  ["상여 구분", ["award_kind"]],
+  ["지급월", ["payment_month"]],
+  ["세전 금액", ["gross_krw"]],
+  ["세후 현금", ["net_cash_krw"]],
+  ["수령 당시 주식 평가액", ["stock_grant_value_krw"]],
+  ["지급률", ["payout_rate_percent"]],
+  ["수령 확인", ["received"]],
   ["가족 관계", ["relation"]],
   [
     "보안 정보",

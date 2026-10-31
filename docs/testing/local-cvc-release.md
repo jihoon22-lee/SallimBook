@@ -1,5 +1,7 @@
 # Android 로컬 CVC 활성화와 별도 보안 검토
 
+> 2026-10-31: 아래는 로컬 CVC 활성화 당시 기록이다. 선택적 공유 CVC는 [v2 결정](../adr/web-cvc-vault-v2.md)과 [최초 입력 검증](financial-first-import.md)을 따른다.
+
 2026-10-25 · R-10/R-11/R-12 · SB-030 · [#39](https://github.com/jihoon22-lee/SallimBook/issues/39).
 [사용자 결정과 범위](../adr/local-cvc-release-option.md)를 따른다.
 

@@ -65,10 +65,13 @@ export async function rotationScenario(mode: "reauth" | "retry" | "manifest" | "
     members: [{ member_id: me.member_id, status: "active", version: 1 }],
     pending_rotation_id: rotation.id,
   };
-  const plain = cardPayload("4242424242424242", 2032, 12);
+  const codes = [undefined, "", "007", "0009", "123", ""] as const;
+  const expected = new Map<string, number[]>();
   const sources = new Map<string, any>(),
     staged = new Map<string, any>();
-  for (const card of cards) {
+  for (const [index, card] of cards.entries()) {
+    const plain = cardPayload("4242424242424242", 2032, 12, codes[index]);
+    expected.set(card.card_id, Array.from(plain));
     sources.set(card.card_id, {
       ...(await encryptCard(oldKey, scope, card.card_id, plain)),
       household_id: me.household_id,
@@ -82,10 +85,10 @@ export async function rotationScenario(mode: "reauth" | "retry" | "manifest" | "
         household_id: me.household_id,
         card_id: card.card_id,
       });
+    plain.fill(0);
   }
   oldKey.destroy();
   nextKey.destroy();
-  plain.fill(0);
   oldPassword.fill(0);
   newPassword.fill(0);
   let allowance = mode === "reauth" ? 2 : 6,
@@ -215,7 +218,7 @@ export async function rotationScenario(mode: "reauth" | "retry" | "manifest" | "
           card.card_id,
           staged.get(card.card_id),
         );
-        valid &&= bytes[4] === 16 && bytes[26] === 12;
+        valid &&= JSON.stringify(Array.from(bytes)) === JSON.stringify(expected.get(card.card_id));
         bytes.fill(0);
       }
     verifyPassword.fill(0);

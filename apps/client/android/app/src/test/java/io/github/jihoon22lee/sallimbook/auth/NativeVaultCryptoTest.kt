@@ -9,6 +9,36 @@ import org.junit.Test
 
 /** Only the committed, explicitly public synthetic vectors are read. No production default secrets. */
 class NativeVaultCryptoTest {
+    @Test fun v2MatchesIndependentPythonVectors() {
+        val fixture=JsonParser.parseString(File("../../../../packages/test-fixtures/vault-v2.json").readText()).asJsonObject
+        for(element in fixture["cards"].asJsonArray) {
+            val row=element.asJsonObject
+            val secret=VaultCardSecret(fixture["pan"].asString.toCharArray(), fixture["expiry_year"].asInt, fixture["expiry_month"].asInt, row["cvc"].asString.toCharArray(),2)
+            val aad=NativeVaultCrypto.cardAad(fixture["household_id"].asString,fixture["card_id"].asString,fixture["key_version"].asLong,2)
+            assertArrayEquals(hex(row["aad_hex"].asString),aad)
+            assertArrayEquals(hex(row["payload_hex"].asString),NativeVaultCrypto.cardPayload(secret))
+            val sealed=fixed(bytes(row,"nonce",12)).sealCard(hex(fixture["hvk_hex"].asString),secret,fixture["household_id"].asString,fixture["card_id"].asString,fixture["key_version"].asLong)
+            assertArrayEquals(bytes(row,"ciphertext",48),sealed.ciphertext)
+            secret.discard(); sealed.discard()
+        }
+    }
+    @Test fun optionalSyncedCvcPreservesSchemaAndWipesBothArrays() {
+        for (code in listOf("", "007", "0009")) {
+            val secret = VaultCardSecret("4242424242424242".toCharArray(), 2030, 12, code.toCharArray(), 2)
+            val payload = NativeVaultCrypto.cardPayload(secret)
+            assertEquals(32, payload.size)
+            val sealed = NativeVaultCrypto().sealCard(hvk, secret, household, card["card_id"].asString, keyVersion)
+            assertEquals(48, sealed.ciphertext.size)
+            val opened = NativeVaultCrypto.openCard(hvk, sealed, household, card["card_id"].asString, keyVersion, 2)
+            assertEquals(2, opened.schemaVersion)
+            assertArrayEquals(code.toCharArray(), opened.cvc)
+            assertArrayEquals(payload, NativeVaultCrypto.cardPayload(opened))
+            rejected { NativeVaultCrypto.openCard(hvk, sealed, household, card["card_id"].asString, keyVersion, 1) }
+            secret.discard(); opened.discard(); sealed.discard(); payload.fill(0)
+            assertTrue(opened.pan.all { it == '\u0000' })
+            assertTrue(opened.cvc.all { it == '\u0000' })
+        }
+    }
     private val vector = JsonParser.parseString(File("../../../../packages/test-fixtures/vault-v1.json").readText()).asJsonObject
     private val household = vector["household_id"].asString
     private val keyVersion = vector["key_version"].asLong

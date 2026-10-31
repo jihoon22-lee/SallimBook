@@ -444,6 +444,9 @@ function IncomeDetail({ id, edit }: { id: string; edit: boolean }) {
             <RecordActor memberId={row.updated_by_member_id} at={row.updated_at} />
             {row.note && <p>메모: {row.note}</p>}
             {row.reason && <p>변경 사유: {row.reason}</p>}
+            {row.kind === "bonus" && (
+              <Link to="/income/planning">성과연도 상여 상세 확인·정정</Link>
+            )}
             {row.reverses_id && <Link to={`/income/${row.reverses_id}`}>반환 원본 수입 확인</Link>}
             <RecordedMoneyNotice />
             {row.kind.startsWith("insurance") && <IncomeInsuranceLinks recordId={row.id} />}
@@ -488,7 +491,7 @@ function IncomeDetail({ id, edit }: { id: string; edit: boolean }) {
             )}
             {row.state === "active" && manualIncome(row) && !row.editable && (
               <p>
-                연결된 반환 등 현재 상태로 정정·무효가 제한돼요. 반환 내역을 먼저 확인해 주세요.
+                연결된 반환 또는 상여 상세 때문에 정정·무효가 제한돼요. 원본 기록을 확인해 주세요.
               </p>
             )}
           </section>
@@ -542,6 +545,9 @@ export function IncomeListPage() {
       title="월간 수입"
       description="등록한 수입과 반환, 보험금 유입을 나누어 확인해요."
     >
+      <p>
+        <Link to="/income/planning">예상 월 수입·성과연도 상여 관리</Link>
+      </p>
       <IncomeList />
     </AuthenticatedFinance>
   );

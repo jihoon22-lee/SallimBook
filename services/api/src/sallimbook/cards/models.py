@@ -1,12 +1,14 @@
 """Household card metadata; secrets belong only to separate encrypted vault envelopes."""
 
 from datetime import date
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sallimbook.core.database import Base, EntityMixin
+from sallimbook.core.types import KrwNumeric
 
 
 class Card(EntityMixin, Base):
@@ -48,10 +50,15 @@ class Card(EntityMixin, Base):
             "started_on IS NULL OR ended_on IS NULL OR started_on <= ended_on", name="valid_dates"
         ),
         CheckConstraint("version > 0", name="positive_version"),
+        CheckConstraint(
+            "annual_fee_krw IS NULL OR annual_fee_krw >= 0", name="annual_fee_nonnegative"
+        ),
         Index("ix_cards_household_owner_id", "household_id", "owner_member_id", "id"),
         Index("ix_cards_household_settlement_account", "household_id", "settlement_account_id"),
     )
     household_id: Mapped[UUID]
+    annual_fee_krw: Mapped[Decimal | None] = mapped_column(KrwNumeric())
+    is_family_card: Mapped[bool | None]
     owner_member_id: Mapped[UUID]
     issuer_name: Mapped[str] = mapped_column(String(120))
     product_name: Mapped[str] = mapped_column(String(120))

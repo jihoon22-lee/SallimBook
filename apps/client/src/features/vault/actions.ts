@@ -2,6 +2,7 @@
 export type WebVaultRequest =
   | { action: "setup" | "change-password" | "recover" | "rotate" }
   | { action: "view" | "edit" | "purge"; cardId: string }
+  | { action: "batch-edit"; cardIds: string[] }
   | { action: "share" | "revoke-member"; memberId: string }
   | { action: "accept-share" | "cancel-share"; offerId: string }
   | { action: "resume-rotation" | "abort-rotation"; rotationId: string };

@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { mockVaultOverview } from "./vault-overview";
 import { members, uid } from "./finance";
 export const vaultPassword = "Synthetic vault password 2026!";
-export async function mockPrivateVault(page: Page) {
+export async function mockPrivateVault(page: Page, cvc?: string) {
   const state = await mockVaultOverview(page);
   state.cashflow.cards[0]!.has_secret = true;
   state.cashflow.cards[0]!.last_four = "4242";
@@ -10,6 +10,7 @@ export async function mockPrivateVault(page: Page) {
   const extra = {
     fail: "",
     failOnce: false,
+    failAt: 0,
     status: 403,
     delay: 0,
     opaque: null as any,
@@ -21,7 +22,12 @@ export async function mockPrivateVault(page: Page) {
     const path = new URL(route.request().url()).pathname;
     if (!/wrappings\/me$|initialize$|recover$|recovery-wrap$/.test(path)) return route.fallback();
     if (extra.delay) await new Promise((resolve) => setTimeout(resolve, extra.delay));
-    if (extra.fail && extra.status !== 408 && (!extra.failOnce || !extra.writes.length))
+    if (
+      extra.fail &&
+      !extra.failAt &&
+      extra.status !== 408 &&
+      (!extra.failOnce || !extra.writes.length)
+    )
       return route.fulfill({
         status: extra.status,
         json: { error: { code: extra.fail, message: "UNTRUSTED_PRIVATE_DETAIL" } },
@@ -55,13 +61,17 @@ export async function mockPrivateVault(page: Page) {
       key: route.request().headers()["idempotency-key"]!,
       body,
     });
-    if (extra.fail) {
+    if (extra.fail && (!extra.failAt || extra.writes.length === extra.failAt)) {
       const code = extra.fail;
       if (extra.failOnce) extra.fail = "";
       return route.fulfill({ status: extra.status, json: { error: { code } } });
     }
     if (route.request().method() === "DELETE") state.cashflow.cards[0]!.has_secret = false;
-    return route.fulfill({ json: { id: uid(50), version: 2 } });
+    const cardId = new URL(route.request().url()).pathname.split("/").at(-2)!;
+    const card = state.cashflow.cards.find((item) => item.id === cardId)!;
+    card.version++;
+    if (route.request().method() !== "DELETE") card.has_secret = true;
+    return route.fulfill({ json: { id: cardId, version: card.version } });
   });
   await page.route("**/api/v1/auth/web/reauthenticate", (route) => {
     extra.reauths++;
@@ -74,13 +84,13 @@ export async function mockPrivateVault(page: Page) {
   });
   await page.goto("/vault");
   extra.opaque = await page.evaluate(
-    async ({ password, householdId, memberId, cardId }) => {
+    async ({ password, householdId, memberId, cardId, cvc }) => {
       const c = await import("/src/features/vault/crypto.ts");
       const key = c.VaultKey.generate(),
         pw = c.passwordBytes(password),
         code = c.randomBytes(32),
         scope = { householdId, keyVersion: 1 };
-      const plain = c.cardPayload("4242424242424242", 2032, 12);
+      const plain = c.cardPayload("4242424242424242", 2032, 12, cvc);
       const result = {
         own: {
           ...(await c.wrapMember(key, pw, scope, memberId, 1)),
@@ -106,7 +116,7 @@ export async function mockPrivateVault(page: Page) {
       [pw, code, plain].forEach(c.wipe);
       return result;
     },
-    { password: vaultPassword, householdId: uid(3), memberId: uid(2), cardId: uid(50) },
+    { password: vaultPassword, householdId: uid(3), memberId: uid(2), cardId: uid(50), cvc },
   );
   return { ...extra, extra, state };
 }

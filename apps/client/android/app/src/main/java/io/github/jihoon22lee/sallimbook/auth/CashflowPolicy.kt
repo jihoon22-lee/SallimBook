@@ -71,6 +71,13 @@ internal object CashflowPolicy {
     private data class Route(val method: String, val path: String, val version: Boolean = false,
         val idempotent: Boolean = false, val query: Boolean = false, val status: Int = 200)
     private val routes = mapOf(
+        FinanceOperation.LIST_EXPECTED_INCOME to Route("GET", "/api/v1/income-planning/expected", query = true),
+        FinanceOperation.CREATE_EXPECTED_INCOME to Route("POST", "/api/v1/income-planning/expected", idempotent = true, status = 201),
+        FinanceOperation.CHANGE_EXPECTED_INCOME to Route("PUT", "/api/v1/income-planning/expected/{recordId}", idempotent = true, version = true),
+        FinanceOperation.LIST_BONUS_AWARDS to Route("GET", "/api/v1/income-planning/bonuses", query = true),
+        FinanceOperation.CREATE_BONUS_AWARD to Route("POST", "/api/v1/income-planning/bonuses", idempotent = true, status = 201),
+        FinanceOperation.CHANGE_BONUS_AWARD to Route("PUT", "/api/v1/income-planning/bonuses/{recordId}", idempotent = true, version = true),
+
         FinanceOperation.GET_ASSET_MONTH to Route("GET", "/api/v1/asset-months/{month}", query = true),
         FinanceOperation.GET_ASSET_MONTH_REVISION to Route("GET", "/api/v1/asset-months/{month}/revisions/{revisionNo}", query = true),
         FinanceOperation.LIST_ASSET_MONTH_REVISIONS to Route("GET", "/api/v1/asset-months/{month}/revisions", query = true),
@@ -110,6 +117,13 @@ internal object CashflowPolicy {
             if (row["input_amount_krw"] != null && row["as_of_date"] == null) invalid()
             row
         }
+        FinanceOperation.CREATE_EXPECTED_INCOME, FinanceOperation.CHANGE_EXPECTED_INCOME,
+        FinanceOperation.CREATE_BONUS_AWARD, FinanceOperation.CHANGE_BONUS_AWARD -> {
+            val bonus = operation in setOf(FinanceOperation.CREATE_BONUS_AWARD, FinanceOperation.CHANGE_BONUS_AWARD)
+            val change = operation in setOf(FinanceOperation.CHANGE_EXPECTED_INCOME, FinanceOperation.CHANGE_BONUS_AWARD)
+            shape(value, planningFields(bonus) + if(change) mapOf("reason" to text(500)) else emptyMap(),
+                setOf("member_id") + (if(bonus) setOf("performance_year", "award_kind") else setOf("label")) + (if(change) setOf("reason") else emptySet()))
+        }
         FinanceOperation.CREATE_INCOME -> incomeInput(value, create = true)
         FinanceOperation.CORRECT_INCOME -> {
             val row = shape(value, cashInputFields() + mapOf("kind" to incomeKind, "member_id" to id,
@@ -132,6 +146,24 @@ internal object CashflowPolicy {
             row
         }
         else -> invalid()
+    }
+
+    private fun planningFields(bonus: Boolean): Map<String, FieldRule> = mapOf("member_id" to id, "active" to bool, "note" to nullable(text(2000, true))) +
+        if (!bonus) mapOf("label" to text(120), "amount_krw" to nullable(money)) else mapOf(
+            "performance_year" to { integer(it, 1900, 9998) }, "award_kind" to choice("tai_h1", "tai_h2", "opi"),
+            "payment_month" to nullable(month), "gross_krw" to nullable(money), "net_cash_krw" to nullable(money),
+            "stock_grant_value_krw" to nullable(money), "received" to bool,
+            "payout_rate_percent" to nullable { if (it !is String || !Regex("(0|[1-9][0-9]{0,4})([.][0-9]{1,2})?").matches(it)) invalid() })
+    private fun planningResponse(operation: FinanceOperation, request: FinanceRequest, value: Any?): Any? {
+        val bonus = request.path.substringBefore('?').contains("/bonuses")
+        val fields = planningFields(bonus) + mapOf("id" to id, "household_id" to id, "version" to positive,
+            "created_at" to timestamp, "updated_at" to timestamp, "created_by_member_id" to id, "updated_by_member_id" to id) +
+            if (bonus) mapOf("cash_record_id" to nullable(id)) else emptyMap()
+        if (operation in setOf(FinanceOperation.LIST_EXPECTED_INCOME, FinanceOperation.LIST_BONUS_AWARDS))
+            return shape(value, mapOf("items" to list(record(fields)), "next_cursor" to nullable(id)))
+        val row = shape(value, fields)
+        if (request.method == "PUT" && row["id"] != request.path.substringAfterLast('/')) invalid()
+        return row
     }
 
     private val incomeKind = choice("salary", "bonus", "other_income")
@@ -245,6 +277,7 @@ internal object CashflowPolicy {
 
     fun response(operation: FinanceOperation, request: FinanceRequest, status: Int, value: Any?): Any? {
         if (status != routes.getValue(operation).status) invalid()
+        if (routes.getValue(operation).path.startsWith("/api/v1/income-planning")) return planningResponse(operation, request, value)
         if (routes.getValue(operation).path.startsWith("/api/v1/income")) return incomeResponse(operation, request, value)
         val segments = URI(request.path).path.split('/')
         val row = when (operation) {

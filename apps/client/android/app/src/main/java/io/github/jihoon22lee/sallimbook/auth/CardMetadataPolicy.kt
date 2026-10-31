@@ -10,7 +10,7 @@ internal object CardMetadataPolicy {
     private val operations = setOf(FinanceOperation.LIST_CARDS, FinanceOperation.GET_CARD, FinanceOperation.CREATE_CARD,
         FinanceOperation.UPDATE_CARD, FinanceOperation.ARCHIVE_CARD, FinanceOperation.DELETE_CARD)
     private val fields = setOf("owner_member_id", "issuer_name", "product_name", "alias", "card_type", "last_four",
-        "settlement_day", "settlement_account_id", "started_on", "ended_on", "note")
+        "settlement_day", "settlement_account_id", "started_on", "ended_on", "note", "annual_fee_krw", "is_family_card")
     private val required = setOf("owner_member_id", "issuer_name", "product_name", "card_type")
     private fun invalid(): Nothing = throw AuthFailure(AuthCode.INVALID_REQUEST)
     private fun obj(value: Any?): Map<String, Any?> {
@@ -48,6 +48,8 @@ internal object CardMetadataPolicy {
             "owner_member_id" -> FinancePolicy.id(item)
             "issuer_name", "product_name" -> text(item, 120)
             "alias" -> if (item != null) text(item, 80, true)
+            "annual_fee_krw" -> if (item != null && (item !is String || !Regex("0|[1-9][0-9]{0,19}").matches(item))) invalid()
+            "is_family_card" -> if (item != null && item !is Boolean) invalid()
             "card_type" -> choice(item, "credit", "debit")
             "last_four" -> if (item != null && (item !is String || !Regex("[0-9]{4}").matches(item))) invalid()
             "settlement_day" -> if (item != null) integer(item, 1, 31)
@@ -156,7 +158,7 @@ internal object CardMetadataPolicy {
     private fun card(value: Any?): Map<String, Any?> {
         val row = obj(value)
         val extra = setOf("id", "household_id", "masked_number", "has_secret", "settlement_account_status", "status", "created_by_member_id", "updated_by_member_id", "created_at", "updated_at", "version")
-        NativeResponseShape.accept(row, row.keys, fields + extra, fields + extra, ::invalid)
+        NativeResponseShape.accept(row, row.keys, fields + extra, (fields + extra) - setOf("annual_fee_krw", "is_family_card"), ::invalid)
         input(row.filterKeys { it in fields }, false)
         for (key in listOf("id", "household_id", "created_by_member_id", "updated_by_member_id")) FinancePolicy.id(row[key])
         timestamp(row["created_at"]); timestamp(row["updated_at"]); integer(row["version"])

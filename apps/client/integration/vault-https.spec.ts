@@ -62,6 +62,9 @@ async function editCard(page: Page, id: string, password: string) {
   await page.getByLabel("전체 카드 번호 (숫자만)").fill("4242424242424242");
   await page.getByLabel("유효기간 연도 (4자리)").fill("2032");
   await page.getByLabel("유효기간 월", { exact: true }).fill("12");
+  await page.getByLabel("공유 CVC 처리", { exact: true }).selectOption("replace");
+  await page.getByLabel("공유 CVC (3~4자리)", { exact: true }).fill("007");
+  await page.getByLabel("공유 CVC의 접근·백업·삭제 범위를 확인했어요.").check();
   await page.getByRole("button", { name: "보호 작업 진행", exact: true }).click();
   await expect(page.getByRole("region", { name: "보관함 보호 작업", exact: true })).toHaveCount(0);
 }
@@ -75,8 +78,8 @@ async function viewCard(page: Page, id: string, password: string) {
     .poll(() =>
       page.evaluate(
         () =>
-          document.querySelector('[aria-label="일시적으로 표시하는 카드 번호와 유효기간"]')
-            ?.textContent === "4242424242424242 · 2032/12",
+          document.querySelector('[aria-label="일시적으로 표시하는 카드 번호·유효기간·공유 CVC"]')
+            ?.textContent === "4242424242424242 · 2032/12 · 공유 CVC 007",
       ),
     )
     .toBe(true);

@@ -139,3 +139,23 @@ def test_card_last_four_cannot_be_detached_from_current_ciphertext(vault_app, ac
         )
         current = card_detail(client, actor, row["id"])
         assert current["last_four"] == "0000" and current["has_secret"]
+
+
+@pytest.mark.parametrize("schema,size", [(1, 48), (2, 43)])
+def test_database_rejects_payload_schema_ciphertext_length_mismatch(
+    vault_app, actors, schema, size
+):
+    actor = actors[0]
+    with TestClient(vault_app) as client:
+        initialize(client, actor)
+        row = card(client, actor)
+        assert write_secret(client, actor, row).status_code == 200
+        reject(
+            vault_app.state.engine,
+            [
+                "UPDATE card_secret_envelopes SET payload_schema_version=:schema, "
+                "ciphertext=:cipher, "
+                "version=version+1 WHERE household_id=:hh"
+            ],
+            {"schema": schema, "cipher": bytes(size), "hh": actor.household_id},
+        )

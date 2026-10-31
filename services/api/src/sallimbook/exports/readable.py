@@ -36,6 +36,19 @@ class Section:
 # Each field is explicitly classified in PUBLIC_COLUMNS; cash_* is a scoped cash join.
 SECTIONS = (
     Section(
+        "income",
+        "expected_incomes",
+        "현재 예상 월 수입 (입금 기록 아님)",
+        "member_id label amount_krw active note",
+    ),
+    Section(
+        "income",
+        "bonus_awards",
+        "성과연도 상여 (주식은 수령 당시 평가액)",
+        "member_id performance_year award_kind payment_month gross_krw net_cash_krw "
+        "stock_grant_value_krw payout_rate_percent received active cash_record_id note",
+    ),
+    Section(
         "assets",
         "assets",
         "자산 기본정보",
@@ -60,7 +73,8 @@ SECTIONS = (
         "cards",
         "cards",
         "카드 기본정보",
-        "alias product_name issuer_name owner_member_id card_type last_four "
+        "alias product_name issuer_name owner_member_id card_type annual_fee_krw "
+        "is_family_card last_four "
         "settlement_day settlement_account_id started_on ended_on note",
     ),
     Section(
@@ -230,7 +244,8 @@ input_amount_krw:입력금액 owned_amount_krw:가계보유금액
 verification_state:확인상태 origin:출처 as_of_date:기준일 asset_id:자산
 institution_name:금융기관 account_type:계좌종류 last_four:끝네자리 purpose:용도
 opened_on:개설일 alias:별칭 product_name:상품명 issuer_name:카드사
-card_type:카드종류 settlement_day:결제일 settlement_account_id:결제계좌
+card_type:카드종류 annual_fee_krw:연회비 is_family_card:가족카드여부
+settlement_day:결제일 settlement_account_id:결제계좌
 member_id:소득귀속 amount_krw:금액 occurred_on:실제일자 period_month:기록월
 date_precision:날짜정밀도 account_id:계좌 state:상태
 created_by_member_id:작성자 created_at:작성시각 title:이름
@@ -263,6 +278,21 @@ received_by_member_id:입고자 cancel_reason:취소사유
 """.split()
 )
 
+LABELS.update(
+    {
+        "label": "수입항목",
+        "active": "유효여부",
+        "performance_year": "성과연도",
+        "award_kind": "상여구분",
+        "payment_month": "지급월",
+        "gross_krw": "세전금액",
+        "net_cash_krw": "세후현금",
+        "stock_grant_value_krw": "수령당시주식평가액",
+        "payout_rate_percent": "지급률",
+        "received": "수령확인",
+        "cash_record_id": "연결현금기록",
+    }
+)
 LABELS["movement_reversed"] = "원입고·교체취소여부"
 
 ENUMS = dict(

@@ -119,8 +119,15 @@ function salt16(salt: Bytes): Bytes {
   requireValue(salt.length === 16);
   return salt;
 }
-export const cardAad = (scope: Scope, cardId: string): Bytes =>
-  concat(prefix("card", scope.householdId), uuid(cardId), u64(scope.keyVersion), u32(1));
+export const cardAad = (scope: Scope, cardId: string, schema: 1 | 2 = 1): Bytes => {
+  requireValue(schema === 1 || schema === 2);
+  return concat(
+    prefix("card", scope.householdId),
+    uuid(cardId),
+    u64(scope.keyVersion),
+    u32(schema),
+  );
+};
 export const memberAad = (
   scope: Scope,
   memberId: string,
@@ -412,7 +419,8 @@ function validPan(pan: Bytes): boolean {
   }
   return sum % 10 === 0 && pan.some((digit) => digit !== 48);
 }
-export function cardPayload(pan: string, year: number, month: number): Bytes {
+export function cardPayload(pan: string, year: number, month: number, cvc?: string): Bytes {
+  requireValue(cvc === undefined || (typeof cvc === "string" && /^(?:[0-9]{3,4})?$/.test(cvc)));
   requireValue(typeof pan === "string" && /^[0-9]{13,19}$/.test(pan));
   requireValue(
     Number.isInteger(year) &&
@@ -425,12 +433,16 @@ export function cardPayload(pan: string, year: number, month: number): Bytes {
   const digits = encoder.encode(pan);
   try {
     requireValue(validPan(digits));
-    const plain = new Uint8Array(27);
-    plain.set(encoder.encode("SBV1"));
+    const plain = new Uint8Array(cvc === undefined ? 27 : 32);
+    plain.set(encoder.encode(cvc === undefined ? "SBV1" : "SBV2"));
     plain[4] = digits.length;
     plain.set(digits, 5);
     new DataView(plain.buffer).setUint16(24, year, false);
     plain[26] = month;
+    if (cvc !== undefined) {
+      plain[27] = cvc.length;
+      for (let i = 0; i < cvc.length; i++) plain[28 + i] = cvc.charCodeAt(i);
+    }
     return plain;
   } finally {
     wipe(digits);
@@ -438,8 +450,17 @@ export function cardPayload(pan: string, year: number, month: number): Bytes {
 }
 function checkPayload(plain: Bytes): number {
   requireValue(
-    plain.length === 27 && plain[0] === 83 && plain[1] === 66 && plain[2] === 86 && plain[3] === 49,
+    ((plain.length === 27 && plain[3] === 49) || (plain.length === 32 && plain[3] === 50)) &&
+      plain[0] === 83 &&
+      plain[1] === 66 &&
+      plain[2] === 86,
   );
+  if (plain.length === 32) {
+    const size = plain[27]!;
+    requireValue(size === 0 || size === 3 || size === 4);
+    requireValue(plain.subarray(28, 28 + size).every((v) => v >= 48 && v <= 57));
+    requireValue(plain.subarray(28 + size).every((v) => v === 0));
+  }
   const length = plain[4]!;
   requireValue(length >= 13 && length <= 19);
   const pan = plain.slice(5, 5 + length);
@@ -453,6 +474,20 @@ function checkPayload(plain: Bytes): number {
   requireValue(year >= 2000 && year <= 2199 && plain[26]! >= 1 && plain[26]! <= 12);
   return length;
 }
+export function payloadSchema(plain: Bytes): 1 | 2 {
+  checkPayload(plain);
+  return plain.length === 27 ? 1 : 2;
+}
+export function preserveCvc(plain: Bytes, previous: Bytes): void {
+  requireValue(payloadSchema(plain) === 2);
+  checkPayload(previous);
+  plain.fill(0, 27);
+  if (previous.length === 32) plain.set(previous.subarray(27), 27);
+}
+export function cardCvc(plain: Bytes): string {
+  checkPayload(plain);
+  return plain.length === 32 ? String.fromCharCode(...plain.subarray(28, 28 + plain[27]!)) : "";
+}
 export function lastFour(plain: Bytes): string {
   const length = checkPayload(plain);
   return String.fromCharCode(...plain.subarray(5 + length - 4, 5 + length));
@@ -461,7 +496,7 @@ export function lastFour(plain: Bytes): string {
 export function displayCard(plain: Bytes): string {
   const length = checkPayload(plain);
   const year = new DataView(plain.buffer, plain.byteOffset, plain.byteLength).getUint16(24, false);
-  return `${String.fromCharCode(...plain.subarray(5, 5 + length))} · ${year}/${String(plain[26]).padStart(2, "0")}`;
+  return `${String.fromCharCode(...plain.subarray(5, 5 + length))} · ${year}/${String(plain[26]).padStart(2, "0")}${plain.length === 32 ? ` · ${cardCvc(plain) ? "공유 CVC " + cardCvc(plain) : "CVC 미입력"}` : ""}`;
 }
 export async function encryptCard(
   key: VaultKey,
@@ -471,11 +506,12 @@ export async function encryptCard(
 ): Promise<CardEnvelope> {
   const last_four = lastFour(plain),
     nonce = randomBytes(12);
-  const cipher = await key.encrypt(nonce, cardAad(scope, cardId), plain);
+  const schema = payloadSchema(plain);
+  const cipher = await key.encrypt(nonce, cardAad(scope, cardId, schema), plain);
   return {
     format_version: 1,
     key_version: scope.keyVersion,
-    payload_schema_version: 1,
+    payload_schema_version: schema,
     last_four,
     nonce: encode64(nonce),
     ciphertext: encode64(cipher),
@@ -488,14 +524,16 @@ export async function decryptCard(
   row: CardEnvelope,
 ): Promise<Bytes> {
   envelopeScope(row, scope);
-  requireValue(row.payload_schema_version === 1);
+  requireValue(row.payload_schema_version === 1 || row.payload_schema_version === 2);
   const plain = await key.decrypt(
     decode64(row.nonce, 12),
-    cardAad(scope, cardId),
-    decode64(row.ciphertext, 43),
+    cardAad(scope, cardId, row.payload_schema_version),
+    decode64(row.ciphertext, row.payload_schema_version === 1 ? 43 : 48),
   );
   try {
-    requireValue(lastFour(plain) === row.last_four);
+    requireValue(
+      payloadSchema(plain) === row.payload_schema_version && lastFour(plain) === row.last_four,
+    );
     return plain;
   } catch {
     wipe(plain);

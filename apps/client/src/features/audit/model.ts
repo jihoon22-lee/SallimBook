@@ -26,6 +26,8 @@ export const entityLabels: Record<string, string> = {
   asset: "자산·부채",
   financial_account: "계좌",
   asset_month: "월별 자산",
+  expected_income: "예상 월 수입",
+  bonus_award: "성과연도 상여",
   cash_record: "금전 기록",
   income_conversion: "수입 입력 방식",
   recurring_rule: "고정 납부 규칙",

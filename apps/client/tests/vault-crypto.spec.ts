@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import v2 from "../../../packages/test-fixtures/vault-v2.json" with { type: "json" };
 import vector from "../../../packages/test-fixtures/vault-v1.json" with { type: "json" };
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -12,6 +13,90 @@ test.beforeEach(async ({ page }) => {
     }),
   );
   await page.goto("/");
+});
+
+test("WebCrypto matches independent Python v2 ciphertext for empty and zero-prefixed CVC", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async (fixture) => {
+    const c = await import("/src/features/vault/crypto.ts");
+    const hex = (s: string) => new Uint8Array(s.match(/../g)!.map((v) => parseInt(v, 16)));
+    const key = await crypto.subtle.importKey("raw", hex(fixture.hvk_hex), "AES-GCM", false, [
+      "encrypt",
+    ]);
+    const values = [];
+    for (const row of fixture.cards) {
+      const plain = c.cardPayload(fixture.pan, fixture.expiry_year, fixture.expiry_month, row.cvc);
+      const aad = c.cardAad(
+        { householdId: fixture.household_id, keyVersion: fixture.key_version },
+        fixture.card_id,
+        2,
+      );
+      const cipher = new Uint8Array(
+        await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: c.decode64(row.nonce, 12), additionalData: aad, tagLength: 128 },
+          key,
+          plain,
+        ),
+      );
+      values.push({ payload: [...plain], aad: [...aad], cipher: c.encode64(cipher) });
+      c.wipe(plain);
+    }
+    return values;
+  }, v2);
+  result.forEach((row, index) => {
+    expect(row.payload).toEqual([...Buffer.from(v2.cards[index]!.payload_hex, "hex")]);
+    expect(row.aad).toEqual([...Buffer.from(v2.cards[index]!.aad_hex, "hex")]);
+    expect(row.cipher).toBe(v2.cards[index]!.ciphertext);
+  });
+});
+
+test("v2 CVC remains encrypted, schema bound and roundtrips zero-prefixed codes", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const c = await import("/src/features/vault/crypto.ts");
+    const scope = { householdId: "00000000-0000-4000-8000-000000000003", keyVersion: 1 };
+    const card = "00000000-0000-4000-8000-000000000004";
+    const key = c.VaultKey.generate();
+    const rows = [];
+    let rejected = 0;
+    try {
+      for (const code of ["", "007", "0009"]) {
+        const plain = c.cardPayload("4242424242424242", 2030, 12, code);
+        const sealed = await c.encryptCard(key, scope, card, plain);
+        const opened = await c.decryptCard(key, scope, card, sealed);
+        rows.push({
+          size: plain.length,
+          schema: sealed.payload_schema_version,
+          cipherSize: c.decode64(sealed.ciphertext, 48).length,
+          equal: plain.every((v, i) => v === opened[i]),
+          shown: c.displayCard(opened).includes(code || "CVC 미입력"),
+        });
+        try {
+          await c.decryptCard(key, scope, card, { ...sealed, payload_schema_version: 1 });
+        } catch {
+          rejected++;
+        }
+        c.wipe(plain);
+        c.wipe(opened);
+      }
+      for (const invalid of ["1", "12", "12345", "a12", "１２３"]) {
+        try {
+          c.cardPayload("4242424242424242", 2030, 12, invalid);
+        } catch {
+          rejected++;
+        }
+      }
+    } finally {
+      key.destroy();
+    }
+    return { rows, rejected };
+  });
+  expect(result.rows).toEqual(
+    Array(3).fill({ size: 32, schema: 2, cipherSize: 48, equal: true, shown: true }),
+  );
+  expect(result.rejected).toBe(8);
 });
 
 test("WebCrypto matches public Python/Android vectors, original Unicode bytes and every AAD", async ({

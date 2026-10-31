@@ -454,6 +454,32 @@ export interface SallimBookAuth {
     ifMatch: string;
     idempotencyKey: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MonthReference"]>>>;
+  listExpectedIncome(options: {
+    query?: NonNullable<operations["listExpectedIncome"]["parameters"]["query"]>;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ExpectedList"]>>>;
+  createExpectedIncome(options: {
+    input: components["schemas"]["ExpectedInput"];
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ExpectedResponse"]>>>;
+  changeExpectedIncome(options: {
+    input: components["schemas"]["ExpectedChange"];
+    idempotencyKey: string;
+    recordId: string;
+    ifMatch: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["ExpectedResponse"]>>>;
+  listBonusAwards(options: {
+    query?: NonNullable<operations["listBonusAwards"]["parameters"]["query"]>;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["BonusList"]>>>;
+  createBonusAward(options: {
+    input: components["schemas"]["BonusInput"];
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["BonusResponse"]>>>;
+  changeBonusAward(options: {
+    input: components["schemas"]["BonusChange"];
+    idempotencyKey: string;
+    recordId: string;
+    ifMatch: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["BonusResponse"]>>>;
   listIncome(options: {
     query: NonNullable<operations["listIncome"]["parameters"]["query"]>;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeListResponse"]>>>;

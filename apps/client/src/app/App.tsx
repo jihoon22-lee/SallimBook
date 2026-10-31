@@ -39,6 +39,7 @@ import { LoginPage } from "../features/auth/LoginPage";
 import { SessionExpiredDialog } from "../features/auth/SessionExpiredDialog";
 import { SessionSettings } from "../features/auth/SessionSettings";
 import { CardListPage, CardNewPage, CardDetailPage } from "../features/cards/CardPages";
+import { IncomePlanningPage } from "../features/income/IncomePlanningPage";
 import { IncomeListPage, IncomeNewPage, IncomeDetailPage } from "../features/income/IncomePages";
 import { IncomeConversionPage } from "../features/income/IncomeConversion";
 import {
@@ -407,6 +408,14 @@ const screens = [
     parent: { to: "/living", label: "생활비" },
     live: true,
     element: <IncomeListPage />,
+  },
+  {
+    path: "/income/planning",
+    title: "예상 수입·성과연도 상여",
+    group: "living" as NavigationGroup,
+    parent: { to: "/income", label: "수입 목록" },
+    live: true,
+    element: <IncomePlanningPage />,
   },
   {
     path: "/income/new",

@@ -142,9 +142,28 @@ def generate() -> dict:
     }
 
 
+def generate_v2() -> dict:
+    v1 = generate()
+    key = bytes.fromhex(v1["hvk_hex"])
+    rows = []
+    for index, code in enumerate(("", "007", "0009")):
+        plain = bytearray.fromhex(v1["card"]["payload_hex"])
+        plain[3] = ord("2")
+        plain += bytes([len(code)]) + code.encode("ascii").ljust(4, b"\0")
+        aad = bytes.fromhex(v1["card"]["aad_hex"])[:-4] + (2).to_bytes(4, "big")
+        nonce = bytes(range(128 + index * 12, 140 + index * 12))
+        rows.append({"cvc": code, "payload_hex": plain.hex(), "aad_hex": aad.hex(),
+                     "nonce": b64(nonce), "ciphertext": b64(AESGCM(key).encrypt(nonce, bytes(plain), aad))})
+    return {"notice": "Public synthetic test data only", "household_id": v1["household_id"],
+            "card_id": v1["card"]["card_id"], "key_version": v1["key_version"],
+            "hvk_hex": v1["hvk_hex"], "pan": v1["card"]["pan"],
+            "expiry_year": v1["card"]["expiry_year"], "expiry_month": v1["card"]["expiry_month"], "cards": rows}
+
+
 if __name__ == "__main__":
     path = ROOT / "packages/test-fixtures/vault-v1.json"
     path.write_text(
         json.dumps(generate(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    (ROOT / "packages/test-fixtures/vault-v2.json").write_text(json.dumps(generate_v2(), indent=2) + "\n", encoding="utf-8")
     print("Reproduced public synthetic vault interoperability vectors.")

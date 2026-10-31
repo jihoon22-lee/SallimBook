@@ -58,6 +58,8 @@ class AuditEvent(Base):
 
 
 AuditEntityType = Literal[
+    "expected_income",
+    "bonus_award",
     "household_person",
     "asset",
     "financial_account",

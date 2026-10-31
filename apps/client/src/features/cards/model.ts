@@ -1,3 +1,4 @@
+import { parseKrwInput } from "../../shared/krw";
 import type { components, operations } from "@sallimbook/api-client";
 import { isDateOnly, isUuid, todaySeoul } from "../finance/dates";
 export type Card = components["schemas"]["CardResponse"];
@@ -10,6 +11,8 @@ export type CardDraft = {
   product: string;
   alias: string;
   type: "credit" | "debit";
+  annualFee: string;
+  family: "" | "yes" | "no";
   lastFour: string;
   settlementDay: string;
   account: string;
@@ -26,6 +29,8 @@ export function cardDraft(row?: Card): CardDraft {
         product: row.product_name,
         alias: row.alias ?? "",
         type: row.card_type,
+        annualFee: row.annual_fee_krw ?? "",
+        family: row.is_family_card === true ? "yes" : row.is_family_card === false ? "no" : "",
         lastFour: row.last_four ?? "",
         settlementDay: row.settlement_day === null ? "" : String(row.settlement_day),
         account: row.settlement_account_id ?? "",
@@ -39,6 +44,8 @@ export function cardDraft(row?: Card): CardDraft {
         product: "",
         alias: "",
         type: "credit",
+        annualFee: "",
+        family: "",
         lastFour: "",
         settlementDay: "",
         account: "",
@@ -56,7 +63,10 @@ export function cardEndDateError(ended: string, started: string | null = null): 
   return "";
 }
 export function cardInput(draft: CardDraft): CardInput | null {
+  const fee = parseKrwInput(draft.annualFee);
   if (
+    (!fee.ok && fee.reason !== "empty") ||
+    !["", "yes", "no"].includes(draft.family) ||
     !isUuid(draft.owner) ||
     !draft.issuer.trim() ||
     draft.issuer.trim().length > 120 ||
@@ -77,6 +87,8 @@ export function cardInput(draft: CardDraft): CardInput | null {
     product_name: draft.product.trim(),
     alias: draft.alias.trim() || null,
     card_type: draft.type,
+    annual_fee_krw: fee.ok ? fee.krw : null,
+    is_family_card: draft.family === "" ? null : draft.family === "yes",
     last_four: draft.lastFour || null,
     settlement_day: draft.settlementDay ? Number(draft.settlementDay) : null,
     settlement_account_id: draft.account || null,
@@ -96,4 +108,8 @@ export function preserveCardChanges(
       Object.entries(draft).filter(([key, value]) => previous[key as keyof CardDraft] !== value),
     ),
   };
+}
+
+export function familyCardLabel(value: boolean | null | undefined): string {
+  return value === true ? "가족카드" : value === false ? "가족카드 아님" : "가족카드 여부 미확인";
 }

@@ -6,6 +6,8 @@ import {
   VaultKey,
   decryptCard,
   displayCard,
+  preserveCvc,
+  lastFour,
   encryptCard,
   makeKeyCheck,
   randomBytes,
@@ -24,6 +26,7 @@ export type VaultPublicContext = {
   status: S["VaultStatusResponse"];
   members: S["MemberResponse"][];
   card?: S["CardResponse"];
+  cards?: S["CardResponse"][];
   offer?: S["VaultShareResponse"];
   rotation?: S["VaultRotationResponse"];
 };
@@ -33,6 +36,8 @@ export type VaultInputs = {
   recoveryCode?: Bytes;
   newPasswords: Map<string, Bytes>;
   card?: Bytes;
+  cards?: Map<string, Bytes>;
+  cvcAction?: "keep" | "replace" | "remove";
   reason: S["VaultRotationStart"]["reason"];
 };
 export type WorkflowResult = "completed" | "displayed" | "confirm-recovery";
@@ -54,6 +59,7 @@ function advance(value: number): number {
 /** No method returns keys, opaque envelopes or plaintext into React state. */
 export class VaultWorkflow {
   context: VaultPublicContext | null = null;
+  completedCards = 0;
   #prepared: (() => Promise<void>) | null = null;
   #retry: (() => Promise<unknown>) | null = null;
   // Only immutable manifest identifiers and digests survive a same-screen reauthentication.
@@ -163,6 +169,20 @@ export class VaultWorkflow {
     if ("cardId" in r) {
       context.card = await this.api.cardMetadata(r.cardId, this.signal);
       check(context.card.id === r.cardId && context.card.household_id === this.me.household_id);
+    }
+    if (r.action === "batch-edit") {
+      check(
+        r.cardIds.length >= 1 &&
+          r.cardIds.length <= 20 &&
+          new Set(r.cardIds).size === r.cardIds.length,
+      );
+      context.cards = [];
+      for (const id of r.cardIds) {
+        const card = await this.api.cardMetadata(id, this.signal);
+        this.life.assert();
+        check(card.id === id && card.household_id === this.me.household_id, true);
+        if (!card.has_secret) context.cards.push(card);
+      }
     }
     if ("offerId" in r) {
       context.offer = await this.findOffer(r.offerId);
@@ -515,8 +535,61 @@ export class VaultWorkflow {
       });
       return "displayed";
     }
+    if (r.action === "batch-edit") {
+      check(context.cards && input.cards && input.cards.size === context.cards.length);
+      const pending: { id: string; version: number; body: S["CardEnvelopeInput"]; key: string }[] =
+        [];
+      for (const card of context.cards) {
+        const plain = secret(input.cards.get(card.id));
+        check(card.last_four === null || lastFour(plain) === card.last_four, true);
+        const current = await this.api.cardMetadata(card.id, this.signal);
+        this.life.assert();
+        check(
+          current.household_id === this.me.household_id &&
+            current.version === card.version &&
+            !current.has_secret,
+          true,
+        );
+        const body = await encryptCard(unlocked.key, scope, card.id, plain);
+        this.life.assert();
+        pending.push({ id: card.id, version: card.version, body, key: crypto.randomUUID() });
+        this.life.forgetBytes(plain);
+      }
+      this.life.clearSecrets();
+      let cursor = 0;
+      await this.mutate(async () => {
+        while (cursor < pending.length) {
+          await this.fresh();
+          this.life.beginStep();
+          const row = pending[cursor]!;
+          const result = await this.api.saveCard(
+            row.id,
+            row.body,
+            row.version,
+            row.key,
+            this.signal,
+          );
+          this.life.assert();
+          check(result.id === row.id && result.version === row.version + 1, true);
+          cursor++;
+          this.completedCards = cursor;
+        }
+      });
+      return "completed";
+    }
     if (r.action === "edit") {
       const card = await this.checkedCard();
+      if (input.cvcAction === "keep" && card.has_secret) {
+        const previous = await this.api.card(card.id, this.signal);
+        this.life.assert();
+        check(previous.card_id === card.id && previous.card_version === card.version, true);
+        const plain = this.life.ownBytes(await decryptCard(unlocked.key, scope, card.id, previous));
+        try {
+          preserveCvc(secret(input.card), plain);
+        } finally {
+          this.life.forgetBytes(plain);
+        }
+      }
       const body = await encryptCard(unlocked.key, scope, card.id, secret(input.card));
       this.life.assert();
       const idempotency = crypto.randomUUID();
