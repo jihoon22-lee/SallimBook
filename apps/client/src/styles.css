@@ -718,7 +718,6 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .dashboard-history > summary { cursor: pointer; font-weight: 600; padding: .4rem 0; }
 .dashboard-history > .card { margin-top: 1rem; }
 @media (max-width: 1000px) { .household-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .household-overview-grid { grid-template-columns: minmax(0, 1fr); } }
 /* Status tiles stay two columns on phones; each heading links to its full list. */
 .household-overview-grid > .card + .card { margin-top: 0; }
 .household-category h3 { margin: 0 0 4px; font-size: 1rem; }

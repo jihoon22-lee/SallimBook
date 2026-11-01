@@ -13,6 +13,7 @@ const plan = {
   transfer_known_krw: "300000",
   margin_before_transfers_krw: "1445000",
   margin_after_transfers_krw: "1145000",
+  excluded_known_krw: "120000",
 };
 
 async function quietCare(page: Page) {
@@ -104,6 +105,8 @@ test("the plan margin is the server's estimate and never reads as a balance", as
   await expect(margin).toContainText(
     "확인된 예상 수입 5,000,000원 − 소비성 비용 2,500,000원 − 대출 원리금 1,055,000원",
   );
+  // Plans kept outside the budget are named, not silently left out.
+  await expect(margin).toContainText("별도 표시 120,000원 제외");
   await expect(margin).toContainText("실제 잔액·저축액이 아니에요");
   await page.goto("/living");
   await expect(page.getByRole("region", { name: "월 계획 기준 여유", exact: true })).toContainText(

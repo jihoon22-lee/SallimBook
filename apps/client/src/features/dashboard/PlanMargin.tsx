@@ -15,6 +15,7 @@ export function PlanMargin({ overview, quiet }: { overview: OverviewResource; qu
           `금액 미확인 예상 수입 ${plan.expected_income_unknown_count}건`,
         plan.planned_unknown_count > 0 && `금액 미정 계획 ${plan.planned_unknown_count}개`,
         plan.unconverted_count > 0 && `월 환산 미정 ${plan.unconverted_count}개`,
+        plan.excluded_known_krw !== "0" && `별도 표시 ${formatKrw(plan.excluded_known_krw)} 제외`,
       ].filter(Boolean)
     : [];
   return (
