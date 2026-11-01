@@ -1555,6 +1555,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/household-overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Household Overview */
+        get: operations["getHouseholdOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/household/connection-code": {
         parameters: {
             query?: never;
@@ -1670,6 +1687,23 @@ export interface paths {
         put?: never;
         /** Create */
         post: operations["createIncome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/income-planning/bonus-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bonus Summary */
+        get: operations["bonusAwardSummary"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4223,6 +4257,31 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** BonusSummary */
+        BonusSummary: {
+            /** Years */
+            years: components["schemas"]["BonusYearSummary"][];
+        };
+        /**
+         * BonusYearSummary
+         * @description Active awards of one performance year; an unknown amount is counted, never treated as 0.
+         */
+        BonusYearSummary: {
+            /** Known Total Krw */
+            known_total_krw: string;
+            /** Net Cash Known Krw */
+            net_cash_known_krw: string;
+            /** Net Cash Unknown Count */
+            net_cash_unknown_count: number;
+            /** Performance Year */
+            performance_year: number;
+            /** Record Count */
+            record_count: number;
+            /** Stock Grant Known Krw */
+            stock_grant_known_krw: string;
+            /** Stock Grant Unknown Count */
+            stock_grant_unknown_count: number;
+        };
         /** CardArchive */
         CardArchive: {
             /**
@@ -6253,6 +6312,48 @@ export interface components {
              */
             status: "ok";
         };
+        /** @enum {string} */
+        HoldingGroup: "accounts" | "financial" | "real_estate" | "deposit" | "loan" | "other";
+        /** HoldingGroupTotal */
+        HoldingGroupTotal: {
+            /** Assets Krw */
+            assets_krw: string;
+            /** Count */
+            count: number;
+            group: components["schemas"]["HoldingGroup"];
+            /** Known Count */
+            known_count: number;
+            /** Liabilities Krw */
+            liabilities_krw: string;
+        };
+        /**
+         * HoldingsOverview
+         * @description Totals use each included item's latest saved amount; unsaved items are counted apart.
+         */
+        HoldingsOverview: {
+            /** Assets Krw */
+            assets_krw: string;
+            /** Current Count */
+            current_count: number;
+            /** Groups */
+            groups: components["schemas"]["HoldingGroupTotal"][];
+            /** Item Count */
+            item_count: number;
+            /** Items */
+            items: components["schemas"]["OverviewHolding"][];
+            /** Known Count */
+            known_count: number;
+            /** Liabilities Krw */
+            liabilities_krw: string;
+            /** Missing Count */
+            missing_count: number;
+            /** Net Assets Krw */
+            net_assets_krw: string;
+            /** Oldest Basis Month */
+            oldest_basis_month: string | null;
+            /** Stale Count */
+            stale_count: number;
+        };
         /** HomecareStatusItem */
         HomecareStatusItem: {
             /**
@@ -6365,6 +6466,16 @@ export interface components {
             items: components["schemas"]["HomecareStatusItem"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** HouseholdOverviewResponse */
+        HouseholdOverviewResponse: {
+            appliances: components["schemas"]["RegisteredItems"];
+            cards: components["schemas"]["RegisteredItems"];
+            holdings: components["schemas"]["HoldingsOverview"];
+            insurance: components["schemas"]["InsuranceOverview"];
+            /** Month */
+            month: string;
+            plan: components["schemas"]["MonthlyPlanOverview"];
         };
         /** @enum {string} */
         InclusionStatus: "included" | "excluded";
@@ -6580,6 +6691,19 @@ export interface components {
             device_id: string;
             /** Key */
             key?: string | null;
+        };
+        /** InsuranceOverview */
+        InsuranceOverview: {
+            /** Active Policy Count */
+            active_policy_count: number;
+            /** Claims In Progress Count */
+            claims_in_progress_count: number;
+            /** Documents Required Count */
+            documents_required_count: number;
+            /** Open Case Count */
+            open_case_count: number;
+            /** Policies */
+            policies: components["schemas"]["NamedItem"][];
         };
         /** @enum {string} */
         IntervalUnit: "manual" | "days" | "months";
@@ -7269,6 +7393,39 @@ export interface components {
              */
             value_id: string;
         };
+        /**
+         * MonthlyPlanOverview
+         * @description A plan-based estimate from the expected income and the monthly plan, never a balance.
+         */
+        MonthlyPlanOverview: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Excluded Known Krw */
+            excluded_known_krw: string;
+            /** Expected Income Count */
+            expected_income_count: number;
+            /** Expected Income Known Krw */
+            expected_income_known_krw: string;
+            /** Expected Income Unknown Count */
+            expected_income_unknown_count: number;
+            /** Loan Known Krw */
+            loan_known_krw: string;
+            /** Margin After Transfers Krw */
+            margin_after_transfers_krw: string;
+            /** Margin Before Transfers Krw */
+            margin_before_transfers_krw: string;
+            /** Planned Unknown Count */
+            planned_unknown_count: number;
+            /** Spending Known Krw */
+            spending_known_krw: string;
+            /** Transfer Known Krw */
+            transfer_known_krw: string;
+            /** Unconverted Count */
+            unconverted_count: number;
+        };
         /** @enum {string} */
         MovementKind: "receipt" | "replacement" | "return_in" | "return_out" | "adjustment" | "reversal";
         /** MutationReference */
@@ -7280,6 +7437,16 @@ export interface components {
             id: string;
             /** Version */
             version: number;
+        };
+        /** NamedItem */
+        NamedItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** NativeLoginRequest */
         NativeLoginRequest: {
@@ -7610,6 +7777,34 @@ export interface components {
             items: components["schemas"]["ObligationResponse"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * OverviewHolding
+         * @description One asset held at the selected month's end and its latest saved household amount.
+         */
+        OverviewHolding: {
+            /** Account Id */
+            account_id: string | null;
+            /** As Of Date */
+            as_of_date: string | null;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Basis Month */
+            basis_month: string | null;
+            category: components["schemas"]["AssetCategory"];
+            group: components["schemas"]["HoldingGroup"];
+            /** Included */
+            included: boolean;
+            kind: components["schemas"]["AssetKind"];
+            /** Name */
+            name: string;
+            /** Owned Amount Krw */
+            owned_amount_krw: string | null;
+            /** Stale */
+            stale: boolean;
         };
         /** @enum {string} */
         OwnershipKind: "individual" | "joint";
@@ -8773,6 +8968,13 @@ export interface components {
              */
             challenge_id: string;
             credential: components["schemas"]["RegistrationCredential"];
+        };
+        /** RegisteredItems */
+        RegisteredItems: {
+            /** Count */
+            count: number;
+            /** Items */
+            items: components["schemas"]["NamedItem"][];
         };
         /** RegistrationAttestation */
         RegistrationAttestation: {
@@ -22507,6 +22709,109 @@ export interface operations {
             };
         };
     };
+    getHouseholdOverview: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdOverviewResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     createHouseholdConnectionCode: {
         parameters: {
             query?: never;
@@ -23373,6 +23678,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CashResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    bonusAwardSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BonusSummary"];
                 };
             };
             /** @description Bad Request */

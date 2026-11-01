@@ -79,3 +79,19 @@ class ExpectedList(InputModel):
 class BonusList(InputModel):
     items: list[BonusResponse]
     next_cursor: UUID | None
+
+
+class BonusYearSummary(InputModel):
+    """Active awards of one performance year; an unknown amount is counted, never treated as 0."""
+
+    performance_year: int
+    record_count: int
+    net_cash_known_krw: KrwString
+    net_cash_unknown_count: int
+    stock_grant_known_krw: KrwString
+    stock_grant_unknown_count: int
+    known_total_krw: KrwString
+
+
+class BonusSummary(InputModel):
+    years: list[BonusYearSummary]

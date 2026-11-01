@@ -10,6 +10,7 @@ from sallimbook.cashflow.planning_schemas import (
     BonusInput,
     BonusList,
     BonusResponse,
+    BonusSummary,
     ExpectedChange,
     ExpectedInput,
     ExpectedList,
@@ -72,6 +73,11 @@ def list_bonuses(
     limit: Limit = 100,
 ):
     return service.list_records(session, principal, BonusAward, cursor, limit)
+
+
+@router.get("/bonus-summary", response_model=BonusSummary, operation_id="bonusAwardSummary")
+def bonus_summary(principal: PrincipalDependency, session: SessionDependency):
+    return service.bonus_summary(session, principal)
 
 
 @router.post(

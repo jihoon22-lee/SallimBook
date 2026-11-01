@@ -237,6 +237,7 @@ export const nativeFinance = {
     metadata(() => plugin.createBonusAward(options)),
   changeBonusAward: (options: Parameters<SallimBookAuth["changeBonusAward"]>[0]) =>
     metadata(() => plugin.changeBonusAward(options)),
+  bonusAwardSummary: () => metadata(() => plugin.bonusAwardSummary({})),
   listIncome: (options: Parameters<SallimBookAuth["listIncome"]>[0]) =>
     metadata(() => plugin.listIncome(options)),
   incomeSummary: (options: Parameters<SallimBookAuth["incomeSummary"]>[0]) =>
@@ -279,6 +280,8 @@ export const nativeFinance = {
     metadata(() => plugin.getAssetComparison(options)),
   getAssetTrends: (options: Parameters<SallimBookAuth["getAssetTrends"]>[0]) =>
     metadata(() => plugin.getAssetTrends(options)),
+  householdOverview: (options: Parameters<SallimBookAuth["householdOverview"]>[0]) =>
+    metadata(() => plugin.householdOverview(options)),
   listOverdueObligations: (options: Parameters<SallimBookAuth["listOverdueObligations"]>[0]) =>
     metadata(() => plugin.listOverdueObligations(options)),
   listObligations: (options: Parameters<SallimBookAuth["listObligations"]>[0]) =>

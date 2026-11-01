@@ -243,6 +243,46 @@ def list_records(session, principal, model, cursor=None, limit=100):
     )
 
 
+def bonus_summary(session, principal):
+    """Known cash and stock-grant amounts of active awards per performance year, newest first."""
+    rows = session.scalars(
+        select(BonusAward).where(
+            BonusAward.household_id == principal.household_id, BonusAward.active.is_(True)
+        )
+    ).all()
+    years: dict[int, list[BonusAward]] = {}
+    for row in rows:
+        years.setdefault(row.performance_year, []).append(row)
+
+    def known(records, field):
+        return sum(int(getattr(row, field)) for row in records if getattr(row, field) is not None)
+
+    def unknown(records, field):
+        return sum(getattr(row, field) is None for row in records)
+
+    try:
+        return dict(
+            years=[
+                dict(
+                    performance_year=year,
+                    record_count=len(records),
+                    net_cash_known_krw=krw_string(known(records, "net_cash_krw")),
+                    net_cash_unknown_count=unknown(records, "net_cash_krw"),
+                    stock_grant_known_krw=krw_string(known(records, "stock_grant_value_krw")),
+                    stock_grant_unknown_count=unknown(records, "stock_grant_value_krw"),
+                    known_total_krw=krw_string(
+                        known(records, "net_cash_krw") + known(records, "stock_grant_value_krw")
+                    ),
+                )
+                for year, records in sorted(years.items(), reverse=True)
+            ]
+        )
+    except ValueError:
+        raise DomainError(
+            "AMOUNT_OUT_OF_RANGE", "집계 금액이 지원 범위를 초과합니다.", 422
+        ) from None
+
+
 def guard_linked_cash(session, principal, record_id):
     if session.scalar(
         select(BonusAward.id).where(

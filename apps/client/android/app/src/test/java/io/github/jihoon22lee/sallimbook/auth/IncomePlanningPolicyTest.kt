@@ -23,4 +23,24 @@ class IncomePlanningPolicyTest {
         val change=CashflowPolicy.prepare(FinanceOperation.CHANGE_BONUS_AWARD,mapOf("recordId" to record,"input" to input+mapOf("reason" to "합성 정정"),"ifMatch" to "\"1\"","idempotencyKey" to "synthetic-change"))
         rejected { CashflowPolicy.response(FinanceOperation.CHANGE_BONUS_AWARD,change,200,response+mapOf("id" to member)) }
     }
+    @Test fun bonusSummaryKeepsServerYearTotalsAndUnknownCounts() {
+        val op = FinanceOperation.BONUS_AWARD_SUMMARY
+        val request = FinancePolicy.prepare(op, emptyMap<String, Any?>())
+        assertEquals("GET", request.method)
+        assertEquals("/api/v1/income-planning/bonus-summary", request.path)
+        assertTrue(FinancePolicy.metadataHttpAllowed("GET", request.path, null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("GET", request.path + "?year=2025", null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("POST", request.path, emptyMap<String, Any>(), null, "synthetic"))
+        rejected { FinancePolicy.prepare(op, mapOf("query" to mapOf("year" to 2025))) }
+        val year = mapOf<String, Any?>("performance_year" to 2025, "record_count" to 2, "net_cash_known_krw" to "9007199254740993",
+            "net_cash_unknown_count" to 1, "stock_grant_known_krw" to "3", "stock_grant_unknown_count" to 0, "known_total_krw" to "9007199254740996")
+        val response = mapOf("years" to listOf(year, year + mapOf("performance_year" to 2024, "record_count" to 1)))
+        assertEquals(response, FinancePolicy.response(op, request, 200, response))
+        assertEquals(response, FinancePolicy.response(op, request, 200, withAddedFields(response)))
+        for (change in listOf(mapOf("net_cash_known_krw" to 3000000), mapOf("known_total_krw" to "-1"), mapOf("record_count" to 0),
+            mapOf("performance_year" to 1899), mapOf("stock_grant_unknown_count" to -1), mapOf("cvc" to "synthetic"))) rejected {
+            FinancePolicy.response(op, request, 200, mapOf("years" to listOf(year + change)))
+        }
+        rejected { FinancePolicy.response(op, request, 201, response) }
+    }
 }

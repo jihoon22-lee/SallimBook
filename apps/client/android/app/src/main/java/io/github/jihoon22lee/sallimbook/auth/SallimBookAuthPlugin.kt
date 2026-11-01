@@ -157,6 +157,7 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun listBonusAwards(call: PluginCall) = finance(call, FinanceOperation.LIST_BONUS_AWARDS)
     @PluginMethod fun createBonusAward(call: PluginCall) = finance(call, FinanceOperation.CREATE_BONUS_AWARD)
     @PluginMethod fun changeBonusAward(call: PluginCall) = finance(call, FinanceOperation.CHANGE_BONUS_AWARD)
+    @PluginMethod fun bonusAwardSummary(call: PluginCall) = finance(call, FinanceOperation.BONUS_AWARD_SUMMARY)
     @PluginMethod fun listIncome(call: PluginCall) = finance(call, FinanceOperation.LIST_INCOME)
     @PluginMethod fun incomeSummary(call: PluginCall) = finance(call, FinanceOperation.INCOME_SUMMARY)
     @PluginMethod fun incomeDuplicateCandidates(call: PluginCall) = finance(call, FinanceOperation.INCOME_DUPLICATE_CANDIDATES)
@@ -179,6 +180,7 @@ class SallimBookAuthPlugin : Plugin() {
 
     @PluginMethod fun getAssetComparison(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_COMPARISON)
     @PluginMethod fun getAssetTrends(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_TRENDS)
+    @PluginMethod fun householdOverview(call: PluginCall) = finance(call, FinanceOperation.HOUSEHOLD_OVERVIEW)
 
     @PluginMethod fun listOverdueObligations(call: PluginCall) = finance(call, FinanceOperation.LIST_OVERDUE_OBLIGATIONS)
     @PluginMethod fun listObligations(call: PluginCall) = finance(call, FinanceOperation.LIST_OBLIGATIONS)
