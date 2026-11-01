@@ -15,7 +15,7 @@ R-13/R-15/R-20의 PDF/JPEG/PNG 검사 경계를 실제 도구로 재현하는 �
 | Tesseract | `tesseract-ocr=5.5.0-1+b1`; [Debian 패키지](https://packages.debian.org/trixie/tesseract-ocr) |
 | OCR 언어 | eng/kor `1:4.1.0-2`; [영어](https://packages.debian.org/trixie/tesseract-ocr-eng), [한국어](https://packages.debian.org/trixie/tesseract-ocr-kor) |
 | 합성 한글 폰트 | `fonts-noto-cjk=1:20240730+repack1-1`; [Debian 패키지](https://packages.debian.org/trixie/fonts-noto-cjk) |
-| Python 라이브러리 | API `uv.lock`에서 해시와 함께 내보낸 `requirements.txt`; Pillow 13.0.0, pypdf 6.21.2 포함 |
+| Python 라이브러리 | API `uv.lock`에서 해시와 함께 내보낸 `requirements.txt`; Pillow 13.0.0, pypdf 6.21.4 포함 |
 
 `toolchain.lock.json`은 위 입력과 API lockfile/내보낸 requirements의 해시를 기록한다.
 API 의존성이 변경되면 공식 버전·호환성을 검토한 뒤 다음 명령으로 내보내고 두 해시를 갱신한다.
@@ -112,6 +112,23 @@ Dependabot 변경은 API lockfile과 requirements를 바꿨으나 `toolchain.loc
 문서·PDF 단위 테스트 218개와 격리 도구 시험 33개가 통과했다. 실제 도구 출력에서 pypdf 6.21.2를
 확인했으며 정상 한글 PDF/이미지와 잘못된 문서·악성코드 거부, 페이지·크기·실행 자원 제한을 검사했다.
 이 결과는 합성 데이터의 호환 시험이며 운영 반영·실제 기기 시험과 구분한다.
+
+## 2026-11-01 보안 패치 검증
+
+pypdf를 6.21.4, pyasn1을 0.6.5로 고정했다. pypdf 6.21.3·6.21.4는 복호화 뒤 검증한 쪽수 사용,
+교차참조 스트림 항목 총량 제한, 과도한 오류 메시지 억제, 평탄화 때 복사하는 쪽 속성 수 제한,
+xref trailer의 EOF 감지, DictionaryObject 복제의 순환 감지를 고친 버전이다
+([6.21.3](https://github.com/py-pdf/pypdf/releases/tag/6.21.3), [6.21.4](https://github.com/py-pdf/pypdf/releases/tag/6.21.4)).
+pyasn1 0.6.5는 webauthn이 쓰는 BER 디코더의 비선형 처리 시간 4건
+(GHSA-mm57-4v3p-rchx, GHSA-2qm8-x737-gmw5, GHSA-9m75-vc3g-4x39, GHSA-fm9c-5rcf-2q5p)을 고쳤다
+([공식 릴리스](https://github.com/pyasn1/pyasn1/releases/tag/v0.6.5)).
+
+이번 Dependabot 변경도 `toolchain.lock.json`의 검토 해시를 갱신하지 않아 실제 검사기 실행 전에 CI가 중단됐다.
+위 frozen export 명령의 결과가 Dependabot의 requirements와 바이트 단위로 같은 것을 확인하고 두 해시만
+갱신했다. 검증을 건너뛰거나 검사 기준을 낮추지 않았다.
+
+문서·PDF·내보내기 단위 테스트 420개, API 단위 1,099개, 격리 도구 시험 33개가 통과했다. 실제 도구 출력에서
+pypdf 6.21.4를 확인했다. 이 결과는 합성 데이터의 호환 시험이며 운영 반영·실제 기기 시험과 구분한다.
 
 관련 공식 문서: [ClamAV 프로토콜](https://docs.clamav.net/manual/Usage/ClamdProtocol.html),
 [서명 갱신](https://docs.clamav.net/manual/Usage/SignatureManagement.html),
