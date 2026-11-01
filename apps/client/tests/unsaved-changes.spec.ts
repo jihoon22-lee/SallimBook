@@ -34,6 +34,47 @@ test("dirty income form asks before a tab leaves and keeps the typed amount", as
   expect(state.writes).toHaveLength(0);
 });
 
+test("keep editing leaves focus in a field the person picked before the dialog finished closing", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  await page.goto("/fixed-payments");
+  await page.getByRole("button", { name: "지출 계획 추가", exact: true }).click();
+  const editor = page.getByRole("region", { name: "지출 계획 편집", exact: true });
+  const name = editor.getByLabel("이름", { exact: true });
+  await name.fill("합성 이름");
+  await editor.getByText("결제수단·주기·관련 구성원·메모", { exact: true }).click();
+  const note = editor.getByRole("textbox", { name: "메모", exact: true });
+  await note.fill("합성 메모");
+  await page.getByRole("button", { name: "뒤로", exact: true }).click();
+  await expect(dialog(page)).toBeVisible();
+  // Hold animation frames: the deferred refocus then runs only after a field was picked, as on a
+  // slow device where the person is already typing again.
+  await page.evaluate(() => {
+    const held: FrameRequestCallback[] = [];
+    const original = window.requestAnimationFrame;
+    window.requestAnimationFrame = (callback) => held.push(callback);
+    Object.assign(window, {
+      syntheticFlushFrames: () => {
+        for (let round = 0; round < 5 && held.length; round++)
+          for (const callback of held.splice(0)) callback(performance.now());
+        window.requestAnimationFrame = original;
+      },
+    });
+  });
+  await page.getByRole("button", { name: "계속 입력하기", exact: true }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await note.focus();
+  await page.evaluate(() =>
+    (window as unknown as { syntheticFlushFrames: () => void }).syntheticFlushFrames(),
+  );
+  await expect(note).toBeFocused();
+  await page.keyboard.type(" 추가");
+  await expect(note).toHaveValue("합성 메모 추가");
+  await expect(name).toHaveValue("합성 이름");
+  expect(state.writes).toHaveLength(0);
+});
+
 test("leaving through cancel asks, writes nothing and back skips the form", async ({ page }) => {
   const state = await mockCashflow(page);
   await page.goto("/income");
