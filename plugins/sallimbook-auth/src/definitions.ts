@@ -486,6 +486,9 @@ export interface SallimBookAuth {
     recordId: string;
     ifMatch: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["BonusResponse"]>>>;
+  bonusAwardSummary(
+    options?: Record<string, never>,
+  ): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["BonusSummary"]>>>;
   listIncome(options: {
     query: NonNullable<operations["listIncome"]["parameters"]["query"]>;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeListResponse"]>>>;
@@ -571,6 +574,11 @@ export interface SallimBookAuth {
   getAssetTrends(options: {
     query: operations["getAssetTrends"]["parameters"]["query"];
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetTrendResponse"]>>>;
+  householdOverview(options: {
+    query: operations["getHouseholdOverview"]["parameters"]["query"];
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["HouseholdOverviewResponse"]>>
+  >;
   listOverdueObligations(options: {
     query?: NonNullable<operations["listOverdueObligations"]["parameters"]["query"]>;
   }): Promise<

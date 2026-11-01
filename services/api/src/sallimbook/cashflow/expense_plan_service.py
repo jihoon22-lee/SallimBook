@@ -257,7 +257,13 @@ def list_plans(session, principal, *, q=None, cursor=None, limit=50, account_id=
 
 def summary(session, principal, as_of=None):
     cash.lock_cash_household(session, principal)
-    day = as_of or recurring.today()
+    result = plan_summary(session, principal, as_of or recurring.today())
+    session.commit()
+    return result
+
+
+def plan_summary(session, principal, day):
+    """Totals of the versions in effect on `day`; the caller holds the household lock."""
     versions = list(
         session.scalars(
             select(RecurringRuleVersion).where(
@@ -327,5 +333,4 @@ def summary(session, principal, as_of=None):
             for k, data in groups.items()
         },
     )
-    session.commit()
     return result

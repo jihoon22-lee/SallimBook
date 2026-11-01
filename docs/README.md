@@ -49,6 +49,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [ADR: mobile first start](adr/mobile-first-start.md) | 웹/Android 직접 시작·배우자 연결·최초 등록의 사설망 신뢰 경계 |
 | [ADR: late insurance records](adr/late-insurance-records.md) | 종료 계약의 사후 청구·직접 보험금 배분 허용 |
 | [ADR: document inspection isolation](adr/document-inspection-isolation.md) | 문서 구조 검사·OCR을 네트워크·비밀 없는 별도 컨테이너로 격리 |
+| [ADR: dashboard first household status](adr/dashboard-first-household-status.md) | 등록 기록 기반 살림 현황 홈, 항목별 최근 금액·알림만 하는 갱신 안내·월 계획 기준 여유 |
 
 ## 문서 유지 규칙
 
@@ -67,6 +68,7 @@ GitHub Issue는 작업 진행 상태, backlog.json은 최초 구현 계획이다
 - [결제수단 일괄 변경](testing/payment-method-switch.md) — 현재·미래 조건 보존, 예외 회차 유지, 실패/충돌 행 재검토
 - [읽기용 자료·연간 가족별 참고 요약](testing/readable-reports.md) — 영역·기간 선택, 이름·관계·서울 시각, 실제 금전 정산
 - [사용자 내보내기 화면 검증](testing/exports-client.md) — JSON·CSV·선택 문서 ZIP과 플랫폼별 저장 경계
+- [등록 기록 기반 살림 현황 홈 검증](testing/household-status.md) — 현황 조회·월 계획 기준 여유·결합 재시도·화면별 코드 분할
 
 설정과 감사 이력 화면·26개 경로 확인은 [설정·감사 UI 검증](testing/settings-audit.md)을 참고합니다.
 

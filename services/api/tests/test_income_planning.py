@@ -267,3 +267,61 @@ def test_dashboard_baseline_is_current_scoped_exact_and_never_actual_cash(db_ses
         assert result.expected.members[0].known_amount_krw == "9007199254740993"
     assert db_session.scalar(select(func.count()).select_from(CashRecord)) == 0
     assert db_session.scalar(select(func.count()).select_from(AssetMonthRecord)) == 0
+
+
+def test_bonus_summary_sums_active_awards_per_year_and_counts_unknown(db_session, db_engine):
+    actor, stranger = make_actor(db_engine), make_actor(db_engine)
+    rows = [
+        (2025, "tai_h1", "9007199254740993", "1", True),
+        (2025, "tai_h2", None, "2", True),
+        (2025, "opi", "500", None, False),
+        (2024, "opi", "0", "0", True),
+    ]
+    for number, (year, kind, cash, stock, active) in enumerate(rows):
+        service.create_bonus(
+            db_session,
+            actor.principal,
+            BonusInput(
+                member_id=actor.member_id,
+                performance_year=year,
+                award_kind=kind,
+                net_cash_krw=cash,
+                stock_grant_value_krw=stock,
+                active=active,
+            ),
+            f"summary-{number}",
+        )
+    service.create_bonus(
+        db_session,
+        stranger.principal,
+        BonusInput(
+            member_id=stranger.member_id,
+            performance_year=2025,
+            award_kind="opi",
+            net_cash_krw="999",
+        ),
+        "summary-foreign",
+    )
+    result = service.bonus_summary(db_session, actor.principal)
+    assert result["years"] == [
+        {
+            "performance_year": 2025,
+            "record_count": 2,
+            "net_cash_known_krw": "9007199254740993",
+            "net_cash_unknown_count": 1,
+            "stock_grant_known_krw": "3",
+            "stock_grant_unknown_count": 0,
+            "known_total_krw": "9007199254740996",
+        },
+        {
+            "performance_year": 2024,
+            "record_count": 1,
+            "net_cash_known_krw": "0",
+            "net_cash_unknown_count": 0,
+            "stock_grant_known_krw": "0",
+            "stock_grant_unknown_count": 0,
+            "known_total_krw": "0",
+        },
+    ]
+    assert service.bonus_summary(db_session, stranger.principal)["years"][0]["record_count"] == 1
+    assert db_session.scalar(select(func.count()).select_from(CashRecord)) == 0

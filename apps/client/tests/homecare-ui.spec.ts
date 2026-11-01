@@ -2,7 +2,7 @@ import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import catalog from "../../../packages/test-fixtures/catalog.json" with { type: "json" };
 import { mockHomecare, applianceRow, consumableRow, linkRow } from "./support/homecare";
-import { uid } from "./support/finance";
+import { householdOverviewFor, jointAsset, uid } from "./support/finance";
 const vectors = catalog.vectors;
 const appliance = `/appliances/${uid(100)}`,
   stock = `/consumables/${uid(200)}`,
@@ -377,6 +377,21 @@ test("T24 dashboard keeps today status independent of selected asset month and u
   state.asOf = t24.expected.consumables_as_of;
   state.links[0]!.next_check_override = t24.inputs.next_check_on;
   state.consumables[0]!.stock_quantity = t24.inputs.stock;
+  // The asset view follows the selected month; each item shows its latest amount up to it.
+  const loan = { ...jointAsset, id: uid(13), name: "합성 대출", kind: "liability" as const };
+  state.cashflow.finance.overview = (month) =>
+    householdOverviewFor({
+      month,
+      assets: [jointAsset, { ...loan, category: "loan" }],
+      accounts: [],
+      amounts:
+        month === t24.inputs.selected_asset_month
+          ? {
+              [jointAsset.id]: { amount: "5000000", basis: month },
+              [loan.id]: { amount: "1000000", basis: month },
+            }
+          : {},
+    });
   await page.goto("/");
   await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
   await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
@@ -405,6 +420,7 @@ test("T24 dashboard keeps today status independent of selected asset month and u
       (r) => r.path === "/api/v1/asset-comparison" && r.query.get("to") === "2025-01",
     ),
   ).toBe(true);
+  expect(state.cashflow.finance.overviewMonths).toContain(t24.inputs.selected_asset_month);
   const h2 = await page.getByRole("heading", { level: 2 }).allTextContents();
   expect(h2[0]).toBe("수입·지출");
   expect(h2).toContain("우리 집 보유 현황");

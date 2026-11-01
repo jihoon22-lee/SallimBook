@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useResource } from "../finance/queries";
 import { CashflowError } from "../finance/FinancialFeedback";
 import { formatKrw } from "../assets/months/model";
+import { useRetryReport } from "../../shared/RetryFailed";
 import { useExpensePlanApi } from "./expensePlanApi";
 import { economicTypes } from "./model";
 
@@ -76,11 +77,14 @@ export function ExpensePlanSummary({
 export function CurrentExpensePlanSummary({ compact = false }: { compact?: boolean }) {
   const api = useExpensePlanApi();
   const result = useResource(useCallback(() => api.summary(), [api]));
+  const quiet = useRetryReport("expense-plan-summary", result.error, result.reload);
   return (
     <>
-      <CashflowError error={result.error} />
+      {!quiet && <CashflowError error={result.error} />}
       {result.loading && <p role="status">월 계획 확인 중</p>}
-      {result.error && <button onClick={() => void result.reload()}>월 계획 다시 불러오기</button>}
+      {result.error && !quiet && (
+        <button onClick={() => void result.reload()}>월 계획 다시 불러오기</button>
+      )}
       {result.data && !result.error && !result.loading && (
         <ExpensePlanSummary data={result.data} compact={compact} />
       )}

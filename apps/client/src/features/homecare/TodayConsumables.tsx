@@ -7,6 +7,7 @@ import { SessionStatus } from "../auth/AuthFeedback";
 import { useAuth } from "../auth/AuthProvider";
 import { dateLabel } from "../finance/dates";
 import { useResource } from "../finance/queries";
+import { useRetryReport } from "../../shared/RetryFailed";
 import { useHomecareApi } from "./api";
 import {
   attentionRank,
@@ -62,6 +63,7 @@ function TodayList({ compact }: { compact: boolean }) {
     ),
   );
   useSeoulDayRefresh(resource.reload);
+  const quiet = useRetryReport("today-consumables", resource.error, resource.reload);
   const shown =
     resource.data?.items.filter((row) => matchesTodayFilter(row, filter)).sort(compareAttention) ??
     [];
@@ -83,7 +85,7 @@ function TodayList({ compact }: { compact: boolean }) {
   const attentionCount = resource.data?.items.filter((row) => attentionRank(row) < 5).length;
   return (
     <div aria-busy={resource.loading}>
-      <ResourceFeedback resource={resource} keepsData />
+      {!quiet && <ResourceFeedback resource={resource} keepsData />}
       {resource.data && !resource.error && (
         <>
           <div className="care-summary">

@@ -1,7 +1,7 @@
 import { CurrentExpensePlanSummary } from "../fixed/ExpensePlanSummary";
 import { ExpectedIncomeSummary } from "../income/ExpectedIncomeSummary";
 import { useHouseholdMembers } from "../finance/FinanceSupport";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router";
 import { formatMonth, useMonth } from "../../shared/MonthContext";
 import { RelatedLinks } from "../../shared/RelatedLinks";
@@ -11,12 +11,16 @@ import { CashflowError } from "../finance/FinancialFeedback";
 import { useResource } from "../finance/queries";
 import { useFixedApi } from "../fixed/api";
 import { useIncomeApi } from "../income/api";
+import { useRetryReport } from "../../shared/RetryFailed";
+import { PlanMargin } from "./PlanMargin";
+import type { OverviewResource } from "./overviewApi";
 
 function IncomeSummary() {
   const api = useIncomeApi();
   const members = useHouseholdMembers();
   const { month } = useMonth();
   const result = useResource(useCallback(() => api.summary(month), [api, month]));
+  const quiet = useRetryReport("home-income", result.error, result.reload);
   const ready = result.data && !result.loading && !result.error;
   return (
     <section className="home-summary-part" aria-label="홈 등록 수입 요약">
@@ -24,9 +28,11 @@ function IncomeSummary() {
         <ExpectedIncomeSummary data={result.data!.expected} members={members.members} level={3} />
       )}
       <h3>{formatMonth(month)} 실제 입금</h3>
-      <CashflowError error={result.error} />
+      {!quiet && <CashflowError error={result.error} />}
       {result.loading && <p role="status">등록 수입 확인 중</p>}
-      {result.error && <button onClick={() => void result.reload()}>홈 수입 다시 확인</button>}
+      {result.error && !quiet && (
+        <button onClick={() => void result.reload()}>홈 수입 다시 확인</button>
+      )}
       {ready &&
         (result.data!.totals.record_count === 0 ? (
           <p>
@@ -48,55 +54,71 @@ function IncomeSummary() {
     </section>
   );
 }
-function FixedSummary() {
+/** Scheduled and actual payments load only when opened; the plan above is the everyday view. */
+function PaymentFacts() {
   const api = useFixedApi();
   const { month } = useMonth();
   const result = useResource(useCallback(() => api.summary(month), [api, month]));
   const ready = result.data && !result.loading && !result.error;
   return (
+    <>
+      <CashflowError error={result.error} />
+      {result.loading && <p role="status">고정 납부 확인 중</p>}
+      {result.error && <button onClick={() => void result.reload()}>홈 고정 납부 다시 확인</button>}
+      {ready && (
+        <>
+          <dl className="metadata-grid compact-metadata">
+            <div>
+              <dt>금액이 정해진 예정</dt>
+              <dd>
+                {result.data!.obligation_count
+                  ? formatKrw(result.data!.expected_known_krw)
+                  : "예정 회차 없음"}
+              </dd>
+            </div>
+            <div>
+              <dt>실제 납부</dt>
+              <dd>{formatKrw(result.data!.actual_amount_krw)}</dd>
+            </div>
+          </dl>
+          <p className="muted">
+            예정액 미정 {result.data!.unknown_expected_count}회차 · 예정{" "}
+            {result.data!.obligation_count}회차
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+function FixedSummary() {
+  const { month } = useMonth();
+  const [open, setOpen] = useState(false);
+  return (
     <section className="home-summary-part" aria-label="홈 고정 납부 요약">
       <CurrentExpensePlanSummary />
-      <details>
+      <details onToggle={(event) => setOpen(event.currentTarget.open)}>
         <summary>{formatMonth(month)} 예정·실제 납부</summary>
-        <CashflowError error={result.error} />
-        {result.loading && <p role="status">고정 납부 확인 중</p>}
-        {result.error && (
-          <button onClick={() => void result.reload()}>홈 고정 납부 다시 확인</button>
-        )}
-        {ready && (
-          <>
-            <dl className="metadata-grid compact-metadata">
-              <div>
-                <dt>금액이 정해진 예정</dt>
-                <dd>
-                  {result.data!.obligation_count
-                    ? formatKrw(result.data!.expected_known_krw)
-                    : "예정 회차 없음"}
-                </dd>
-              </div>
-              <div>
-                <dt>실제 납부</dt>
-                <dd>{formatKrw(result.data!.actual_amount_krw)}</dd>
-              </div>
-            </dl>
-            <p className="muted">
-              예정액 미정 {result.data!.unknown_expected_count}회차 · 예정{" "}
-              {result.data!.obligation_count}회차
-            </p>
-          </>
-        )}
+        {open && <PaymentFacts />}
       </details>
       <Link to="/fixed-payments">월 지출 계획 보기</Link>
     </section>
   );
 }
-export function HomeSecondary() {
+export function HomeSecondary({
+  overview,
+  overviewQuiet = false,
+}: {
+  /** The household status read shared with the rest of the page, for the plan-based margin. */
+  overview?: OverviewResource;
+  overviewQuiet?: boolean;
+}) {
   const { state } = useAuth();
   return (
     <section className="card secondary-summary" aria-label="다른 기록 살펴보기">
       <h2>수입·지출</h2>
       {state.status === "authenticated" ? (
         <>
+          {overview && <PlanMargin overview={overview} quiet={overviewQuiet} />}
           <div className="home-monthly-grid">
             <IncomeSummary />
             <FixedSummary />

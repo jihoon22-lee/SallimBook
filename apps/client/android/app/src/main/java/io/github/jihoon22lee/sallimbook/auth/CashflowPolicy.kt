@@ -77,6 +77,7 @@ internal object CashflowPolicy {
         FinanceOperation.LIST_BONUS_AWARDS to Route("GET", "/api/v1/income-planning/bonuses", query = true),
         FinanceOperation.CREATE_BONUS_AWARD to Route("POST", "/api/v1/income-planning/bonuses", idempotent = true, status = 201),
         FinanceOperation.CHANGE_BONUS_AWARD to Route("PUT", "/api/v1/income-planning/bonuses/{recordId}", idempotent = true, version = true),
+        FinanceOperation.BONUS_AWARD_SUMMARY to Route("GET", "/api/v1/income-planning/bonus-summary"),
 
         FinanceOperation.GET_ASSET_MONTH to Route("GET", "/api/v1/asset-months/{month}", query = true),
         FinanceOperation.GET_ASSET_MONTH_REVISION to Route("GET", "/api/v1/asset-months/{month}/revisions/{revisionNo}", query = true),
@@ -155,6 +156,11 @@ internal object CashflowPolicy {
             "stock_grant_value_krw" to nullable(money), "received" to bool,
             "payout_rate_percent" to nullable { if (it !is String || !Regex("(0|[1-9][0-9]{0,4})([.][0-9]{1,2})?").matches(it)) invalid() })
     private fun planningResponse(operation: FinanceOperation, request: FinanceRequest, value: Any?): Any? {
+        // Server totals per performance year; an unknown amount stays a count, never a zero.
+        if (operation == FinanceOperation.BONUS_AWARD_SUMMARY) return shape(value, mapOf("years" to list(record(mapOf(
+            "performance_year" to { integer(it, 1900, 9998) }, "record_count" to positive, "net_cash_known_krw" to money,
+            "net_cash_unknown_count" to count, "stock_grant_known_krw" to money, "stock_grant_unknown_count" to count,
+            "known_total_krw" to money)), 8099)))
         val bonus = request.path.substringBefore('?').contains("/bonuses")
         val fields = planningFields(bonus) + mapOf("id" to id, "household_id" to id, "version" to positive,
             "created_at" to timestamp, "updated_at" to timestamp, "created_by_member_id" to id, "updated_by_member_id" to id) +

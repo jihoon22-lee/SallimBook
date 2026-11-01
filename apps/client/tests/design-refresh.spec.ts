@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mockComparison } from "./support/comparison";
 import { mockHomecare } from "./support/homecare";
 import { mockOnboarding } from "./support/onboarding";
-import { mockFinance, uid } from "./support/finance";
+import { householdOverviewFor, jointAsset, mockFinance, uid } from "./support/finance";
 import { mockCashflow } from "./support/cashflow";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
@@ -121,6 +121,22 @@ test("dark enlarged narrow layouts retain exact large money and insurance conten
     const data = state.response(new URL(route.request().url()).searchParams);
     data.current.totals!.net_assets_krw = "9007199254740993";
     return route.fulfill({ json: data });
+  });
+  // The home balance is the household status: the latest entered amount of each item.
+  const loan = { ...jointAsset, id: uid(13), name: "합성 대출", kind: "liability" as const };
+  await page.route("**/api/v1/household-overview?*", (route) => {
+    const month = new URL(route.request().url()).searchParams.get("month")!;
+    return route.fulfill({
+      json: householdOverviewFor({
+        month,
+        assets: [jointAsset, { ...loan, category: "loan" }],
+        accounts: [],
+        amounts: {
+          [jointAsset.id]: { amount: "9007199254740994", basis: month },
+          [loan.id]: { amount: "1", basis: month },
+        },
+      }),
+    });
   });
   await page.goto("/");
   await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();

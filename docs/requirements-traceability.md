@@ -7,7 +7,7 @@
 |---|---|---|---|
 | R-01 | SB-005, SB-006, SB-007, SB-032 | 부부 공동 접근/타가계 차단 | [인증 HTTPS](testing/browser-authentication.md), [패스키](testing/passkeys-web.md) |
 | R-02 | SB-001, SB-003, SB-031, SB-034, SB-038 | Android/PC 교차조회·업데이트 | [웹·Android adapter](native-bridge-contract.md), [설정·26개 경로](testing/settings-audit.md), [실기기 게이트](testing/native-security-proof.md) |
-| R-03 | SB-003, SB-013, SB-027, SB-033 | T-24 / 홈 레이아웃 | [월 비교](testing/assets-comparison-client.md), [오늘 소모품·홈](testing/homecare-client.md) |
+| R-03 | SB-003, SB-013, SB-027, SB-033, #184, #195 | T-24 / 홈 레이아웃 | [월 비교](testing/assets-comparison-client.md), [오늘 소모품·홈](testing/homecare-client.md), [살림 현황 홈](testing/household-status.md) |
 | R-04 | SB-010 | T-01/T-03 | [자산·계좌](testing/assets-accounts-client.md) |
 | R-05 | SB-012, SB-013 | T-05~T-07 | [월 기록](testing/monthly-assets-client.md), [비교](testing/assets-comparison-client.md) |
 | R-06 | SB-011 | T-02/T-04 | [계좌 단일 원본](testing/assets-accounts-client.md) |

@@ -6,7 +6,7 @@ import java.time.OffsetDateTime
 
 internal enum class FinanceOperation {
     LIST_EXPENSE_PLANS, GET_EXPENSE_PLAN, CREATE_EXPENSE_PLAN, CHANGE_EXPENSE_PLAN, END_EXPENSE_PLAN, DELETE_EXPENSE_PLAN, EXPENSE_PLAN_SUMMARY, PREVIEW_EXPENSE_PLAN_PAYMENT_SWITCH, APPLY_EXPENSE_PLAN_PAYMENT_SWITCH,
-    LIST_EXPECTED_INCOME, CREATE_EXPECTED_INCOME, CHANGE_EXPECTED_INCOME, LIST_BONUS_AWARDS, CREATE_BONUS_AWARD, CHANGE_BONUS_AWARD,
+    LIST_EXPECTED_INCOME, CREATE_EXPECTED_INCOME, CHANGE_EXPECTED_INCOME, LIST_BONUS_AWARDS, CREATE_BONUS_AWARD, CHANGE_BONUS_AWARD, BONUS_AWARD_SUMMARY,
     GET_PURCHASE_PLAN, LIST_CONSUMABLE_ORDERS, CREATE_CONSUMABLE_ORDER, GET_CONSUMABLE_ORDER, UPDATE_CONSUMABLE_ORDER, SUBMIT_CONSUMABLE_ORDER, RECEIVE_CONSUMABLE_ORDER, CANCEL_CONSUMABLE_ORDER,
     LIST_HOUSEHOLD_PEOPLE, CREATE_HOUSEHOLD_PERSON, UPDATE_HOUSEHOLD_PERSON,
     DELETE_APPLIANCE, DELETE_CONSUMABLE, DELETE_APPLIANCE_CONSUMABLE,
@@ -22,7 +22,7 @@ internal enum class FinanceOperation {
     LIST_INCOME, INCOME_SUMMARY, INCOME_DUPLICATE_CANDIDATES, GET_INCOME, INCOME_HISTORY,
     CREATE_INCOME, CORRECT_INCOME, VOID_INCOME, RETURN_INCOME, CONVERT_INCOME_PRECISION,
     LIST_CARDS, GET_CARD, CREATE_CARD, UPDATE_CARD, ARCHIVE_CARD, DELETE_CARD,
-    GET_ASSET_COMPARISON, GET_ASSET_TRENDS,
+    GET_ASSET_COMPARISON, GET_ASSET_TRENDS, HOUSEHOLD_OVERVIEW,
     LIST_RECURRING_RULES, CREATE_RECURRING_RULE, GET_RECURRING_RULE, CHANGE_RECURRING_RULE, END_RECURRING_RULE, DELETE_RECURRING_RULE,
     GENERATE_OBLIGATIONS, LIST_OBLIGATIONS, LIST_OVERDUE_OBLIGATIONS, FIXED_COST_SUMMARY, GET_OBLIGATION, OBLIGATION_HISTORY,
     RESCHEDULE_OBLIGATION, SKIP_OBLIGATION, UNSKIP_OBLIGATION, COMPLETE_OBLIGATION, REOPEN_OBLIGATION,
@@ -168,6 +168,7 @@ internal object FinancePolicy {
         if (CashflowPolicy.supports(operation)) return CashflowPolicy.prepare(operation, value)
         if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.prepare(operation, value)
         if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.prepare(operation, value)
+        if (HouseholdOverviewPolicy.supports(operation)) return HouseholdOverviewPolicy.prepare(operation, value)
         if (ExpensePlanPolicy.supports(operation)) return ExpensePlanPolicy.prepare(operation, value)
         if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.prepare(operation, value)
         if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.prepare(operation, value)
@@ -217,6 +218,7 @@ internal object FinancePolicy {
         if (HouseholdPeoplePolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (CashflowPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (ExpensePlanPolicy.httpAllowed(method,path,body,ifMatch,idempotencyKey)) return true
+        if (HouseholdOverviewPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (FixedCostPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (NativeDocumentPolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
         if (NativeHomecarePolicy.httpAllowed(method, path, body, ifMatch, idempotencyKey)) return true
@@ -345,6 +347,7 @@ internal object FinancePolicy {
             if (CashflowPolicy.supports(operation)) return CashflowPolicy.response(operation, request, status, value)
             if (CardMetadataPolicy.supports(operation)) return CardMetadataPolicy.response(operation, request, status, value)
             if (ComparisonPolicy.supports(operation)) return ComparisonPolicy.response(operation, request, status, value)
+            if (HouseholdOverviewPolicy.supports(operation)) return HouseholdOverviewPolicy.response(operation, request, status, value)
             if (ExpensePlanPolicy.supports(operation)) return ExpensePlanPolicy.response(operation,request,status,value)
             if (FixedCostPolicy.supports(operation)) return FixedCostPolicy.response(operation, request, status, value)
             if (PaymentLinksPolicy.supports(operation)) return PaymentLinksPolicy.response(operation, request, status, value)

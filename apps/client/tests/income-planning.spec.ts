@@ -28,6 +28,39 @@ async function mockBaseline(page: Page, rows: () => Baseline[]) {
     });
   });
 }
+type Award = {
+  performance_year: number;
+  active?: boolean;
+  net_cash_krw?: string | null;
+  stock_grant_value_krw?: string | null;
+};
+/** Year totals also come from the server; derive them from the synthetic awards. */
+async function mockBonusSummary(page: Page, rows: () => Award[]) {
+  await page.route("**/api/v1/income-planning/bonus-summary", (route) => {
+    const active = rows().filter((r) => r.active !== false);
+    const known = (list: Award[], field: "net_cash_krw" | "stock_grant_value_krw") =>
+      list.reduce((sum, r) => sum + BigInt(r[field] ?? "0"), 0n);
+    const years = [...new Set(active.map((r) => r.performance_year))].sort((a, b) => b - a);
+    return route.fulfill({
+      json: {
+        years: years.map((year) => {
+          const list = active.filter((r) => r.performance_year === year);
+          const cash = known(list, "net_cash_krw"),
+            stock = known(list, "stock_grant_value_krw");
+          return {
+            performance_year: year,
+            record_count: list.length,
+            net_cash_known_krw: cash.toString(),
+            net_cash_unknown_count: list.filter((r) => r.net_cash_krw == null).length,
+            stock_grant_known_krw: stock.toString(),
+            stock_grant_unknown_count: list.filter((r) => r.stock_grant_value_krw == null).length,
+            known_total_krw: (cash + stock).toString(),
+          };
+        }),
+      },
+    });
+  });
+}
 test("expected baseline and stock award keep exact money and distinct cash confirmation", async ({
   page,
 }) => {
@@ -58,6 +91,7 @@ test("expected baseline and stock award keep exact money and distinct cash confi
     return route.fulfill({ status: 201, json: row });
   });
   await mockBaseline(page, () => expected);
+  await mockBonusSummary(page, () => bonuses);
   await page.goto("/income/planning");
   await page.getByRole("button", { name: "예상 수입 추가", exact: true }).click();
   await page.getByLabel("구성원", { exact: true }).selectOption(uid(2));
@@ -127,6 +161,7 @@ test("editing an expected baseline saves once without a mandatory explanation", 
     return route.fulfill({ json: row });
   });
   await mockBaseline(page, () => [row]);
+  await mockBonusSummary(page, () => []);
   await page.goto("/income/planning");
   await page.getByRole("button", { name: "예상 수입 수정", exact: true }).click();
   await page.getByLabel("예상 월 금액", { exact: true }).fill("2700000");
@@ -185,6 +220,7 @@ test("an expected income draft asks before it is dropped and Back closes an unto
     });
   });
   await mockBaseline(page, () => rows);
+  await mockBonusSummary(page, () => []);
   await page.goto("/income/planning");
   await expect(page.getByText(/확인된 예상 합계 2,500,000원/)).toBeVisible();
   // Ended items stay out of the current list but remain one tap away.
