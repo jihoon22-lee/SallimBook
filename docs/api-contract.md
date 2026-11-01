@@ -336,7 +336,7 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 | 사용자 | GET /me, GET /household/members | 허용된 공동 가계만 |
 | 비밀번호 | POST /auth/password | 현재·새 비밀번호, 다른 기기 모두 폐기, 같은 트랜잭션 감사 |
 | 초대·기기 | POST /household/invitations, GET /devices, DELETE /devices/{id}, POST /devices/revoke-others | 최근 로그인 또는 X-Step-Up-Token, 기기 세션 폐기. 다른 기기 모두 로그아웃은 비밀번호 확인 |
-| 홈 | GET /asset-comparison?to=YYYY-MM&limit=1, GET /asset-trends?from=...&to=..., GET /homecare/status | 별도 dashboard API 없음. 자산은 선택 월 비교 또는 최근 24개월에서 연속 확정 두 달의 비교, 소모품은 서버 오늘 |
+| 홈 | GET /household-overview?month=YYYY-MM, GET /income/summary?month=..., GET /expense-plan-summary, GET /homecare/status | 보유 현황·월 계획 기준 여유는 현황 조회 한 번(§3). 월별 비교·추이(GET /asset-comparison, /asset-trends)는 접힌 영역을 열 때만 조회, 소모품은 서버 오늘 |
 | 자산 | GET/POST /assets, GET/PATCH/DELETE /assets/{id} | 종료/삭제 의미 구분 |
 | 계좌 | GET/POST /accounts, GET/PATCH/DELETE /accounts/{id} | 자산 원본과 1:1, 참조 없을 때만 삭제(`ACCOUNT_IN_USE`) |
 | 계좌번호 | POST /accounts/{id}/reveal | 서버 재인증, no-store, 반환 audit |
@@ -371,26 +371,27 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
 보험료 금액 편집은 별도 독립 API가 아니라 recurring-rules의 적용일 변경 서비스를 재사용한다.
 독립 CVC 평문 API는 **존재하지 않는다**. 선택적 공유 CVC는 secret-envelope v2에만 암호화되어 포함된다. [포맷 ADR](adr/web-cvc-vault-v2.md).
 
-## 3. 홈 응답 설계
+## 3. 홈 현황 조회
 
-아래는 초기 설계의 합성 예시이며 구현된 API가 아니다. 홈은 위 표의 비교·추이·소모품 API를 각각 호출한다.
+`GET /api/v1/household-overview?month=YYYY-MM`(`getHouseholdOverview`)는 읽기 전용이며 월 기록을 만들거나
+이어 쓰거나 바꾸지 않는다. OpenAPI의 `HouseholdOverviewResponse`가 계약 원본이고 공통 계산 예제는
+`packages/test-fixtures/household-overview.json`이다. 결정과 표시 원칙은 [대시보드 우선 ADR](adr/dashboard-first-household-status.md)을 따른다.
 
-```json
-{
-  "asset_month": "2026-10",
-  "asset_status": "draft",
-  "verified_count": 6,
-  "total_count": 8,
-  "net_assets_krw": "525000000",
-  "comparison": {"delta_krw": "8500000", "scope_changed": false},
-  "consumables_as_of": "2026-10-17",
-  "consumable_alerts": [],
-  "cash_summary": {"earned_income_krw": "7200000", "insurance_received_krw": "800000"},
-  "registered_fixed_payments_krw": "2850000"
-}
-```
-
-모든 값은 합성 예시다. 누락 데이터가 있으면 임시 합계와 경고를 함께 반환한다.
+- `holdings.items`: 선택 월 말일에 보유 중인 자산 한 행씩이다. 계좌는 연결된 자산 행 하나이고 `account_id`가 있으면
+  `group=accounts`다. `owned_amount_krw`는 선택 월까지의 각 월 현재 revision에서 마지막으로 직접 입력하거나 확인한
+  가계 보유분이며 없으면 null이다. 이어 온 뒤 확인하지 않은 값은 기준이 아니므로 `basis_month`는 원래 입력한 달이다.
+- `stale`: 합계에 포함한 금융·대출 항목의 `basis_month`가 선택 월보다 3개월 이상 앞서면 true다. 부동산·보증금·기타 평가는 표시하지 않는다.
+- 합계: 포함(`included`) 항목 중 금액이 있는 것만 더한 `assets_krw`·`liabilities_krw`·부호 있는 `net_assets_krw`,
+  그리고 `item_count`·`known_count`·`missing_count`·`stale_count`·`current_count`·`oldest_basis_month`다. `groups`는
+  accounts·financial·real_estate·deposit·loan·other 순서로 항목이 있는 분류만 count·known_count·자산·부채 합계를 준다.
+- `cards`·`appliances`: 종료하지 않은 등록 수와 이름순 앞 4개. `insurance`: 유지 중 계약 수와 앞 4개, 진행 중 사건,
+  진행 중 청구(작성·접수·서류 보완·심사), 서류 보완 청구 수.
+- `plan`: 서울 오늘(`as_of`) 기준 활성 예상 수입과 월 지출 계획의 월 환산이다. `margin_before_transfers_krw`는 확인된
+  예상 수입 − 소비성 비용 − 대출 원리금, `margin_after_transfers_krw`는 연금 납입·저축 같은 자산 이동까지 뺀 값이다.
+  금액 미확인 예상 수입·금액 미정 계획·월 환산 미정 개수와 별도 표시 금액(`excluded_known_krw`)을 따로 준다.
+  실제 잔액·저축액이 아니다.
+- 모든 금액은 정수 원 십진 문자열이고 다른 가계의 기록은 포함하지 않는다. 합계가 범위를 넘으면 422 `TOTAL_OUT_OF_RANGE`다.
+  Android는 같은 응답을 `householdOverview` bridge에서 형식·불변식 검증 후 전달한다.
 
 ## 4. 보험금 수동 입력 예시
 
@@ -787,6 +788,10 @@ received=true는 지급월과 세후 현금을 확인하고 현금 연결에 동
 0원은 보상 항목에만 남긴다. 정정으로 현금 조건이 바뀌면 기존 cash를 void하고 새 cash를
 만든다. 반환이 있으면 먼저 원본을 확인하도록409로 차단한다. 연결 cash의 일반 정정·무효·
 정밀도 전환은 차단하고 상세 상여에서 수행한다. 계좌·자산 스냅샷을 가감하지 않는다.
+
+`GET /api/v1/income-planning/bonus-summary`(`bonusAwardSummary`)는 활성 상여를 성과연도별로 최신 연도부터 묶어
+`record_count`, 세후 현금·주식 수령 평가액의 확인된 합계와 금액 미확인 건수, `known_total_krw`를 준다. 미확인 금액을
+0원으로 바꾸지 않고 건수로만 센다. 읽기 전용이며 현금 기록을 만들지 않는다. 합계가 범위를 넘으면 422 `AMOUNT_OUT_OF_RANGE`다.
 
 모든 생성/정정은 Idempotency-Key, 정정은 If-Match와 reason이 필수다. 변경마다 검증된
 응답 snapshot을 income_planning_revisions에 남겨 최초 응답을 재현한다. 목록은 가계 범위
