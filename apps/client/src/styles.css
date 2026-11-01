@@ -732,3 +732,54 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .expense-plans details { margin-block: .75rem; }
 .expense-plans details[open] > label { margin-block: .75rem; }
 .expense-plans .link-button { color: var(--accent); background: none; border: 0; padding: 0; font: inherit; text-align: left; overflow-wrap: anywhere; }
+
+/* A household ledger: aligned money, visible payment names, compact rows on phones. */
+.expense-ledger { margin-block: 12px; border-block: 1px solid var(--border); }
+.expense-ledger table { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
+.expense-ledger th, .expense-ledger td { padding: 8px 10px; text-align: left; vertical-align: middle; overflow-wrap: anywhere; border-bottom: 1px solid var(--border); }
+.expense-ledger thead th { background: var(--surface-subtle); color: var(--muted); font-weight: 600; }
+.expense-ledger thead th:first-child { width: 32%; }
+.expense-ledger thead th:nth-child(2) { width: 13%; }
+.expense-ledger thead th:nth-child(3) { width: 20%; }
+.expense-ledger thead th:nth-child(4) { width: 23%; }
+.expense-ledger tr:last-child > * { border-bottom: 0; }
+.expense-ledger tbody tr:hover { background: var(--surface-subtle); }
+.expense-ledger .plan-title { font-weight: 600; }
+.expense-ledger .plan-title .link-button { min-height: 44px; line-height: 1.45; }
+.expense-ledger .plan-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.expense-ledger small { display: block; color: var(--muted); font-size: .75rem; font-weight: 400; }
+.expense-ledger .plan-method a { display: inline-flex; align-items: center; min-height: 44px; text-decoration-color: var(--border-strong); }
+.expense-ledger .plan-note details { margin: 0; }
+.expense-ledger .plan-note summary { cursor: pointer; min-height: 44px; align-content: center; }
+.expense-ledger .plan-note p { white-space: pre-wrap; }
+.expense-ledger .plan-excluded { background: var(--surface-subtle); }
+.plan-filters { margin-block: 12px; }
+.expense-plans .plan-filters > label { flex: 1 1 8rem; font-size: .8125rem; }
+.expense-plans .plan-filters > label:first-child { flex: 2 1 12rem; }
+.home-monthly-grid { align-items: start; }
+.home-summary-part .expected-income-summary h2 { font-size: 1rem; }
+.home-summary-part h3 { font-size: .875rem; }
+@media (max-width: 700px) {
+  .expense-ledger table, .expense-ledger tbody { display: block; }
+  .expense-ledger thead { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
+  .expense-ledger tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(6.8rem, 38%); padding: 4px 0; border-bottom: 1px solid var(--border); column-gap: 8px; }
+  .expense-ledger tbody tr:last-child { border-bottom: 0; }
+  .expense-ledger th, .expense-ledger td { min-width: 0; padding: 0; border: 0; }
+  .expense-ledger .plan-title { grid-column: 1; grid-row: 1; }
+  .expense-ledger .plan-title .link-button { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; width: 100%; }
+  .expense-ledger .plan-amount { grid-column: 2; grid-row: 1; align-self: center; }
+  .expense-ledger .plan-method { grid-column: 1; grid-row: 2; font-size: .75rem; }
+  .expense-ledger .plan-category { grid-column: 2; grid-row: 2; align-self: center; text-align: right; color: var(--muted); font-size: .75rem; }
+  .expense-ledger .plan-note { grid-column: 1 / -1; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .expense-ledger .plan-note:empty { display: none; }
+  .expense-ledger .plan-note details[open] { flex-basis: 100%; }
+  .expense-plans .plan-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .expense-plans .plan-filters > label:first-child { grid-column: 1 / -1; }
+}
+.home-monthly-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.home-summary-part { min-width: 0; }
+@media (min-width: 1100px) { .home-monthly-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; } }
+.expense-plan-summary .metadata-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-block: 12px; gap: 10px; }
+.expense-plan-summary .metadata-grid dd { font-size: 1rem; }
+@media (max-width: 700px) { .expense-plan-summary .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.home-summary-part .expense-plan-summary .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

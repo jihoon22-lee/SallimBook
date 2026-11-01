@@ -203,18 +203,18 @@ test("monthly plans show server totals, annual original, exclusions, unknown and
   await expect(summary).toContainText("20,001원");
   await expect(summary).toContainText("9,000원");
   await expect(page.getByRole("button", { name: "예정 회차 생성 열기" })).toHaveCount(0);
-  const annual = page.locator(".record-list > li").filter({ hasText: "합성 계획 0" });
+  const annual = page.locator(".expense-ledger tbody tr").filter({ hasText: "합성 계획 0" });
   await expect(annual).toContainText("120,006원");
   await expect(annual).toContainText("10,001원");
-  await expect(page.locator(".record-list > li").filter({ hasText: "합성 계획 4" })).toContainText(
-    "금액 미정",
-  );
-  await expect(page.locator(".record-list > li").filter({ hasText: "합성 계획 5" })).toContainText(
-    "0원",
-  );
+  await expect(
+    page.locator(".expense-ledger tbody tr").filter({ hasText: "합성 계획 4" }),
+  ).toContainText("금액 미정");
+  await expect(
+    page.locator(".expense-ledger tbody tr").filter({ hasText: "합성 계획 5" }),
+  ).toContainText("0원");
   await page.getByLabel("계획 보기").selectOption("budget");
-  await expect(page.locator(".record-list > li")).toHaveCount(1);
-  await expect(page.locator(".record-list > li")).toContainText("7,000원");
+  await expect(page.locator(".expense-ledger tbody tr")).toHaveCount(1);
+  await expect(page.locator(".expense-ledger tbody tr")).toContainText("7,000원");
   expect(state.writes).toHaveLength(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -342,4 +342,79 @@ test("refresh while editing keeps the draft's original version and rejects an in
   await expect(page.getByLabel("계획 금액 (미정이면 비워두기)", { exact: true })).toHaveValue(
     "15000",
   );
+});
+
+test("compact ledger shows payment names without opening items and searches across metadata pages", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  const rows = Array.from({ length: 49 }, (_, i) => {
+    const row = refreshPlan();
+    row.id = uid(600 + i);
+    row.versions[0] = {
+      ...row.versions[0]!,
+      title: `합성 월 계획 ${i + 1}`,
+      category: "생활비",
+      currency_reference: null,
+      foreign_amount_reference: null,
+      card_id: i % 2 === 0 ? uid(50) : null,
+      account_id: i % 2 === 1 ? uid(30) : null,
+    };
+    row.history = row.versions;
+    return row;
+  });
+  let cardReads = 0;
+  await page.route("**/api/v1/cards?*", (route) => {
+    cardReads++;
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    return route.fulfill({
+      json: cursor
+        ? { items: state.cards, next_cursor: null }
+        : { items: [], next_cursor: "second" },
+    });
+  });
+  await page.route("**/api/v1/expense-plans?*", (route) =>
+    route.fulfill({ json: { items: rows, next_cursor: null } }),
+  );
+  await page.goto("/fixed-payments");
+  const table = page.getByRole("table", { name: "월 지출 계획 표" });
+  await expect(table.getByRole("row")).toHaveCount(50);
+  await expect(table.getByRole("link", { name: "합성 구독 카드", exact: true })).toHaveCount(25);
+  await expect(table.getByRole("link", { name: "합성 개인 금융 자산", exact: true })).toHaveCount(
+    24,
+  );
+  await expect(table.getByText("납부 카드 보기", { exact: true })).toHaveCount(0);
+  expect(cardReads).toBeLessThanOrEqual(4); // StrictMode may read twice; never 49 per-row requests.
+  const height = await table
+    .locator("tbody tr")
+    .first()
+    .evaluate((el) => el.getBoundingClientRect().height);
+  expect(height).toBeLessThanOrEqual(106);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await table.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath("compact-ledger.png"), fullPage: false });
+  await page.getByLabel("계획 검색", { exact: true }).fill("합성 구독 카드");
+  await expect(table.locator("tbody tr")).toHaveCount(25);
+  expect(state.writes).toHaveLength(0);
+});
+
+test("payment metadata failure keeps plans visible and recovers names without opening a card", async ({
+  page,
+}) => {
+  await mockCashflow(page);
+  const row = refreshPlan();
+  row.versions[0]!.card_id = uid(50);
+  await page.route("**/api/v1/expense-plans?*", (route) =>
+    route.fulfill({ json: { items: [row], next_cursor: null } }),
+  );
+  let fail = true;
+  await page.route("**/api/v1/cards?*", (route) =>
+    fail ? route.abort("failed") : route.fallback(),
+  );
+  await page.goto("/fixed-payments");
+  await expect(page.getByRole("button", { name: "합성 새로고침 계획", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "연결 카드 확인 필요", exact: true })).toBeVisible();
+  fail = false;
+  await page.getByRole("button", { name: "납부수단 다시 불러오기", exact: true }).click();
+  await expect(page.getByRole("link", { name: "합성 구독 카드", exact: true })).toBeVisible();
 });

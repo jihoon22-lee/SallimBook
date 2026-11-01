@@ -50,7 +50,7 @@ function IncomeSummaryView({
   const data = summary.data;
   return (
     <section className="card task-summary" aria-label="등록 수입 요약">
-      <h2>{formatMonth(month)}분 수입</h2>
+      <h2>{formatMonth(month)} 실제 입금</h2>
       {!combined && <CashflowError error={summary.error} />}
       {summary.loading && <p role="status">수입 요약을 확인하고 있어요.</p>}
       {summary.error && !combined && (
@@ -60,20 +60,26 @@ function IncomeSummaryView({
       )}
       {data && !summary.error && (
         <>
-          <dl className="metric-strip">
-            <div className="metric-primary">
-              <dt>근로·부수입 순액</dt>
-              <dd>{formatKrw(data.totals.earned_net_krw)}</dd>
-            </div>
-            <div>
-              <dt>등록 유입 순액</dt>
-              <dd>{formatKrw(data.totals.net_inflow_krw)}</dd>
-            </div>
-            <div>
-              <dt>보험금 순유입</dt>
-              <dd>{formatKrw(data.totals.insurance_net_krw)}</dd>
-            </div>
-          </dl>
+          {data.totals.record_count === 0 ? (
+            <p>
+              이 달에 기록한 실제 입금은 아직 없어요. 예상 월 수입은 위의 수입 기준을 참고하세요.
+            </p>
+          ) : (
+            <dl className="metric-strip">
+              <div className="metric-primary">
+                <dt>근로·부수입 순액</dt>
+                <dd>{formatKrw(data.totals.earned_net_krw)}</dd>
+              </div>
+              <div>
+                <dt>등록 유입 순액</dt>
+                <dd>{formatKrw(data.totals.net_inflow_krw)}</dd>
+              </div>
+              <div>
+                <dt>보험금 순유입</dt>
+                <dd>{formatKrw(data.totals.insurance_net_krw)}</dd>
+              </div>
+            </dl>
+          )}
           <details className="summary-details">
             <summary>수입 종류·구성원별 상세</summary>
             <dl className="metadata-grid compact-metadata">

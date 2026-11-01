@@ -11,6 +11,8 @@ import { CashflowError } from "../finance/FinancialFeedback";
 import { useHouseholdMembers } from "../finance/FinanceSupport";
 import { todaySeoul } from "../finance/dates";
 import { allPages, useResource } from "../finance/queries";
+import { useAccountsApi } from "../accounts/api";
+import { useCardsApi } from "../cards/api";
 import { PaymentMethod, LiabilitySelect } from "./PaymentMethod";
 import { useExpensePlanApi } from "./expensePlanApi";
 import { ExpensePlanSummary } from "./ExpensePlanSummary";
@@ -59,6 +61,39 @@ function termsOf(v?: Terms): S["PlanCreate"] {
 }
 export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; id: string } }) {
   const api = useExpensePlanApi();
+  const accountApi = useAccountsApi();
+  const cardApi = useCardsApi();
+  // One paginated metadata read per kind, never a per-row lookup or vault request.
+  const methods = useResource(
+    useCallback(async () => {
+      const [accounts, cards] = await Promise.all([
+        allPages((cursor) =>
+          accountApi.list({ status: "all", limit: 200, ...(cursor ? { cursor } : {}) }),
+        ),
+        allPages((cursor) =>
+          cardApi.list({ status: "all", limit: 200, ...(cursor ? { cursor } : {}) }),
+        ),
+      ]);
+      return { accounts, cards };
+    }, [accountApi, cardApi]),
+  );
+  const methodName = (v: Terms) => {
+    if (v.card_id) {
+      const card = methods.data?.cards.find((row) => row.id === v.card_id);
+      return card
+        ? card.alias || card.product_name
+        : methods.loading
+          ? "카드 이름 불러오는 중"
+          : "연결 카드 확인 필요";
+    }
+    if (v.account_id) {
+      const account = methods.data?.accounts.find((row) => row.id === v.account_id);
+      return (
+        account?.asset.name ?? (methods.loading ? "계좌 이름 불러오는 중" : "연결 계좌 확인 필요")
+      );
+    }
+    return "미지정";
+  };
   const methodKind = method?.kind;
   const methodId = method?.id;
   const members = useHouseholdMembers();
@@ -88,7 +123,9 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
     const v = currentPlan(row);
     return (
       !!v &&
-      (v.title + " " + v.category).toLocaleLowerCase().includes(query.toLocaleLowerCase()) &&
+      (v.title + " " + v.category + " " + methodName(v))
+        .toLocaleLowerCase()
+        .includes(query.toLocaleLowerCase()) &&
       (group === "all" ||
         (group === "excluded" && v.budget_treatment !== "included") ||
         (group === "budget" && v.plan_kind === "budget") ||
@@ -156,7 +193,7 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
         />
       ) : (
         <>
-          <div className="form-actions">
+          <div className="form-actions plan-filters">
             <label>
               계획 검색
               <input value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -179,62 +216,110 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
               </select>
             </label>
           </div>
+          {methods.error && (
+            <p role="status">
+              납부수단 이름을 불러오지 못했어요.{" "}
+              <button onClick={() => void methods.reload()}>납부수단 다시 불러오기</button>
+            </p>
+          )}
           {!data.loading && !data.error && (
-            <ul className="record-list">
-              {visible.map((row) => {
-                const v = currentPlan(row)!;
-                return (
-                  <li key={row.id}>
-                    <h3>
-                      <button
-                        className="link-button"
-                        onClick={() =>
-                          setParams((old) => {
-                            old.set("plan", row.id);
-                            return old;
-                          })
-                        }
+            <div className="expense-ledger">
+              <table role="table" aria-label="월 지출 계획 표">
+                <thead>
+                  <tr role="row">
+                    <th scope="col">항목</th>
+                    <th scope="col">분류</th>
+                    <th scope="col" className="plan-amount">
+                      월 금액
+                    </th>
+                    <th scope="col">납부 카드·계좌</th>
+                    <th scope="col">참고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((row) => {
+                    const v = currentPlan(row)!;
+                    return (
+                      <tr
+                        key={row.id}
+                        role="row"
+                        className={v.budget_treatment !== "included" ? "plan-excluded" : undefined}
                       >
-                        {v.title}
-                      </button>
-                    </h3>
-                    <p>
-                      {v.category} · {v.plan_kind === "budget" ? "변동 예산" : "고정 지출"} ·{" "}
-                      {economics[v.economic_type]}
-                    </p>
-                    <p>
-                      월 {money(v.monthly_equivalent_krw)}
-                      {v.frequency === "annual"
-                        ? ` · ${v.interval_count}년마다 ${money(v.expected_amount_krw)}${v.annual_month ? ` (${v.annual_month}월)` : ""}`
-                        : v.interval_count > 1 || v.frequency === "days"
-                          ? ` · ${v.interval_count}${v.frequency === "days" ? "일" : "개월"}마다 ${money(v.expected_amount_krw)}`
-                          : ""}
-                    </p>
-                    {v.currency_reference && (
-                      <p>
-                        외화 참고 {v.foreign_amount_reference} {v.currency_reference}
-                      </p>
-                    )}
-                    {v.budget_treatment !== "included" && <p>{treatments[v.budget_treatment]}</p>}
-                    {v.subject_member_id && (
-                      <p>
-                        관련 구성원:{" "}
-                        {members.members.find((m) => m.member_id === v.subject_member_id)
-                          ?.display_name ?? "구성원"}
-                      </p>
-                    )}
-                    {v.card_id && <Link to={`/cards/${v.card_id}`}>납부 카드 보기</Link>}
-                    {v.account_id && <Link to={`/accounts/${v.account_id}`}>납부 계좌 보기</Link>}
-                    {v.note && (
-                      <details>
-                        <summary>메모</summary>
-                        <p style={{ whiteSpace: "pre-wrap" }}>{v.note}</p>
-                      </details>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                        <th scope="row" role="rowheader" className="plan-title">
+                          <button
+                            className="link-button"
+                            title={v.title}
+                            onClick={() =>
+                              setParams((old) => {
+                                old.set("plan", row.id);
+                                return old;
+                              })
+                            }
+                          >
+                            {v.title}
+                          </button>
+                        </th>
+                        <td role="cell" className="plan-category">
+                          {v.category}
+                          {v.plan_kind === "budget" && <small>변동 예산</small>}
+                          {v.economic_type !== "expense" && (
+                            <small>{economics[v.economic_type]}</small>
+                          )}
+                          {v.budget_treatment !== "included" && (
+                            <small>{treatments[v.budget_treatment]}</small>
+                          )}
+                        </td>
+                        <td role="cell" className="plan-amount">
+                          <strong>{money(v.monthly_equivalent_krw)}</strong>
+                          {v.frequency === "annual" ? (
+                            <small>
+                              {v.interval_count}년마다 {money(v.expected_amount_krw)}
+                              {v.annual_month ? ` (${v.annual_month}월)` : ""}
+                            </small>
+                          ) : v.interval_count > 1 || v.frequency === "days" ? (
+                            <small>
+                              {v.interval_count}
+                              {v.frequency === "days" ? "일" : "개월"}마다{" "}
+                              {money(v.expected_amount_krw)}
+                            </small>
+                          ) : null}
+                        </td>
+                        <td role="cell" className="plan-method">
+                          {v.card_id || v.account_id ? (
+                            <Link
+                              to={v.card_id ? `/cards/${v.card_id}` : `/accounts/${v.account_id}`}
+                            >
+                              {methodName(v)}
+                            </Link>
+                          ) : (
+                            <span className="muted">납부수단 미지정</span>
+                          )}
+                        </td>
+                        <td role="cell" className="plan-note">
+                          {v.currency_reference && (
+                            <small>
+                              {v.foreign_amount_reference} {v.currency_reference}
+                            </small>
+                          )}
+                          {v.subject_member_id && (
+                            <small>
+                              {members.members.find((m) => m.member_id === v.subject_member_id)
+                                ?.display_name ?? "구성원"}
+                            </small>
+                          )}
+                          {v.note && (
+                            <details>
+                              <summary>메모</summary>
+                              <p>{v.note}</p>
+                            </details>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
           {!data.loading && !data.error && !visible.length && <p>표시할 월 계획이 없어요.</p>}
           <details>

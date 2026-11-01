@@ -10,7 +10,7 @@ export function ExpensePlanSummary({
   data: components["schemas"]["PlanSummaryResponse"];
 }) {
   return (
-    <section aria-label="현재 월 지출 계획">
+    <section className="expense-plan-summary" aria-label="현재 월 지출 계획">
       <h3>현재 월 지출 계획</h3>
       <dl className="metadata-grid compact-metadata">
         <div>

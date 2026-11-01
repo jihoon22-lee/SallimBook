@@ -33,6 +33,11 @@ test("real monthly planning saves without dates, edits same day, links cards and
   await page.getByRole("combobox", { name: "납부 카드", exact: true }).selectOption(cardId);
   await page.getByRole("button", { name: "계획 저장", exact: true }).click();
   await expect(page.getByRole("button", { name: "합성 HTTPS 월 계획", exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("table", { name: "월 지출 계획 표" })
+      .getByRole("link", { name: "합성 계획 카드", exact: true }),
+  ).toBeVisible();
   const summary = page.getByRole("region", { name: "현재 월 지출 계획", exact: true });
   await expect(summary).toContainText("12,345원");
   await page.getByRole("button", { name: "합성 HTTPS 월 계획", exact: true }).click();
