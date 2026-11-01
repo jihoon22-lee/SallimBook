@@ -211,3 +211,19 @@ R-13/R-14/R-15/R-18/R-19. 진료 저장 후 같은 부모의 다음 진료를 �
 
 실행 결과와 원격 CI·Android 계측 결과는 PR에 기록한다. 브라우저 native 모의와
 Kotlin 정책 검증을 실기기 사용 시험으로 표현하지 않는다.
+
+## 월 계획 항목의 보험료 연결과 결제수단 변경 예정 (#199, 2026-11-01)
+
+R-08/R-09/R-13/R-18. 납부일 없는 월 계획 항목도 보험료로 연결하고, 미래 결제수단 변경을 월 계획 표와 카드·계좌 상세에 보인다.
+설계는 [월 지출 계획](../expense-plans.md)에 있다.
+
+검증 위치:
+
+- `test_insurance_core.py::test_plan_only_item_links_as_premium_within_household`: 계획 전용 항목 연결과 빈 일정 투영, 역참조,
+  배우자 연결, 다른 가계 404, 재전송·다른 계약 409, 오래된 version 409, 연결 이력이 있는 계획 삭제 409, 회차 미생성.
+- `InsurancePolicyTest`: 일정 버전 0개인 보험료 연결 생성·목록 응답 허용, 기존 규칙·가계 대조 유지.
+- `insurance-core.spec.ts`: 보험료 분류 우선 후보, 이미 연결된 규칙 제외, 계획 금액·관리 방식 표시, 월 계획 링크, 해제 검토.
+- `insurance-native-ui.spec.ts`: Android 명령으로 월 계획 목록을 읽고 웹 HTTP를 쓰지 않음.
+- `expense-plans.spec.ts`: 표의 변경 예정, 편집기의 연결 계약, 떠나는 카드와 옮겨 가는 카드('이 카드') 상세.
+- `cashflow-model.spec.ts`: 금액만 바뀐 예정 변경 제외, 여러 번 바뀌는 순서, 시작 전 항목.
+- `insurance-https.spec.ts`: 실제 API/DB에서 계획 전용 항목을 만들어 연결하고 편집기에서 계약 링크 확인.

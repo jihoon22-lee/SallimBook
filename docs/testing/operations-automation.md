@@ -219,7 +219,8 @@ ruff check --config services/api/pyproject.toml ops/automation.py ops/automation
 - 실제 배포 앱 소스 `f017d8f61bfeae2304f0109d6f62c9fd13643212`의 git archive와 frozen uv export:
   umask 0077에서 API context 파일 144개 생성, 모든 파일/하위 디렉터리의 읽기·탐색 권한과 소스 marker 확인.
   웹 빌드와 이미지 빌드는 수행하지 않았다.
-- 운영 코드 `f2f7f14ef0bc4c47d6037d4dd79f3f74df8e12a1`과 위 앱 소스의 기존 API 이미지로
+- 운영 코드 `f2f7f14ef0bc4c47d6037d4dd79f3f74df8e12a1`(로컬 작업 커밋. 같은 변경이 다른 기반 위에서
+  main의 `1ffc39a`로 들어갔고, 원래 커밋은 더 이상 보관하지 않는다)과 위 앱 소스의 기존 API 이미지로
   `tests.operations.automation_integration` 실행: 실제 worker 백업·archive hash·호스트 장부·ack·
   `Runtime.restore_check` 성공, 총 12.564초. 스키마/테이블 수/첨부/필드 암호문 검사가 모두 통과했다.
 - 합성 DB는 백업과 무결성 helper가 읽는 5개 테이블과 계좌번호·보험번호·첨부 각 1건으로 구성했다.
