@@ -1,13 +1,4 @@
-import { PurchasePlanPage } from "../features/homecare/orders/PurchasePlanPage";
-import {
-  OrderListPage,
-  OrderNewPage,
-  OrderDetailPage,
-} from "../features/homecare/orders/OrderPages";
-import { ActivityPage } from "../features/audit/ActivityPage";
-import { RecordActorsProvider } from "../shared/RecordActor";
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { isNativeAuth, nativeAuth } from "../platform/nativeAuth";
+import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import {
   Link,
   matchRoutes,
@@ -18,80 +9,137 @@ import {
   useNavigate,
   useNavigationType,
 } from "react-router";
-import {
-  AccountListPage,
-  AccountNewPage,
-  AccountDetailPage,
-} from "../features/accounts/AccountPages";
 import { accountScreens } from "../features/accounts/screens";
 import { assetScreens } from "../features/assets/screens";
-import { AssetComparisonPage } from "../features/assets/comparison/ComparisonPage";
-import { AssetMonthPage } from "../features/assets/months/MonthPage";
-import { AssetListPage, AssetNewPage, AssetDetailPage } from "../features/assets/AssetPages";
 import { authScreens } from "../features/auth/screens";
-import { Icon } from "../shared/Icon";
-import type { IconName } from "../shared/Icon";
 import { AuthProvider, useAuth } from "../features/auth/AuthProvider";
-import { InvitationAcceptPage } from "../features/auth/InvitationAcceptPage";
-import { OnboardingPage } from "../features/auth/OnboardingPage";
-import { SignedOutWelcome } from "../features/auth/OnboardingEntry";
+// The session dialog signs in again in place, so the login form is already in the first bundle.
 import { LoginPage } from "../features/auth/LoginPage";
+import { SignedOutWelcome } from "../features/auth/OnboardingEntry";
 import { SessionExpiredDialog } from "../features/auth/SessionExpiredDialog";
-import { SessionSettings } from "../features/auth/SessionSettings";
-import { CardListPage, CardNewPage, CardDetailPage } from "../features/cards/CardPages";
-import { IncomePlanningPage } from "../features/income/IncomePlanningPage";
-import { IncomeListPage, IncomeNewPage, IncomeDetailPage } from "../features/income/IncomePages";
-import { IncomeConversionPage } from "../features/income/IncomeConversion";
-import {
-  FixedListPage,
-  FixedDetailPage,
-  RuleListPage,
-  RuleNewPage,
-  RuleDetailPage,
-} from "../features/fixed/FixedPages";
-import { LivingPage } from "../features/living/LivingPage";
-import {
-  ApplianceListPage,
-  ApplianceNewPage,
-  ApplianceDetailPage,
-} from "../features/homecare/AppliancePages";
-import {
-  ConsumableListPage,
-  ConsumableNewPage,
-  ConsumableDetailPage,
-} from "../features/homecare/ConsumablePages";
-import { DeviceDetailPage } from "../features/homecare/DeviceLinks";
-import { StockNewPage, StockDetailPage } from "../features/homecare/StockPages";
-import { ReplacementDetailPage } from "../features/homecare/ReplacementPages";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { householdScreens } from "../features/household/screens";
-import { InsuranceHome } from "../features/insurance/InsuranceHome";
-import {
-  PolicyListPage,
-  PolicyNewPage,
-  PolicyDetailPage,
-} from "../features/insurance/policies/PolicyPages";
-import { CaseListPage, CaseNewPage, CaseDetailPage } from "../features/insurance/cases/CasePages";
-import { ClaimWorkbench } from "../features/insurance/claims/ClaimWorkbench";
-import { ClaimNewPage, ClaimDetailPage } from "../features/insurance/claims/ClaimPages";
-import {
-  EventDetailPage,
-  ExpenseNewPage,
-  PayoutNewPage,
-  PayoutListPage,
-  ReturnNewPage,
-} from "../features/insurance/events/EventPages";
-import { AuditPage } from "../features/audit/AuditPage";
-import { PeoplePage } from "../features/household/PeoplePage";
-import { SettingsPage } from "../features/household/SettingsPage";
-import { ExportsPage } from "../features/exports/ExportsPage";
-import { VaultPage } from "../features/vault/VaultPage";
+import { isNativeAuth, nativeAuth } from "../platform/nativeAuth";
 import { canGoBackWithinApp, registerAndroidBackHandler } from "../platform/navigation";
+import { Icon } from "../shared/Icon";
+import type { IconName } from "../shared/Icon";
 import { MonthProvider } from "../shared/MonthContext";
+import { RecordActorsProvider } from "../shared/RecordActor";
 import { RelatedLinks } from "../shared/RelatedLinks";
 import type { NavigationGroup, ScreenLink } from "../shared/screens";
 import { useHistoryScroll } from "../shared/historyRestore";
 import { UnsavedChangesProvider, useLeavePrompt } from "../shared/UnsavedChanges";
+import { lazyPage } from "./lazyPage";
+
+// The home is in the first bundle; every other screen is fetched on its first visit. Router
+// navigations are transitions, so the current screen stays until the next one is ready and the
+// loading fallback shows only when a screen is opened directly.
+const orders = () => import("../features/homecare/orders/OrderPages");
+const accounts = () => import("../features/accounts/AccountPages");
+const assets = () => import("../features/assets/AssetPages");
+const cards = () => import("../features/cards/CardPages");
+const income = () => import("../features/income/IncomePages");
+const fixed = () => import("../features/fixed/FixedPages");
+const appliances = () => import("../features/homecare/AppliancePages");
+const consumables = () => import("../features/homecare/ConsumablePages");
+const devices = () => import("../features/homecare/DeviceLinks");
+const stock = () => import("../features/homecare/StockPages");
+const policies = () => import("../features/insurance/policies/PolicyPages");
+const cases = () => import("../features/insurance/cases/CasePages");
+const claims = () => import("../features/insurance/claims/ClaimPages");
+const events = () => import("../features/insurance/events/EventPages");
+const PurchasePlanPage = lazyPage(() =>
+  import("../features/homecare/orders/PurchasePlanPage").then((m) => m.PurchasePlanPage),
+);
+const OrderListPage = lazyPage(() => orders().then((m) => m.OrderListPage));
+const OrderNewPage = lazyPage(() => orders().then((m) => m.OrderNewPage));
+const OrderDetailPage = lazyPage(() => orders().then((m) => m.OrderDetailPage));
+const ActivityPage = lazyPage(() =>
+  import("../features/audit/ActivityPage").then((m) => m.ActivityPage),
+);
+const AccountListPage = lazyPage(() => accounts().then((m) => m.AccountListPage));
+const AccountNewPage = lazyPage(() => accounts().then((m) => m.AccountNewPage));
+const AccountDetailPage = lazyPage(() => accounts().then((m) => m.AccountDetailPage));
+const AssetComparisonPage = lazyPage(() =>
+  import("../features/assets/comparison/ComparisonPage").then((m) => m.AssetComparisonPage),
+);
+const AssetMonthPage = lazyPage(() =>
+  import("../features/assets/months/MonthPage").then((m) => m.AssetMonthPage),
+);
+const AssetListPage = lazyPage(() => assets().then((m) => m.AssetListPage));
+const AssetNewPage = lazyPage(() => assets().then((m) => m.AssetNewPage));
+const AssetDetailPage = lazyPage(() => assets().then((m) => m.AssetDetailPage));
+const InvitationAcceptPage = lazyPage(() =>
+  import("../features/auth/InvitationAcceptPage").then((m) => m.InvitationAcceptPage),
+);
+const OnboardingPage = lazyPage(() =>
+  import("../features/auth/OnboardingPage").then((m) => m.OnboardingPage),
+);
+const SessionSettings = lazyPage(() =>
+  import("../features/auth/SessionSettings").then((m) => m.SessionSettings),
+);
+const CardListPage = lazyPage(() => cards().then((m) => m.CardListPage));
+const CardNewPage = lazyPage(() => cards().then((m) => m.CardNewPage));
+const CardDetailPage = lazyPage(() => cards().then((m) => m.CardDetailPage));
+const IncomePlanningPage = lazyPage(() =>
+  import("../features/income/IncomePlanningPage").then((m) => m.IncomePlanningPage),
+);
+const IncomeListPage = lazyPage(() => income().then((m) => m.IncomeListPage));
+const IncomeNewPage = lazyPage(() => income().then((m) => m.IncomeNewPage));
+const IncomeDetailPage = lazyPage(() => income().then((m) => m.IncomeDetailPage));
+const IncomeConversionPage = lazyPage(() =>
+  import("../features/income/IncomeConversion").then((m) => m.IncomeConversionPage),
+);
+const FixedListPage = lazyPage(() => fixed().then((m) => m.FixedListPage));
+const FixedDetailPage = lazyPage(() => fixed().then((m) => m.FixedDetailPage));
+const RuleListPage = lazyPage(() => fixed().then((m) => m.RuleListPage));
+const RuleNewPage = lazyPage(() => fixed().then((m) => m.RuleNewPage));
+const RuleDetailPage = lazyPage(() => fixed().then((m) => m.RuleDetailPage));
+const LivingPage = lazyPage(() =>
+  import("../features/living/LivingPage").then((m) => m.LivingPage),
+);
+const ApplianceListPage = lazyPage(() => appliances().then((m) => m.ApplianceListPage));
+const ApplianceNewPage = lazyPage(() => appliances().then((m) => m.ApplianceNewPage));
+const ApplianceDetailPage = lazyPage(() => appliances().then((m) => m.ApplianceDetailPage));
+const ConsumableListPage = lazyPage(() => consumables().then((m) => m.ConsumableListPage));
+const ConsumableNewPage = lazyPage(() => consumables().then((m) => m.ConsumableNewPage));
+const ConsumableDetailPage = lazyPage(() => consumables().then((m) => m.ConsumableDetailPage));
+const DeviceDetailPage = lazyPage(() => devices().then((m) => m.DeviceDetailPage));
+const StockNewPage = lazyPage(() => stock().then((m) => m.StockNewPage));
+const StockDetailPage = lazyPage(() => stock().then((m) => m.StockDetailPage));
+const ReplacementDetailPage = lazyPage(() =>
+  import("../features/homecare/ReplacementPages").then((m) => m.ReplacementDetailPage),
+);
+const InsuranceHome = lazyPage(() =>
+  import("../features/insurance/InsuranceHome").then((m) => m.InsuranceHome),
+);
+const PolicyListPage = lazyPage(() => policies().then((m) => m.PolicyListPage));
+const PolicyNewPage = lazyPage(() => policies().then((m) => m.PolicyNewPage));
+const PolicyDetailPage = lazyPage(() => policies().then((m) => m.PolicyDetailPage));
+const CaseListPage = lazyPage(() => cases().then((m) => m.CaseListPage));
+const CaseNewPage = lazyPage(() => cases().then((m) => m.CaseNewPage));
+const CaseDetailPage = lazyPage(() => cases().then((m) => m.CaseDetailPage));
+const ClaimWorkbench = lazyPage(() =>
+  import("../features/insurance/claims/ClaimWorkbench").then((m) => m.ClaimWorkbench),
+);
+const ClaimNewPage = lazyPage(() => claims().then((m) => m.ClaimNewPage));
+const ClaimDetailPage = lazyPage(() => claims().then((m) => m.ClaimDetailPage));
+const EventDetailPage = lazyPage(() => events().then((m) => m.EventDetailPage));
+const ExpenseNewPage = lazyPage(() => events().then((m) => m.ExpenseNewPage));
+const PayoutNewPage = lazyPage(() => events().then((m) => m.PayoutNewPage));
+const PayoutListPage = lazyPage(() => events().then((m) => m.PayoutListPage));
+const ReturnNewPage = lazyPage(() => events().then((m) => m.ReturnNewPage));
+const AuditPage = lazyPage(() => import("../features/audit/AuditPage").then((m) => m.AuditPage));
+const PeoplePage = lazyPage(() =>
+  import("../features/household/PeoplePage").then((m) => m.PeoplePage),
+);
+const SettingsPage = lazyPage(() =>
+  import("../features/household/SettingsPage").then((m) => m.SettingsPage),
+);
+const ExportsPage = lazyPage(() =>
+  import("../features/exports/ExportsPage").then((m) => m.ExportsPage),
+);
+const VaultPage = lazyPage(() => import("../features/vault/VaultPage").then((m) => m.VaultPage));
 
 const screens = [
   {
@@ -483,7 +531,7 @@ const screens = [
   },
   {
     path: "/fixed-payments",
-    title: "고정 납부",
+    title: "고정 지출",
     group: "living" as NavigationGroup,
     parent: { to: "/living", label: "생활비" },
     live: true,
@@ -491,9 +539,9 @@ const screens = [
   },
   {
     path: "/fixed-payments/rules",
-    title: "납부 규칙 관리",
+    title: "적용기간·납부 일정 관리",
     group: "living" as NavigationGroup,
-    parent: { to: "/fixed-payments", label: "고정 납부" },
+    parent: { to: "/fixed-payments", label: "고정 지출" },
     live: true,
     element: <RuleListPage />,
   },
@@ -501,7 +549,7 @@ const screens = [
     path: "/fixed-payments/rules/new",
     title: "납부 규칙 등록",
     group: "living" as NavigationGroup,
-    parent: { to: "/fixed-payments/rules", label: "납부 규칙" },
+    parent: { to: "/fixed-payments/rules", label: "적용기간·납부 일정" },
     live: true,
     element: <RuleNewPage />,
   },
@@ -509,7 +557,7 @@ const screens = [
     path: "/fixed-payments/rules/:id",
     title: "납부 규칙 상세",
     group: "living" as NavigationGroup,
-    parent: { to: "/fixed-payments/rules", label: "납부 규칙" },
+    parent: { to: "/fixed-payments/rules", label: "적용기간·납부 일정" },
     live: true,
     element: <RuleDetailPage />,
   },
@@ -517,7 +565,7 @@ const screens = [
     path: "/fixed-payments/rules/:id/edit",
     title: "납부 규칙 변경",
     group: "living" as NavigationGroup,
-    parent: { to: "/fixed-payments/rules", label: "납부 규칙" },
+    parent: { to: "/fixed-payments/rules", label: "적용기간·납부 일정" },
     live: true,
     element: <RuleDetailPage edit />,
   },
@@ -525,7 +573,7 @@ const screens = [
     path: "/fixed-payments/:id",
     title: "고정 납부 상세",
     group: "living" as NavigationGroup,
-    parent: { to: "/fixed-payments", label: "고정 납부 목록" },
+    parent: { to: "/fixed-payments?view=payments", label: "예정·실제 납부" },
     live: true,
     element: <FixedDetailPage />,
   },
@@ -772,7 +820,7 @@ const navigation: {
     icon: "cashflow",
     children: [
       { to: "/income", label: "수입" },
-      { to: "/fixed-payments", label: "고정 납부" },
+      { to: "/fixed-payments", label: "고정 지출" },
       { to: "/cards", label: "카드" },
     ],
   },
@@ -1016,12 +1064,20 @@ function ShellFrame() {
             </div>
           )}
           <main id="main-content" ref={mainRef} tabIndex={-1}>
-            <Routes>
-              {screens.map((screen) => (
-                <Route key={screen.path} path={screen.path} element={screen.element} />
-              ))}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <Suspense
+              fallback={
+                <p className="loading-state" role="status">
+                  화면을 불러오고 있어요.
+                </p>
+              }
+            >
+              <Routes>
+                {screens.map((screen) => (
+                  <Route key={screen.path} path={screen.path} element={screen.element} />
+                ))}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </main>
           <footer>살림북 · 함께 쌓아가는 우리 집의 기록</footer>
         </div>

@@ -3076,6 +3076,74 @@
         "title": "BonusResponse",
         "type": "object"
       },
+      "BonusSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "years": {
+            "items": {
+              "$ref": "#/components/schemas/BonusYearSummary"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "years"
+        ],
+        "title": "BonusSummary",
+        "type": "object"
+      },
+      "BonusYearSummary": {
+        "additionalProperties": false,
+        "description": "Active awards of one performance year; an unknown amount is counted, never treated as 0.",
+        "properties": {
+          "known_total_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Known Total Krw",
+            "type": "string"
+          },
+          "net_cash_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Net Cash Known Krw",
+            "type": "string"
+          },
+          "net_cash_unknown_count": {
+            "title": "Net Cash Unknown Count",
+            "type": "integer"
+          },
+          "performance_year": {
+            "title": "Performance Year",
+            "type": "integer"
+          },
+          "record_count": {
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "stock_grant_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Stock Grant Known Krw",
+            "type": "string"
+          },
+          "stock_grant_unknown_count": {
+            "title": "Stock Grant Unknown Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "performance_year",
+          "record_count",
+          "net_cash_known_krw",
+          "net_cash_unknown_count",
+          "stock_grant_known_krw",
+          "stock_grant_unknown_count",
+          "known_total_krw"
+        ],
+        "title": "BonusYearSummary",
+        "type": "object"
+      },
       "CardArchive": {
         "additionalProperties": false,
         "properties": {
@@ -8815,6 +8883,137 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HoldingGroup": {
+        "enum": [
+          "accounts",
+          "financial",
+          "real_estate",
+          "deposit",
+          "loan",
+          "other"
+        ],
+        "type": "string"
+      },
+      "HoldingGroupTotal": {
+        "properties": {
+          "assets_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Assets Krw",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "group": {
+            "$ref": "#/components/schemas/HoldingGroup"
+          },
+          "known_count": {
+            "title": "Known Count",
+            "type": "integer"
+          },
+          "liabilities_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Liabilities Krw",
+            "type": "string"
+          }
+        },
+        "required": [
+          "group",
+          "count",
+          "known_count",
+          "assets_krw",
+          "liabilities_krw"
+        ],
+        "title": "HoldingGroupTotal",
+        "type": "object"
+      },
+      "HoldingsOverview": {
+        "description": "Totals use each included item's latest saved amount; unsaved items are counted apart.",
+        "properties": {
+          "assets_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Assets Krw",
+            "type": "string"
+          },
+          "current_count": {
+            "title": "Current Count",
+            "type": "integer"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingGroupTotal"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OverviewHolding"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "known_count": {
+            "title": "Known Count",
+            "type": "integer"
+          },
+          "liabilities_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Liabilities Krw",
+            "type": "string"
+          },
+          "missing_count": {
+            "title": "Missing Count",
+            "type": "integer"
+          },
+          "net_assets_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Net Assets Krw",
+            "type": "string"
+          },
+          "oldest_basis_month": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Basis Month"
+          },
+          "stale_count": {
+            "title": "Stale Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assets_krw",
+          "liabilities_krw",
+          "net_assets_krw",
+          "item_count",
+          "known_count",
+          "missing_count",
+          "stale_count",
+          "current_count",
+          "oldest_basis_month",
+          "groups",
+          "items"
+        ],
+        "title": "HoldingsOverview",
+        "type": "object"
+      },
       "HomecareStatusItem": {
         "additionalProperties": false,
         "properties": {
@@ -9100,6 +9299,40 @@
           "next_cursor"
         ],
         "title": "HomecareStatusResponse",
+        "type": "object"
+      },
+      "HouseholdOverviewResponse": {
+        "properties": {
+          "appliances": {
+            "$ref": "#/components/schemas/RegisteredItems"
+          },
+          "cards": {
+            "$ref": "#/components/schemas/RegisteredItems"
+          },
+          "holdings": {
+            "$ref": "#/components/schemas/HoldingsOverview"
+          },
+          "insurance": {
+            "$ref": "#/components/schemas/InsuranceOverview"
+          },
+          "month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/MonthlyPlanOverview"
+          }
+        },
+        "required": [
+          "month",
+          "holdings",
+          "cards",
+          "appliances",
+          "insurance",
+          "plan"
+        ],
+        "title": "HouseholdOverviewResponse",
         "type": "object"
       },
       "InclusionStatus": {
@@ -9798,6 +10031,42 @@
           "device_id"
         ],
         "title": "InstallDevice",
+        "type": "object"
+      },
+      "InsuranceOverview": {
+        "properties": {
+          "active_policy_count": {
+            "title": "Active Policy Count",
+            "type": "integer"
+          },
+          "claims_in_progress_count": {
+            "title": "Claims In Progress Count",
+            "type": "integer"
+          },
+          "documents_required_count": {
+            "title": "Documents Required Count",
+            "type": "integer"
+          },
+          "open_case_count": {
+            "title": "Open Case Count",
+            "type": "integer"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            },
+            "title": "Policies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "active_policy_count",
+          "open_case_count",
+          "claims_in_progress_count",
+          "documents_required_count",
+          "policies"
+        ],
+        "title": "InsuranceOverview",
         "type": "object"
       },
       "IntervalUnit": {
@@ -11714,6 +11983,90 @@
         "title": "MonthValueUpdate",
         "type": "object"
       },
+      "MonthlyPlanOverview": {
+        "description": "A plan-based estimate from the expected income and the monthly plan, never a balance.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "excluded_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Excluded Known Krw",
+            "type": "string"
+          },
+          "expected_income_count": {
+            "title": "Expected Income Count",
+            "type": "integer"
+          },
+          "expected_income_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Expected Income Known Krw",
+            "type": "string"
+          },
+          "expected_income_unknown_count": {
+            "title": "Expected Income Unknown Count",
+            "type": "integer"
+          },
+          "loan_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Loan Known Krw",
+            "type": "string"
+          },
+          "margin_after_transfers_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Margin After Transfers Krw",
+            "type": "string"
+          },
+          "margin_before_transfers_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Margin Before Transfers Krw",
+            "type": "string"
+          },
+          "planned_unknown_count": {
+            "title": "Planned Unknown Count",
+            "type": "integer"
+          },
+          "spending_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Spending Known Krw",
+            "type": "string"
+          },
+          "transfer_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Transfer Known Krw",
+            "type": "string"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "as_of",
+          "expected_income_known_krw",
+          "expected_income_count",
+          "expected_income_unknown_count",
+          "spending_known_krw",
+          "loan_known_krw",
+          "transfer_known_krw",
+          "planned_unknown_count",
+          "unconverted_count",
+          "excluded_known_krw",
+          "margin_before_transfers_krw",
+          "margin_after_transfers_krw"
+        ],
+        "title": "MonthlyPlanOverview",
+        "type": "object"
+      },
       "MovementKind": {
         "enum": [
           "receipt",
@@ -11742,6 +12095,25 @@
           "version"
         ],
         "title": "MutationReference",
+        "type": "object"
+      },
+      "NamedItem": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "NamedItem",
         "type": "object"
       },
       "NativeLoginRequest": {
@@ -12557,6 +12929,101 @@
           "as_of"
         ],
         "title": "OverdueObligationListResponse",
+        "type": "object"
+      },
+      "OverviewHolding": {
+        "description": "One asset held at the selected month's end and its latest saved household amount.",
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "asset_id": {
+            "format": "uuid",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "basis_month": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Month"
+          },
+          "category": {
+            "$ref": "#/components/schemas/AssetCategory"
+          },
+          "group": {
+            "$ref": "#/components/schemas/HoldingGroup"
+          },
+          "included": {
+            "title": "Included",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AssetKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owned_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owned Amount Krw"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "asset_id",
+          "account_id",
+          "name",
+          "kind",
+          "category",
+          "group",
+          "included",
+          "owned_amount_krw",
+          "basis_month",
+          "as_of_date",
+          "stale"
+        ],
+        "title": "OverviewHolding",
         "type": "object"
       },
       "OwnershipKind": {
@@ -13443,6 +13910,1043 @@
           "updated_by_member_id"
         ],
         "title": "PersonResponse",
+        "type": "object"
+      },
+      "PlanChange": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount_mode": {
+            "enum": [
+              "fixed",
+              "variable"
+            ],
+            "title": "Amount Mode",
+            "type": "string"
+          },
+          "anchor_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Date"
+          },
+          "annual_month": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Month"
+          },
+          "budget_treatment": {
+            "default": "included",
+            "enum": [
+              "included",
+              "external_support",
+              "payroll",
+              "reference_only"
+            ],
+            "title": "Budget Treatment",
+            "type": "string"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "category": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "currency_reference": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency Reference"
+          },
+          "economic_type": {
+            "$ref": "#/components/schemas/EconomicType"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "expected_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount Krw"
+          },
+          "foreign_amount_reference": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foreign Amount Reference"
+          },
+          "frequency": {
+            "enum": [
+              "monthly",
+              "annual",
+              "days"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "interval_count": {
+            "default": 1,
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Interval Count",
+            "type": "integer"
+          },
+          "loan_asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Asset Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "plan_kind": {
+            "default": "recurring",
+            "enum": [
+              "recurring",
+              "budget"
+            ],
+            "title": "Plan Kind",
+            "type": "string"
+          },
+          "reason": {
+            "default": "월 계획 수정",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "subject_member_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Member Id"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "tracking_mode": {
+            "default": "plan_only",
+            "enum": [
+              "plan_only",
+              "scheduled"
+            ],
+            "title": "Tracking Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "category",
+          "amount_mode",
+          "economic_type",
+          "frequency"
+        ],
+        "title": "PlanChange",
+        "type": "object"
+      },
+      "PlanCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount_mode": {
+            "enum": [
+              "fixed",
+              "variable"
+            ],
+            "title": "Amount Mode",
+            "type": "string"
+          },
+          "anchor_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Date"
+          },
+          "annual_month": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Month"
+          },
+          "budget_treatment": {
+            "default": "included",
+            "enum": [
+              "included",
+              "external_support",
+              "payroll",
+              "reference_only"
+            ],
+            "title": "Budget Treatment",
+            "type": "string"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "category": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "currency_reference": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency Reference"
+          },
+          "economic_type": {
+            "$ref": "#/components/schemas/EconomicType"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "expected_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount Krw"
+          },
+          "foreign_amount_reference": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foreign Amount Reference"
+          },
+          "frequency": {
+            "enum": [
+              "monthly",
+              "annual",
+              "days"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "interval_count": {
+            "default": 1,
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Interval Count",
+            "type": "integer"
+          },
+          "loan_asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Asset Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "plan_kind": {
+            "default": "recurring",
+            "enum": [
+              "recurring",
+              "budget"
+            ],
+            "title": "Plan Kind",
+            "type": "string"
+          },
+          "subject_member_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Member Id"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "tracking_mode": {
+            "default": "plan_only",
+            "enum": [
+              "plan_only",
+              "scheduled"
+            ],
+            "title": "Tracking Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "category",
+          "amount_mode",
+          "economic_type",
+          "frequency"
+        ],
+        "title": "PlanCreate",
+        "type": "object"
+      },
+      "PlanListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "PlanListResponse",
+        "type": "object"
+      },
+      "PlanPaymentSwitchPreview": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanPaymentSwitchRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "PlanPaymentSwitchPreview",
+        "type": "object"
+      },
+      "PlanPaymentSwitchRow": {
+        "properties": {
+          "blocked_reason": {
+            "anyOf": [
+              {
+                "const": "INITIAL_PERIOD_START",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked Reason"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "periods": {
+            "items": {
+              "$ref": "#/components/schemas/PlanVersionResponse"
+            },
+            "title": "Periods",
+            "type": "array"
+          },
+          "preserved_manual_count": {
+            "title": "Preserved Manual Count",
+            "type": "integer"
+          },
+          "preserved_paid_count": {
+            "title": "Preserved Paid Count",
+            "type": "integer"
+          },
+          "preserved_past_count": {
+            "title": "Preserved Past Count",
+            "type": "integer"
+          },
+          "preview_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Preview Digest",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unchanged_period_count": {
+            "title": "Unchanged Period Count",
+            "type": "integer"
+          },
+          "update_occurrence_count": {
+            "title": "Update Occurrence Count",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "title",
+          "periods",
+          "unchanged_period_count",
+          "update_occurrence_count",
+          "preserved_past_count",
+          "preserved_paid_count",
+          "preserved_manual_count",
+          "blocked_reason",
+          "preview_digest"
+        ],
+        "title": "PlanPaymentSwitchRow",
+        "type": "object"
+      },
+      "PlanResponse": {
+        "properties": {
+          "end_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Reason"
+          },
+          "ended_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended On"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/PlanVersionResponse"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "household_id": {
+            "format": "uuid",
+            "title": "Household Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/PlanVersionResponse"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "household_id",
+          "version",
+          "ended_on",
+          "end_reason",
+          "versions",
+          "history"
+        ],
+        "title": "PlanResponse",
+        "type": "object"
+      },
+      "PlanSubtotal": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Known Krw",
+            "type": "string"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          },
+          "unknown_count": {
+            "title": "Unknown Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "known_krw",
+          "unknown_count",
+          "unconverted_count",
+          "count"
+        ],
+        "title": "PlanSubtotal",
+        "type": "object"
+      },
+      "PlanSummaryResponse": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "budget_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Budget Known Krw",
+            "type": "string"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/PlanSubtotal"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "combined_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Combined Known Krw",
+            "type": "string"
+          },
+          "economic_types": {
+            "items": {
+              "$ref": "#/components/schemas/PlanSubtotal"
+            },
+            "title": "Economic Types",
+            "type": "array"
+          },
+          "excluded_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Excluded Known Krw",
+            "type": "string"
+          },
+          "excluded_unknown_count": {
+            "title": "Excluded Unknown Count",
+            "type": "integer"
+          },
+          "fixed_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Fixed Known Krw",
+            "type": "string"
+          },
+          "included_unknown_count": {
+            "title": "Included Unknown Count",
+            "type": "integer"
+          },
+          "plan_count": {
+            "title": "Plan Count",
+            "type": "integer"
+          },
+          "treatments": {
+            "items": {
+              "$ref": "#/components/schemas/PlanSubtotal"
+            },
+            "title": "Treatments",
+            "type": "array"
+          },
+          "unconverted_count": {
+            "title": "Unconverted Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "as_of",
+          "fixed_known_krw",
+          "budget_known_krw",
+          "combined_known_krw",
+          "excluded_known_krw",
+          "included_unknown_count",
+          "excluded_unknown_count",
+          "unconverted_count",
+          "plan_count",
+          "categories",
+          "treatments",
+          "economic_types"
+        ],
+        "title": "PlanSummaryResponse",
+        "type": "object"
+      },
+      "PlanVersionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount_mode": {
+            "enum": [
+              "fixed",
+              "variable"
+            ],
+            "title": "Amount Mode",
+            "type": "string"
+          },
+          "anchor_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Date"
+          },
+          "annual_month": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Month"
+          },
+          "budget_treatment": {
+            "default": "included",
+            "enum": [
+              "included",
+              "external_support",
+              "payroll",
+              "reference_only"
+            ],
+            "title": "Budget Treatment",
+            "type": "string"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "category": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency_reference": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency Reference"
+          },
+          "economic_type": {
+            "$ref": "#/components/schemas/EconomicType"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Until"
+          },
+          "expected_amount_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount Krw"
+          },
+          "foreign_amount_reference": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foreign Amount Reference"
+          },
+          "frequency": {
+            "enum": [
+              "monthly",
+              "annual",
+              "days"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "interval_count": {
+            "default": 1,
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Interval Count",
+            "type": "integer"
+          },
+          "loan_asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Asset Id"
+          },
+          "monthly_equivalent_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Equivalent Krw"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "plan_kind": {
+            "default": "recurring",
+            "enum": [
+              "recurring",
+              "budget"
+            ],
+            "title": "Plan Kind",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "subject_member_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Member Id"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "tracking_mode": {
+            "default": "plan_only",
+            "enum": [
+              "plan_only",
+              "scheduled"
+            ],
+            "title": "Tracking Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "category",
+          "amount_mode",
+          "economic_type",
+          "frequency",
+          "id",
+          "effective_from",
+          "effective_until",
+          "reason",
+          "created_at",
+          "revoked_at",
+          "monthly_equivalent_krw"
+        ],
+        "title": "PlanVersionResponse",
         "type": "object"
       },
       "PolicyCreate": {
@@ -14854,6 +16358,27 @@
           "credential"
         ],
         "title": "RegisterVerification",
+        "type": "object"
+      },
+      "RegisteredItems": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "RegisteredItems",
         "type": "object"
       },
       "RegistrationAttestation": {
@@ -33021,6 +34546,1365 @@
         ]
       }
     },
+    "/api/v1/expense-plan-payment-switch/preview": {
+      "post": {
+        "operationId": "previewExpensePlanPaymentSwitch",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSwitchInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanPaymentSwitchPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Switch Preview",
+        "tags": [
+          "expense-plans"
+        ]
+      }
+    },
+    "/api/v1/expense-plan-payment-switch/{plan_id}": {
+      "post": {
+        "operationId": "applyExpensePlanPaymentSwitch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "title": "If-Match",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSwitchApply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationReference"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Switch Apply",
+        "tags": [
+          "expense-plans"
+        ]
+      }
+    },
+    "/api/v1/expense-plan-summary": {
+      "get": {
+        "operationId": "expensePlanSummary",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Summary",
+        "tags": [
+          "expense-plans"
+        ]
+      }
+    },
+    "/api/v1/expense-plans": {
+      "get": {
+        "operationId": "listExpensePlans",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Plans",
+        "tags": [
+          "expense-plans"
+        ]
+      },
+      "post": {
+        "operationId": "createExpensePlan",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationReference"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Quoted resource version for If-Match.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "description": "Created expense plan path.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "expense-plans"
+        ]
+      }
+    },
+    "/api/v1/expense-plans/{plan_id}": {
+      "delete": {
+        "operationId": "deleteExpensePlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete",
+        "tags": [
+          "expense-plans"
+        ]
+      },
+      "get": {
+        "operationId": "getExpensePlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Quoted resource version for If-Match.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get",
+        "tags": [
+          "expense-plans"
+        ]
+      },
+      "patch": {
+        "operationId": "changeExpensePlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationReference"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Quoted resource version for If-Match.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Change",
+        "tags": [
+          "expense-plans"
+        ]
+      }
+    },
+    "/api/v1/expense-plans/{plan_id}/end": {
+      "post": {
+        "operationId": "endExpensePlan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleEnd"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationReference"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "ETag": {
+                "description": "Quoted resource version for If-Match.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "End",
+        "tags": [
+          "expense-plans"
+        ]
+      }
+    },
     "/api/v1/exports": {
       "post": {
         "operationId": "createUserExport",
@@ -33641,6 +36525,129 @@
         "summary": "Get Status",
         "tags": [
           "homecare"
+        ]
+      }
+    },
+    "/api/v1/household-overview": {
+      "get": {
+        "operationId": "getHouseholdOverview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Household Overview",
+        "tags": [
+          "household-overview"
         ]
       }
     },
@@ -34896,6 +37903,117 @@
           }
         },
         "summary": "Create",
+        "tags": [
+          "income"
+        ]
+      }
+    },
+    "/api/v1/income-planning/bonus-summary": {
+      "get": {
+        "operationId": "bonusAwardSummary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BonusSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Bonus Summary",
         "tags": [
           "income"
         ]

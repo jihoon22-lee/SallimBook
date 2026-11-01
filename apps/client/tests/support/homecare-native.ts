@@ -1,4 +1,4 @@
-import { householdPeople } from "./finance";
+import { emptyExpensePlanSummary, householdOverviewFor, householdPeople } from "./finance";
 import type { Page } from "@playwright/test";
 import { members } from "./finance";
 import { homeComparison } from "./homecare";
@@ -7,6 +7,8 @@ type State = Awaited<ReturnType<typeof mockHomecare>>;
 type Args = Record<string, any>;
 const mapping: Record<string, { method: string; path: string; fields: Record<string, string> }> = {
   listAssets: { method: "GET", path: "/api/v1/assets", fields: {} },
+  householdOverview: { method: "GET", path: "/api/v1/household-overview", fields: {} },
+  expensePlanSummary: { method: "GET", path: "/api/v1/expense-plan-summary", fields: {} },
   listAccounts: { method: "GET", path: "/api/v1/accounts", fields: {} },
   listCards: { method: "GET", path: "/api/v1/cards", fields: {} },
   listInsurancePolicies: { method: "GET", path: "/api/v1/insurance/policies", fields: {} },
@@ -234,6 +236,7 @@ export async function mockNativeHomecare(page: Page, state: State) {
     delayMethod: "",
     delayMs: 0,
     delayAllMs: 0,
+    metadataGate: null as Promise<void> | null,
     maxPending: Infinity,
     pending: 0,
     peakPending: 0,
@@ -255,6 +258,10 @@ export async function mockNativeHomecare(page: Page, state: State) {
       return { ok: false, code: control.failure };
     if (method === "listAssets" || method === "listAccounts")
       return metadata({ items: [], next_cursor: null });
+    // Like the lists above, this household has no registered assets or accounts yet.
+    if (method === "householdOverview")
+      return metadata(householdOverviewFor({ month: args.query.month, assets: [], accounts: [] }));
+    if (method === "expensePlanSummary") return metadata(emptyExpensePlanSummary);
     if (method === "getAssetComparison") return metadata(homeComparison(args.query.to));
     if (method === "getAssetTrends")
       return metadata(state.trendResponse(new URLSearchParams(args.query)));
@@ -295,6 +302,11 @@ export async function mockNativeHomecare(page: Page, state: State) {
     control.pending++;
     control.peakPending = Math.max(control.peakPending, control.pending);
     try {
+      if (
+        control.metadataGate &&
+        !["getSession", "request", "listHouseholdPeople"].includes(method)
+      )
+        await control.metadataGate;
       if (control.delayAllMs)
         await new Promise((resolve) => setTimeout(resolve, control.delayAllMs));
       return await respond(method, args);

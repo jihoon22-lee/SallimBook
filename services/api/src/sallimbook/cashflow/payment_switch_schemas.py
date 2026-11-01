@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, model_validator
 
 from sallimbook.assets.schemas import DateOnly
+from sallimbook.cashflow.expense_plan_schemas import PlanVersionResponse
 from sallimbook.cashflow.payment_link_schemas import Digest
 from sallimbook.cashflow.recurring_schemas import RuleVersionResponse
 from sallimbook.cashflow.schemas import InputModel, Reason
@@ -48,4 +49,13 @@ class PaymentSwitchRow(BaseModel):
 
 class PaymentSwitchPreview(BaseModel):
     items: list[PaymentSwitchRow]
+    next_cursor: UUID | None
+
+
+class PlanPaymentSwitchRow(PaymentSwitchRow):
+    periods: list[PlanVersionResponse]
+
+
+class PlanPaymentSwitchPreview(BaseModel):
+    items: list[PlanPaymentSwitchRow]
     next_cursor: UUID | None

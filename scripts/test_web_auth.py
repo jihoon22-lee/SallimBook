@@ -56,6 +56,7 @@ def execute(
     months: bool = False,
     comparison: bool = False,
     cashflow: bool = False,
+    expense_plans: bool = False,
     insurance: bool = False,
     homecare: bool = False,
     documents: bool = False,
@@ -90,6 +91,7 @@ def execute(
             months=months,
             comparison=comparison,
             cashflow=cashflow,
+            expense_plans=expense_plans,
             insurance=insurance,
             homecare=homecare,
             documents=documents,
@@ -110,6 +112,7 @@ def run_browser(
     months: bool = False,
     comparison: bool = False,
     cashflow: bool = False,
+    expense_plans: bool = False,
     insurance: bool = False,
     homecare: bool = False,
     documents: bool = False,
@@ -344,6 +347,7 @@ def run_browser(
                         "SALLIMBOOK_HTTPS_MONTHS": "1" if months else "0",
                         "SALLIMBOOK_HTTPS_COMPARISON": "1" if comparison else "0",
                         "SALLIMBOOK_HTTPS_CASHFLOW": "1" if cashflow else "0",
+                        "SALLIMBOOK_HTTPS_EXPENSE_PLANS": "1" if expense_plans else "0",
                         "SALLIMBOOK_HTTPS_INSURANCE": "1" if insurance else "0",
                         "SALLIMBOOK_HTTPS_HOMECARE": "1" if homecare else "0",
                         "SALLIMBOOK_HTTPS_DOCUMENTS": "1" if documents else "0",
@@ -361,7 +365,7 @@ def run_browser(
                     locations = sorted(
                         set(
                             re.findall(
-                                r"(?:auth|onboarding|passkeys|finance|months|cashflow|insurance|homecare|documents|exports|audit|vault)-https\.spec\.ts:\d+:\d+",
+                                r"(?:auth|onboarding|passkeys|finance|months|cashflow|expense-plans|insurance|homecare|documents|exports|audit|vault)-https\.spec\.ts:\d+:\d+",
                                 result.stdout + result.stderr,
                             )
                         )
@@ -436,6 +440,7 @@ if __name__ == "__main__":
     parser.add_argument("--exports", action="store_true", help="Verify private ZIP exports and selected originals with real HTTPS and PostgreSQL.")
     parser.add_argument("--vault", action="store_true", help="Verify real WebCrypto vault sharing, recovery, rotation and purge through HTTPS.")
     parser.add_argument("--onboarding", action="store_true", help="Verify mobile first-start and spouse connection with real API/PostgreSQL and synthetic private-proxy identity.")
+    parser.add_argument("--expense-plans", action="store_true", help="Verify date-optional planning with real HTTPS and PostgreSQL.")
     args = parser.parse_args()
     if args.onboarding and any(value for name, value in vars(args).items() if name != "onboarding"):
         parser.error("--onboarding uses an empty installation and cannot be combined with other modes")
@@ -446,6 +451,7 @@ if __name__ == "__main__":
             months=args.months or args.comparison,
             comparison=args.comparison,
             cashflow=args.cashflow,
+            expense_plans=args.expense_plans,
             insurance=args.insurance,
             homecare=args.homecare,
             documents=args.documents,

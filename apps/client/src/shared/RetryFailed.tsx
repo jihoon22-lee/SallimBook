@@ -1,3 +1,13 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { ApiError } from "../platform/api";
 import { MonthError } from "../features/assets/months/MonthFeedback";
 
@@ -19,4 +29,48 @@ export function RetryFailed({ items, label }: { items: RetryItem[]; label: strin
       </button>
     </div>
   );
+}
+
+type Report = (id: string, item: RetryItem | null) => void;
+const RetryContext = createContext<{ report: Report; combined: boolean } | null>(null);
+
+/** Parts that load on their own report here, so a shared outage shows one message, not one per part. */
+export function RetryScope({ label, children }: { label: string; children: ReactNode }) {
+  const [items, setItems] = useState<Record<string, RetryItem>>({});
+  const report = useCallback<Report>(
+    (id, item) =>
+      setItems((old) => {
+        if (item) return { ...old, [id]: item };
+        if (!(id in old)) return old;
+        const rest = { ...old };
+        delete rest[id];
+        return rest;
+      }),
+    [],
+  );
+  const list = Object.values(items);
+  const combined = retriesCombined(list);
+  const value = useMemo(() => ({ report, combined }), [report, combined]);
+  return (
+    <RetryContext.Provider value={value}>
+      <RetryFailed items={list} label={label} />
+      {children}
+    </RetryContext.Provider>
+  );
+}
+
+/** Reports one part's failure; true while the scope's single retry stands in for this part's own. */
+export function useRetryReport(id: string, error: ApiError | null, retry: () => unknown) {
+  const context = useContext(RetryContext);
+  const latest = useRef(retry);
+  useEffect(() => {
+    latest.current = retry;
+  });
+  const report = context?.report;
+  useEffect(() => {
+    if (!report) return;
+    report(id, error ? { error, retry: () => void latest.current() } : null);
+    return () => report(id, null);
+  }, [report, id, error]);
+  return !!context?.combined && !!error;
 }

@@ -12,7 +12,7 @@ import { allPages } from "./queries";
 import { formatKrw } from "../assets/months/model";
 type S = components["schemas"];
 type Input = S["PaymentSwitchInput"];
-type Row = S["PaymentSwitchRow"];
+type Row = S["PlanPaymentSwitchRow"];
 type Entry = {
   row: Row;
   selected: boolean;
@@ -86,12 +86,12 @@ export function PaymentSwitch({
       const rows = await allPages((cursor) =>
         domainApi.write(
           (client) =>
-            client.POST("/api/v1/payment-switch/preview", {
+            client.POST("/api/v1/expense-plan-payment-switch/preview", {
               body: input,
               params: { query: { limit: 200, ...(cursor ? { cursor } : {}) } },
             }),
           () =>
-            nativeFinance.previewPaymentSwitch({
+            nativeFinance.previewExpensePlanPaymentSwitch({
               input,
               query: { limit: 200, ...(cursor ? { cursor } : {}) },
             }),
@@ -151,18 +151,18 @@ export function PaymentSwitch({
         attempted = true;
         await domainApi.write(
           (client) =>
-            client.POST("/api/v1/payment-switch/rules/{rule_id}", {
+            client.POST("/api/v1/expense-plan-payment-switch/{plan_id}", {
               body: input,
               params: {
-                path: { rule_id: entry.row.id },
+                path: { plan_id: entry.row.id },
                 header: { "If-Match": `"${entry.row.version}"`, "Idempotency-Key": entry.key },
               },
               signal: abort.signal,
             }),
           () =>
             cancellableNative(abort.signal, () =>
-              nativeFinance.applyPaymentSwitch({
-                ruleId: entry.row.id,
+              nativeFinance.applyExpensePlanPaymentSwitch({
+                planId: entry.row.id,
                 input,
                 ifMatch: `"${entry.row.version}"`,
                 idempotencyKey: entry.key,

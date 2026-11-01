@@ -1,7 +1,7 @@
 import { RecordActor } from "../../shared/RecordActor";
 import { DateInput } from "../../shared/DateInput";
 import { OptionalFields } from "../../shared/OptionalFields";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
@@ -15,11 +15,20 @@ import { useAccountsApi } from "./api";
 import { accountDraft, accountInput, accountLabels, accountTypes } from "./model";
 import type { Account, AccountDraft, AccountPatch } from "./model";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { commonInstitutions, useNameSuggestions } from "../../shared/NameSuggestions";
 
 export function AccountEditor({ initial }: { initial?: Account }) {
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const api = useAccountsApi();
+  const institutions = useNameSuggestions(
+    useCallback(
+      async () =>
+        (await api.list({ status: "all", limit: 200 })).items.map((row) => row.institution_name),
+      [api],
+    ),
+    commonInstitutions,
+  );
   const assetsApi = useAssetsApi();
   const navigate = useNavigate();
   const mounted = useMounted();
@@ -196,9 +205,11 @@ export function AccountEditor({ initial }: { initial?: Account }) {
               id="account-institution"
               required
               maxLength={120}
+              list={institutions.id}
               value={draft.institution_name}
               onChange={(event) => setDraft({ ...draft, institution_name: event.target.value })}
             />
+            {institutions.list}
           </div>
           <div className="form-field">
             <label htmlFor="account-type">계좌 유형</label>

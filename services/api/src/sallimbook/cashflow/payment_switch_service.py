@@ -19,7 +19,6 @@ from sallimbook.cashflow.recurring_models import (
     RecurringRuleVersion,
     ScheduledObligation,
 )
-from sallimbook.cashflow.recurring_schemas import ScheduleTerms
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
 from sallimbook.core.idempotency import IdempotentResult, payload_hash, run_idempotent
@@ -63,7 +62,9 @@ def _affected(version, payload):
     )
 
 
-def _row(session, principal, rule, payload, method_versions):
+def _row(session, principal, rule, payload, method_versions, *, plan=False):
+    if not plan:
+        recurring._require_legacy(session, principal, rule.id)
     versions = recurring._versions(session, principal, rule.id)
     matched = [version for version in versions if _affected(version, payload)]
     if not matched:
@@ -102,7 +103,15 @@ def _row(session, principal, rule, payload, method_versions):
         elif row.rule_version_id in affected_ids and row.schedule_state == "active":
             counts["update_occurrence_count"] += 1
     # Full term/state fingerprints detect same-version occurrence/payment edits as well.
-    response = recurring._rule_response(session, principal, rule, versions=versions)
+    if plan:
+        from sallimbook.cashflow.expense_plan_service import _response
+        from sallimbook.cashflow.payment_switch_schemas import PlanPaymentSwitchRow
+
+        response = _response(session, principal, rule)
+        row_type = PlanPaymentSwitchRow
+    else:
+        response = recurring._rule_response(session, principal, rule, versions=versions)
+        row_type = PaymentSwitchRow
     digest = payload_hash(
         dict(
             request=PaymentSwitchInput.model_validate(
@@ -120,7 +129,7 @@ def _row(session, principal, rule, payload, method_versions):
             ],
         )
     )
-    return PaymentSwitchRow(
+    return row_type(
         id=rule.id,
         version=rule.version,
         title=matched[0].title,
@@ -128,7 +137,9 @@ def _row(session, principal, rule, payload, method_versions):
         unchanged_period_count=len(versions) - len(matched),
         blocked_reason=(
             "INITIAL_PERIOD_START"
-            if versions[0] in matched and payload.effective_on <= versions[0].effective_from
+            if versions[0] in matched
+            and payload.effective_on <= versions[0].effective_from
+            and versions[0].tracking_mode != "plan_only"
             else None
         ),
         preview_digest=digest,
@@ -136,7 +147,7 @@ def _row(session, principal, rule, payload, method_versions):
     ), matched
 
 
-def preview(session, principal, payload, *, cursor=None, limit=50):
+def preview(session, principal, payload, *, cursor=None, limit=50, plan=False):
     cash.lock_cash_household(session, principal)
     method_versions = _scope(session, principal, payload)
     _validate(session, principal, payload)
@@ -161,16 +172,36 @@ def preview(session, principal, payload, *, cursor=None, limit=50):
             .order_by(RecurringRule.id)
         )
     )
+    if not plan:
+        rules = [
+            r
+            for r in rules
+            if not session.scalar(
+                select(RecurringRuleVersion.id)
+                .where(
+                    RecurringRuleVersion.household_id == principal.household_id,
+                    RecurringRuleVersion.rule_id == r.id,
+                    RecurringRuleVersion.tracking_mode == "plan_only",
+                )
+                .limit(1)
+            )
+        ]
     selected, next_cursor = page_after(rules, cursor=cursor, limit=limit, key=attrgetter("id"))
-    result = PaymentSwitchPreview(
-        items=[_row(session, principal, row, payload, method_versions)[0] for row in selected],
+    from sallimbook.cashflow.payment_switch_schemas import PlanPaymentSwitchPreview
+
+    preview_type = PlanPaymentSwitchPreview if plan else PaymentSwitchPreview
+    result = preview_type(
+        items=[
+            _row(session, principal, row, payload, method_versions, plan=plan)[0]
+            for row in selected
+        ],
         next_cursor=next_cursor,
     )
     session.commit()
     return result
 
 
-def apply(session, principal, rule_id, payload, if_match, key):
+def apply(session, principal, rule_id, payload, if_match, key, *, plan=False):
     cash.lock_cash_household(session, principal)
     # Authorization precedes idempotent replay; current linkage is only required on first write.
     method_versions = _scope(session, principal, payload)
@@ -179,7 +210,7 @@ def apply(session, principal, rule_id, payload, if_match, key):
     def execute():
         require_version(rule, if_match)
         _validate(session, principal, payload)
-        view, matched = _row(session, principal, rule, payload, method_versions)
+        view, matched = _row(session, principal, rule, payload, method_versions, plan=plan)
         if view.preview_digest != payload.preview_digest:
             raise DomainError(
                 "PAYMENT_LINKS_CHANGED", "미리보기 후 기록이 바뀌었습니다. 다시 확인해 주세요.", 409
@@ -191,7 +222,9 @@ def apply(session, principal, rule_id, payload, if_match, key):
         replacements = []
         for old in matched:
             start = max(payload.effective_on, old.effective_from)
-            values = {name: getattr(old, name) for name in ScheduleTerms.model_fields}
+            from sallimbook.cashflow.expense_plan_schemas import PlanTerms
+
+            values = {name: getattr(old, name) for name in PlanTerms.model_fields}
             values.update(account_id=None, card_id=None)
             values[f"{payload.target_kind}_id"] = payload.target_id
             replacements.append(

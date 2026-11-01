@@ -13,6 +13,7 @@ from sallimbook.assets.month_router import router as asset_months_router
 from sallimbook.assets.router import router as assets_router
 from sallimbook.audit.router import router as audit_router
 from sallimbook.cards.router import router as cards_router
+from sallimbook.cashflow.expense_plan_router import router as expense_plan_router
 from sallimbook.cashflow.payment_link_router import router as payment_links_router
 from sallimbook.cashflow.payment_switch_router import router as payment_switch_router
 from sallimbook.cashflow.planning_router import router as planning_router
@@ -29,6 +30,7 @@ from sallimbook.identity.passkeys.router import router as passkey_router
 from sallimbook.identity.router import router as identity_router
 from sallimbook.insurance.event_router import router as insurance_events_router
 from sallimbook.insurance.router import router as insurance_router
+from sallimbook.overview.router import router as overview_router
 from sallimbook.vault.router import router as vault_router
 
 
@@ -132,8 +134,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(income_router)
     app.include_router(planning_router)
     app.include_router(recurring_router)
+    app.include_router(expense_plan_router)
     app.include_router(cards_router)
     app.include_router(asset_comparison_router)
+    app.include_router(overview_router)
     app.include_router(insurance_router)
     app.include_router(insurance_events_router)
     app.include_router(homecare_router)

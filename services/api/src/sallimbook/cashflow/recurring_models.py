@@ -103,6 +103,26 @@ class RecurringRuleVersion(ScheduleFields, Base):
         ),
         household_fk("recurring_rule_versions", "rule_id", "recurring_rules"),
         *schedule_constraints("recurring_rule_versions"),
+        household_fk("recurring_rule_versions", "subject_member_id", "household_members"),
+        CheckConstraint("tracking_mode IN ('scheduled', 'plan_only')", name="tracking_mode"),
+        CheckConstraint("plan_kind IN ('recurring', 'budget')", name="plan_kind"),
+        CheckConstraint(
+            "budget_treatment IN ('included', 'external_support', 'payroll', 'reference_only')",
+            name="budget_treatment",
+        ),
+        CheckConstraint(
+            "tracking_mode <> 'scheduled' OR anchor_date IS NOT NULL", name="scheduled_anchor"
+        ),
+        CheckConstraint(
+            "annual_month IS NULL OR (frequency = 'annual' AND annual_month BETWEEN 1 AND 12 "
+            "AND (anchor_date IS NULL OR extract(month from anchor_date) = annual_month))",
+            name="annual_month",
+        ),
+        CheckConstraint(
+            "plan_kind <> 'budget' OR (tracking_mode = 'plan_only' "
+            "AND frequency = 'monthly' AND interval_count = 1)",
+            name="budget_monthly",
+        ),
         CheckConstraint(
             "effective_until IS NULL OR effective_until > effective_from", name="positive_period"
         ),
@@ -124,7 +144,12 @@ class RecurringRuleVersion(ScheduleFields, Base):
     rule_id: Mapped[UUID]
     effective_from: Mapped[date]
     effective_until: Mapped[date | None]
-    anchor_date: Mapped[date]
+    anchor_date: Mapped[date | None]
+    tracking_mode: Mapped[str] = mapped_column(String(12), server_default="scheduled")
+    plan_kind: Mapped[str] = mapped_column(String(12), server_default="recurring")
+    budget_treatment: Mapped[str] = mapped_column(String(20), server_default="included")
+    subject_member_id: Mapped[UUID | None]
+    annual_month: Mapped[int | None]
     frequency: Mapped[str] = mapped_column(String(8))
     interval_count: Mapped[int]
     reason: Mapped[str | None] = mapped_column(String(500))

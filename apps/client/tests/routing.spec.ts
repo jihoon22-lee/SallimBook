@@ -32,7 +32,7 @@ const routes = [
   ["/accounts/synthetic-account", "계좌 상세"],
   ["/income", "월간 수입"],
   ["/income/new", "수입 입력"],
-  ["/fixed-payments", "고정 납부"],
+  ["/fixed-payments", "고정 지출"],
   ["/fixed-payments/synthetic-payment", "고정 납부 상세"],
   ["/cards", "카드 관리"],
   ["/cards/synthetic-card", "카드 상세"],
@@ -90,7 +90,7 @@ test("navigation exposes five mobile tabs or the expanded desktop sidebar", asyn
     for (const label of [
       "계좌",
       "수입",
-      "고정 납부",
+      "고정 지출",
       "카드",
       "계약",
       "사건·청구·지급",

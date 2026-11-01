@@ -615,3 +615,21 @@ JVM **308개**, debug APK·release Kotlin, 브라우저 **58개**(신규 export 
 
 검증은 JVM **322개**, debug APK·release Kotlin, 브리지 모의시험 **38개**, 서버 순수 계약 **44개**다.
 세부 명령과 실제 Galaxy 미실행 범위는 [native 감사 검증](testing/native-audit.md)을 따른다.
+
+## 23. 홈 현황과 성과연도 상여 합계 (2026-11-01)
+
+`householdOverview({ query: { month } })`는 생성 `getHouseholdOverview` query와 `HouseholdOverviewResponse`를
+사용한다. 네이티브는 `GET /api/v1/household-overview?month=YYYY-MM`만 만들며 body·버전·중복 방지 키·임의 헤더를
+받지 않는다. 응답의 월이 요청과 같아야 하고, 금액은 정수 원 문자열(순자산과 월 계획 기준 여유만 부호 허용),
+개수는 0 이상 정수다. 항목 수와 금액 있음·없음 수, 오래된·당월 수, 분류 합계가 서로 맞지 않거나, 금액과 기준 월이
+한쪽만 있거나, 계좌 연결과 `accounts` 분류가 어긋난 응답은 전달하지 않는다. 서류 보완 청구 수는 진행 중 청구 수를,
+금액 미확인 예상 수입 수는 전체 예상 수입 수를 넘을 수 없다. 서버가 추가한 필드는 §2 응답 호환을 따르며 비밀처럼
+보이는 이름은 거부한다.
+
+`bonusAwardSummary()`는 `GET /api/v1/income-planning/bonus-summary`만 보내고 성과연도(1900~9998), 기록 수(1 이상),
+확인된 금액 문자열과 금액 미확인 건수를 검증한다. 두 명령 모두 읽기 전용이며 일반 `request` allowlist를 넓히지 않고
+기존 잠금·세대 검증을 그대로 쓴다.
+
+검증: JVM **495개**(새 `HouseholdOverviewPolicyTest` 4개와 상여 합계 시험 1개 포함)와 release Kotlin 컴파일을 통과했다.
+웹의 모의 bridge 시험으로 홈이 `householdOverview` 한 번으로 보유 현황을 그리고 자산·계좌·카드·보험 목록 명령을
+부르지 않는 것을 확인했다. 이 시험은 실제 Android 기기 보안을 검증하지 않으며 실기기 시험은 사용자가 따로 수행한다.

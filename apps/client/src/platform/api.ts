@@ -8,6 +8,7 @@ export const apiClient = createApiClient();
 const knownCodes = [
   "PERSON_UNAVAILABLE",
   "PEOPLE_CLIENT_REQUIRED",
+  "PLAN_CLIENT_REQUIRED",
   "MEMBER_PERSON_MANAGED",
   "SETUP_UNAVAILABLE",
   "SETUP_COMPLETE",

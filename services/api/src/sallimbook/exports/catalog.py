@@ -500,6 +500,11 @@ PUBLIC_COLUMNS = {
         "decision_note",
     ),
     "recurring_rule_versions": (
+        "tracking_mode",
+        "plan_kind",
+        "budget_treatment",
+        "subject_member_id",
+        "annual_month",
         "id",
         "created_at",
         "household_id",
@@ -751,6 +756,25 @@ PRIVATE_COLUMNS = {
 }
 
 PRIVATE_TABLES = {
+    "expense_import_batches": (
+        "id",
+        "household_id",
+        "source_id",
+        "manifest_hash",
+        "actor_member_id",
+        "baseline_date",
+        "row_count",
+        "created_at",
+    ),
+    "expense_import_rows": (
+        "household_id",
+        "source_id",
+        "source_key",
+        "payload_hash",
+        "created_rule_id",
+        "rule_id",
+        "state",
+    ),
     "card_stored_details": ("household_id", "card_id", "key_version", "nonce", "ciphertext"),
     "idempotency_records": (
         "household_id",

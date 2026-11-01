@@ -486,6 +486,9 @@ export interface SallimBookAuth {
     recordId: string;
     ifMatch: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["BonusResponse"]>>>;
+  bonusAwardSummary(
+    options?: Record<string, never>,
+  ): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["BonusSummary"]>>>;
   listIncome(options: {
     query: NonNullable<operations["listIncome"]["parameters"]["query"]>;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["IncomeListResponse"]>>>;
@@ -571,6 +574,11 @@ export interface SallimBookAuth {
   getAssetTrends(options: {
     query: operations["getAssetTrends"]["parameters"]["query"];
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["AssetTrendResponse"]>>>;
+  householdOverview(options: {
+    query: operations["getHouseholdOverview"]["parameters"]["query"];
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["HouseholdOverviewResponse"]>>
+  >;
   listOverdueObligations(options: {
     query?: NonNullable<operations["listOverdueObligations"]["parameters"]["query"]>;
   }): Promise<
@@ -638,6 +646,50 @@ export interface SallimBookAuth {
   unskipObligation(options: {
     obligationId: string;
     input: components["schemas"]["ObligationAction"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  listExpensePlans(options: {
+    query?: NonNullable<operations["listExpensePlans"]["parameters"]["query"]>;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["PlanListResponse"]>>>;
+  createExpensePlan(options: {
+    input: components["schemas"]["PlanCreate"];
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  getExpensePlan(options: {
+    planId: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["PlanResponse"]>>>;
+  changeExpensePlan(options: {
+    planId: string;
+    input: components["schemas"]["PlanChange"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  endExpensePlan(options: {
+    planId: string;
+    input: components["schemas"]["RuleEnd"];
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;
+  deleteExpensePlan(options: {
+    planId: string;
+    ifMatch: string;
+    idempotencyKey: string;
+  }): Promise<NativeAuthResult<NativeFinanceResponse<null>>>;
+  expensePlanSummary(options: {
+    query?: NonNullable<operations["expensePlanSummary"]["parameters"]["query"]>;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["PlanSummaryResponse"]>>
+  >;
+  previewExpensePlanPaymentSwitch(options: {
+    input: components["schemas"]["PaymentSwitchInput"];
+    query?: NonNullable<operations["previewExpensePlanPaymentSwitch"]["parameters"]["query"]>;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["PlanPaymentSwitchPreview"]>>
+  >;
+  applyExpensePlanPaymentSwitch(options: {
+    planId: string;
+    input: components["schemas"]["PaymentSwitchApply"];
     ifMatch: string;
     idempotencyKey: string;
   }): Promise<NativeAuthResult<NativeFinanceResponse<components["schemas"]["MutationReference"]>>>;

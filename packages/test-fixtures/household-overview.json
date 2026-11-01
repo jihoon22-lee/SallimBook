@@ -1,0 +1,57 @@
+{
+  "description": "Synthetic household status: latest saved amounts and a plan-based monthly margin. No real household data.",
+  "month": "2026-03",
+  "assets": [
+    {"key": "checking", "name": "합성 입출금 계좌", "account": true, "values": {"2026-01": "1000000", "2026-03": "1200000"}},
+    {"key": "stock", "name": "합성 주식", "values": {"2025-11": "500000"}},
+    {"key": "home", "name": "합성 아파트", "category": "real_estate", "values": {"2025-06": "300000000"}},
+    {"key": "mortgage", "name": "합성 주택담보대출", "kind": "liability", "category": "loan", "values": {"2026-02": "100000000"}},
+    {"key": "unsaved", "name": "합성 새 예금", "values": {}},
+    {"key": "excluded", "name": "합성 참고 자산", "inclusion_status": "excluded", "values": {"2026-03": "9999"}},
+    {"key": "ended", "name": "합성 해지 적금", "ended_on": "2026-02-10", "values": {"2026-01": "777"}}
+  ],
+  "expected_holdings": {
+    "assets_krw": "301700000",
+    "liabilities_krw": "100000000",
+    "net_assets_krw": "201700000",
+    "item_count": 5,
+    "known_count": 4,
+    "missing_count": 1,
+    "stale_count": 1,
+    "current_count": 1,
+    "oldest_basis_month": "2025-06",
+    "groups": [
+      {"group": "accounts", "count": 1, "known_count": 1, "assets_krw": "1200000", "liabilities_krw": "0"},
+      {"group": "financial", "count": 2, "known_count": 1, "assets_krw": "500000", "liabilities_krw": "0"},
+      {"group": "real_estate", "count": 1, "known_count": 1, "assets_krw": "300000000", "liabilities_krw": "0"},
+      {"group": "loan", "count": 1, "known_count": 1, "assets_krw": "0", "liabilities_krw": "100000000"}
+    ],
+    "stale": ["stock"],
+    "basis": {"checking": "2026-03", "stock": "2025-11", "home": "2025-06", "mortgage": "2026-02", "unsaved": null, "excluded": "2026-03"}
+  },
+  "plans": [
+    {"title": "합성 생활비", "category": "생활비", "expected_amount_krw": "800000", "plan_kind": "budget", "amount_mode": "variable"},
+    {"title": "합성 통신비", "category": "통신비", "expected_amount_krw": "55000"},
+    {"title": "합성 대출 상환", "category": "대출", "expected_amount_krw": "700000", "economic_type": "loan"},
+    {"title": "합성 적금", "category": "저축", "expected_amount_krw": "300000", "economic_type": "asset_transfer"},
+    {"title": "합성 지원 항목", "category": "지원", "expected_amount_krw": "90000", "budget_treatment": "external_support"},
+    {"title": "합성 미정 구독", "category": "구독", "expected_amount_krw": null, "amount_mode": "variable"}
+  ],
+  "expected_income": [
+    {"label": "합성 월급", "amount_krw": "3000000"},
+    {"label": "합성 부수입", "amount_krw": null}
+  ],
+  "expected_plan": {
+    "expected_income_known_krw": "3000000",
+    "expected_income_count": 2,
+    "expected_income_unknown_count": 1,
+    "spending_known_krw": "855000",
+    "loan_known_krw": "700000",
+    "transfer_known_krw": "300000",
+    "planned_unknown_count": 1,
+    "unconverted_count": 0,
+    "excluded_known_krw": "90000",
+    "margin_before_transfers_krw": "1445000",
+    "margin_after_transfers_krw": "1145000"
+  }
+}

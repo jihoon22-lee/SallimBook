@@ -1379,6 +1379,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expense-plan-payment-switch/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switch Preview */
+        post: operations["previewExpensePlanPaymentSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-plan-payment-switch/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switch Apply */
+        post: operations["applyExpensePlanPaymentSwitch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-plan-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["expensePlanSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plans */
+        get: operations["listExpensePlans"];
+        put?: never;
+        /** Create */
+        post: operations["createExpensePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get */
+        get: operations["getExpensePlan"];
+        put?: never;
+        post?: never;
+        /** Delete */
+        delete: operations["deleteExpensePlan"];
+        options?: never;
+        head?: never;
+        /** Change */
+        patch: operations["changeExpensePlan"];
+        trace?: never;
+    };
+    "/api/v1/expense-plans/{plan_id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End */
+        post: operations["endExpensePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/exports": {
         parameters: {
             query?: never;
@@ -1442,6 +1547,23 @@ export interface paths {
         };
         /** Get Status */
         get: operations["getHomecareStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household-overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Household Overview */
+        get: operations["getHouseholdOverview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1565,6 +1687,23 @@ export interface paths {
         put?: never;
         /** Create */
         post: operations["createIncome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/income-planning/bonus-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bonus Summary */
+        get: operations["bonusAwardSummary"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4118,6 +4257,31 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** BonusSummary */
+        BonusSummary: {
+            /** Years */
+            years: components["schemas"]["BonusYearSummary"][];
+        };
+        /**
+         * BonusYearSummary
+         * @description Active awards of one performance year; an unknown amount is counted, never treated as 0.
+         */
+        BonusYearSummary: {
+            /** Known Total Krw */
+            known_total_krw: string;
+            /** Net Cash Known Krw */
+            net_cash_known_krw: string;
+            /** Net Cash Unknown Count */
+            net_cash_unknown_count: number;
+            /** Performance Year */
+            performance_year: number;
+            /** Record Count */
+            record_count: number;
+            /** Stock Grant Known Krw */
+            stock_grant_known_krw: string;
+            /** Stock Grant Unknown Count */
+            stock_grant_unknown_count: number;
+        };
         /** CardArchive */
         CardArchive: {
             /**
@@ -6148,6 +6312,48 @@ export interface components {
              */
             status: "ok";
         };
+        /** @enum {string} */
+        HoldingGroup: "accounts" | "financial" | "real_estate" | "deposit" | "loan" | "other";
+        /** HoldingGroupTotal */
+        HoldingGroupTotal: {
+            /** Assets Krw */
+            assets_krw: string;
+            /** Count */
+            count: number;
+            group: components["schemas"]["HoldingGroup"];
+            /** Known Count */
+            known_count: number;
+            /** Liabilities Krw */
+            liabilities_krw: string;
+        };
+        /**
+         * HoldingsOverview
+         * @description Totals use each included item's latest saved amount; unsaved items are counted apart.
+         */
+        HoldingsOverview: {
+            /** Assets Krw */
+            assets_krw: string;
+            /** Current Count */
+            current_count: number;
+            /** Groups */
+            groups: components["schemas"]["HoldingGroupTotal"][];
+            /** Item Count */
+            item_count: number;
+            /** Items */
+            items: components["schemas"]["OverviewHolding"][];
+            /** Known Count */
+            known_count: number;
+            /** Liabilities Krw */
+            liabilities_krw: string;
+            /** Missing Count */
+            missing_count: number;
+            /** Net Assets Krw */
+            net_assets_krw: string;
+            /** Oldest Basis Month */
+            oldest_basis_month: string | null;
+            /** Stale Count */
+            stale_count: number;
+        };
         /** HomecareStatusItem */
         HomecareStatusItem: {
             /**
@@ -6260,6 +6466,16 @@ export interface components {
             items: components["schemas"]["HomecareStatusItem"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** HouseholdOverviewResponse */
+        HouseholdOverviewResponse: {
+            appliances: components["schemas"]["RegisteredItems"];
+            cards: components["schemas"]["RegisteredItems"];
+            holdings: components["schemas"]["HoldingsOverview"];
+            insurance: components["schemas"]["InsuranceOverview"];
+            /** Month */
+            month: string;
+            plan: components["schemas"]["MonthlyPlanOverview"];
         };
         /** @enum {string} */
         InclusionStatus: "included" | "excluded";
@@ -6475,6 +6691,19 @@ export interface components {
             device_id: string;
             /** Key */
             key?: string | null;
+        };
+        /** InsuranceOverview */
+        InsuranceOverview: {
+            /** Active Policy Count */
+            active_policy_count: number;
+            /** Claims In Progress Count */
+            claims_in_progress_count: number;
+            /** Documents Required Count */
+            documents_required_count: number;
+            /** Open Case Count */
+            open_case_count: number;
+            /** Policies */
+            policies: components["schemas"]["NamedItem"][];
         };
         /** @enum {string} */
         IntervalUnit: "manual" | "days" | "months";
@@ -7164,6 +7393,39 @@ export interface components {
              */
             value_id: string;
         };
+        /**
+         * MonthlyPlanOverview
+         * @description A plan-based estimate from the expected income and the monthly plan, never a balance.
+         */
+        MonthlyPlanOverview: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Excluded Known Krw */
+            excluded_known_krw: string;
+            /** Expected Income Count */
+            expected_income_count: number;
+            /** Expected Income Known Krw */
+            expected_income_known_krw: string;
+            /** Expected Income Unknown Count */
+            expected_income_unknown_count: number;
+            /** Loan Known Krw */
+            loan_known_krw: string;
+            /** Margin After Transfers Krw */
+            margin_after_transfers_krw: string;
+            /** Margin Before Transfers Krw */
+            margin_before_transfers_krw: string;
+            /** Planned Unknown Count */
+            planned_unknown_count: number;
+            /** Spending Known Krw */
+            spending_known_krw: string;
+            /** Transfer Known Krw */
+            transfer_known_krw: string;
+            /** Unconverted Count */
+            unconverted_count: number;
+        };
         /** @enum {string} */
         MovementKind: "receipt" | "replacement" | "return_in" | "return_out" | "adjustment" | "reversal";
         /** MutationReference */
@@ -7175,6 +7437,16 @@ export interface components {
             id: string;
             /** Version */
             version: number;
+        };
+        /** NamedItem */
+        NamedItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** NativeLoginRequest */
         NativeLoginRequest: {
@@ -7505,6 +7777,34 @@ export interface components {
             items: components["schemas"]["ObligationResponse"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * OverviewHolding
+         * @description One asset held at the selected month's end and its latest saved household amount.
+         */
+        OverviewHolding: {
+            /** Account Id */
+            account_id: string | null;
+            /** As Of Date */
+            as_of_date: string | null;
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Basis Month */
+            basis_month: string | null;
+            category: components["schemas"]["AssetCategory"];
+            group: components["schemas"]["HoldingGroup"];
+            /** Included */
+            included: boolean;
+            kind: components["schemas"]["AssetKind"];
+            /** Name */
+            name: string;
+            /** Owned Amount Krw */
+            owned_amount_krw: string | null;
+            /** Stale */
+            stale: boolean;
         };
         /** @enum {string} */
         OwnershipKind: "individual" | "joint";
@@ -7863,6 +8163,329 @@ export interface components {
             updated_by_member_id: string;
             /** Version */
             version: number;
+        };
+        /** PlanChange */
+        PlanChange: {
+            /** Account Id */
+            account_id?: string | null;
+            /**
+             * Amount Mode
+             * @enum {string}
+             */
+            amount_mode: "fixed" | "variable";
+            /** Anchor Date */
+            anchor_date?: string | null;
+            /** Annual Month */
+            annual_month?: number | null;
+            /**
+             * Budget Treatment
+             * @default included
+             * @enum {string}
+             */
+            budget_treatment: "included" | "external_support" | "payroll" | "reference_only";
+            /** Card Id */
+            card_id?: string | null;
+            /** Category */
+            category: string;
+            /** Currency Reference */
+            currency_reference?: string | null;
+            economic_type: components["schemas"]["EconomicType"];
+            /** Effective From */
+            effective_from?: string | null;
+            /** Expected Amount Krw */
+            expected_amount_krw?: string | null;
+            /** Foreign Amount Reference */
+            foreign_amount_reference?: string | null;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency: "monthly" | "annual" | "days";
+            /**
+             * Interval Count
+             * @default 1
+             */
+            interval_count: number;
+            /** Loan Asset Id */
+            loan_asset_id?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Plan Kind
+             * @default recurring
+             * @enum {string}
+             */
+            plan_kind: "recurring" | "budget";
+            /**
+             * Reason
+             * @default 월 계획 수정
+             */
+            reason: string;
+            /** Subject Member Id */
+            subject_member_id?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Tracking Mode
+             * @default plan_only
+             * @enum {string}
+             */
+            tracking_mode: "plan_only" | "scheduled";
+        };
+        /** PlanCreate */
+        PlanCreate: {
+            /** Account Id */
+            account_id?: string | null;
+            /**
+             * Amount Mode
+             * @enum {string}
+             */
+            amount_mode: "fixed" | "variable";
+            /** Anchor Date */
+            anchor_date?: string | null;
+            /** Annual Month */
+            annual_month?: number | null;
+            /**
+             * Budget Treatment
+             * @default included
+             * @enum {string}
+             */
+            budget_treatment: "included" | "external_support" | "payroll" | "reference_only";
+            /** Card Id */
+            card_id?: string | null;
+            /** Category */
+            category: string;
+            /** Currency Reference */
+            currency_reference?: string | null;
+            economic_type: components["schemas"]["EconomicType"];
+            /** Effective From */
+            effective_from?: string | null;
+            /** Expected Amount Krw */
+            expected_amount_krw?: string | null;
+            /** Foreign Amount Reference */
+            foreign_amount_reference?: string | null;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency: "monthly" | "annual" | "days";
+            /**
+             * Interval Count
+             * @default 1
+             */
+            interval_count: number;
+            /** Loan Asset Id */
+            loan_asset_id?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Plan Kind
+             * @default recurring
+             * @enum {string}
+             */
+            plan_kind: "recurring" | "budget";
+            /** Subject Member Id */
+            subject_member_id?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Tracking Mode
+             * @default plan_only
+             * @enum {string}
+             */
+            tracking_mode: "plan_only" | "scheduled";
+        };
+        /** PlanListResponse */
+        PlanListResponse: {
+            /** Items */
+            items: components["schemas"]["PlanResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** PlanPaymentSwitchPreview */
+        PlanPaymentSwitchPreview: {
+            /** Items */
+            items: components["schemas"]["PlanPaymentSwitchRow"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** PlanPaymentSwitchRow */
+        PlanPaymentSwitchRow: {
+            /** Blocked Reason */
+            blocked_reason: "INITIAL_PERIOD_START" | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Periods */
+            periods: components["schemas"]["PlanVersionResponse"][];
+            /** Preserved Manual Count */
+            preserved_manual_count: number;
+            /** Preserved Paid Count */
+            preserved_paid_count: number;
+            /** Preserved Past Count */
+            preserved_past_count: number;
+            /** Preview Digest */
+            preview_digest: string;
+            /** Title */
+            title: string;
+            /** Unchanged Period Count */
+            unchanged_period_count: number;
+            /** Update Occurrence Count */
+            update_occurrence_count: number;
+            /** Version */
+            version: number;
+        };
+        /** PlanResponse */
+        PlanResponse: {
+            /** End Reason */
+            end_reason: string | null;
+            /** Ended On */
+            ended_on: string | null;
+            /** History */
+            history: components["schemas"]["PlanVersionResponse"][];
+            /**
+             * Household Id
+             * Format: uuid
+             */
+            household_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+            /** Versions */
+            versions: components["schemas"]["PlanVersionResponse"][];
+        };
+        /** PlanSubtotal */
+        PlanSubtotal: {
+            /** Count */
+            count: number;
+            /** Key */
+            key: string;
+            /** Known Krw */
+            known_krw: string;
+            /** Unconverted Count */
+            unconverted_count: number;
+            /** Unknown Count */
+            unknown_count: number;
+        };
+        /** PlanSummaryResponse */
+        PlanSummaryResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Budget Known Krw */
+            budget_known_krw: string;
+            /** Categories */
+            categories: components["schemas"]["PlanSubtotal"][];
+            /** Combined Known Krw */
+            combined_known_krw: string;
+            /** Economic Types */
+            economic_types: components["schemas"]["PlanSubtotal"][];
+            /** Excluded Known Krw */
+            excluded_known_krw: string;
+            /** Excluded Unknown Count */
+            excluded_unknown_count: number;
+            /** Fixed Known Krw */
+            fixed_known_krw: string;
+            /** Included Unknown Count */
+            included_unknown_count: number;
+            /** Plan Count */
+            plan_count: number;
+            /** Treatments */
+            treatments: components["schemas"]["PlanSubtotal"][];
+            /** Unconverted Count */
+            unconverted_count: number;
+        };
+        /** PlanVersionResponse */
+        PlanVersionResponse: {
+            /** Account Id */
+            account_id?: string | null;
+            /**
+             * Amount Mode
+             * @enum {string}
+             */
+            amount_mode: "fixed" | "variable";
+            /** Anchor Date */
+            anchor_date?: string | null;
+            /** Annual Month */
+            annual_month?: number | null;
+            /**
+             * Budget Treatment
+             * @default included
+             * @enum {string}
+             */
+            budget_treatment: "included" | "external_support" | "payroll" | "reference_only";
+            /** Card Id */
+            card_id?: string | null;
+            /** Category */
+            category: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Currency Reference */
+            currency_reference?: string | null;
+            economic_type: components["schemas"]["EconomicType"];
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective Until */
+            effective_until: string | null;
+            /** Expected Amount Krw */
+            expected_amount_krw?: string | null;
+            /** Foreign Amount Reference */
+            foreign_amount_reference?: string | null;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency: "monthly" | "annual" | "days";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Interval Count
+             * @default 1
+             */
+            interval_count: number;
+            /** Loan Asset Id */
+            loan_asset_id?: string | null;
+            /** Monthly Equivalent Krw */
+            monthly_equivalent_krw: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Plan Kind
+             * @default recurring
+             * @enum {string}
+             */
+            plan_kind: "recurring" | "budget";
+            /** Reason */
+            reason: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Subject Member Id */
+            subject_member_id?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Tracking Mode
+             * @default plan_only
+             * @enum {string}
+             */
+            tracking_mode: "plan_only" | "scheduled";
         };
         /** PolicyCreate */
         PolicyCreate: {
@@ -8345,6 +8968,13 @@ export interface components {
              */
             challenge_id: string;
             credential: components["schemas"]["RegistrationCredential"];
+        };
+        /** RegisteredItems */
+        RegisteredItems: {
+            /** Count */
+            count: number;
+            /** Items */
+            items: components["schemas"]["NamedItem"][];
         };
         /** RegistrationAttestation */
         RegistrationAttestation: {
@@ -20669,6 +21299,978 @@ export interface operations {
             };
         };
     };
+    previewExpensePlanPaymentSwitch: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentSwitchInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanPaymentSwitchPreview"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    applyExpensePlanPaymentSwitch: {
+        parameters: {
+            query?: never;
+            header: {
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentSwitchApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    expensePlanSummary: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanSummaryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listExpensePlans: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                account_id?: string | null;
+                card_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanListResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createExpensePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    /** @description Quoted resource version for If-Match. */
+                    ETag?: string;
+                    /** @description Created expense plan path. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getExpensePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Quoted resource version for If-Match. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteExpensePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    changeExpensePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Quoted resource version for If-Match. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    endExpensePlan: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleEnd"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Quoted resource version for If-Match. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     createUserExport: {
         parameters: {
             query?: never;
@@ -21022,6 +22624,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HomecareStatusResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHouseholdOverview: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdOverviewResponse"];
                 };
             };
             /** @description Bad Request */
@@ -21973,6 +23678,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CashResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    bonusAwardSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BonusSummary"];
                 };
             };
             /** @description Bad Request */

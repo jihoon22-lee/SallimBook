@@ -1,3 +1,4 @@
+import { ExpensePlans } from "./ExpensePlans";
 import { LastAuditActor } from "../audit/LastAuditActor";
 import { NameSearch } from "../../shared/NameSearch";
 import { RuleInsuranceLink, NamedReference } from "../finance/RelatedRecords";
@@ -355,7 +356,6 @@ function FixedList() {
 function FixedMonthList({ month }: { month: string }) {
   const api = useFixedApi();
   const [showBatch, setShowBatch] = useState(false);
-  const [showGenerate, setShowGenerate] = useState(false);
   const [view, setView] = useState<"list" | "calendar">("list");
   const [refresh, setRefresh] = useState(0);
   const list = usePagedList(
@@ -384,7 +384,7 @@ function FixedMonthList({ month }: { month: string }) {
             달력 보기
           </button>
         </div>
-        <button className="secondary-button" disabled={list.loading} onClick={reload}>
+        <button className="secondary-button quiet-button" disabled={list.loading} onClick={reload}>
           월 납부 목록 다시 확인
         </button>
       </div>
@@ -412,8 +412,8 @@ function FixedMonthList({ month }: { month: string }) {
         <section className="card empty-state">
           <h2>이 달의 회차가 없어요</h2>
           <p>
-            규칙을 새로 저장하면 12개월의 예정을 준비해요. 이미 등록한 규칙은 ‘이달 예정 준비’를
-            선택해 주세요. 실제 납부는 직접 기록해요.
+            월 계획에서 ‘납부 일정도 관리’로 저장한 항목은 12개월의 예정을 준비해요. 이미 등록한
+            항목은 ‘이달 예정 준비’를 선택해 주세요. 실제 납부는 직접 기록해요.
           </p>
         </section>
       )}
@@ -472,21 +472,10 @@ function FixedMonthList({ month }: { month: string }) {
         </>
       )}
       <div className="form-actions">
-        <Link className="button-link" to="/fixed-payments/rules/new">
-          납부 규칙 등록
-        </Link>
         <Link className="button-link secondary-button" to="/fixed-payments/rules">
-          규칙과 적용기간 관리
+          적용기간·납부 일정 관리
         </Link>
-        <button aria-expanded={showGenerate} onClick={() => setShowGenerate((value) => !value)}>
-          예정 회차 생성 {showGenerate ? "닫기" : "열기"}
-        </button>
       </div>
-      {showGenerate && (
-        <TaskPanel key={month} label="예정 회차 생성 입력">
-          <GenerateForm month={month} onSaved={reload} />
-        </TaskPanel>
-      )}
       <FixedSummaryPanel refresh={refresh} />
       <RecordedMoneyNotice />
     </>
@@ -494,6 +483,7 @@ function FixedMonthList({ month }: { month: string }) {
 }
 function RuleList() {
   const api = useFixedApi();
+  const [showGenerate, setShowGenerate] = useState(false);
   const [params] = useSearchParams();
   const q = params.get("q") ?? "";
   const list = usePagedList(
@@ -511,12 +501,28 @@ function RuleList() {
         label="납부 규칙 이름·변경 이력 검색"
         hint="과거·예정 적용기간의 이름도 함께 찾아요."
       />
+      <p className="muted">
+        새 항목은 월 계획의 &lsquo;지출 계획 추가&rsquo;에서 등록해요. 이 화면에서는 적용기간과 납부
+        일정을 자세히 관리해요.
+      </p>
       <div className="form-actions">
-        <Link className="button-link" to="/fixed-payments/rules/new">
-          납부 규칙 등록
+        <Link className="button-link secondary-button" to="/fixed-payments?new=1">
+          지출 계획 추가
         </Link>
-        <Link to="/fixed-payments">월별 납부 회차</Link>
+        <Link to="/fixed-payments?view=payments">예정·실제 납부 보기</Link>
+        <button
+          className="secondary-button"
+          aria-expanded={showGenerate}
+          onClick={() => setShowGenerate((value) => !value)}
+        >
+          예정 회차 생성 {showGenerate ? "닫기" : "열기"}
+        </button>
       </div>
+      {showGenerate && (
+        <TaskPanel label="예정 회차 생성 입력">
+          <GenerateForm month={todaySeoul().slice(0, 7)} onSaved={() => void list.reload()} />
+        </TaskPanel>
+      )}
       <CashflowError error={list.error} />
       {list.error && <button onClick={() => void list.reload()}>규칙 목록 다시 확인</button>}
       {list.loading && (
@@ -1158,9 +1164,37 @@ function ObligationDetail({ id }: { id: string }) {
   );
 }
 export function FixedListPage() {
+  const [params, setParams] = useSearchParams();
+  const actual = params.get("view") === "payments";
   return (
-    <AuthenticatedFinance title="고정 납부" description="예정 회차와 실제 납부를 나누어 확인해요.">
-      <FixedList />
+    <AuthenticatedFinance title="고정 지출" description="월 계획을 한눈에 보고 필요할 때 수정해요.">
+      <nav className="segmented-control fixed-view-switch" aria-label="고정 지출 보기">
+        <button
+          aria-pressed={!actual}
+          onClick={() =>
+            setParams((old) => {
+              old.delete("view");
+              return old;
+            })
+          }
+        >
+          월 계획
+        </button>
+        <button
+          aria-pressed={actual}
+          onClick={() =>
+            setParams((old) => {
+              old.set("view", "payments");
+              old.delete("plan");
+              old.delete("new");
+              return old;
+            })
+          }
+        >
+          예정·실제 납부
+        </button>
+      </nav>
+      {actual ? <FixedList /> : <ExpensePlans />}
     </AuthenticatedFinance>
   );
 }
@@ -1168,8 +1202,8 @@ export function RuleListPage() {
   const deleted = useRouteNotice(stateFlag("deleted", "rule"));
   return (
     <AuthenticatedFinance
-      title="납부 규칙 관리"
-      description="주기와 적용기간을 관리하고 과거 규칙을 보존해요."
+      title="적용기간·납부 일정 관리"
+      description="주기와 적용기간을 자세히 관리하고 과거 기록을 보존해요."
     >
       {deleted && <p role="status">납부 규칙을 삭제했어요.</p>}
       <RuleList />

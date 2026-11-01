@@ -1,0 +1,11 @@
+{
+  "rows": [
+    {"expected_amount_krw":"120006","frequency":"annual","annual_month":6},
+    {"expected_amount_krw":"30000","interval_count":3},
+    {"expected_amount_krw":"7000","plan_kind":"budget"},
+    {"expected_amount_krw":"9000","budget_treatment":"external_support"},
+    {"expected_amount_krw":null,"amount_mode":"variable"},
+    {"expected_amount_krw":"0"}
+  ],
+  "expected": {"fixed_known_krw":"20001","budget_known_krw":"7000","combined_known_krw":"27001","excluded_known_krw":"9000","included_unknown_count":1,"plan_count":6}
+}

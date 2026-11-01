@@ -84,21 +84,28 @@ async function createRule(
   await expect(page.getByRole("heading", { name: "납부 규칙 상세", exact: true })).toBeVisible();
   return new URL(page.url()).pathname.split("/").at(-1)!;
 }
-async function generate(page: Page, ruleId: string, title: string, span = false) {
-  await page.goto("/fixed-payments");
-  await page.getByLabel("확인할 월", { exact: true }).fill(month);
+async function generate(page: Page, ruleId: string, title: string, span = false, repeat = false) {
+  // Explicit generation lives with the rule periods; the payment view shows the result.
+  await page.goto("/fixed-payments/rules");
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
-  if (span) {
-    await page.getByLabel("회차 생성 시작일", { exact: true }).fill("2025-01-01");
-    await page.getByLabel("회차 생성 종료일", { exact: true }).fill("2025-03-31");
-  }
+  await page
+    .getByLabel("회차 생성 시작일", { exact: true })
+    .fill(span ? "2025-01-01" : `${month}-01`);
+  await page
+    .getByLabel("회차 생성 종료일", { exact: true })
+    .fill(span ? "2025-03-31" : `${month}-28`);
   await page.getByRole("combobox", { name: "생성할 규칙", exact: true }).selectOption(ruleId);
-  await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
-  await expect(
-    page.getByText("요청한 기간의 회차 생성을 확인했어요. 예정 월 목록에서 확인해 주세요.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // A repeated request for the same period must not add a second schedule.
+  for (let attempt = 0; attempt < (repeat ? 2 : 1); attempt += 1) {
+    await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
+    await expect(
+      page.getByText("요청한 기간의 회차 생성을 확인했어요. 예정 월 목록에서 확인해 주세요.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+  }
+  await page.goto("/fixed-payments?view=payments");
+  await page.getByLabel("확인할 월", { exact: true }).fill(month);
   const link = page.getByRole("link", { name: title, exact: true });
   await expect(link).toBeVisible();
   return (await link.getAttribute("href"))!.split("/").at(-1)!;
@@ -280,7 +287,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
     methodId: cardId,
     until: cutoff,
   });
-  const obligationId = await generate(page, ruleId, "합성 HTTPS 구독", true);
+  const obligationId = await generate(page, ruleId, "합성 HTTPS 구독", true, true);
   const dates = await page.evaluate(async (rule) => {
     const values = await Promise.all(
       ["2025-01", "2025-02", "2025-03"].map(async (value) =>
@@ -295,12 +302,6 @@ test("real income card recurring and closure workflow preserves cash facts and i
       .sort();
   }, ruleId);
   expect(dates).toEqual(["2025-01-31", "2025-02-28", "2025-03-31"]);
-  await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
-  await expect(
-    page.getByText("요청한 기간의 회차 생성을 확인했어요. 예정 월 목록에서 확인해 주세요.", {
-      exact: true,
-    }),
-  ).toBeVisible();
   await page.goto("/");
   await page.getByText("예정일과 진행 중인 기록 살펴보기", { exact: true }).click();
   const homeOverdue = page.getByRole("region", { name: "지난 예정일 납부 확인", exact: true });
@@ -469,7 +470,7 @@ test("real income card recurring and closure workflow preserves cash facts and i
     );
     expect(prepared).toBe(1);
   }
-  await page.goto("/fixed-payments");
+  await page.goto("/fixed-payments?view=payments");
   await page.getByLabel("확인할 월", { exact: true }).fill("2025-03");
   await page.getByRole("button", { name: "이달 예정 준비", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "이달 예정 회차" })).toBeVisible();

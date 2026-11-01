@@ -1,3 +1,4 @@
+import { ExpensePlans } from "../fixed/ExpensePlans";
 import { useCallback } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
@@ -142,6 +143,7 @@ export function PaymentConnections({ kind, id }: { kind: "account" | "card"; id:
   return (
     <section className="card" aria-label="정기 결제 연결">
       <h2>정기 결제 연결</h2>
+      <ExpensePlans method={{ kind, id }} />
       <p>
         {dateLabel(date)} 기준 현재·미래 납부 규칙과 미납·일부 납부 회차예요. 전체 카드 명세나 계좌
         출금 합계는 아니에요.

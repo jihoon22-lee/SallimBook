@@ -136,7 +136,7 @@ test("native receipt cancellation and replacement cancellation call eight stock 
   expect(write.args.input.link_version).toBe(3);
   expect(write.args.idempotencyKey).toBeTruthy();
 });
-test("native dashboard uses status asset comparison and secondary source APIs with independent month", async ({
+test("native dashboard uses the status read and secondary source APIs with independent month", async ({
   page,
 }) => {
   const state = await mockHomecare(page);
@@ -147,9 +147,9 @@ test("native dashboard uses status asset comparison and secondary source APIs wi
   await expect(page.getByText("오늘 기준 · 2026.10.17", { exact: true })).toBeVisible();
   await called(native, [
     "getHomecareStatus",
-    "getAssetComparison",
+    "householdOverview",
     "incomeSummary",
-    "fixedCostSummary",
+    "expensePlanSummary",
     "listOverdueObligations",
     "listMedicalExpenses",
     "listInsuranceClaims",
@@ -159,8 +159,24 @@ test("native dashboard uses status asset comparison and secondary source APIs wi
       .filter((c) => c.method === "getHomecareStatus")
       .every((c) => !Object.hasOwn(c.args.query, "month")),
   ).toBe(true);
+  await expect
+    .poll(() =>
+      native.calls.some(
+        (c) => c.method === "householdOverview" && c.args.query.month === "2025-01",
+      ),
+    )
+    .toBe(true);
+  // Month comparison and scheduled payments load only once their sections are opened.
+  for (const method of ["getAssetComparison", "fixedCostSummary"])
+    expect(native.calls.map((c) => c.method)).not.toContain(method);
+  await page.getByText("월별 자산 변화·기록 관리", { exact: true }).click();
+  await page.getByText("2025년 1월 예정·실제 납부", { exact: true }).click();
+  await called(native, ["getAssetComparison", "fixedCostSummary"]);
   expect(
     native.calls.some((c) => c.method === "getAssetComparison" && c.args.query.to === "2025-01"),
+  ).toBe(true);
+  expect(
+    native.calls.some((c) => c.method === "fixedCostSummary" && c.args.query.month === "2025-01"),
   ).toBe(true);
 });
 for (const failure of ["APP_LOCKED", "SESSION_EXPIRED", "NETWORK_UNAVAILABLE"] as const)

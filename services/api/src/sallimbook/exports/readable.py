@@ -88,9 +88,10 @@ SECTIONS = (
     Section(
         "fixed",
         "recurring_rule_versions",
-        "납부 규칙의 저장된 적용기간",
+        "월 계획·납부 규칙의 저장된 적용기간",
         "title category effective_from effective_until economic_type "
         "expected_amount_krw frequency interval_count account_id card_id "
+        "tracking_mode plan_kind budget_treatment subject_member_id annual_month note "
         "revoked_at",
     ),
     Section(
@@ -278,6 +279,13 @@ received_by_member_id:입고자 cancel_reason:취소사유
 """.split()
 )
 
+LABELS.update(
+    tracking_mode="관리방식",
+    plan_kind="계획구분",
+    budget_treatment="합계처리",
+    subject_member_id="관련구성원",
+    annual_month="연결제월",
+)
 LABELS.update(
     {
         "label": "수입항목",

@@ -22,6 +22,12 @@ export function usePlanningApi() {
             c.GET("/api/v1/income-planning/bonuses", { params: { query: { cursor, limit: 200 } } }),
           () => nativeFinance.listBonusAwards({ query: { cursor, limit: 200 } }),
         ),
+      // Year totals are summed by the server over every active award, not the loaded pages.
+      bonusSummary: () =>
+        domainApi.read(
+          (c) => c.GET("/api/v1/income-planning/bonus-summary"),
+          () => nativeFinance.bonusAwardSummary(),
+        ),
       saveExpected: (
         input: S["ExpectedInput"],
         source: S["ExpectedResponse"] | undefined,

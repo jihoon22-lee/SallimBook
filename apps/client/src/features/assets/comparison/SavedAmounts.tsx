@@ -9,6 +9,7 @@ import { useAssetComparisonApi } from "./api";
 import { useAssetMonthsApi } from "../months/api";
 import { useIdempotencyKey, useMonthCommand } from "../months/useMonthCommand";
 import { MonthRowEditor, type EditingValue } from "../months/MonthRowEditor";
+import { useHouseholdOverview } from "../../dashboard/overviewApi";
 
 /** One editor per page, independent of the refreshed list and pinned to its opening month. */
 export function useSavedAmounts() {
@@ -16,6 +17,8 @@ export function useSavedAmounts() {
   const months = useAssetMonthsApi();
   const { month, currentMonth } = useMonth();
   const resource = useResource(useCallback(() => api.all({ to: month }), [api, month]));
+  // Each item's latest entered amount, shown when the selected month has none of its own.
+  const latest = useHouseholdOverview(month);
   const command = useMonthCommand();
   const draftKey = useIdempotencyKey(month);
   const [editor, setEditor] = useState<{ month: string; value: EditingValue } | null>(null);
@@ -64,6 +67,7 @@ export function useSavedAmounts() {
   }
   return {
     ...resource,
+    latest,
     editor,
     notice,
     command,
@@ -74,6 +78,7 @@ export function useSavedAmounts() {
     saved: () => {
       setEditor(null);
       void resource.reload();
+      void latest.reload();
     },
   };
 }
@@ -123,12 +128,24 @@ export function SavedAmount({ result, assetId }: { result: Amounts; assetId: str
   const { month, currentMonth } = useMonth();
   const data = !result.error && !result.loading ? result.data : null;
   const row = data?.items.find((item) => item.asset_id === assetId)?.after;
+  // A quiet hint only: a failed status read never adds an error to the list.
+  const latest =
+    row?.owned_amount_krw == null && !result.latest.error
+      ? result.latest.data?.holdings.items.find((item) => item.asset_id === assetId)
+      : undefined;
   return (
     <div className="saved-amount">
       {data && (
         <p>
           <span>{formatMonth(month)} 가계 보유분 </span>
           <strong>{row ? formatKrw(row.owned_amount_krw) : "미입력"}</strong>
+          {latest?.owned_amount_krw != null && latest.basis_month && (
+            <small>
+              {" "}
+              · 최근 입력 {formatKrw(latest.owned_amount_krw)} ({formatMonth(latest.basis_month)}{" "}
+              기준)
+            </small>
+          )}
           {row?.as_of_date && <small> · {dateLabel(row.as_of_date)} 기준</small>}
           {row?.verification_state === "carried_unconfirmed" && (
             <small> · 전월에서 가져온 금액</small>

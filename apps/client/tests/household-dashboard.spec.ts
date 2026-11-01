@@ -23,11 +23,11 @@ const totals = {
   net_inflow_krw: "0",
   record_count: 0,
 };
-for (const path of ["/", "/income"]) {
+for (const path of ["/", "/income", "/living"]) {
   test(`current expected income is visible immediately with no cash records at ${path}`, async ({
     page,
   }) => {
-    if (path === "/income") await mockCashflow(page);
+    if (path !== "/") await mockCashflow(page);
     else await mockComparison(page);
     const writes: string[] = [];
     page.on("request", (req) => {
@@ -56,6 +56,21 @@ for (const path of ["/", "/income"]) {
       "href",
       "/income/planning",
     );
+    if (path === "/income") {
+      const actual = page.getByRole("region", { name: "등록 수입 요약", exact: true });
+      await expect(actual).toContainText("실제 입금");
+      await expect(actual).toContainText("기록한 실제 입금은 아직 없어요");
+      await expect(actual.locator(".metric-primary")).toHaveCount(0);
+    }
+    if (path === "/living") {
+      await expect(
+        page.getByRole("region", { name: "현재 월 지출 계획", exact: true }),
+      ).toBeVisible();
+      await page.screenshot({
+        path: test.info().outputPath("income-dashboard.png"),
+        fullPage: true,
+      });
+    }
     if (path === "/") {
       await expect(page.getByRole("region", { name: "우리 집 보유 현황" })).toBeVisible();
       await expect(page.getByRole("region", { name: "계좌·연금", exact: true })).toContainText(
@@ -194,12 +209,18 @@ test("Android dashboard shows the same current income without browser API reques
     "6,300,000원",
   );
   await expect(page.getByLabel("오늘 소모품 보기")).toBeVisible();
-  await expect(page.getByRole("region", { name: "계좌·연금", exact: true })).toContainText(
+  // One status read covers holdings, cards, appliances and insurance on the home.
+  await expect(page.getByRole("region", { name: "저장된 자산 금액" })).toContainText(
+    "아직 합계에 넣을 자산·계좌가 없어요.",
+  );
+  await expect(page.getByRole("region", { name: "카드", exact: true })).toContainText(
     "아직 등록한 항목이 없어요",
   );
-  await expect(page.getByRole("region", { name: "부동산", exact: true })).toContainText(
-    "아직 등록한 항목이 없어요",
-  );
+  const methods = native.calls.map((call) => call.method);
+  expect(methods).toContain("householdOverview");
+  // The consumables card still reads its own appliance list.
+  for (const list of ["listAssets", "listAccounts", "listCards", "listInsurancePolicies"])
+    expect(methods).not.toContain(list);
   expect(native.control.rejected).toBe(0);
   expect(native.control.peakPending).toBeLessThanOrEqual(4);
   expect(native.http).toEqual([]);
@@ -246,12 +267,16 @@ test("locking the app discards queued dashboard reads before another native call
   const { mockNativeHomecare } = await import("./support/homecare-native");
   const native = await mockNativeHomecare(page, await mockHomecare(page));
   native.control.maxPending = 8;
-  native.control.delayAllMs = 250;
+  let release!: () => void;
+  native.control.metadataGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   await page.goto("/");
   await expect.poll(() => native.control.pending).toBe(4);
   const started = native.control.started;
   await native.lock();
   await expect(page.getByRole("status").filter({ hasText: "앱이 잠겨 있어요" })).toBeVisible();
+  release();
   await expect.poll(() => native.control.pending).toBe(0);
   expect(native.control.started).toBe(started);
   expect(native.control.rejected).toBe(0);
