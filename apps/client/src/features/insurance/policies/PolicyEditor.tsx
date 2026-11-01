@@ -1,6 +1,7 @@
 import { LastModified } from "../../../shared/RecordActor";
 import { DateInput } from "../../../shared/DateInput";
 import { OptionalFields } from "../../../shared/OptionalFields";
+import { commonInsurers, useNameSuggestions } from "../../../shared/NameSuggestions";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
@@ -100,6 +101,13 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const api = useInsuranceApi();
+  const insurers = useNameSuggestions(
+    useCallback(
+      async () => (await api.policies({ limit: 200 })).items.map((row) => row.insurer),
+      [api],
+    ),
+    commonInsurers,
+  );
   const assetsApi = useAssetsApi();
   const navigate = useNavigate();
   const command = useMetadataCommand();
@@ -191,9 +199,11 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
                 <input
                   required
                   maxLength={120}
+                  list={insurers.id}
                   value={draft.insurer}
                   onChange={(e) => change("insurer", e.target.value)}
                 />
+                {insurers.list}
               </label>
             </div>
             <div className="form-field">

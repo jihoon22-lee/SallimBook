@@ -3,7 +3,7 @@ import { krwFieldError } from "../../shared/krw";
 import { formatKrw } from "../assets/months/model";
 import { familyCardLabel } from "./model";
 import { RecordActor } from "../../shared/RecordActor";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError, toApiError } from "../../platform/api";
@@ -21,10 +21,19 @@ import { useCardsApi } from "./api";
 import { cardDraft, cardInput, cardEndDateError, cardTypes, preserveCardChanges } from "./model";
 import type { Card, CardDraft, CardPatch } from "./model";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
+import { commonCardIssuers, useNameSuggestions } from "../../shared/NameSuggestions";
 export function CardEditor({ initial }: { initial?: Card }) {
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const api = useCardsApi();
+  const issuers = useNameSuggestions(
+    useCallback(
+      async () =>
+        (await api.list({ status: "all", limit: 200 })).items.map((row) => row.issuer_name),
+      [api],
+    ),
+    commonCardIssuers,
+  );
   const navigate = useNavigate();
   const members = useHouseholdMembers();
   const mounted = useMounted();
@@ -147,9 +156,11 @@ export function CardEditor({ initial }: { initial?: Card }) {
                 <input
                   value={draft.issuer}
                   maxLength={120}
+                  list={issuers.id}
                   onChange={(event) => change("issuer", event.target.value)}
                   required
                 />
+                {issuers.list}
               </label>
             </div>
             <div className="form-field">

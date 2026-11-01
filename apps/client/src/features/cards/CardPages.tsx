@@ -146,7 +146,7 @@ function CardList() {
         <Link className="button-link" to="/cards/new">
           카드 등록
         </Link>
-        <Link to="/fixed-payments">고정 납부 확인</Link>
+        <Link to="/fixed-payments">고정 지출 확인</Link>
       </div>
       <FilterPanel
         title="카드 찾기"

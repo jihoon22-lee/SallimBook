@@ -225,7 +225,7 @@ for (const width of [320, 390, 1280]) {
     await page.goto("/fixed-payments?view=payments");
     const record = page.getByRole("link", { name: state.obligations[0]!.title, exact: true });
     await expect(record).toBeVisible();
-    const management = page.getByRole("link", { name: "규칙과 적용기간 관리", exact: true });
+    const management = page.getByRole("link", { name: "적용기간·납부 일정 관리", exact: true });
     expect((await record.boundingBox())!.y).toBeLessThan((await management.boundingBox())!.y);
     await expect(
       page.getByRole("link", { name: "납부 기록", exact: true }).first(),

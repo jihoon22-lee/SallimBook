@@ -17,16 +17,20 @@ export function OverviewSection({
   title,
   to,
   read,
+  level = 3,
 }: {
   title: string;
   to: string;
   read: () => Promise<Preview>;
+  /** Heading level within the page: 3 under the home's section heading, 2 on its own page. */
+  level?: 2 | 3;
 }) {
   const result = useResource(read);
+  const Heading = level === 2 ? "h2" : "h3";
   return (
     <section className="card household-category" aria-label={title}>
       <div className="item-heading">
-        <h3>{title}</h3>
+        <Heading>{title}</Heading>
         <Link to={to}>{title} 전체 보기</Link>
       </div>
       {result.loading && <p role="status">불러오는 중</p>}
@@ -55,7 +59,7 @@ export function OverviewSection({
   );
 }
 
-export function InsuranceOverview() {
+export function InsuranceOverview({ title = "보험", level }: { title?: string; level?: 2 | 3 }) {
   const api = useInsuranceApi();
   const read = useCallback(async () => {
     const page = await api.policies({ limit: 4, status: "active" });
@@ -68,7 +72,7 @@ export function InsuranceOverview() {
       })),
     };
   }, [api]);
-  return <OverviewSection title="보험" to="/insurance/policies" read={read} />;
+  return <OverviewSection title={title} level={level} to="/insurance/policies" read={read} />;
 }
 function PortfolioBalance() {
   const api = useAssetComparisonApi();

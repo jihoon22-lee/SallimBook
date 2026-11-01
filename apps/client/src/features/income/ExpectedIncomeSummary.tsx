@@ -7,14 +7,18 @@ import type { HouseholdMember } from "../finance/FinanceSupport";
 export function ExpectedIncomeSummary({
   data,
   members,
+  level = 2,
 }: {
   data: components["schemas"]["ExpectedIncomeSummary"] | undefined;
   members: HouseholdMember[];
+  /** 3 when it sits under another section heading (the home's 수입·지출 card). */
+  level?: 2 | 3;
 }) {
+  const Heading = level === 3 ? "h3" : "h2";
   return (
     <section className="expected-income-summary" aria-label="현재 예상 월 수입">
       <div className="item-heading">
-        <h2>현재 예상 월 수입</h2>
+        <Heading>현재 예상 월 수입</Heading>
         <Link to="/income/planning">수입 기준 수정</Link>
       </div>
       {!data ? (
