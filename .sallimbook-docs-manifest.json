@@ -34,8 +34,8 @@
       "git_sha1": "ffcfdbdc9f2ebd5edf23ff3d32273ba992243814"
     },
     "CHANGELOG.md": {
-      "sha256": "51813c504e09d21a048fcf3656868def908dec684563def5323ad71f0f0887b3",
-      "git_sha1": "e7ab1668189968d62c3a1894f9030f65b2dc4f9f"
+      "sha256": "97d7312f62bd5a0d95eac2671129d66ec32070ae7ce3a8c289b0ae5998f0a403",
+      "git_sha1": "b40aa987b9222c36223ba029a20c3195fe0884a4"
     },
     "CONTRIBUTING.md": {
       "sha256": "acc150b1986b3760e780c8fe98ee4477603d718e0ccce5b6be6950b236b6f4db",
@@ -258,8 +258,8 @@
       "git_sha1": "5109f60a63723b43951c6996bad493fa3c4d41a2"
     },
     "infra/documents/README.md": {
-      "sha256": "9cc10526c233dceb9c7e873320e63ad3603e1b29a754b376baa90c91ce5f44ab",
-      "git_sha1": "5b233aed1a0c5774d16a6f018d3d4becc47ef67b"
+      "sha256": "0c0627fddfd97c001d422c32a3060e0f587540238239bdaa27c2d688a1083877",
+      "git_sha1": "2ba2af12abbb34e80e456bd047c84ec23c9e0f6c"
     },
     "scripts/cleanup_documents.py": {
       "sha256": "514c471e081b56d2dc7fcdbc5f00d4b352a729b2c7b1f1997594606218eb527f",
