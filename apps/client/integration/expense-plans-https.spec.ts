@@ -99,8 +99,8 @@ test("real monthly planning saves without dates, edits same day, links cards and
   );
   await page.goto("/fixed-payments?plan=" + invariant.plan.id);
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("합성 HTTPS 월 계획");
-  await page.getByRole("button", { name: "계획 종료", exact: true }).click();
-  await page.getByRole("button", { name: "종료하기", exact: true }).click();
+  await page.getByText("계획 종료·삭제", { exact: true }).click();
+  await page.getByRole("button", { name: "계획 종료하기", exact: true }).click();
   await expect(page.getByRole("region", { name: "현재 월 지출 계획", exact: true })).toContainText(
     "등록 0개",
   );

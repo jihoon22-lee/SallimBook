@@ -13,7 +13,7 @@ export function LivingPage() {
             월간 수입
           </Link>
           <Link className="button-link secondary-button" to="/fixed-payments">
-            월 지출 계획
+            고정 지출
           </Link>
           <Link className="button-link secondary-button" to="/cards">
             카드 관리

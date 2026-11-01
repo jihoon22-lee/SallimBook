@@ -1,6 +1,33 @@
 import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { mockFinance, uid } from "./support/finance";
 test.use({ trace: "off", screenshot: "off", video: "off" });
+
+type Baseline = { member_id: string; amount_krw: string | null; active: boolean };
+/** The page's totals come from the server summary; derive it from the synthetic rows. */
+async function mockBaseline(page: Page, rows: () => Baseline[]) {
+  await page.route("**/api/v1/income/summary?*", (route) => {
+    const values = (records: Baseline[]) => ({
+      known_amount_krw: records
+        .reduce((sum, r) => sum + BigInt(r.amount_krw ?? "0"), 0n)
+        .toString(),
+      record_count: records.length,
+      unknown_count: records.filter((r) => r.amount_krw == null).length,
+    });
+    const active = rows().filter((r) => r.active);
+    return route.fulfill({
+      json: {
+        expected: {
+          ...values(active),
+          members: [...new Set(active.map((r) => r.member_id))].map((member_id) => ({
+            member_id,
+            ...values(active.filter((r) => r.member_id === member_id)),
+          })),
+        },
+      },
+    });
+  });
+}
 test("expected baseline and stock award keep exact money and distinct cash confirmation", async ({
   page,
 }) => {
@@ -30,6 +57,7 @@ test("expected baseline and stock award keep exact money and distinct cash confi
     rows.push(row);
     return route.fulfill({ status: 201, json: row });
   });
+  await mockBaseline(page, () => expected);
   await page.goto("/income/planning");
   await page.getByRole("button", { name: "예상 수입 추가", exact: true }).click();
   await page.getByLabel("구성원", { exact: true }).selectOption(uid(2));
@@ -98,6 +126,7 @@ test("editing an expected baseline saves once without a mandatory explanation", 
     row = { ...row, ...body, version: 2 };
     return route.fulfill({ json: row });
   });
+  await mockBaseline(page, () => [row]);
   await page.goto("/income/planning");
   await page.getByRole("button", { name: "예상 수입 수정", exact: true }).click();
   await page.getByLabel("예상 월 금액", { exact: true }).fill("2700000");
@@ -105,4 +134,79 @@ test("editing an expected baseline saves once without a mandatory explanation", 
   await expect(page.getByText(/확인된 예상 합계 2,700,000원/)).toBeVisible();
   expect(writes).toHaveLength(1);
   expect(writes[0].reason).toBe("예상 월 수입 수정");
+});
+
+test("an expected income draft asks before it is dropped and Back closes an untouched editor", async ({
+  page,
+}) => {
+  await mockFinance(page);
+  const stamp = "2026-01-01T00:00:00Z";
+  const rows = [
+    {
+      id: uid(961),
+      household_id: uid(3),
+      member_id: uid(2),
+      label: "합성 월급",
+      amount_krw: "2500000",
+      active: true,
+      note: null,
+      version: 1,
+      created_at: stamp,
+      updated_at: stamp,
+      created_by_member_id: uid(2),
+      updated_by_member_id: uid(2),
+    },
+    {
+      id: uid(962),
+      household_id: uid(3),
+      member_id: uid(2),
+      label: "합성 지난 부수입",
+      amount_krw: "300000",
+      active: false,
+      note: null,
+      version: 3,
+      created_at: stamp,
+      updated_at: stamp,
+      created_by_member_id: uid(2),
+      updated_by_member_id: uid(2),
+    },
+  ];
+  const writes: unknown[] = [];
+  await page.route("**/api/v1/income-planning/**", (route) => {
+    if (route.request().method() !== "GET") {
+      writes.push(route.request().postDataJSON());
+      return route.fulfill({ status: 500, json: {} });
+    }
+    return route.fulfill({
+      json: {
+        items: route.request().url().includes("/expected") ? rows : [],
+        next_cursor: null,
+      },
+    });
+  });
+  await mockBaseline(page, () => rows);
+  await page.goto("/income/planning");
+  await expect(page.getByText(/확인된 예상 합계 2,500,000원/)).toBeVisible();
+  // Ended items stay out of the current list but remain one tap away.
+  await expect(page.getByRole("heading", { name: /합성 지난 부수입/ })).toBeHidden();
+  await page.getByText("종료된 예상 수입 1개", { exact: true }).click();
+  await expect(page.getByRole("heading", { name: /합성 지난 부수입/ })).toBeVisible();
+  await page.getByRole("button", { name: "예상 수입 추가", exact: true }).click();
+  await page.getByRole("button", { name: "뒤로", exact: true }).click();
+  await expect(page.getByLabel("수입 항목", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  expect(new URL(page.url()).pathname).toBe("/income/planning");
+
+  await page.getByRole("button", { name: "예상 수입 추가", exact: true }).click();
+  await page.getByLabel("수입 항목", { exact: true }).fill("합성 새 부수입");
+  await page.getByRole("link", { name: "월별 실제 수입 보기", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await page.getByRole("button", { name: "계속 입력하기", exact: true }).click();
+  await expect(page.getByLabel("수입 항목", { exact: true })).toHaveValue("합성 새 부수입");
+  await page.getByRole("button", { name: "입력 취소", exact: true }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await page.getByRole("button", { name: "입력 버리고 나가기", exact: true }).click();
+  await expect(page.getByLabel("수입 항목", { exact: true })).toHaveCount(0);
+  expect(new URL(page.url()).pathname).toBe("/income/planning");
+  expect(writes).toHaveLength(0);
 });

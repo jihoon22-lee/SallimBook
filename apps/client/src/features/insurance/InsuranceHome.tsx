@@ -2,26 +2,25 @@ import { InsuranceOverview } from "../dashboard/HouseholdOverview";
 import { Link } from "react-router";
 import { InsurancePage } from "./InsuranceSupport";
 export function InsuranceHome() {
+  // One primary action: the claim work list is where the open insurance tasks are.
   const navigation = (
     <div className="form-actions">
-      <Link className="button-link secondary-button" to="/settings/people">
-        가족 관리
-      </Link>
-      <Link className="button-link" to="/insurance/policies">
-        보험 계약
-      </Link>
-      <Link className="button-link" to="/insurance/cases">
-        보험 사건
-      </Link>
       <Link className="button-link" to="/insurance/claims">
         전체 청구 작업 목록
       </Link>
-      <Link className="button-link" to="/insurance/payouts">
-        수령 원본 목록
+      <Link className="button-link secondary-button" to="/insurance/cases">
+        보험 사건
       </Link>
-      <Link className="button-link" to="/insurance/payouts/new">
+      <Link className="button-link secondary-button" to="/insurance/policies">
+        보험 계약
+      </Link>
+      <Link className="button-link secondary-button" to="/insurance/payouts/new">
         보험금 수령 입력
       </Link>
+      <Link className="button-link secondary-button" to="/insurance/payouts">
+        수령 원본 목록
+      </Link>
+      <Link to="/settings/people">가족 관리</Link>
     </div>
   );
   return (
@@ -30,7 +29,7 @@ export function InsuranceHome() {
       description="계약과 독립 사건, 실제 의료비·청구·수령을 함께 기록해요."
       navigation={navigation}
     >
-      <InsuranceOverview />
+      <InsuranceOverview title="가입 중인 보험 계약" level={2} />
       <details className="card">
         <summary>보험 기록 도움말</summary>
         <ol>
