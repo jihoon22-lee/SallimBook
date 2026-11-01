@@ -259,7 +259,7 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
                             {v.title}
                           </button>
                         </th>
-                        <td role="cell" className="plan-category">
+                        <td className="plan-category">
                           {v.category}
                           {v.plan_kind === "budget" && <small>변동 예산</small>}
                           {v.economic_type !== "expense" && (
@@ -269,7 +269,7 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
                             <small>{treatments[v.budget_treatment]}</small>
                           )}
                         </td>
-                        <td role="cell" className="plan-amount">
+                        <td className="plan-amount">
                           <strong>{money(v.monthly_equivalent_krw)}</strong>
                           {v.frequency === "annual" ? (
                             <small>
@@ -284,7 +284,7 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
                             </small>
                           ) : null}
                         </td>
-                        <td role="cell" className="plan-method">
+                        <td className="plan-method">
                           {v.card_id || v.account_id ? (
                             <Link
                               to={v.card_id ? `/cards/${v.card_id}` : `/accounts/${v.account_id}`}
@@ -295,7 +295,7 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
                             <span className="muted">납부수단 미지정</span>
                           )}
                         </td>
-                        <td role="cell" className="plan-note">
+                        <td className="plan-note">
                           {v.currency_reference && (
                             <small>
                               {v.foreign_amount_reference} {v.currency_reference}
