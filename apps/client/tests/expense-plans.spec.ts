@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { components } from "@sallimbook/api-client";
-import { mockCashflow, ruleRow } from "./support/cashflow";
+import { mockCashflow, planRow, ruleRow } from "./support/cashflow";
 import { uid } from "./support/finance";
 import fixture from "../../../packages/test-fixtures/expense-plans.json" with { type: "json" };
 type S = components["schemas"];
@@ -398,6 +398,64 @@ test("compact ledger shows payment names without opening items and searches acro
   expect(state.writes).toHaveLength(0);
 });
 
+test("a future payment-method change shows on the plan list and on both card pages", async ({
+  page,
+}) => {
+  const state = await mockCashflow(page);
+  state.cards.push({ ...state.cards[0]!, id: uid(51), alias: "합성 새 카드", last_four: "2222" });
+  const plan = planRow(420, {
+    title: "합성 수단 변경 계획",
+    card_id: uid(50),
+    effective_from: "2025-01-01",
+    effective_until: "2025-03-01",
+  });
+  plan.versions.push({
+    ...plan.versions[0]!,
+    id: uid(521),
+    card_id: uid(51),
+    effective_from: "2025-03-01",
+    effective_until: null,
+  });
+  plan.history = plan.versions;
+  state.ruleInsuranceLinks.set(plan.id, {
+    rule_id: plan.id,
+    link: {
+      id: uid(522),
+      policy_id: uid(80),
+      product_name: "합성 실손",
+      insurer: "합성 보험사",
+      policy_status: "active",
+      active: true,
+      ended_at: null,
+    },
+  });
+  await page.route("**/api/v1/expense-plans?*", (route) =>
+    route.fulfill({ json: { items: [plan], next_cursor: null } }),
+  );
+  await page.goto("/fixed-payments");
+  const row = page
+    .getByRole("table", { name: "월 지출 계획 표" })
+    .getByRole("row")
+    .filter({ hasText: "합성 수단 변경 계획" });
+  await expect(row.getByRole("link", { name: "합성 구독 카드", exact: true })).toBeVisible();
+  await expect(row).toContainText("변경 예정: 2025.03.01부터 합성 새 카드");
+  await row.getByRole("button", { name: "합성 수단 변경 계획", exact: true }).click();
+  const editor = page.getByRole("region", { name: "지출 계획 편집", exact: true });
+  await expect(editor).toContainText("보험료로 연결된 계약:");
+  await expect(
+    editor.getByRole("link", { name: "합성 실손 · 합성 보험사", exact: true }),
+  ).toHaveAttribute("href", `/insurance/policies/${uid(80)}`);
+  // The card it leaves names the next card; the card it moves to reads as "this card".
+  await page.goto(`/cards/${uid(50)}`);
+  await expect(page.getByRole("region", { name: "연결된 월 계획", exact: true })).toContainText(
+    "변경 예정: 2025.03.01부터 합성 새 카드",
+  );
+  await page.goto(`/cards/${uid(51)}`);
+  await expect(page.getByRole("region", { name: "연결된 월 계획", exact: true })).toContainText(
+    "변경 예정: 2025.03.01부터 이 카드",
+  );
+  expect(state.writes).toHaveLength(0);
+});
 test("payment metadata failure keeps plans visible and recovers names without opening a card", async ({
   page,
 }) => {

@@ -48,12 +48,14 @@ test("native policy coverage premium commands and protected number activities ne
   await page.getByLabel("기록한 보장금액 (원)", { exact: true }).fill("100001");
   await page.getByRole("button", { name: "보장 항목 저장", exact: true }).click();
   await page
-    .getByRole("combobox", { name: "연결할 보험료 규칙", exact: true })
+    .getByRole("combobox", { name: "연결할 월 계획 항목", exact: true })
     .selectOption(uid(61));
-  await page.getByRole("button", { name: "보험료 규칙 연결", exact: true }).click();
+  await page.getByRole("button", { name: "보험료 항목 연결", exact: true }).click();
   await page.getByRole("button", { name: "보험료 연결 해제 검토", exact: true }).click();
   await page
-    .getByLabel("같은 납부 규칙의 과거 기록이 보존되는 것을 확인했어요.", { exact: true })
+    .getByLabel("같은 월 계획 항목과 지난 납부 기록이 그대로 남는 것을 확인했어요.", {
+      exact: true,
+    })
     .check();
   await page.getByRole("button", { name: "보험료 연결 변경 저장", exact: true }).click();
   await expect(
@@ -68,6 +70,7 @@ test("native policy coverage premium commands and protected number activities ne
     "createInsuranceCoverage",
     "updateInsuranceCoverage",
     "listPolicyPremiumLinks",
+    "listExpensePlans",
     "createPolicyPremiumLink",
     "updatePolicyPremiumLink",
     "editInsurancePolicyNumberUI",

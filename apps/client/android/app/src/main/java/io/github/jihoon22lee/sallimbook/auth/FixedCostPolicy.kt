@@ -215,11 +215,12 @@ internal object FixedCostPolicy {
         terms(row)
         if (row["effective_until"] != null && (row["effective_until"] as String) <= (row["effective_from"] as String)) invalid()
     }
-    fun ruleMetadata(value: Any?): Map<String, Any?> = rule(value)
-    private fun rule(value: Any?): Map<String, Any?> {
+    /** A premium may point to a monthly-plan item, whose schedule projection has no versions. */
+    fun premiumRuleMetadata(value: Any?): Map<String, Any?> = rule(value, minimumVersions = 0)
+    private fun rule(value: Any?, minimumVersions: Int = 1): Map<String, Any?> {
         // Versions are historical scope, not a 200-row page; 10,000 exceeds the 3 MiB transport capacity.
         val row = shape(value, mapOf("id" to id, "household_id" to id, "version" to positive, "ended_on" to nullable(date),
-            "end_reason" to nullable(reason), "versions" to records(::ruleVersion, 10_000, 1)))
+            "end_reason" to nullable(reason), "versions" to records(::ruleVersion, 10_000, minimumVersions)))
         if ((row["ended_on"] == null) != (row["end_reason"] == null)) invalid()
         return row
     }

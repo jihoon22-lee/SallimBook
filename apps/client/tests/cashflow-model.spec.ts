@@ -14,8 +14,11 @@ import {
   paymentSplit,
   ruleDraft,
   ruleInput,
+  paymentMethodChanges,
+  shownPlanTerms,
 } from "../src/features/fixed/model";
 import { uid } from "./support/finance";
+import { planRow } from "./support/cashflow";
 test("cash form normalization preserves exact money, month precision and changed-only corrections", () => {
   const draft = {
     ...incomeDraft("2025-02"),
@@ -116,4 +119,35 @@ test("rule preparation covers twelve calendar months within the generation limit
     expect(window).toEqual({ start_date: start, end_date: end });
     expect(generationValid(window.start_date, window.end_date)).toBe(true);
   }
+});
+
+test("plan terms and future payment-method changes follow the version dates", () => {
+  const version = (from: string, until: string | null, method: Record<string, string | null>) =>
+    ({
+      ...plan.versions[0]!,
+      id: uid(Number(from.replaceAll("-", "").slice(2))),
+      effective_from: from,
+      effective_until: until,
+      card_id: null,
+      account_id: null,
+      ...method,
+    }) as (typeof plan.versions)[number];
+  const plan = planRow(430);
+  const today = "2026-02-20";
+  plan.versions = [
+    version("2026-01-01", "2026-03-01", { card_id: uid(50) }),
+    version("2026-03-01", "2026-04-01", { card_id: uid(50) }),
+    version("2026-04-01", "2026-06-01", { account_id: uid(30) }),
+    version("2026-06-01", null, { card_id: uid(50) }),
+  ];
+  // An amount-only change keeps the card; each later switch is listed once, in date order.
+  expect(paymentMethodChanges(plan, today).map((v) => v.effective_from)).toEqual([
+    "2026-04-01",
+    "2026-06-01",
+  ]);
+  expect(shownPlanTerms(plan, today)?.effective_from).toBe("2026-01-01");
+  // Before the first version starts there is no current method to change from.
+  expect(paymentMethodChanges(plan, "2025-12-31")).toEqual([]);
+  expect(shownPlanTerms(plan, "2025-12-31")?.effective_from).toBe("2026-01-01");
+  expect(paymentMethodChanges({ ...plan, versions: plan.versions.slice(0, 1) }, today)).toEqual([]);
 });

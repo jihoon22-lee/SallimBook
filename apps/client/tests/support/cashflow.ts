@@ -99,6 +99,37 @@ export function ruleRow(id = 60, patch: Partial<S["RuleVersionResponse"]> = {}):
     ],
   };
 }
+/** The monthly-plan view of a payment rule: plans and schedules share one store. */
+export function planFromRule(rule: S["RuleResponse"]): S["PlanResponse"] {
+  const versions = rule.versions.map((v) => ({
+    ...v,
+    tracking_mode: "scheduled" as const,
+    plan_kind: "recurring" as const,
+    budget_treatment: "included" as const,
+    annual_month: null,
+    subject_member_id: null,
+    revoked_at: null,
+    monthly_equivalent_krw: v.expected_amount_krw ?? null,
+  }));
+  return { ...rule, versions, history: versions };
+}
+/** A plan-only monthly item without a payment day or schedule. */
+export function planRow(
+  id: number,
+  patch: Partial<S["PlanVersionResponse"]> = {},
+): S["PlanResponse"] {
+  const [version] = planFromRule(ruleRow(id)).versions;
+  const terms: S["PlanVersionResponse"] = {
+    ...version!,
+    tracking_mode: "plan_only",
+    anchor_date: null,
+    currency_reference: null,
+    foreign_amount_reference: null,
+    ...patch,
+  };
+  terms.monthly_equivalent_krw = patch.monthly_equivalent_krw ?? terms.expected_amount_krw ?? null;
+  return { ...ruleRow(id), versions: [terms], history: [terms] };
+}
 export function obligationRow(
   id = 70,
   patch: Partial<S["ObligationResponse"]> = {},

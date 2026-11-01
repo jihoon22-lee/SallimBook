@@ -1,4 +1,5 @@
 import { ExpensePlans } from "../fixed/ExpensePlans";
+import { PolicyLinkText, useRuleInsuranceLink } from "../fixed/insuranceLink";
 import { useCallback } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
@@ -16,7 +17,6 @@ import { CashflowError } from "./FinancialFeedback";
 import { dateLabel, todaySeoul } from "./dates";
 import { formatKrw } from "../assets/months/model";
 import { MonthPicker, useMonth, formatMonth } from "../../shared/MonthContext";
-import { formatSeoulDateTime } from "../../shared/format";
 
 function ReadState({
   state,
@@ -261,20 +261,7 @@ export function AccountIncomeLinks({ accountId }: { accountId: string }) {
 }
 
 export function RuleInsuranceLink({ ruleId }: { ruleId: string }) {
-  const { domainApi } = useAuth();
-  const resource = useResource(
-    useCallback(
-      () =>
-        domainApi.read(
-          (client) =>
-            client.GET("/api/v1/recurring-rules/{rule_id}/insurance-link", {
-              params: { path: { rule_id: ruleId } },
-            }),
-          () => nativeFinance.getRecurringRuleInsuranceLink({ ruleId }),
-        ),
-      [domainApi, ruleId],
-    ),
-  );
+  const resource = useRuleInsuranceLink(ruleId);
   const row = resource.data?.link;
   return (
     <section className="card" aria-label="납부 규칙의 보험 계약">
@@ -284,19 +271,7 @@ export function RuleInsuranceLink({ ruleId }: { ruleId: string }) {
         !resource.loading &&
         (row ? (
           <p>
-            <Link to={`/insurance/policies/${row.policy_id}`}>
-              {row.product_name} · {row.insurer}
-            </Link>{" "}
-            ·{" "}
-            {row.policy_status === "active"
-              ? "유지 중"
-              : row.policy_status === "ended"
-                ? "계약 종료"
-                : "실효"}{" "}
-            ·{" "}
-            {row.active
-              ? "보험료 연결 중"
-              : `보험료 연결 종료${row.ended_at ? ` (${formatSeoulDateTime(row.ended_at)})` : ""}`}
+            <PolicyLinkText row={row} />
           </p>
         ) : (
           <p>연결된 보험 계약이 없어요.</p>

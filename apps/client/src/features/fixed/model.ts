@@ -7,6 +7,8 @@ export type RuleTerms = components["schemas"]["RuleVersionResponse"];
 export type Obligation = components["schemas"]["ObligationResponse"];
 export type Settlement = components["schemas"]["SettlementResponse"];
 export type ObligationHistoryItem = components["schemas"]["ObligationHistoryItem"];
+export type Plan = components["schemas"]["PlanResponse"];
+export type PlanTerms = components["schemas"]["PlanVersionResponse"];
 const historyLabels: Record<ObligationHistoryItem["action"], string> = {
   create: "회차 생성",
   regenerate: "규칙 변경 반영",
@@ -93,6 +95,39 @@ export function changeBase(rule: Rule, date: string): RuleTerms {
 }
 export function changeDraft(rule: Rule, date: string): RuleDraft {
   return { ...ruleDraft(changeBase(rule, date)), from: date };
+}
+/** The plan terms in effect today, or the next ones when the item has not started yet. */
+export function shownPlanTerms(plan: Plan, today = todaySeoul()): PlanTerms | undefined {
+  const sorted = [...plan.versions].sort((a, b) =>
+    a.effective_from.localeCompare(b.effective_from),
+  );
+  return (
+    sorted.find(
+      (row) => row.effective_from <= today && (!row.effective_until || today < row.effective_until),
+    ) ?? sorted.find((row) => row.effective_from > today)
+  );
+}
+const methodKey = (row: PlanTerms) =>
+  row.card_id ? `card:${row.card_id}` : row.account_id ? `account:${row.account_id}` : "none";
+/**
+ * Future versions that move the payment to another card or account, in date order. Each entry
+ * names the version that takes over and the date it starts; amount-only changes are left out.
+ */
+export function paymentMethodChanges(plan: Plan, today = todaySeoul()): PlanTerms[] {
+  const sorted = [...plan.versions].sort((a, b) =>
+    a.effective_from.localeCompare(b.effective_from),
+  );
+  const current = sorted.find(
+    (row) => row.effective_from <= today && (!row.effective_until || today < row.effective_until),
+  );
+  if (!current) return [];
+  let previous = methodKey(current);
+  const changes: PlanTerms[] = [];
+  for (const row of sorted.filter((v) => v.effective_from > today)) {
+    if (methodKey(row) !== previous) changes.push(row);
+    previous = methodKey(row);
+  }
+  return changes;
 }
 export function pendingVersions(rule: Rule, today = todaySeoul()): RuleTerms[] {
   return rule.versions

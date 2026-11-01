@@ -2,6 +2,7 @@ import { openDisclosure } from "./support/task-ui";
 import { expect, test } from "@playwright/test";
 import { mockInsurance, nodeRow, caseRow, policyRow } from "./support/insurance";
 import { uid } from "./support/finance";
+import { planRow } from "./support/cashflow";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
@@ -79,7 +80,9 @@ test("premium editing links to the same recurring rule and detaching preserves i
   ).toHaveAttribute("href", `/fixed-payments/rules/${uid(60)}/edit`);
   await page.getByRole("button", { name: "보험료 연결 해제 검토", exact: true }).click();
   await page
-    .getByLabel("같은 납부 규칙의 과거 기록이 보존되는 것을 확인했어요.", { exact: true })
+    .getByLabel("같은 월 계획 항목과 지난 납부 기록이 그대로 남는 것을 확인했어요.", {
+      exact: true,
+    })
     .check();
   await page.getByRole("button", { name: "보험료 연결 변경 저장", exact: true }).click();
   await expect(
@@ -88,6 +91,43 @@ test("premium editing links to the same recurring rule and detaching preserves i
   expect(state.premiums[0]!.active).toBe(false);
   expect(state.cashflow.rules[0]!.version).toBe(1);
   expect(state.writes.at(-1)!.body).toEqual({ active: false });
+});
+test("a plan-only monthly item links as the premium and opens in the monthly plan", async ({
+  page,
+}) => {
+  const state = await mockInsurance(page);
+  const plan = planRow(62, {
+    title: "합성 실손 보험료",
+    category: "보험료",
+    expected_amount_krw: "52000",
+  });
+  state.plans.push(plan);
+  await page.goto(`/insurance/policies/${uid(80)}`);
+  const picker = page.getByRole("combobox", { name: "연결할 월 계획 항목", exact: true });
+  // Premium-category items come first; the scheduled rule already linked here is not offered.
+  await expect(picker.getByRole("option").nth(1)).toHaveText("합성 실손 보험료 · 매달 52,000원");
+  await expect(picker.getByRole("option", { name: /합성 AI 구독/ })).toHaveCount(0);
+  await picker.selectOption(plan.id);
+  await page.getByRole("button", { name: "보험료 항목 연결", exact: true }).click();
+  const item = page.getByRole("listitem").filter({
+    has: page.getByRole("heading", { name: "합성 실손 보험료 · 연결 중", exact: true }),
+  });
+  await expect(item).toContainText("매달 52,000원");
+  await expect(item).toContainText("월 계획만");
+  await expect(item.getByRole("link", { name: "월 계획에서 보기", exact: true })).toHaveAttribute(
+    "href",
+    `/fixed-payments?plan=${plan.id}`,
+  );
+  // A plan without a schedule has no legacy rule pages to open.
+  await expect(item.getByRole("link", { name: "보험료 적용기간 변경", exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    item.getByRole("link", { name: "같은 보험료 규칙과 이력", exact: true }),
+  ).toHaveCount(0);
+  expect(state.writes.at(-1)!.body).toEqual({ rule_id: plan.id });
+  await item.getByRole("button", { name: "보험료 연결 해제 검토", exact: true }).click();
+  await expect(page.locator(".review-panel")).toContainText("매달 52,000원");
 });
 test("policy number uses separate transient web entry and clears display on timeout and blur", async ({
   page,

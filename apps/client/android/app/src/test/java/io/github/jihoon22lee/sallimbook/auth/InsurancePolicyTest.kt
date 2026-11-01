@@ -193,6 +193,11 @@ class InsurancePolicyTest {
             response(FinanceOperation.CREATE_POLICY_PREMIUM_LINK, args, link + mapOf("rule" to badRule), 201)
         }
         bad(AuthCode.ACCESS_DENIED) { response(FinanceOperation.CREATE_POLICY_PREMIUM_LINK, args, link + mapOf("active" to false), 201) }
+        // A monthly-plan item has no schedule versions; its terms come from the expense-plan API.
+        val planOnly = link + mapOf("rule" to rule + mapOf("versions" to emptyList<Any?>()))
+        assertEquals(planOnly, response(FinanceOperation.CREATE_POLICY_PREMIUM_LINK, args, planOnly, 201))
+        assertEquals(mapOf("items" to listOf(planOnly), "next_cursor" to null),
+            response(FinanceOperation.LIST_POLICY_PREMIUM_LINKS, mapOf("policyId" to id), mapOf("items" to listOf(planOnly), "next_cursor" to null)))
     }
     @Test fun knownInsuranceErrorsProjectOnlySafeCodeAndMessage() {
         for ((code, status) in listOf("INSURANCE_CASE_IN_USE" to 409, "INSURANCE_POLICY_IN_USE" to 409, "MEDICAL_NODE_CYCLE" to 422, "MEDICAL_NODE_IN_USE" to 409, "PREMIUM_RULE_ALREADY_LINKED" to 409, "POLICY_NUMBER_UNAVAILABLE" to 503, "INSURANCE_ASSET_REQUIRED" to 422)) {
