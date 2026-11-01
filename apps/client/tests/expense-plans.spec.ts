@@ -1,11 +1,142 @@
 import { expect, test } from "@playwright/test";
 import type { components } from "@sallimbook/api-client";
-import { mockCashflow } from "./support/cashflow";
+import { mockCashflow, ruleRow } from "./support/cashflow";
 import { uid } from "./support/finance";
 import fixture from "../../../packages/test-fixtures/expense-plans.json" with { type: "json" };
 type S = components["schemas"];
+function refreshPlan(version = 1): S["PlanResponse"] {
+  const base = ruleRow(401);
+  const terms: S["PlanVersionResponse"] = {
+    ...base.versions[0]!,
+    title: "합성 새로고침 계획",
+    expected_amount_krw: version === 1 ? "12000" : "50000",
+    monthly_equivalent_krw: version === 1 ? "12000" : "50000",
+    tracking_mode: "plan_only",
+    plan_kind: "recurring",
+    budget_treatment: "included",
+    annual_month: null,
+    subject_member_id: null,
+    revoked_at: null,
+    anchor_date: null,
+  };
+  return { ...base, version, versions: [terms], history: [terms] };
+}
+
+for (const mode of ["edit", "new"] as const) {
+  for (const failure of ["list-network", "summary-503"] as const) {
+    test(`${mode} draft survives ${failure} refresh failure and recovery`, async ({ page }) => {
+      await mockCashflow(page);
+      let fail = false;
+      let version = 1;
+      let saved: Record<string, unknown> | undefined;
+      let sentVersion: string | undefined;
+      let releaseRetry!: () => void;
+      const retryGate = new Promise<void>((resolve) => {
+        releaseRetry = resolve;
+      });
+      let holdRetry = false;
+      await page.route("**/api/v1/expense-plans**", async (route) => {
+        if (route.request().method() === "PATCH") {
+          sentVersion = route.request().headers()["if-match"];
+          return route.fulfill({
+            status: 409,
+            json: { error: { code: "VERSION_CONFLICT", message: "합성 충돌" } },
+          });
+        }
+        if (route.request().method() === "POST") {
+          saved = route.request().postDataJSON();
+          return route.fulfill({ status: 201, json: refreshPlan() });
+        }
+        if (fail && failure === "list-network") return route.abort("failed");
+        if (holdRetry) await retryGate;
+        const row = refreshPlan(version);
+        if (saved) {
+          row.versions[0] = { ...row.versions[0]!, ...saved };
+          row.history = row.versions;
+        }
+        return route.fulfill({ json: { items: [row], next_cursor: null } });
+      });
+      await page.route("**/api/v1/expense-plan-summary", (route) =>
+        fail && failure === "summary-503"
+          ? route.fulfill({
+              status: 503,
+              json: { error: { code: "REQUEST_FAILED", message: "합성 조회 실패" } },
+            })
+          : route.fallback(),
+      );
+      await page.goto("/fixed-payments");
+      await page
+        .getByRole("button", {
+          name: mode === "edit" ? "합성 새로고침 계획" : "지출 계획 추가",
+          exact: true,
+        })
+        .click();
+      const editor = page.getByRole("region", { name: "지출 계획 편집", exact: true });
+      await editor.getByLabel("이름", { exact: true }).fill("합성 보존할 계획");
+      const amount = editor.getByLabel("계획 금액 (미정이면 비워두기)", { exact: true });
+      await amount.fill("15000");
+      await editor.getByText("결제수단·주기·관련 구성원·메모", { exact: true }).click();
+      const note = editor.getByRole("textbox", { name: "메모", exact: true });
+      await note.fill("합성 미저장 메모");
+      const refresh = page.getByRole("button", { name: "월 계획 새로고침", exact: true });
+      fail = true;
+      await refresh.click();
+      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(refresh).toBeEnabled();
+      await expect(editor).toBeVisible();
+      await expect(amount).toHaveValue("15000");
+      await expect(note).toHaveValue("합성 미저장 메모");
+      await page.getByRole("button", { name: "뒤로", exact: true }).click();
+      await expect(page.getByRole("alertdialog")).toBeVisible();
+      await page.getByRole("button", { name: "계속 입력하기", exact: true }).click();
+      fail = false;
+      version = 2;
+      holdRetry = true;
+      await refresh.click();
+      await expect(refresh).toBeDisabled();
+      await expect(amount).toHaveValue("15000");
+      await note.fill("합성 재시도 중에도 보존할 메모");
+      releaseRetry();
+      await expect(refresh).toBeEnabled();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(amount).toHaveValue("15000");
+      await expect(note).toHaveValue("합성 재시도 중에도 보존할 메모");
+      await editor.getByRole("button", { name: "계획 저장", exact: true }).click();
+      if (mode === "edit") {
+        await expect(page.getByRole("alert")).toContainText("다른 곳에서 기록이 변경됐어요");
+        expect(sentVersion).toBe('"1"');
+        await expect(amount).toHaveValue("15000");
+        await expect(note).toHaveValue("합성 재시도 중에도 보존할 메모");
+      } else {
+        await expect(
+          page.getByRole("button", { name: "합성 보존할 계획", exact: true }),
+        ).toBeVisible();
+        expect(saved).toMatchObject({
+          title: "합성 보존할 계획",
+          expected_amount_krw: "15000",
+          note: "합성 재시도 중에도 보존할 메모",
+        });
+      }
+    });
+  }
+}
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
+});
+test("session expiry during refresh still removes the protected plan editor", async ({ page }) => {
+  await mockCashflow(page);
+  await page.goto("/fixed-payments");
+  await page.getByRole("button", { name: "지출 계획 추가", exact: true }).click();
+  await page.getByLabel("이름", { exact: true }).fill("합성 비공개 초안");
+  await page.route("**/api/v1/expense-plans?*", (route) =>
+    route.fulfill({
+      status: 401,
+      json: { error: { code: "UNAUTHENTICATED", message: "합성 만료" } },
+    }),
+  );
+  await page.getByRole("button", { name: "월 계획 새로고침", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "로그인이 필요해요", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "지출 계획 편집", exact: true })).toHaveCount(0);
 });
 test("monthly plans show server totals, annual original, exclusions, unknown and zero without payment tasks", async ({
   page,

@@ -137,7 +137,8 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
           지출 계획 추가
         </button>
       )}
-      {(newPlan || selected) && !data.error ? (
+      {/* A failed refresh keeps the loaded rows; keep their editor and its unsaved draft too. */}
+      {newPlan || selected ? (
         <PlanEditor
           key={selected?.id ?? "new"}
           row={selected}
