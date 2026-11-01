@@ -9,15 +9,16 @@ import { formatKrw } from "../assets/months/model";
 import { useIdempotencyKey, useMonthCommand } from "../assets/months/useMonthCommand";
 import { CashflowError, SaveControls } from "../finance/FinancialFeedback";
 import { useHouseholdMembers } from "../finance/FinanceSupport";
-import { todaySeoul } from "../finance/dates";
+import { dateLabel, todaySeoul } from "../finance/dates";
 import { allPages, useResource } from "../finance/queries";
 import { useAccountsApi } from "../accounts/api";
 import { useCardsApi } from "../cards/api";
 import { PaymentMethod, LiabilitySelect } from "./PaymentMethod";
 import { useExpensePlanApi } from "./expensePlanApi";
 import { useFixedApi } from "./api";
-import { economicTypes, preparationWindow } from "./model";
+import { economicTypes, paymentMethodChanges, preparationWindow } from "./model";
 import { ExpensePlanSummary } from "./ExpensePlanSummary";
+import { PlanInsuranceLink } from "./insuranceLink";
 
 type S = components["schemas"];
 type Plan = S["PlanResponse"];
@@ -139,6 +140,15 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
     }
     return "미지정";
   };
+  // On a card or account page, a change to that same method reads as "this card/account".
+  const changeTarget = (v: Terms) =>
+    method && (method.kind === "card" ? v.card_id : v.account_id) === method.id
+      ? method.kind === "card"
+        ? "이 카드"
+        : "이 계좌"
+      : v.card_id || v.account_id
+        ? methodName(v)
+        : "납부수단 없음";
   const methodKind = method?.kind;
   const methodId = method?.id;
   const members = useHouseholdMembers();
@@ -366,6 +376,12 @@ export function ExpensePlans({ method }: { method?: { kind: "card" | "account"; 
                           ) : (
                             <span className="muted">납부수단 미지정</span>
                           )}
+                          {paymentMethodChanges(row).map((change) => (
+                            <small key={change.id}>
+                              변경 예정: {dateLabel(change.effective_from)}부터{" "}
+                              {changeTarget(change)}
+                            </small>
+                          ))}
                         </td>
                         <td className="plan-note">
                           {v.tracking_mode === "scheduled" && <small>납부 일정 관리</small>}
@@ -836,6 +852,7 @@ function PlanEditor({
           />
         )}
       </form>
+      {row && <PlanInsuranceLink planId={row.id} />}
       {row && (
         <>
           <details className="history-disclosure">
@@ -897,7 +914,8 @@ function PlanEditor({
             >
               <h4>잘못 등록한 계획 삭제</h4>
               <p className="muted">
-                납부 기록이 있는 계획은 삭제할 수 없어요. 그때는 위에서 종료해 주세요.
+                납부 기록이 있거나 보험료로 연결된 계획은 삭제할 수 없어요. 그때는 위에서 종료해
+                주세요.
               </p>
               <label className="checkbox-field">
                 <input

@@ -138,10 +138,15 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
 /**
  * After "keep editing" the person lands on the first field of the form they were in. The
  * dialog gives focus back to what opened it when it closes, so this waits until it is gone.
+ * If focus has moved on by then, the person already picked a field: typing there must not
+ * jump to the first one.
  */
 function focusFormField(last: HTMLElement | null) {
+  const returned = document.activeElement;
   window.requestAnimationFrame(() =>
     window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active !== returned && active !== document.body) return;
       const form =
         (last?.isConnected ? last.closest("form") : null) ?? document.querySelector("main form");
       form

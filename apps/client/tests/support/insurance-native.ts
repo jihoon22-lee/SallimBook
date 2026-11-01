@@ -2,6 +2,7 @@ import { householdPeople } from "./finance";
 import type { Page } from "@playwright/test";
 import { members } from "./finance";
 import type { mockInsuranceEvents } from "./insurance-events";
+import { insurancePlans } from "./insurance";
 type State = Awaited<ReturnType<typeof mockInsuranceEvents>>;
 type Args = Record<string, any>;
 const mapping: Record<string, { method: string; path: string; fields: Record<string, string> }> = {
@@ -432,6 +433,8 @@ export async function mockNativeInsurance(
     if (method === "listCards") return metadata({ items: state.cashflow.cards, next_cursor: null });
     if (method === "listRecurringRules")
       return metadata({ items: state.cashflow.rules, next_cursor: null });
+    if (method === "listExpensePlans")
+      return metadata({ items: insurancePlans(state.core, state.cashflow), next_cursor: null });
     const route = mapping[method];
     if (!route) return { ok: false, code: "INVALID_REQUEST" };
     let path = route.path;
@@ -473,6 +476,7 @@ export async function mockNativeInsurance(
                 "listAssets",
                 "listCards",
                 "listRecurringRules",
+                "listExpensePlans",
                 "editInsurancePolicyNumberUI",
                 "showInsurancePolicyNumberUI",
               ]

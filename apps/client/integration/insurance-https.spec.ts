@@ -274,9 +274,9 @@ test("real insurance policies cases medical originals claims receipts correction
   const ruleId = lastId(page);
   await page.goto(`/insurance/policies/${policyA}`);
   await page
-    .getByRole("combobox", { name: "연결할 보험료 규칙", exact: true })
+    .getByRole("combobox", { name: "연결할 월 계획 항목", exact: true })
     .selectOption(ruleId);
-  await page.getByRole("button", { name: "보험료 규칙 연결", exact: true }).click();
+  await page.getByRole("button", { name: "보험료 항목 연결", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "보험료 적용기간 변경", exact: true }),
   ).toHaveAttribute("href", `/fixed-payments/rules/${ruleId}/edit`);
@@ -284,6 +284,31 @@ test("real insurance policies cases medical originals claims receipts correction
   await expect(
     page.getByRole("region", { name: "납부 규칙의 보험 계약" }).getByRole("link"),
   ).toHaveAttribute("href", `/insurance/policies/${policyA}`);
+  // A monthly-plan item without a payment schedule links as a premium on the real server too.
+  await page.goto("/fixed-payments?new=1");
+  const planEditor = page.getByRole("region", { name: "지출 계획 편집", exact: true });
+  await planEditor.getByLabel("이름", { exact: true }).fill("합성 HTTPS 월 계획 보험료");
+  await planEditor.getByLabel("분류", { exact: true }).fill("보험료");
+  await planEditor.getByLabel("계획 금액 (미정이면 비워두기)", { exact: true }).fill("41000");
+  await planEditor.getByRole("button", { name: "계획 저장", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "합성 HTTPS 월 계획 보험료", exact: true }),
+  ).toBeVisible();
+  await page.goto(`/insurance/policies/${policyB}`);
+  await page
+    .getByRole("combobox", { name: "연결할 월 계획 항목", exact: true })
+    .selectOption({ label: "합성 HTTPS 월 계획 보험료 · 매달 41,000원" });
+  await page.getByRole("button", { name: "보험료 항목 연결", exact: true }).click();
+  const planPremium = page.getByRole("listitem").filter({
+    has: page.getByRole("heading", { name: "합성 HTTPS 월 계획 보험료 · 연결 중", exact: true }),
+  });
+  await expect(planPremium).toContainText("월 계획만");
+  await planPremium.getByRole("link", { name: "월 계획에서 보기", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "지출 계획 편집", exact: true })
+      .getByRole("link", { name: /합성 HTTPS 정액 계약/ }),
+  ).toHaveAttribute("href", `/insurance/policies/${policyB}`);
   console.log("SAFE_PHASE=INSURANCE_POLICY");
   const caseA = await createCase(page, "합성 HTTPS 첫 사건");
   const caseB = await createCase(page, "합성 HTTPS 두 번째 사건");

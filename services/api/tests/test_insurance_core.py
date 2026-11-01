@@ -19,6 +19,7 @@ from test_pagination import api_pages, ids, pairs
 from test_recurring import generate, obligation_for, post_rule, rule_payload, settle
 
 from sallimbook.assets.models import Asset
+from sallimbook.cashflow.expense_plan_router import router as expense_plan_router
 from sallimbook.cashflow.recurring_models import RecurringRuleVersion, ScheduledObligation
 from sallimbook.cashflow.recurring_router import router as recurring_router
 from sallimbook.config import Settings
@@ -132,6 +133,7 @@ def app(db_engine, key_file):
     install_http_contract(app)
     app.include_router(router)
     app.include_router(recurring_router)
+    app.include_router(expense_plan_router)
     return app
 
 
@@ -470,6 +472,79 @@ class TestInsurancePolicy:
                 ).status_code
                 == 422
             )
+
+    def test_plan_only_item_links_as_premium_within_household(self, app, actors, db_engine):
+        actor, spouse, foreign = actors
+        with TestClient(app) as client:
+            policy = create(client, actor, "/policies", policy_payload())
+            other = create(client, actor, "/policies", policy_payload())
+            path = f"/policies/{policy['id']}/premium-links"
+            created = client.post(
+                "/api/v1/expense-plans",
+                headers=headers(actor),
+                json={
+                    "title": "합성 월 계획 보험료",
+                    "category": "보험료",
+                    "expected_amount_krw": "52000",
+                    "amount_mode": "fixed",
+                    "economic_type": "expense",
+                    "frequency": "monthly",
+                    "tracking_mode": "plan_only",
+                },
+            )
+            assert created.status_code == 201, created.text
+            plan = created.json()["id"]
+            link = create(client, spouse, path, {"rule_id": plan})
+            # The schedule DTO still projects schedules only; plan terms stay in the plan API.
+            assert link["rule"]["id"] == plan and link["rule"]["versions"] == []
+            listed = client.get(BASE + path, headers=actor.headers).json()["items"]
+            assert [(row["rule_id"], row["active"]) for row in listed] == [(plan, True)]
+            reverse = client.get(
+                f"/api/v1/recurring-rules/{plan}/insurance-link", headers=actor.headers
+            )
+            assert reverse.status_code == 200
+            assert reverse.json()["link"]["policy_id"] == policy["id"]
+            # A resend or a second policy finds the one link instead of adding another.
+            for target in (policy, other):
+                again = client.post(
+                    f"{BASE}/policies/{target['id']}/premium-links",
+                    headers=actor.headers,
+                    json={"rule_id": plan},
+                )
+                assert again.status_code == 409
+                assert again.json()["error"]["code"] == "PREMIUM_RULE_ALREADY_LINKED"
+            foreign_policy = create(client, foreign, "/policies", policy_payload())
+            assert (
+                client.post(
+                    f"{BASE}/policies/{foreign_policy['id']}/premium-links",
+                    headers=foreign.headers,
+                    json={"rule_id": plan},
+                ).status_code
+                == 404
+            )
+            assert (
+                client.get(
+                    f"/api/v1/recurring-rules/{plan}/insurance-link", headers=foreign.headers
+                ).status_code
+                == 404
+            )
+            unlinked = client.patch(
+                BASE + path + "/" + link["id"], headers=vheaders(actor), json={"active": False}
+            )
+            assert unlinked.status_code == 200
+            stale = client.patch(
+                BASE + path + "/" + link["id"], headers=vheaders(spouse), json={"active": True}
+            )
+            assert stale.status_code == 409
+            # Even an unlinked premium keeps the plan from being deleted as a mistake.
+            deleted = client.delete(
+                f"/api/v1/expense-plans/{plan}", headers=headers(actor, version=1)
+            )
+            assert deleted.status_code == 409
+            assert deleted.json()["error"]["code"] == "RULE_IN_USE"
+        with Session(db_engine) as session:
+            assert session.scalar(select(func.count()).select_from(PolicyPremiumLink)) == 1
+            assert session.scalar(select(func.count()).select_from(ScheduledObligation)) == 0
 
     def test_concurrent_premium_links_choose_one_policy(self, app, actors, db_engine):
         actor = actors[0]

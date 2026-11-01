@@ -193,7 +193,7 @@ internal object InsurancePolicy {
             "PolicyResponse" -> policy(value)
             "CoverageResponse" -> shape(value, coverageFields + audit + mapOf("policy_id" to id))
             "PremiumLinkResponse" -> shape(value, audit + mapOf("policy_id" to id, "rule_id" to id, "active" to bool,
-                "ended_at" to nullable(timestamp), "rule" to { v: Any? -> FixedCostPolicy.ruleMetadata(v); Unit }))
+                "ended_at" to nullable(timestamp), "rule" to { v: Any? -> FixedCostPolicy.premiumRuleMetadata(v); Unit }))
             "CaseResponse" -> shape(value, caseFields + audit)
             "CaseListItem" -> shape(value, (caseFields - setOf("diagnosis_note", "diagnosis_code")) + audit + mapOf("net_burden_krw" to signedKrw))
             "CaseRevisionResponse" -> shape(value, caseFields + mapOf("case_id" to id, "version" to positive, "changed_by_member_id" to id, "changed_at" to timestamp, "reason" to nullable(text(500))))

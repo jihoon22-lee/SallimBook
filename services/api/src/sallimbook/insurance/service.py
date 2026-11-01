@@ -12,7 +12,7 @@ from sallimbook.accounts.crypto import KeyRing, SealedNumber
 from sallimbook.assets.locking import lock_asset_scope
 from sallimbook.assets.models import Asset
 from sallimbook.cashflow.recurring_models import RecurringRule, RecurringRuleVersion
-from sallimbook.cashflow.recurring_service import _require_legacy, _rule_response
+from sallimbook.cashflow.recurring_service import _rule_response
 from sallimbook.core.audit import record_event
 from sallimbook.core.authorization import require_version, scoped_entity
 from sallimbook.core.errors import DomainError
@@ -430,8 +430,8 @@ def _premium_responses(session, principal, rows):
 def create_premium_link(session, principal, policy_id, payload):
     lock_asset_scope(session, principal)
     policy = scoped_entity(session, InsurancePolicy, policy_id, principal)
+    # Monthly-plan items link too: the link reads the rule and never writes its terms.
     rule = scoped_entity(session, RecurringRule, payload.rule_id, principal)
-    _require_legacy(session, principal, rule.id)
     _premium_available(policy, rule)
     if (
         session.scalar(

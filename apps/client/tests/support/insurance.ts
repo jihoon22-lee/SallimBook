@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { components } from "@sallimbook/api-client";
-import { mockCashflow, ruleRow } from "./cashflow";
+import { mockCashflow, planFromRule, ruleRow } from "./cashflow";
 import { jointAsset, uid } from "./finance";
 type S = components["schemas"];
 const entity = (id: number) => ({
@@ -114,6 +114,8 @@ export function insuranceFixture() {
         rule: ruleRow(),
       },
     ] as S["PremiumLinkResponse"][],
+    /** Plan-only monthly items; their premium link carries no schedule versions. */
+    plans: [] as S["PlanResponse"][],
     histories: new Map<string, S["CaseRevisionResponse"][]>([
       [
         initial.id,
@@ -278,7 +280,9 @@ export function insuranceFixture() {
             rule_id: String(body.rule_id),
             active: true,
             ended_at: null,
-            rule: ruleRow(Number(String(body.rule_id).slice(-12))),
+            rule: state.plans.some((plan) => plan.id === body.rule_id)
+              ? { ...ruleRow(Number(String(body.rule_id).slice(-12))), versions: [] }
+              : ruleRow(Number(String(body.rule_id).slice(-12))),
           };
           state.premiums.push(added);
           return response(added, 201);
@@ -454,5 +458,17 @@ export async function mockInsurance(page: Page) {
     if (result.status === 204) return route.fulfill({ status: 204 });
     return route.fulfill(result);
   });
+  // The premium picker lists monthly-plan items: the payment rules plus any plan-only items.
+  await page.route("**/api/v1/expense-plans?*", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: { items: insurancePlans(state, cashflow), next_cursor: null } })
+      : route.fallback(),
+  );
   return Object.assign(state, { cashflow });
+}
+export function insurancePlans(
+  state: { plans: S["PlanResponse"][] },
+  cashflow: { rules: S["RuleResponse"][] },
+): S["PlanResponse"][] {
+  return [...cashflow.rules.map(planFromRule), ...state.plans];
 }

@@ -1,11 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { mockMonths, total } from "./support/months";
 import { uid } from "./support/finance";
-test.use({ trace: "off", screenshot: "off", video: "off" });
+// Keep a trace when a run fails: CI uploads test-results, and a timeout here once left no evidence.
+test.use({ trace: "retain-on-failure", screenshot: "off", video: "off" });
 
 test("twenty carried assets require explicit selection and date, preserve ownership and do not confirm the month", async ({
   page,
 }) => {
+  // Twenty sequential saves; about 8 s locally but 45-58 s under a 6x CPU slowdown.
+  test.slow();
   const state = await mockMonths(page);
   const template = state.record!.values[0]!;
   state.record!.values = Array.from({ length: 20 }, (_, i) => ({
