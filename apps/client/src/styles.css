@@ -719,6 +719,23 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .dashboard-history > .card { margin-top: 1rem; }
 @media (max-width: 1000px) { .household-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .household-overview-grid { grid-template-columns: minmax(0, 1fr); } }
+/* Status tiles stay two columns on phones; each heading links to its full list. */
+.household-overview-grid > .card + .card { margin-top: 0; }
+.household-category h3 { margin: 0 0 4px; font-size: 1rem; }
+.household-category h3 a { color: inherit; }
+.household-amount { margin: 4px 0; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.household-category .overview-items { list-style: none; margin: 8px 0 0; padding: 0; }
+.household-category .overview-items li { margin: 6px 0; font-size: .875rem; }
+.household-category .overview-items small { color: var(--muted); }
+@media (max-width: 600px) {
+  .household-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .household-overview-grid > .household-category { padding: 14px; }
+}
+/* The plan-based margin is an estimate and reads as one, separate from balances. */
+.plan-margin { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.plan-margin h3 { margin: 0; font-size: 1rem; }
+.plan-margin .metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0 8px; }
+.plan-margin-terms { margin: 0 0 4px; font-size: .8125rem; color: var(--muted); overflow-wrap: anywhere; }
 
 .month-picker-lock { border: 0; margin: 0; padding: 0; min-width: 0; }
 .portfolio-balance dd, .expected-income-summary dd { overflow-wrap: anywhere; }

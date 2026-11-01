@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { components } from "@sallimbook/api-client";
-import { mockFinance, uid } from "./finance";
+import { householdOverviewFor, mockFinance, uid } from "./finance";
 type S = components["schemas"];
 type Result = { status: number; body: unknown; abort?: boolean };
 export type Write = {
@@ -447,6 +447,22 @@ export async function mockCashflow(page: Page) {
         account.asset = structuredClone(row);
       }
       return response(row);
+    }
+    if (path === "/api/v1/household-overview" && method === "GET") {
+      const month = query.get("month")!;
+      state.finance.overviewMonths.push(month);
+      if (state.finance.overviewFailure) return error("UNAVAILABLE", 503);
+      return {
+        status: 200,
+        body:
+          state.finance.overview?.(month) ??
+          householdOverviewFor({
+            month,
+            assets: state.finance.assets,
+            accounts: state.finance.accounts,
+            cards: state.cards,
+          }),
+      };
     }
     if (
       !/^\/api\/v1\/(income|cards|recurring-rules|obligations|settlements)(\/|$)/.test(path) &&

@@ -209,12 +209,18 @@ test("Android dashboard shows the same current income without browser API reques
     "6,300,000원",
   );
   await expect(page.getByLabel("오늘 소모품 보기")).toBeVisible();
-  await expect(page.getByRole("region", { name: "계좌·연금", exact: true })).toContainText(
+  // One status read covers holdings, cards, appliances and insurance on the home.
+  await expect(page.getByRole("region", { name: "저장된 자산 금액" })).toContainText(
+    "아직 합계에 넣을 자산·계좌가 없어요.",
+  );
+  await expect(page.getByRole("region", { name: "카드", exact: true })).toContainText(
     "아직 등록한 항목이 없어요",
   );
-  await expect(page.getByRole("region", { name: "부동산", exact: true })).toContainText(
-    "아직 등록한 항목이 없어요",
-  );
+  const methods = native.calls.map((call) => call.method);
+  expect(methods).toContain("householdOverview");
+  // The consumables card still reads its own appliance list.
+  for (const list of ["listAssets", "listAccounts", "listCards", "listInsurancePolicies"])
+    expect(methods).not.toContain(list);
   expect(native.control.rejected).toBe(0);
   expect(native.control.peakPending).toBeLessThanOrEqual(4);
   expect(native.http).toEqual([]);

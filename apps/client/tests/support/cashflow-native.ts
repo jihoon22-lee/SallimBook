@@ -21,6 +21,8 @@ export async function mockNativeCashflow(
     },
     listExpensePlans: { method: "GET", path: () => "/expense-plans" },
     expensePlanSummary: { method: "GET", path: () => "/expense-plan-summary" },
+    householdOverview: { method: "GET", path: () => "/household-overview" },
+    bonusAwardSummary: { method: "GET", path: () => "/income-planning/bonus-summary" },
     previewPaymentSwitch: { method: "POST", path: () => "/payment-switch/preview" },
     applyPaymentSwitch: { method: "POST", path: (a) => `/payment-switch/rules/${a.ruleId}` },
     listOverdueObligations: { method: "GET", path: () => "/obligations/overdue" },

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { homeComparison, mockHomecare } from "./support/homecare";
+import { householdOverviewFor } from "./support/finance";
+import { mockHomecare } from "./support/homecare";
 import { mockNativeOnboarding } from "./support/onboarding";
 
 const predicate = readFileSync(
@@ -42,7 +43,8 @@ for (const mode of ["signed-out", "loading", "error", "ready"] as const) {
     const pending = new Promise<void>((resolve) => {
       release = resolve;
     });
-    await page.route("**/api/v1/asset-comparison?*", async (route) => {
+    // A new household: the status read holds, fails or answers with nothing to total yet.
+    await page.route("**/api/v1/household-overview?*", async (route) => {
       if (mode === "loading") await pending;
       if (mode === "error")
         return route.fulfill({
@@ -51,20 +53,8 @@ for (const mode of ["signed-out", "loading", "error", "ready"] as const) {
             error: { code: "REQUEST_FAILED", message: "합성 조회 실패", request_id: "synthetic" },
           },
         });
-      const month = new URL(route.request().url()).searchParams.get("to")!;
-      const base = homeComparison(month);
-      return route.fulfill({
-        json: {
-          ...base,
-          state: "current_missing",
-          from_month: null,
-          current: { ...base.current, state: "missing", revision: null, totals: null },
-          previous: null,
-          item_count: 0,
-          items: [],
-          next_cursor: null,
-        },
-      });
+      const month = new URL(route.request().url()).searchParams.get("month")!;
+      return route.fulfill({ json: householdOverviewFor({ month, assets: [], accounts: [] }) });
     });
     try {
       await page.goto("/");

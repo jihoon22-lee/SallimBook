@@ -42,11 +42,12 @@ function IncomePlanning() {
   const [params, setParams] = useSearchParams();
   const data = useResource(
     useCallback(async () => {
-      const [expected, bonuses] = await Promise.all([
+      const [expected, bonuses, bonusTotals] = await Promise.all([
         allPages(api.expected),
         allPages(api.bonuses),
+        api.bonusSummary(),
       ]);
-      return { expected, bonuses };
+      return { expected, bonuses, bonusTotals };
     }, [api]),
   );
   // The household totals come from the server, the same figures the home summary shows.
@@ -195,20 +196,25 @@ function IncomePlanning() {
                 .sort((a, b) => a.award_kind.localeCompare(b.award_kind));
               const current = rows.filter((r) => r.active);
               const voided = rows.filter((r) => !r.active);
-              const sum = (field: "net_cash_krw" | "stock_grant_value_krw") =>
-                current.reduce((n, r) => n + BigInt(r[field] ?? "0"), 0n);
+              // Year totals come from the server over every active award of the year.
+              const total = data.data?.bonusTotals.years.find((y) => y.performance_year === year);
               return (
                 <section key={year} aria-label={`${year}년 성과 상여`}>
                   <h3>{year}년 성과</h3>
-                  <p>
-                    확인된 세후 현금 {money(sum("net_cash_krw").toString())} · 주식 수령가액{" "}
-                    {money(sum("stock_grant_value_krw").toString())} · 합계{" "}
-                    {money((sum("net_cash_krw") + sum("stock_grant_value_krw")).toString())}
-                  </p>
-                  <p className="muted">
-                    현금 미확인 {current.filter((r) => r.net_cash_krw == null).length}건 · 주식
-                    미확인 {current.filter((r) => r.stock_grant_value_krw == null).length}건
-                  </p>
+                  {total ? (
+                    <>
+                      <p>
+                        확인된 세후 현금 {money(total.net_cash_known_krw)} · 주식 수령가액{" "}
+                        {money(total.stock_grant_known_krw)} · 합계 {money(total.known_total_krw)}
+                      </p>
+                      <p className="muted">
+                        현금 미확인 {total.net_cash_unknown_count}건 · 주식 미확인{" "}
+                        {total.stock_grant_unknown_count}건
+                      </p>
+                    </>
+                  ) : (
+                    <p className="muted">이 해에 유효한 상여 기록은 없어요.</p>
+                  )}
                   <ul className="record-list">
                     {current.map((r) => (
                       <BonusRow

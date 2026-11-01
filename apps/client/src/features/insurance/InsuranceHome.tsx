@@ -1,6 +1,59 @@
-import { InsuranceOverview } from "../dashboard/HouseholdOverview";
+import { InsuranceCounts } from "../dashboard/HouseholdOverview";
+import { useHouseholdOverview } from "../dashboard/overviewApi";
+import { FinanceError } from "../finance/FinanceSupport";
 import { Link } from "react-router";
+import { useMonth } from "../../shared/MonthContext";
 import { InsurancePage } from "./InsuranceSupport";
+
+/** Counts from the household status: what is in progress, and where to continue it. */
+function InsuranceStatus() {
+  const { currentMonth } = useMonth();
+  const overview = useHouseholdOverview(currentMonth);
+  const insurance = overview.error ? null : overview.data?.insurance;
+  return (
+    <section className="card household-category" aria-label="보험 현황">
+      <div className="item-heading">
+        <h2>보험 현황</h2>
+        <Link to="/insurance/policies">보험 계약 전체 보기</Link>
+      </div>
+      {overview.loading && !insurance && <p role="status">보험 현황 불러오는 중</p>}
+      <FinanceError error={overview.error} />
+      {overview.error && (
+        <button type="button" onClick={() => void overview.reload()}>
+          보험 현황 다시 불러오기
+        </button>
+      )}
+      {insurance && (
+        <>
+          <p>가입 중인 계약 {insurance.active_policy_count}개</p>
+          <InsuranceCounts insurance={insurance} />
+          {insurance.policies.length > 0 ? (
+            <ul className="overview-items">
+              {insurance.policies.map((policy) => (
+                <li key={policy.id}>
+                  <Link to={`/insurance/policies/${policy.id}`}>{policy.name}</Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">
+              아직 가입 중인 보험 계약이 없어요.{" "}
+              <Link to="/insurance/policies/new">보험 계약 등록</Link>
+            </p>
+          )}
+          {insurance.active_policy_count > insurance.policies.length && (
+            <p className="muted">
+              외 {insurance.active_policy_count - insurance.policies.length}개
+            </p>
+          )}
+          <p>
+            <Link to="/insurance/cases?financial=open">진행 중인 사건 보기</Link>
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
 export function InsuranceHome() {
   // One primary action: the claim work list is where the open insurance tasks are.
   const navigation = (
@@ -29,7 +82,7 @@ export function InsuranceHome() {
       description="계약과 독립 사건, 실제 의료비·청구·수령을 함께 기록해요."
       navigation={navigation}
     >
-      <InsuranceOverview title="가입 중인 보험 계약" level={2} />
+      <InsuranceStatus />
       <details className="card">
         <summary>보험 기록 도움말</summary>
         <ol>

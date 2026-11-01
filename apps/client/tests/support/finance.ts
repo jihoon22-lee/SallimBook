@@ -83,6 +83,116 @@ export const sampleAccount: components["schemas"]["AccountResponse"] = {
   version: 1,
 };
 
+type S = components["schemas"];
+const holdingOrder = ["accounts", "financial", "real_estate", "deposit", "loan", "other"] as const;
+const lastDay = (month: string) => {
+  const [year, value] = month.split("-").map(Number) as [number, number];
+  return `${month}-${String(new Date(Date.UTC(year, value, 0)).getUTCDate()).padStart(2, "0")}`;
+};
+/** A synthetic household status like the server's: latest saved amounts, never netted twice. */
+export function householdOverviewFor(options: {
+  month: string;
+  assets: S["AssetResponse"][];
+  accounts: S["AccountResponse"][];
+  amounts?: Record<string, { amount: string; basis: string; stale?: boolean }>;
+  cards?: { id: string; alias?: string | null; product_name: string }[];
+  plan?: Partial<S["MonthlyPlanOverview"]>;
+  insurance?: Partial<S["InsuranceOverview"]>;
+}): S["HouseholdOverviewResponse"] {
+  const end = lastDay(options.month);
+  const accountOf = new Map(options.accounts.map((row) => [row.asset_id, row.id]));
+  const items: S["OverviewHolding"][] = options.assets
+    .filter((asset) => asset.started_on <= end && (!asset.ended_on || asset.ended_on >= end))
+    .map((asset) => {
+      const saved = options.amounts?.[asset.id];
+      const account = accountOf.get(asset.id) ?? null;
+      return {
+        asset_id: asset.id,
+        account_id: account,
+        name: asset.name,
+        kind: asset.kind,
+        category: asset.category,
+        group: account ? "accounts" : asset.category,
+        included: asset.inclusion_status === "included",
+        owned_amount_krw: saved?.amount ?? null,
+        basis_month: saved?.basis ?? null,
+        as_of_date: null,
+        stale: saved?.stale ?? false,
+      };
+    });
+  const counted = items.filter((item) => item.included);
+  const known = counted.filter((item) => item.owned_amount_krw !== null);
+  const sum = (rows: S["OverviewHolding"][], kind: string) =>
+    rows
+      .filter((row) => row.kind === kind)
+      .reduce((total, row) => total + BigInt(row.owned_amount_krw!), 0n)
+      .toString();
+  const assets = sum(known, "asset"),
+    liabilities = sum(known, "liability");
+  const bases = known.map((item) => item.basis_month!).sort();
+  const cards = options.cards ?? [];
+  return {
+    month: options.month,
+    holdings: {
+      assets_krw: assets,
+      liabilities_krw: liabilities,
+      net_assets_krw: (BigInt(assets) - BigInt(liabilities)).toString(),
+      item_count: counted.length,
+      known_count: known.length,
+      missing_count: counted.length - known.length,
+      stale_count: counted.filter((item) => item.stale).length,
+      current_count: known.filter((item) => item.basis_month === options.month).length,
+      oldest_basis_month: bases[0] ?? null,
+      groups: holdingOrder.flatMap((group) => {
+        const rows = counted.filter((item) => item.group === group);
+        const saved = rows.filter((item) => item.owned_amount_krw !== null);
+        return rows.length
+          ? [
+              {
+                group,
+                count: rows.length,
+                known_count: saved.length,
+                assets_krw: sum(saved, "asset"),
+                liabilities_krw: sum(saved, "liability"),
+              },
+            ]
+          : [];
+      }),
+      items,
+    },
+    cards: {
+      count: cards.length,
+      items: cards
+        .slice(0, 4)
+        .map((card) => ({ id: card.id, name: card.alias || card.product_name })),
+    },
+    appliances: { count: 0, items: [] },
+    insurance: {
+      active_policy_count: 0,
+      open_case_count: 0,
+      claims_in_progress_count: 0,
+      documents_required_count: 0,
+      policies: [],
+      ...options.insurance,
+    },
+    plan: {
+      as_of: `${options.month}-01`,
+      expected_income_known_krw: "0",
+      expected_income_count: 0,
+      expected_income_unknown_count: 0,
+      spending_known_krw: "0",
+      loan_known_krw: "0",
+      transfer_known_krw: "0",
+      planned_unknown_count: 0,
+      unconverted_count: 0,
+      excluded_known_krw: "0",
+      margin_before_transfers_krw: "0",
+      margin_after_transfers_krw: "0",
+      ...options.plan,
+    },
+  };
+}
+
 export async function mockFinance(page: Page) {
   const state = {
     assets: [
@@ -133,6 +243,10 @@ export async function mockFinance(page: Page) {
     deletes: [] as { path: string; version: string }[],
     deleteInUse: false,
     deleteFailureAfter: false,
+    /** Replaces the default household status built from the registered assets above. */
+    overview: null as null | ((month: string) => S["HouseholdOverviewResponse"]),
+    overviewFailure: false,
+    overviewMonths: [] as string[],
   };
   const error = (route: Route, status: number, code: string) =>
     route.fulfill({
@@ -162,6 +276,16 @@ export async function mockFinance(page: Page) {
           economic_types: [],
         },
       });
+    if (path === "/api/v1/household-overview" && method === "GET") {
+      const month = url.searchParams.get("month")!;
+      state.overviewMonths.push(month);
+      if (state.overviewFailure) return error(route, 503, "UNAVAILABLE");
+      return route.fulfill({
+        json:
+          state.overview?.(month) ??
+          householdOverviewFor({ month, assets: state.assets, accounts: state.accounts }),
+      });
+    }
     if (path === "/api/v1/me")
       return state.signedIn
         ? route.fulfill({ json: members[0] })
