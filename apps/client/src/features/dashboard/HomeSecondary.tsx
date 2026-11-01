@@ -21,7 +21,7 @@ function IncomeSummary() {
   return (
     <section className="home-summary-part" aria-label="홈 등록 수입 요약">
       {ready && <ExpectedIncomeSummary data={result.data!.expected} members={members.members} />}
-      <h3>{formatMonth(month)}분 수입</h3>
+      <h3>{formatMonth(month)} 실제 입금</h3>
       <CashflowError error={result.error} />
       {result.loading && <p role="status">등록 수입 확인 중</p>}
       {result.error && <button onClick={() => void result.reload()}>홈 수입 다시 확인</button>}

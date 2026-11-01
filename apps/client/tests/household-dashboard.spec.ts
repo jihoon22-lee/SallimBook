@@ -23,11 +23,11 @@ const totals = {
   net_inflow_krw: "0",
   record_count: 0,
 };
-for (const path of ["/", "/income"]) {
+for (const path of ["/", "/income", "/living"]) {
   test(`current expected income is visible immediately with no cash records at ${path}`, async ({
     page,
   }) => {
-    if (path === "/income") await mockCashflow(page);
+    if (path !== "/") await mockCashflow(page);
     else await mockComparison(page);
     const writes: string[] = [];
     page.on("request", (req) => {
@@ -56,6 +56,21 @@ for (const path of ["/", "/income"]) {
       "href",
       "/income/planning",
     );
+    if (path === "/income") {
+      const actual = page.getByRole("region", { name: "등록 수입 요약", exact: true });
+      await expect(actual).toContainText("실제 입금");
+      await expect(actual).toContainText("기록한 실제 입금은 아직 없어요");
+      await expect(actual.locator(".metric-primary")).toHaveCount(0);
+    }
+    if (path === "/living") {
+      await expect(
+        page.getByRole("region", { name: "현재 월 지출 계획", exact: true }),
+      ).toBeVisible();
+      await page.screenshot({
+        path: test.info().outputPath("income-dashboard.png"),
+        fullPage: true,
+      });
+    }
     if (path === "/") {
       await expect(page.getByRole("region", { name: "우리 집 보유 현황" })).toBeVisible();
       await expect(page.getByRole("region", { name: "계좌·연금", exact: true })).toContainText(

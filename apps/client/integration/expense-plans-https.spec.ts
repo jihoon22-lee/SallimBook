@@ -8,6 +8,7 @@ test.setTimeout(180000);
 test.use({ actionTimeout: 10000, navigationTimeout: 15000 });
 test("real monthly planning saves without dates, edits same day, links cards and ends without cash effects", async ({
   page,
+  context,
 }) => {
   await page.goto("/login");
   await page.getByLabel("로그인 이름", { exact: true }).fill(fixture.login);
@@ -32,10 +33,35 @@ test("real monthly planning saves without dates, edits same day, links cards and
   await page.getByRole("combobox", { name: "납부 카드", exact: true }).selectOption(cardId);
   await page.getByRole("button", { name: "계획 저장", exact: true }).click();
   await expect(page.getByRole("button", { name: "합성 HTTPS 월 계획", exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("table", { name: "월 지출 계획 표" })
+      .getByRole("link", { name: "합성 계획 카드", exact: true }),
+  ).toBeVisible();
   const summary = page.getByRole("region", { name: "현재 월 지출 계획", exact: true });
   await expect(summary).toContainText("12,345원");
   await page.getByRole("button", { name: "합성 HTTPS 월 계획", exact: true }).click();
   await page.getByLabel("계획 금액 (미정이면 비워두기)", { exact: true }).fill("23456");
+  await page.getByText("결제수단·주기·관련 구성원·메모", { exact: true }).click();
+  const memo = page.getByRole("textbox", { name: "메모", exact: true });
+  await memo.fill("합성 연결 오류 후에도 유지할 메모");
+  const refresh = page.getByRole("button", { name: "월 계획 새로고침", exact: true });
+  await context.setOffline(true);
+  try {
+    await refresh.click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(refresh).toBeEnabled();
+    await expect(page.getByLabel("계획 금액 (미정이면 비워두기)", { exact: true })).toHaveValue(
+      "23456",
+    );
+    await expect(memo).toHaveValue("합성 연결 오류 후에도 유지할 메모");
+  } finally {
+    await context.setOffline(false);
+  }
+  await refresh.click();
+  await expect(refresh).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(memo).toHaveValue("합성 연결 오류 후에도 유지할 메모");
   await page.getByRole("button", { name: "계획 저장", exact: true }).click();
   await expect(summary).toContainText("23,456원");
   await page.reload();
@@ -57,6 +83,7 @@ test("real monthly planning saves without dates, edits same day, links cards and
     return { plan, facts, missing: missing.status };
   });
   expect(invariant.plan.versions[0].anchor_date).toBeNull();
+  expect(invariant.plan.versions[0].note).toBe("합성 연결 오류 후에도 유지할 메모");
   expect(invariant.plan.history).toHaveLength(2);
   expect(invariant.plan.history[0].revoked_at).not.toBeNull();
   expect(invariant.facts.obligation_count).toBe(0);
