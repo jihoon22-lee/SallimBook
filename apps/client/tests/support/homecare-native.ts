@@ -1,4 +1,4 @@
-import { householdOverviewFor, householdPeople } from "./finance";
+import { emptyExpensePlanSummary, householdOverviewFor, householdPeople } from "./finance";
 import type { Page } from "@playwright/test";
 import { members } from "./finance";
 import { homeComparison } from "./homecare";
@@ -8,6 +8,7 @@ type Args = Record<string, any>;
 const mapping: Record<string, { method: string; path: string; fields: Record<string, string> }> = {
   listAssets: { method: "GET", path: "/api/v1/assets", fields: {} },
   householdOverview: { method: "GET", path: "/api/v1/household-overview", fields: {} },
+  expensePlanSummary: { method: "GET", path: "/api/v1/expense-plan-summary", fields: {} },
   listAccounts: { method: "GET", path: "/api/v1/accounts", fields: {} },
   listCards: { method: "GET", path: "/api/v1/cards", fields: {} },
   listInsurancePolicies: { method: "GET", path: "/api/v1/insurance/policies", fields: {} },
@@ -260,6 +261,7 @@ export async function mockNativeHomecare(page: Page, state: State) {
     // Like the lists above, this household has no registered assets or accounts yet.
     if (method === "householdOverview")
       return metadata(householdOverviewFor({ month: args.query.month, assets: [], accounts: [] }));
+    if (method === "expensePlanSummary") return metadata(emptyExpensePlanSummary);
     if (method === "getAssetComparison") return metadata(homeComparison(args.query.to));
     if (method === "getAssetTrends")
       return metadata(state.trendResponse(new URLSearchParams(args.query)));

@@ -193,6 +193,22 @@ export function householdOverviewFor(options: {
   };
 }
 
+/** A household with no monthly plans yet. */
+export const emptyExpensePlanSummary: S["PlanSummaryResponse"] = {
+  as_of: "2025-02-20",
+  fixed_known_krw: "0",
+  budget_known_krw: "0",
+  combined_known_krw: "0",
+  excluded_known_krw: "0",
+  included_unknown_count: 0,
+  excluded_unknown_count: 0,
+  unconverted_count: 0,
+  plan_count: 0,
+  categories: [],
+  treatments: [],
+  economic_types: [],
+};
+
 export async function mockFinance(page: Page) {
   const state = {
     assets: [
@@ -260,22 +276,7 @@ export async function mockFinance(page: Page) {
     if (path === "/api/v1/expense-plans" && method === "GET")
       return route.fulfill({ json: { items: [], next_cursor: null } });
     if (path === "/api/v1/expense-plan-summary" && method === "GET")
-      return route.fulfill({
-        json: {
-          as_of: "2025-02-20",
-          fixed_known_krw: "0",
-          budget_known_krw: "0",
-          combined_known_krw: "0",
-          excluded_known_krw: "0",
-          included_unknown_count: 0,
-          excluded_unknown_count: 0,
-          unconverted_count: 0,
-          plan_count: 0,
-          categories: [],
-          treatments: [],
-          economic_types: [],
-        },
-      });
+      return route.fulfill({ json: emptyExpensePlanSummary });
     if (path === "/api/v1/household-overview" && method === "GET") {
       const month = url.searchParams.get("month")!;
       state.overviewMonths.push(month);
