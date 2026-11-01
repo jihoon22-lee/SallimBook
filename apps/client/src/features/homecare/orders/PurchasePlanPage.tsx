@@ -162,15 +162,22 @@ function PurchasePlanWorkspace() {
   );
   return (
     <>
-      <div className="form-actions">
-        <button type="button" onClick={() => period("")}>
-          오늘만 확인
-        </button>
-        <button type="button" onClick={() => period(daysAfter(today, 30))}>
-          앞으로 30일
-        </button>
+      <div className="form-actions plan-toolbar">
+        <div className="segmented-control" role="group" aria-label="구매 계획 기간">
+          <button type="button" aria-pressed={!through} onClick={() => period("")}>
+            오늘만 확인
+          </button>
+          <button
+            type="button"
+            aria-pressed={!!through && through === daysAfter(today, 30)}
+            onClick={() => period(daysAfter(today, 30))}
+          >
+            앞으로 30일
+          </button>
+        </div>
         <button
           type="button"
+          className="secondary-button quiet-button"
           aria-label="구매 계획 새로고침"
           disabled={resource.loading}
           onClick={() => void resource.reload()}

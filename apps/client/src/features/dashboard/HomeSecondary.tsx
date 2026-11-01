@@ -20,7 +20,9 @@ function IncomeSummary() {
   const ready = result.data && !result.loading && !result.error;
   return (
     <section className="home-summary-part" aria-label="홈 등록 수입 요약">
-      {ready && <ExpectedIncomeSummary data={result.data!.expected} members={members.members} />}
+      {ready && (
+        <ExpectedIncomeSummary data={result.data!.expected} members={members.members} level={3} />
+      )}
       <h3>{formatMonth(month)} 실제 입금</h3>
       <CashflowError error={result.error} />
       {result.loading && <p role="status">등록 수입 확인 중</p>}

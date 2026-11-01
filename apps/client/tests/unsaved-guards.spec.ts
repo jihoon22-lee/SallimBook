@@ -118,7 +118,7 @@ test("a money void reason being typed asks before leaving", async ({ page }) => 
 
 test("generating occurrences releases the guard so back does not ask", async ({ page }) => {
   const state = await mockCashflow(page);
-  await page.goto("/fixed-payments?view=payments");
+  await page.goto("/fixed-payments/rules");
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   await page.getByLabel("회차 생성 종료일", { exact: true }).fill("2025-02-27");
   await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
@@ -126,7 +126,7 @@ test("generating occurrences releases the guard so back does not ask", async ({ 
     page.getByText("요청한 기간의 회차 생성을 확인했어요", { exact: false }),
   ).toBeVisible();
   expect(state.writes).toHaveLength(1);
-  await expectLeavesWithoutAsking(page, "/fixed-payments");
+  await expectLeavesWithoutAsking(page, "/fixed-payments/rules");
 });
 
 test("uploading a document on a medical node releases the guard so back does not ask", async ({

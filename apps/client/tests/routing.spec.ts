@@ -90,7 +90,7 @@ test("navigation exposes five mobile tabs or the expanded desktop sidebar", asyn
     for (const label of [
       "계좌",
       "수입",
-      "고정 납부",
+      "고정 지출",
       "카드",
       "계약",
       "사건·청구·지급",

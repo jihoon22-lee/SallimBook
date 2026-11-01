@@ -727,6 +727,14 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .expense-plans label { display: grid; gap: .4rem; min-width: 0; max-width: 100%; }
 .expense-plans input, .expense-plans select, .expense-plans textarea { box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; min-height: 44px; padding: .55rem; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--foreground); font: inherit; }
 .expense-plans .form-actions > label { flex: 1 1 12rem; }
+.planning-section .record-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.planning-section .record-list > li { padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.planning-section .record-list > li:last-child { border-bottom: 0; }
+.planning-section .record-list h3, .planning-section .record-list h4 { margin: 0; font-size: 1rem; }
+.planning-section .record-list .item-heading > button { padding: 6px 12px; font-size: .8125rem; }
+.planning-section .record-facts { margin: 4px 0 0; }
+.planning-total strong { font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.planning-members { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0; }
 .expense-plans .record-list { list-style: none; padding: 0; }
 .expense-plans .record-list > li { padding: 1rem 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .expense-plans details { margin-block: .75rem; }
@@ -753,11 +761,23 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .expense-ledger .plan-note summary { cursor: pointer; min-height: 44px; align-content: center; }
 .expense-ledger .plan-note p { white-space: pre-wrap; }
 .expense-ledger .plan-excluded { background: var(--surface-subtle); }
+/* One primary add action; a manual refresh stays available but quiet (apps also refresh on return). */
+.plan-toolbar { justify-content: space-between; }
+.quiet-button { border-color: transparent; background: none; box-shadow: none; color: var(--muted); font-size: .8125rem; font-weight: 600; }
+.quiet-button:hover { color: var(--foreground); background: var(--surface-subtle); border-color: transparent; }
+.plan-toolbar > .quiet-button:only-child { margin-inline-start: auto; }
+.expense-plan-summary .plan-total { margin-block: 8px 4px; }
+.expense-plan-summary .plan-total strong { font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.plan-categories ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.plan-categories li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.plan-categories li:last-child { border-bottom: 0; }
+.plan-categories li small { color: var(--muted); }
+.fixed-view-switch { margin-block: 4px 16px; }
 .plan-filters { margin-block: 12px; }
 .expense-plans .plan-filters > label { flex: 1 1 8rem; font-size: .8125rem; }
 .expense-plans .plan-filters > label:first-child { flex: 2 1 12rem; }
 .home-monthly-grid { align-items: start; }
-.home-summary-part .expected-income-summary h2 { font-size: 1rem; }
+.home-summary-part .expected-income-summary :is(h2, h3) { font-size: 1rem; }
 .home-summary-part h3 { font-size: .875rem; }
 @media (max-width: 700px) {
   .expense-ledger table, .expense-ledger tbody { display: block; }
@@ -783,3 +803,6 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 .expense-plan-summary .metadata-grid dd { font-size: 1rem; }
 @media (max-width: 700px) { .expense-plan-summary .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .home-summary-part .expense-plan-summary .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Spending, loan payments and savings transfers read as three separate figures. */
+.expense-plan-summary .metadata-grid.plan-split { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 700px) { .expense-plan-summary .metadata-grid.plan-split { grid-template-columns: minmax(0, 1fr); gap: 6px; } }

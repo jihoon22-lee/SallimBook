@@ -20,6 +20,9 @@ test("fixed summary separates known plans, unknown amounts and actuals without a
   await expect(summary).toContainText("실제 납부액0원");
   await expect(page.getByRole("link", { name: "합성 미정 납부", exact: true })).toBeVisible();
   expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole("button", { name: "예정 회차 생성 열기" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "납부 규칙 등록" })).toHaveCount(0);
+  await page.getByRole("link", { name: "적용기간·납부 일정 관리", exact: true }).click();
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   await page.getByLabel("회차 생성 종료일", { exact: true }).fill("2026-02-02");
   await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
@@ -33,7 +36,7 @@ test("explicit generation retries the same key after a committed response is los
 }) => {
   const state = await mockCashflow(page);
   state.failure = "after";
-  await page.goto("/fixed-payments?view=payments");
+  await page.goto("/fixed-payments/rules");
   await page.getByRole("button", { name: "예정 회차 생성 열기", exact: true }).click();
   await page.getByRole("button", { name: "선택 기간 회차 생성", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("처리 결과를 확인하지 못했어요");

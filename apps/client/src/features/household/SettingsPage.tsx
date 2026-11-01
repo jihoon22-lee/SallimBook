@@ -116,12 +116,12 @@ export function SettingsPage() {
           {
             to: "/activity",
             label: "최근 작업 이력",
-            description: "구성원·기간·대상별 작업 기록",
+            description: "누가 언제 어떤 기록을 바꿨는지 쉽게 보기",
           },
           {
             to: "/settings/audit",
             label: "감사 이력",
-            description: "구성원·기간·대상별 작업 기록",
+            description: "버전·변경 필드까지 남는 원본 감사 기록",
           },
         ]}
       />
@@ -150,12 +150,14 @@ export function SettingsPage() {
           </p>
         )}
         <RelatedLinks
-          links={[
-            { to: "/login", label: "로그인·재인증" },
+          links={
             state.status === "authenticated"
-              ? { to: "/settings/auth", label: "가계 구성원 관리" }
-              : { to: "/onboarding", label: "초대받은 계정 등록" },
-          ]}
+              ? [{ to: "/settings/auth", label: "가계 구성원 관리" }]
+              : [
+                  { to: "/login", label: "로그인·재인증" },
+                  { to: "/onboarding", label: "초대받은 계정 등록" },
+                ]
+          }
         />
       </section>
       <AppVersion />
