@@ -53,25 +53,25 @@ from sallimbook.insurance.schemas import (
     PremiumLinkResponse,
 )
 
+# Stored as numeric(20,0), carried as decimal strings on the wire.
+MONEY_FIELDS = frozenset({"insured_amount_krw", "premium_paid_before_krw"})
 
-def _values(row, schema):
-    return {name: getattr(row, name) for name in schema.model_fields}
+
+def _values(row, schema, skip=frozenset()):
+    values = {name: getattr(row, name) for name in schema.model_fields if name not in skip}
+    for name in MONEY_FIELDS & values.keys():
+        if values[name] is not None:
+            values[name] = str(values[name])
+    return values
 
 
 def _response(row, schema):
-    values = _values(row, schema)
-    if "insured_amount_krw" in values and values["insured_amount_krw"] is not None:
-        values["insured_amount_krw"] = str(values["insured_amount_krw"])
-    return schema(**values)
+    return schema(**_values(row, schema))
 
 
 def policy_response(row):
     return PolicyResponse(
-        **{
-            name: getattr(row, name)
-            for name in PolicyResponse.model_fields
-            if name not in {"masked_number", "has_number"}
-        },
+        **_values(row, PolicyResponse, {"masked_number", "has_number"}),
         masked_number="**** " + row.last_four if row.last_four is not None else None,
         has_number=row.policy_number_ciphertext is not None,
     )
@@ -153,8 +153,6 @@ def _policy_links(session, principal, candidate, previous=None, *, people_suppor
 
 def _candidate(row, schema, payload, *, exclude=frozenset()):
     values = _values(row, schema)
-    if "insured_amount_krw" in values and values["insured_amount_krw"] is not None:
-        values["insured_amount_krw"] = str(values["insured_amount_krw"])
     try:
         return schema.model_validate(
             values | payload.model_dump(exclude_unset=True, exclude=exclude)
@@ -167,7 +165,7 @@ def _candidate(row, schema, payload, *, exclude=frozenset()):
 
 def _assign(row, values):
     for name, value in values.items():
-        if name == "insured_amount_krw" and value is not None:
+        if name in MONEY_FIELDS and value is not None:
             value = Decimal(value)
         setattr(row, name, value)
 
@@ -204,9 +202,8 @@ def create_policy(
 ):
     lock_asset_scope(session, principal)
     _policy_links(session, principal, payload, people_supported=people_supported)
-    row = InsurancePolicy(
-        id=uuid4(), **payload.model_dump(exclude={"policy_number"}), **_actors(principal)
-    )
+    row = InsurancePolicy(id=uuid4(), **_actors(principal))
+    _assign(row, payload.model_dump(exclude={"policy_number"}))
     _write_number(row, payload.policy_number, key_file)
     session.add(row)
     session.flush()

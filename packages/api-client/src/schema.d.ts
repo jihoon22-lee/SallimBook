@@ -1572,6 +1572,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/household-trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Household Trends */
+        get: operations["getHouseholdTrends"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/household/connection-code": {
         parameters: {
             query?: never;
@@ -2598,6 +2615,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/insurance/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Insurance Summary */
+        get: operations["getInsuranceSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -3262,6 +3296,13 @@ export interface components {
             asset?: components["schemas"]["AssetCreate"] | null;
             /** Asset Id */
             asset_id?: string | null;
+            /** Contributed As Of */
+            contributed_as_of?: string | null;
+            /**
+             * Contributed Krw
+             * @description 지금까지 넣은 돈(원금). 기록에서 계산하지 않는 직접 입력값.
+             */
+            contributed_krw?: string | null;
             /** Institution Name */
             institution_name: string;
             /** Opened On */
@@ -3282,6 +3323,10 @@ export interface components {
             account_number?: string | null;
             /** Account Type */
             account_type?: components["schemas"]["AccountType"];
+            /** Contributed As Of */
+            contributed_as_of?: string | null;
+            /** Contributed Krw */
+            contributed_krw?: string | null;
             /** Institution Name */
             institution_name?: string;
             /** Opened On */
@@ -3300,6 +3345,10 @@ export interface components {
             asset_id: string;
             /** Closed On */
             closed_on: string | null;
+            /** Contributed As Of */
+            contributed_as_of?: string | null;
+            /** Contributed Krw */
+            contributed_krw?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -6473,9 +6522,21 @@ export interface components {
             cards: components["schemas"]["RegisteredItems"];
             holdings: components["schemas"]["HoldingsOverview"];
             insurance: components["schemas"]["InsuranceOverview"];
+            investments: components["schemas"]["InvestmentsOverview"];
             /** Month */
             month: string;
             plan: components["schemas"]["MonthlyPlanOverview"];
+        };
+        /** HouseholdTrendsResponse */
+        HouseholdTrendsResponse: {
+            /** Months */
+            months: number;
+            /** Net Assets */
+            net_assets: components["schemas"]["NetAssetsPoint"][];
+            /** Plan */
+            plan: components["schemas"]["PlanPoint"][];
+            /** To Month */
+            to_month: string;
         };
         /** @enum {string} */
         InclusionStatus: "included" | "excluded";
@@ -6705,8 +6766,85 @@ export interface components {
             /** Policies */
             policies: components["schemas"]["NamedItem"][];
         };
+        /** InsuranceSummaryResponse */
+        InsuranceSummaryResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Matched Received Krw */
+            matched_received_krw: string;
+            /** Monthly Premium Krw */
+            monthly_premium_krw: string;
+            /** Paid Total Krw */
+            paid_total_krw: string;
+            /** Paid Unknown Count */
+            paid_unknown_count: number;
+            /** Policies */
+            policies: components["schemas"]["PolicyMoney"][];
+            /** Policy Count */
+            policy_count: number;
+            /** Received Krw */
+            received_krw: string;
+            /** Recovery Percent */
+            recovery_percent: string | null;
+            /** Unassigned Received Krw */
+            unassigned_received_krw: string;
+        };
         /** @enum {string} */
         IntervalUnit: "manual" | "days" | "months";
+        /**
+         * InvestmentHolding
+         * @description An investment or pension account whose put-in money was entered by hand.
+         */
+        InvestmentHolding: {
+            /**
+             * Account Id
+             * Format: uuid
+             */
+            account_id: string;
+            account_type: components["schemas"]["AccountType"];
+            /**
+             * Asset Id
+             * Format: uuid
+             */
+            asset_id: string;
+            /** Basis Month */
+            basis_month: string;
+            /** Contributed As Of */
+            contributed_as_of: string | null;
+            /** Contributed Krw */
+            contributed_krw: string;
+            /** Gain Krw */
+            gain_krw: string;
+            /** Name */
+            name: string;
+            /** Return Percent */
+            return_percent: string | null;
+            /** Value Krw */
+            value_krw: string;
+        };
+        /**
+         * InvestmentsOverview
+         * @description Latest saved value against the money put in; a plain difference, not a rate over time.
+         */
+        InvestmentsOverview: {
+            /** Contributed Krw */
+            contributed_krw: string;
+            /** Count */
+            count: number;
+            /** Gain Krw */
+            gain_krw: string;
+            /** Items */
+            items: components["schemas"]["InvestmentHolding"][];
+            /** Missing Contribution Count */
+            missing_contribution_count: number;
+            /** Return Percent */
+            return_percent: string | null;
+            /** Value Krw */
+            value_krw: string;
+        };
         /** InvitationAcceptance */
         InvitationAcceptance: {
             /** Display Name */
@@ -7542,6 +7680,28 @@ export interface components {
              */
             token_type: "Bearer";
         };
+        /**
+         * NetAssetsPoint
+         * @description One month of the household total from the latest amount saved up to that month.
+         */
+        NetAssetsPoint: {
+            /** Assets Krw */
+            assets_krw: string | null;
+            /** Confirmed */
+            confirmed: boolean;
+            /** Entered Count */
+            entered_count: number;
+            /** Item Count */
+            item_count: number;
+            /** Known Count */
+            known_count: number;
+            /** Liabilities Krw */
+            liabilities_krw: string | null;
+            /** Month */
+            month: string;
+            /** Net Assets Krw */
+            net_assets_krw: string | null;
+        };
         /** @enum {string} */
         NodeKind: "outpatient" | "inpatient" | "surgery" | "prescription" | "pharmacy" | "follow_up" | "group";
         /** NodeSummaryResponse */
@@ -8337,6 +8497,39 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * PlanPoint
+         * @description One month's plan-based estimate; never a balance or an amount saved.
+         */
+        PlanPoint: {
+            /** Actual Income Krw */
+            actual_income_krw: string;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Income Count */
+            income_count: number;
+            /** Income Known Krw */
+            income_known_krw: string;
+            /** Income Unknown Count */
+            income_unknown_count: number;
+            /** Loan Known Krw */
+            loan_known_krw: string;
+            /** Margin After Transfers Krw */
+            margin_after_transfers_krw: string | null;
+            /** Margin Before Transfers Krw */
+            margin_before_transfers_krw: string | null;
+            /** Month */
+            month: string;
+            /** Planned Unknown Count */
+            planned_unknown_count: number;
+            /** Spending Known Krw */
+            spending_known_krw: string;
+            /** Transfer Known Krw */
+            transfer_known_krw: string;
+        };
         /** PlanResponse */
         PlanResponse: {
             /** End Reason */
@@ -8519,6 +8712,13 @@ export interface components {
             policy_number?: string | null;
             /** Policyholder Member Id */
             policyholder_member_id?: string | null;
+            /**
+             * Premium Paid Before Krw
+             * @description 기준일까지 이미 낸 보험료 합계. 월 계획 등록 이전 납입분을 직접 입력합니다.
+             */
+            premium_paid_before_krw?: string | null;
+            /** Premium Paid Through */
+            premium_paid_through?: string | null;
             /** Product Name */
             product_name: string;
             /** @default active */
@@ -8532,6 +8732,42 @@ export interface components {
             items: components["schemas"]["PolicyResponse"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * PolicyMoney
+         * @description Premiums paid (entered and estimated) against benefits actually received for one policy.
+         */
+        PolicyMoney: {
+            /** Estimated From Month */
+            estimated_from_month: string | null;
+            /** Estimated Months */
+            estimated_months: number;
+            /** Insurer */
+            insurer: string;
+            /** Monthly Premium Krw */
+            monthly_premium_krw: string;
+            /** Paid Before Krw */
+            paid_before_krw: string | null;
+            /** Paid Estimated Krw */
+            paid_estimated_krw: string;
+            /** Paid Through */
+            paid_through: string | null;
+            /** Paid Total Krw */
+            paid_total_krw: string | null;
+            /**
+             * Policy Id
+             * Format: uuid
+             */
+            policy_id: string;
+            /** Product Name */
+            product_name: string;
+            /** Received Krw */
+            received_krw: string;
+            /** Recovery Percent */
+            recovery_percent: string | null;
+            status: components["schemas"]["PolicyStatus"];
+            /** Unknown Months */
+            unknown_months: number;
         };
         /** PolicyPatch */
         PolicyPatch: {
@@ -8565,6 +8801,10 @@ export interface components {
             policy_number?: string | null;
             /** Policyholder Member Id */
             policyholder_member_id?: string | null;
+            /** Premium Paid Before Krw */
+            premium_paid_before_krw?: string | null;
+            /** Premium Paid Through */
+            premium_paid_through?: string | null;
             /** Product Name */
             product_name?: string;
             /** Status */
@@ -8626,6 +8866,13 @@ export interface components {
             payment_start?: string | null;
             /** Policyholder Member Id */
             policyholder_member_id?: string | null;
+            /**
+             * Premium Paid Before Krw
+             * @description 기준일까지 이미 낸 보험료 합계. 월 계획 등록 이전 납입분을 직접 입력합니다.
+             */
+            premium_paid_before_krw?: string | null;
+            /** Premium Paid Through */
+            premium_paid_through?: string | null;
             /** Product Name */
             product_name: string;
             /** @default active */
@@ -22812,6 +23059,110 @@ export interface operations {
             };
         };
     };
+    getHouseholdTrends: {
+        parameters: {
+            query: {
+                to: string;
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdTrendsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     createHouseholdConnectionCode: {
         parameters: {
             query?: never;
@@ -31578,6 +31929,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventReference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getInsuranceSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsuranceSummaryResponse"];
                 };
             };
             /** @description Bad Request */

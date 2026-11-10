@@ -9,7 +9,7 @@ from sallimbook.identity.dependencies import (
     PrincipalDependency,
     SessionDependency,
 )
-from sallimbook.insurance import service
+from sallimbook.insurance import service, summary_service
 from sallimbook.insurance.schemas import (
     CaseHistoryResponse,
     CaseInput,
@@ -21,6 +21,7 @@ from sallimbook.insurance.schemas import (
     CoveragePatch,
     CoverageResponse,
     FinancialState,
+    InsuranceSummaryResponse,
     MedicalNodeInput,
     MedicalNodeListResponse,
     MedicalNodePatch,
@@ -81,6 +82,13 @@ def create_policy(
         people_supported=people_supported,
     )
     return _etag(response, result, f"/api/v1/insurance/policies/{result.id}")
+
+
+@router.get("/summary", response_model=InsuranceSummaryResponse, operation_id="getInsuranceSummary")
+def insurance_summary(
+    principal: PrincipalDependency, session: SessionDependency
+) -> InsuranceSummaryResponse:
+    return summary_service.insurance_summary(session, principal)
 
 
 @router.get("/policies", response_model=PolicyListResponse, operation_id="listInsurancePolicies")

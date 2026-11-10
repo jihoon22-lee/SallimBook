@@ -85,7 +85,23 @@ def test_policy_distinguishes_contract_coverage_and_payment_periods():
     for field in ("contract_end", "coverage_end", "payment_end"):
         with pytest.raises(ValidationError):
             PolicyCreate.model_validate(policy.model_dump() | {field: "2025-01-01"})
-    assert not any("premium" in field or "balance" in field for field in PolicyCreate.model_fields)
+    # The policy carries no recurring premium amount or balance. The one exception is the
+    # hand-entered total already paid up to a date, used only for the paid-versus-received view.
+    entered = {"premium_paid_before_krw", "premium_paid_through"}
+    assert not any(
+        "premium" in field or "balance" in field
+        for field in PolicyCreate.model_fields.keys() - entered
+    )
+    for half in entered:
+        with pytest.raises(ValidationError):
+            PolicyCreate.model_validate(
+                policy.model_dump() | {half: "1000" if half.endswith("krw") else "2026-01-31"}
+            )
+    both = PolicyCreate.model_validate(
+        policy.model_dump()
+        | {"premium_paid_before_krw": "1000", "premium_paid_through": "2026-01-31"}
+    )
+    assert both.premium_paid_before_krw == "1000"
 
 
 def test_case_states_are_independent_and_treatment_reopening_clears_end():

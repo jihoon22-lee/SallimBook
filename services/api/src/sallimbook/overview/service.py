@@ -5,7 +5,8 @@ Unsaved and long-unchanged items are counted for a gentle notice instead of bloc
 view. Nothing here writes, carries forward or adjusts a month record.
 """
 
-from decimal import Decimal
+from datetime import UTC, datetime, time, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -18,9 +19,10 @@ from sallimbook.assets.month_models import AssetMonthRecord, AssetMonthRevision,
 from sallimbook.cards.models import Card
 from sallimbook.cashflow import expense_plan_service, recurring_service
 from sallimbook.cashflow import service as cash_service
+from sallimbook.cashflow.planning_models import IncomePlanningRevision
 from sallimbook.core.authorization import Principal
 from sallimbook.core.errors import DomainError
-from sallimbook.core.types import krw_string, month_end, month_start
+from sallimbook.core.types import SEOUL, krw_string, month_end, month_start
 from sallimbook.homecare.models import Appliance
 from sallimbook.insurance.event_models import InsuranceClaim
 from sallimbook.insurance.models import InsuranceCase, InsurancePolicy
@@ -29,10 +31,15 @@ from sallimbook.overview.schemas import (
     HoldingGroupTotal,
     HoldingsOverview,
     HouseholdOverviewResponse,
+    HouseholdTrendsResponse,
     InsuranceOverview,
+    InvestmentHolding,
+    InvestmentsOverview,
     MonthlyPlanOverview,
     NamedItem,
+    NetAssetsPoint,
     OverviewHolding,
+    PlanPoint,
     RegisteredItems,
 )
 
@@ -49,6 +56,28 @@ GROUP_ORDER: tuple[HoldingGroup, ...] = (
 )
 CLAIMS_IN_PROGRESS = ("draft", "submitted", "documents_required", "reviewing")
 PREVIEW_LIMIT = 4
+# Accounts whose value moves with the market, so money put in is worth comparing.
+INVESTMENT_TYPES = frozenset({"brokerage", "pension_savings", "irp", "dc_pension", "isa"})
+MAX_TREND_MONTHS = 36
+
+
+def _total_error() -> DomainError:
+    return DomainError("TOTAL_OUT_OF_RANGE", "합산 가능한 금액 범위를 확인해 주세요.", 422)
+
+
+def percent(part: int, whole: int) -> str | None:
+    """`part` over `whole` as a percentage with one decimal; nothing to divide by gives None."""
+    if whole <= 0:
+        return None
+    value = (Decimal(part) * 100 / Decimal(whole)).quantize(Decimal("0.1"), ROUND_HALF_UP)
+    # A loss too small to show is "0.0", never "-0.0".
+    return "0.0" if value == 0 else str(value)
+
+
+def _shift_month(month: str, delta: int) -> str:
+    first = month_start(month)
+    index = first.year * 12 + first.month - 1 + delta
+    return f"{index // 12:04d}-{index % 12 + 1:02d}"
 
 
 def _month_text(period) -> str:
@@ -263,10 +292,70 @@ def _insurance(session: Session, principal: Principal) -> InsuranceOverview:
     )
 
 
-def _plan(session: Session, principal: Principal) -> MonthlyPlanOverview:
-    day = recurring_service.today()
+def _investments(
+    session: Session, principal: Principal, holdings: HoldingsOverview
+) -> InvestmentsOverview:
+    """Latest saved value against hand-entered money put in, for investment-type accounts."""
+    held = {item.account_id: item for item in holdings.items if item.account_id and item.included}
+    accounts = (
+        list(
+            session.scalars(
+                select(FinancialAccount)
+                .where(
+                    FinancialAccount.household_id == principal.household_id,
+                    FinancialAccount.id.in_(held),
+                    FinancialAccount.account_type.in_(INVESTMENT_TYPES),
+                )
+                .order_by(FinancialAccount.id)
+            )
+        )
+        if held
+        else []
+    )
+    items: list[InvestmentHolding] = []
+    missing = 0
+    try:
+        for account in accounts:
+            holding = held[account.id]
+            if account.contributed_krw is None:
+                missing += 1
+                continue
+            if holding.owned_amount_krw is None or holding.basis_month is None:
+                continue
+            value, put_in = int(holding.owned_amount_krw), int(account.contributed_krw)
+            items.append(
+                InvestmentHolding(
+                    asset_id=holding.asset_id,
+                    account_id=account.id,
+                    name=holding.name,
+                    account_type=account.account_type,
+                    value_krw=krw_string(value),
+                    basis_month=holding.basis_month,
+                    contributed_krw=krw_string(put_in),
+                    contributed_as_of=account.contributed_as_of,
+                    gain_krw=krw_string(value - put_in),
+                    return_percent=percent(value - put_in, put_in),
+                )
+            )
+        value = sum(int(item.value_krw) for item in items)
+        put_in = sum(int(item.contributed_krw) for item in items)
+        items.sort(key=lambda item: (-int(item.value_krw), item.name, str(item.account_id)))
+        return InvestmentsOverview(
+            count=len(items),
+            value_krw=krw_string(value),
+            contributed_krw=krw_string(put_in),
+            gain_krw=krw_string(value - put_in),
+            return_percent=percent(value - put_in, put_in),
+            missing_contribution_count=missing,
+            items=items,
+        )
+    except ValueError:
+        raise _total_error() from None
+
+
+def _plan_figures(session: Session, principal: Principal, day, income: tuple[int, int, int]):
+    """The plan in effect on `day` against (known income, income count, unknown count)."""
     plan = expense_plan_service.plan_summary(session, principal, day)
-    income = cash_service.expected_summary(session, principal)
     # Only plans counted in the monthly total; loan payments and savings stay apart from spending.
     by_type = {row.key: row for row in plan.economic_types}
 
@@ -274,15 +363,25 @@ def _plan(session: Session, principal: Principal) -> MonthlyPlanOverview:
         row = by_type.get(key)
         return 0 if row is None else int(row.known_krw)
 
-    expected = int(income.known_amount_krw)
+    expected = income[0]
     spending, loan, transfer = known("expense"), known("loan"), known("asset_transfer")
     try:
         before = krw_string(expected - spending - loan)
         after = krw_string(expected - spending - loan - transfer)
     except ValueError:
-        raise DomainError(
-            "TOTAL_OUT_OF_RANGE", "합산 가능한 금액 범위를 확인해 주세요.", 422
-        ) from None
+        raise _total_error() from None
+    return plan, spending, loan, transfer, before, after
+
+
+def _plan(session: Session, principal: Principal) -> MonthlyPlanOverview:
+    day = recurring_service.today()
+    income = cash_service.expected_summary(session, principal)
+    plan, spending, loan, transfer, before, after = _plan_figures(
+        session,
+        principal,
+        day,
+        (int(income.known_amount_krw), income.record_count, income.unknown_count),
+    )
     return MonthlyPlanOverview(
         as_of=day,
         expected_income_known_krw=income.known_amount_krw,
@@ -299,12 +398,135 @@ def _plan(session: Session, principal: Principal) -> MonthlyPlanOverview:
     )
 
 
+def _expected_income_history(session: Session, principal: Principal):
+    """Every saved state of each expected income, oldest first, for month-end lookups."""
+    history: dict = {}
+    for row in session.scalars(
+        select(IncomePlanningRevision)
+        .where(
+            IncomePlanningRevision.household_id == principal.household_id,
+            IncomePlanningRevision.kind == "expected",
+        )
+        .order_by(IncomePlanningRevision.resource_id, IncomePlanningRevision.version)
+    ):
+        history.setdefault(row.resource_id, []).append((row.created_at, row.snapshot))
+    return history
+
+
+def _expected_income_at(history, moment: datetime) -> tuple[int, int, int]:
+    """(known total, active count, active without an amount) as registered just before `moment`."""
+    known = count = unknown = 0
+    for states in history.values():
+        current = None
+        for created_at, snapshot in states:
+            if created_at >= moment:
+                break
+            current = snapshot
+        if current is None or not current.get("active", True):
+            continue
+        count += 1
+        if current.get("amount_krw") is None:
+            unknown += 1
+        else:
+            known += int(current["amount_krw"])
+    return known, count, unknown
+
+
+def _confirmed_months(session: Session, principal: Principal, first: str, last: str) -> set[str]:
+    return {
+        _month_text(period)
+        for period in session.scalars(
+            select(AssetMonthRecord.period_month)
+            .join(
+                AssetMonthRevision,
+                (AssetMonthRevision.household_id == AssetMonthRecord.household_id)
+                & (AssetMonthRevision.id == AssetMonthRecord.current_revision_id),
+            )
+            .where(
+                AssetMonthRecord.household_id == principal.household_id,
+                AssetMonthRecord.period_month >= month_start(first),
+                AssetMonthRecord.period_month <= month_start(last),
+                AssetMonthRevision.state == "confirmed",
+            )
+        )
+    }
+
+
+def get_trends(
+    session: Session, principal: Principal, to_month: str, months: int
+) -> HouseholdTrendsResponse:
+    """Month by month, what the registered records said; nothing is written or carried."""
+    today = recurring_service.today()
+    current = f"{today.year:04d}-{today.month:02d}"
+    if to_month > current or not 1 <= months <= MAX_TREND_MONTHS:
+        raise DomainError("INVALID_MONTH_RANGE", "조회할 월 범위를 확인해 주세요.", 422)
+    lock_asset_scope(session, principal)
+    labels = [_shift_month(to_month, delta) for delta in range(1 - months, 1)]
+    # Years before 0001 cannot exist; a shorter history simply starts later.
+    labels = [label for label in labels if label >= "0001-01"]
+    confirmed = _confirmed_months(session, principal, labels[0], labels[-1])
+    history = _expected_income_history(session, principal)
+    net_assets: list[NetAssetsPoint] = []
+    plan: list[PlanPoint] = []
+    for month in labels:
+        holdings = _holdings(session, principal, month)
+        entered = holdings.known_count > 0
+        net_assets.append(
+            NetAssetsPoint(
+                month=month,
+                assets_krw=holdings.assets_krw if entered else None,
+                liabilities_krw=holdings.liabilities_krw if entered else None,
+                net_assets_krw=holdings.net_assets_krw if entered else None,
+                item_count=holdings.item_count,
+                known_count=holdings.known_count,
+                entered_count=holdings.current_count,
+                confirmed=month in confirmed,
+            )
+        )
+        # A past month is read at its end; the running month as it stands today.
+        day = today if month == current else month_end(month)
+        moment = (
+            datetime.now(UTC)
+            if month == current
+            else datetime.combine(day + timedelta(days=1), time.min, SEOUL).astimezone(UTC)
+        )
+        income = _expected_income_at(history, moment)
+        summary, spending, loan, transfer, before, after = _plan_figures(
+            session, principal, day, income
+        )
+        ready = income[1] > income[2]
+        plan.append(
+            PlanPoint(
+                month=month,
+                as_of=day,
+                income_known_krw=krw_string(income[0]),
+                income_count=income[1],
+                income_unknown_count=income[2],
+                spending_known_krw=str(spending),
+                loan_known_krw=str(loan),
+                transfer_known_krw=str(transfer),
+                planned_unknown_count=summary.included_unknown_count,
+                margin_before_transfers_krw=before if ready else None,
+                margin_after_transfers_krw=after if ready else None,
+                actual_income_krw=cash_service.summary(
+                    session, principal, month
+                ).totals.earned_net_krw,
+            )
+        )
+    result = HouseholdTrendsResponse(
+        to_month=to_month, months=len(labels), net_assets=net_assets, plan=plan
+    )
+    session.commit()
+    return result
+
+
 def get_overview(session: Session, principal: Principal, month: str) -> HouseholdOverviewResponse:
     # Every writer takes the household row first, so holding it reads one consistent state.
     lock_asset_scope(session, principal)
     result = HouseholdOverviewResponse(
         month=month,
-        holdings=_holdings(session, principal, month),
+        holdings=(holdings := _holdings(session, principal, month)),
+        investments=_investments(session, principal, holdings),
         cards=_registered(session, principal, Card, (Card.alias, Card.product_name)),
         appliances=_registered(session, principal, Appliance, (Appliance.name,)),
         insurance=_insurance(session, principal),

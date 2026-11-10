@@ -1,6 +1,7 @@
 """One account per financial asset; ownership, closure and amounts belong to the asset."""
 
 from datetime import date
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
@@ -14,6 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sallimbook.core.database import Base, EntityMixin
+from sallimbook.core.types import KrwNumeric
 
 
 class FinancialAccount(EntityMixin, Base):
@@ -53,6 +55,11 @@ class FinancialAccount(EntityMixin, Base):
             name="valid_number_envelope",
         ),
         CheckConstraint("version > 0", name="positive_version"),
+        CheckConstraint(
+            "(contributed_krw IS NULL AND contributed_as_of IS NULL) "
+            "OR (contributed_krw IS NOT NULL AND contributed_krw >= 0)",
+            name="contribution",
+        ),
         Index("ix_financial_accounts_household_type_id", "household_id", "account_type", "id"),
     )
 
@@ -66,5 +73,8 @@ class FinancialAccount(EntityMixin, Base):
     last_four: Mapped[str | None] = mapped_column(String(4))
     purpose: Mapped[str | None] = mapped_column(String(500))
     opened_on: Mapped[date | None]
+    # Money the household put in so far, entered by hand; never derived from records.
+    contributed_krw: Mapped[Decimal | None] = mapped_column(KrwNumeric())
+    contributed_as_of: Mapped[date | None]
     created_by_member_id: Mapped[UUID]
     updated_by_member_id: Mapped[UUID]

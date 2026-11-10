@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from sallimbook.accounts.schemas import AccountType
 from sallimbook.assets.schemas import AssetCategory, AssetKind
 from sallimbook.core.types import KrwString, SignedKrwString, YearMonth
 
@@ -87,9 +88,74 @@ class MonthlyPlanOverview(BaseModel):
     margin_after_transfers_krw: SignedKrwString
 
 
+class InvestmentHolding(BaseModel):
+    """An investment or pension account whose put-in money was entered by hand."""
+
+    asset_id: UUID
+    account_id: UUID
+    name: str
+    account_type: AccountType
+    value_krw: KrwString
+    basis_month: YearMonth
+    contributed_krw: KrwString
+    contributed_as_of: date | None
+    gain_krw: SignedKrwString
+    return_percent: str | None
+
+
+class InvestmentsOverview(BaseModel):
+    """Latest saved value against the money put in; a plain difference, not a rate over time."""
+
+    count: int
+    value_krw: KrwString
+    contributed_krw: KrwString
+    gain_krw: SignedKrwString
+    return_percent: str | None
+    missing_contribution_count: int
+    items: list[InvestmentHolding]
+
+
+class NetAssetsPoint(BaseModel):
+    """One month of the household total from the latest amount saved up to that month."""
+
+    month: YearMonth
+    assets_krw: KrwString | None
+    liabilities_krw: KrwString | None
+    net_assets_krw: SignedKrwString | None
+    item_count: int
+    known_count: int
+    entered_count: int
+    confirmed: bool
+
+
+class PlanPoint(BaseModel):
+    """One month's plan-based estimate; never a balance or an amount saved."""
+
+    month: YearMonth
+    as_of: date
+    income_known_krw: KrwString
+    income_count: int
+    income_unknown_count: int
+    spending_known_krw: KrwString
+    loan_known_krw: KrwString
+    transfer_known_krw: KrwString
+    planned_unknown_count: int
+    margin_before_transfers_krw: SignedKrwString | None
+    margin_after_transfers_krw: SignedKrwString | None
+    actual_income_krw: SignedKrwString
+
+
+class HouseholdTrendsResponse(BaseModel):
+    to_month: YearMonth
+    months: int
+    net_assets: list[NetAssetsPoint]
+    plan: list[PlanPoint]
+
+
 class HouseholdOverviewResponse(BaseModel):
     month: YearMonth
     holdings: HoldingsOverview
+    investments: InvestmentsOverview
     cards: RegisteredItems
     appliances: RegisteredItems
     insurance: InsuranceOverview

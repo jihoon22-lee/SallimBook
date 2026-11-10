@@ -15,6 +15,7 @@ from pydantic import (
 from pydantic.json_schema import SkipJsonSchema
 
 from sallimbook.assets.schemas import AssetCreate, AssetResponse, DateOnly
+from sallimbook.core.types import KrwString
 
 type AccountType = Literal[
     "checking",
@@ -62,9 +63,15 @@ class AccountCreate(AccountInput):
     account_number: AccountNumber | None = Field(default=None, repr=False)
     purpose: Purpose | None = None
     opened_on: DateOnly | None = None
+    contributed_krw: KrwString | None = Field(
+        default=None, description="지금까지 넣은 돈(원금). 기록에서 계산하지 않는 직접 입력값."
+    )
+    contributed_as_of: DateOnly | None = None
 
     @model_validator(mode="after")
     def validate_asset(self) -> Self:
+        if self.contributed_krw is None and self.contributed_as_of is not None:
+            raise ValueError("A contribution date needs its amount")
         if (self.asset_id is None) == (self.asset is None):
             raise ValueError("Choose an existing asset or supply a new asset")
         if self.asset is not None:
@@ -85,11 +92,19 @@ class AccountPatch(AccountInput):
     account_number: AccountNumber | None = Field(default=None, repr=False)
     purpose: Purpose | None = None
     opened_on: DateOnly | None = None
+    contributed_krw: KrwString | None = None
+    contributed_as_of: DateOnly | None = None
 
     @model_validator(mode="after")
     def validate_patch(self) -> Self:
         if not self.model_fields_set:
             raise ValueError("Supply at least one account field")
+        if (
+            "contributed_krw" in self.model_fields_set
+            and self.contributed_krw is None
+            and self.contributed_as_of is not None
+        ):
+            raise ValueError("A contribution date needs its amount")
         for name in self.model_fields_set & {"institution_name", "account_type"}:
             if getattr(self, name) is None:
                 raise ValueError("Required account metadata cannot be cleared")
@@ -107,6 +122,8 @@ class AccountResponse(BaseModel):
     has_number: bool
     purpose: str | None
     opened_on: date | None
+    contributed_krw: KrwString | None = None
+    contributed_as_of: date | None = None
     closed_on: date | None
     status: AccountStatus
     created_by_member_id: UUID

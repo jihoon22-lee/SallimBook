@@ -44,6 +44,32 @@
             ],
             "title": "Asset Id"
           },
+          "contributed_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributed As Of"
+          },
+          "contributed_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "지금까지 넣은 돈(원금). 기록에서 계산하지 않는 직접 입력값.",
+            "title": "Contributed Krw"
+          },
           "institution_name": {
             "maxLength": 120,
             "minLength": 1,
@@ -133,6 +159,31 @@
             "$ref": "#/components/schemas/AccountType",
             "title": "Account Type"
           },
+          "contributed_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributed As Of"
+          },
+          "contributed_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributed Krw"
+          },
           "institution_name": {
             "maxLength": 120,
             "minLength": 1,
@@ -191,6 +242,31 @@
               }
             ],
             "title": "Closed On"
+          },
+          "contributed_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributed As Of"
+          },
+          "contributed_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributed Krw"
           },
           "created_at": {
             "format": "date-time",
@@ -9315,6 +9391,9 @@
           "insurance": {
             "$ref": "#/components/schemas/InsuranceOverview"
           },
+          "investments": {
+            "$ref": "#/components/schemas/InvestmentsOverview"
+          },
           "month": {
             "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
             "title": "Month",
@@ -9327,12 +9406,48 @@
         "required": [
           "month",
           "holdings",
+          "investments",
           "cards",
           "appliances",
           "insurance",
           "plan"
         ],
         "title": "HouseholdOverviewResponse",
+        "type": "object"
+      },
+      "HouseholdTrendsResponse": {
+        "properties": {
+          "months": {
+            "title": "Months",
+            "type": "integer"
+          },
+          "net_assets": {
+            "items": {
+              "$ref": "#/components/schemas/NetAssetsPoint"
+            },
+            "title": "Net Assets",
+            "type": "array"
+          },
+          "plan": {
+            "items": {
+              "$ref": "#/components/schemas/PlanPoint"
+            },
+            "title": "Plan",
+            "type": "array"
+          },
+          "to_month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "To Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_month",
+          "months",
+          "net_assets",
+          "plan"
+        ],
+        "title": "HouseholdTrendsResponse",
         "type": "object"
       },
       "InclusionStatus": {
@@ -10069,6 +10184,85 @@
         "title": "InsuranceOverview",
         "type": "object"
       },
+      "InsuranceSummaryResponse": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "matched_received_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Matched Received Krw",
+            "type": "string"
+          },
+          "monthly_premium_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Monthly Premium Krw",
+            "type": "string"
+          },
+          "paid_total_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Paid Total Krw",
+            "type": "string"
+          },
+          "paid_unknown_count": {
+            "title": "Paid Unknown Count",
+            "type": "integer"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyMoney"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "policy_count": {
+            "title": "Policy Count",
+            "type": "integer"
+          },
+          "received_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Received Krw",
+            "type": "string"
+          },
+          "recovery_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Percent"
+          },
+          "unassigned_received_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Unassigned Received Krw",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "policy_count",
+          "paid_unknown_count",
+          "monthly_premium_krw",
+          "paid_total_krw",
+          "received_krw",
+          "matched_received_krw",
+          "unassigned_received_krw",
+          "recovery_percent",
+          "policies"
+        ],
+        "title": "InsuranceSummaryResponse",
+        "type": "object"
+      },
       "IntervalUnit": {
         "enum": [
           "manual",
@@ -10076,6 +10270,148 @@
           "months"
         ],
         "type": "string"
+      },
+      "InvestmentHolding": {
+        "description": "An investment or pension account whose put-in money was entered by hand.",
+        "properties": {
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "asset_id": {
+            "format": "uuid",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "basis_month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "Basis Month",
+            "type": "string"
+          },
+          "contributed_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contributed As Of"
+          },
+          "contributed_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Contributed Krw",
+            "type": "string"
+          },
+          "gain_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Gain Krw",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "return_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Percent"
+          },
+          "value_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Value Krw",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset_id",
+          "account_id",
+          "name",
+          "account_type",
+          "value_krw",
+          "basis_month",
+          "contributed_krw",
+          "contributed_as_of",
+          "gain_krw",
+          "return_percent"
+        ],
+        "title": "InvestmentHolding",
+        "type": "object"
+      },
+      "InvestmentsOverview": {
+        "description": "Latest saved value against the money put in; a plain difference, not a rate over time.",
+        "properties": {
+          "contributed_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Contributed Krw",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "gain_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Gain Krw",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InvestmentHolding"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "missing_contribution_count": {
+            "title": "Missing Contribution Count",
+            "type": "integer"
+          },
+          "return_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Percent"
+          },
+          "value_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Value Krw",
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "value_krw",
+          "contributed_krw",
+          "gain_krw",
+          "return_percent",
+          "missing_contribution_count",
+          "items"
+        ],
+        "title": "InvestmentsOverview",
+        "type": "object"
       },
       "InvitationAcceptance": {
         "additionalProperties": false,
@@ -12313,6 +12649,83 @@
         "title": "NativeTokenResponse",
         "type": "object"
       },
+      "NetAssetsPoint": {
+        "description": "One month of the household total from the latest amount saved up to that month.",
+        "properties": {
+          "assets_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assets Krw"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "entered_count": {
+            "title": "Entered Count",
+            "type": "integer"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "known_count": {
+            "title": "Known Count",
+            "type": "integer"
+          },
+          "liabilities_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Liabilities Krw"
+          },
+          "month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          },
+          "net_assets_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Assets Krw"
+          }
+        },
+        "required": [
+          "month",
+          "assets_krw",
+          "liabilities_krw",
+          "net_assets_krw",
+          "item_count",
+          "known_count",
+          "entered_count",
+          "confirmed"
+        ],
+        "title": "NetAssetsPoint",
+        "type": "object"
+      },
       "NodeKind": {
         "enum": [
           "outpatient",
@@ -14487,6 +14900,105 @@
         "title": "PlanPaymentSwitchRow",
         "type": "object"
       },
+      "PlanPoint": {
+        "description": "One month's plan-based estimate; never a balance or an amount saved.",
+        "properties": {
+          "actual_income_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Actual Income Krw",
+            "type": "string"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "income_count": {
+            "title": "Income Count",
+            "type": "integer"
+          },
+          "income_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Income Known Krw",
+            "type": "string"
+          },
+          "income_unknown_count": {
+            "title": "Income Unknown Count",
+            "type": "integer"
+          },
+          "loan_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Loan Known Krw",
+            "type": "string"
+          },
+          "margin_after_transfers_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin After Transfers Krw"
+          },
+          "margin_before_transfers_krw": {
+            "anyOf": [
+              {
+                "maxLength": 21,
+                "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Before Transfers Krw"
+          },
+          "month": {
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          },
+          "planned_unknown_count": {
+            "title": "Planned Unknown Count",
+            "type": "integer"
+          },
+          "spending_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Spending Known Krw",
+            "type": "string"
+          },
+          "transfer_known_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Transfer Known Krw",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "as_of",
+          "income_known_krw",
+          "income_count",
+          "income_unknown_count",
+          "spending_known_krw",
+          "loan_known_krw",
+          "transfer_known_krw",
+          "planned_unknown_count",
+          "margin_before_transfers_krw",
+          "margin_after_transfers_krw",
+          "actual_income_krw"
+        ],
+        "title": "PlanPoint",
+        "type": "object"
+      },
       "PlanResponse": {
         "properties": {
           "end_reason": {
@@ -15087,6 +15599,32 @@
             ],
             "title": "Policyholder Member Id"
           },
+          "premium_paid_before_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "기준일까지 이미 낸 보험료 합계. 월 계획 등록 이전 납입분을 직접 입력합니다.",
+            "title": "Premium Paid Before Krw"
+          },
+          "premium_paid_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Paid Through"
+          },
           "product_name": {
             "maxLength": 120,
             "minLength": 1,
@@ -15145,6 +15683,132 @@
           "next_cursor"
         ],
         "title": "PolicyListResponse",
+        "type": "object"
+      },
+      "PolicyMoney": {
+        "description": "Premiums paid (entered and estimated) against benefits actually received for one policy.",
+        "properties": {
+          "estimated_from_month": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated From Month"
+          },
+          "estimated_months": {
+            "title": "Estimated Months",
+            "type": "integer"
+          },
+          "insurer": {
+            "title": "Insurer",
+            "type": "string"
+          },
+          "monthly_premium_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Monthly Premium Krw",
+            "type": "string"
+          },
+          "paid_before_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Before Krw"
+          },
+          "paid_estimated_krw": {
+            "maxLength": 20,
+            "pattern": "^(0|[1-9][0-9]{0,19})$",
+            "title": "Paid Estimated Krw",
+            "type": "string"
+          },
+          "paid_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Through"
+          },
+          "paid_total_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Total Krw"
+          },
+          "policy_id": {
+            "format": "uuid",
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "received_krw": {
+            "maxLength": 21,
+            "pattern": "^(0|-?[1-9][0-9]{0,19})$",
+            "title": "Received Krw",
+            "type": "string"
+          },
+          "recovery_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Percent"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PolicyStatus"
+          },
+          "unknown_months": {
+            "title": "Unknown Months",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy_id",
+          "insurer",
+          "product_name",
+          "status",
+          "monthly_premium_krw",
+          "paid_before_krw",
+          "paid_through",
+          "paid_estimated_krw",
+          "estimated_from_month",
+          "estimated_months",
+          "unknown_months",
+          "paid_total_krw",
+          "received_krw",
+          "recovery_percent"
+        ],
+        "title": "PolicyMoney",
         "type": "object"
       },
       "PolicyPatch": {
@@ -15284,6 +15948,31 @@
               }
             ],
             "title": "Policyholder Member Id"
+          },
+          "premium_paid_before_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Paid Before Krw"
+          },
+          "premium_paid_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Paid Through"
           },
           "product_name": {
             "maxLength": 120,
@@ -15468,6 +16157,32 @@
               }
             ],
             "title": "Policyholder Member Id"
+          },
+          "premium_paid_before_krw": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^(0|[1-9][0-9]{0,19})$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "기준일까지 이미 낸 보험료 합계. 월 계획 등록 이전 납입분을 직접 입력합니다.",
+            "title": "Premium Paid Before Krw"
+          },
+          "premium_paid_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium Paid Through"
           },
           "product_name": {
             "maxLength": 120,
@@ -36651,6 +37366,141 @@
         ]
       }
     },
+    "/api/v1/household-trends": {
+      "get": {
+        "operationId": "getHouseholdTrends",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 36,
+              "minimum": 1,
+              "title": "Months",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdTrendsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Household Trends",
+        "tags": [
+          "household-overview"
+        ]
+      }
+    },
     "/api/v1/household/connection-code": {
       "post": {
         "operationId": "createHouseholdConnectionCode",
@@ -48998,6 +49848,117 @@
         "summary": "Void",
         "tags": [
           "insurance-events"
+        ]
+      }
+    },
+    "/api/v1/insurance/summary": {
+      "get": {
+        "operationId": "getInsuranceSummary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsuranceSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Insurance Summary",
+        "tags": [
+          "insurance"
         ]
       }
     },

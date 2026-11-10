@@ -31,6 +31,7 @@ from sallimbook.core.authorization import (
 from sallimbook.core.errors import DomainError
 from sallimbook.core.name_search import search_names
 from sallimbook.core.pagination import keyset_page
+from sallimbook.core.types import decimal_krw, krw_string
 from sallimbook.identity import service as identity
 from sallimbook.identity.auth_models import HouseholdMember
 from sallimbook.identity.passkeys.models import StepUpPurpose
@@ -49,6 +50,10 @@ def account_response(account: FinancialAccount, asset: Asset) -> AccountResponse
         has_number=account.account_number_ciphertext is not None,
         purpose=account.purpose,
         opened_on=account.opened_on,
+        contributed_krw=(
+            None if account.contributed_krw is None else krw_string(account.contributed_krw)
+        ),
+        contributed_as_of=account.contributed_as_of,
         closed_on=asset.ended_on,
         status="closed" if asset.ended_on is not None else "active",
         created_by_member_id=account.created_by_member_id,
@@ -144,6 +149,10 @@ def create_account(
         account_type=payload.account_type,
         purpose=payload.purpose,
         opened_on=payload.opened_on,
+        contributed_krw=(
+            None if payload.contributed_krw is None else decimal_krw(payload.contributed_krw)
+        ),
+        contributed_as_of=payload.contributed_as_of,
         created_by_member_id=principal.member_id,
         updated_by_member_id=principal.member_id,
     )
@@ -254,8 +263,16 @@ def update_account(
         payload.opened_on if "opened_on" in payload.model_fields_set else account.opened_on, asset
     )
     previous = account.version
-    for name in payload.model_fields_set - {"account_number"}:
+    for name in payload.model_fields_set - {"account_number", "contributed_krw"}:
         setattr(account, name, getattr(payload, name))
+    if "contributed_krw" in payload.model_fields_set:
+        account.contributed_krw = (
+            None if payload.contributed_krw is None else decimal_krw(payload.contributed_krw)
+        )
+        if payload.contributed_krw is None:
+            account.contributed_as_of = None
+    if account.contributed_krw is None and account.contributed_as_of is not None:
+        raise DomainError("VALIDATION_ERROR", "넣은 돈 금액과 기준일을 함께 확인해 주세요.", 422)
     if "account_number" in payload.model_fields_set:
         _write_number(account, payload.account_number, key_file)
     account.updated_by_member_id = principal.member_id
