@@ -167,6 +167,66 @@ test("first asset amount saves from the list without a month setup or confirmati
   expect(months.record!.values[0]!.input_amount_krw).toBe("3000");
 });
 
+test("an item registered after this month's record was started takes its amount from the list", async ({
+  page,
+}) => {
+  const comparison = await mockComparison(page);
+  const { mockMonths } = await import("./support/months");
+  const months = await mockMonths(page);
+  await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
+  // The record was started before this item existed, so its list does not include it yet.
+  const late = months.record!.values.pop()!;
+  await page.route("**/api/v1/asset-comparison?*", (route) => {
+    comparison.mode = "unconfirmed";
+    comparison.after = months.record!.values;
+    return route.fulfill({
+      json: comparison.response(new URL(route.request().url()).searchParams),
+    });
+  });
+  await page.goto("/assets");
+  const asset = page
+    .locator(".asset-record")
+    .filter({ has: page.getByRole("link", { name: late.name, exact: true }) });
+  await asset.getByRole("button", { name: "금액 입력·수정", exact: true }).click();
+  // It joins the record on its own; nothing else in the list had changed.
+  const editor = page.getByRole("region", { name: "목록에서 금액 수정" });
+  await editor.getByLabel("확인 금액 (원)", { exact: true }).fill("7000");
+  await editor.getByRole("button", { name: "금액 확인 저장", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(months.writes.map((write) => write.operation)).toEqual(["sync-scope", "values"]);
+  expect(
+    months.record!.values.find((row) => row.asset_id === late.asset_id)!.input_amount_krw,
+  ).toBe("7000");
+  await expect(page.getByText("아직 포함되지 않았어요", { exact: false })).toHaveCount(0);
+});
+
+test("a list that changed in other ways still goes through the reviewed month record step", async ({
+  page,
+}) => {
+  const comparison = await mockComparison(page);
+  const { mockMonths } = await import("./support/months");
+  const months = await mockMonths(page);
+  await page.clock.setFixedTime(new Date("2025-02-20T03:00:00Z"));
+  const late = months.record!.values.pop()!;
+  // Another item's share was changed meanwhile: joining silently would also apply that change.
+  months.record!.values[0]!.household_share = "0.25";
+  await page.route("**/api/v1/asset-comparison?*", (route) => {
+    comparison.mode = "unconfirmed";
+    comparison.after = months.record!.values;
+    return route.fulfill({
+      json: comparison.response(new URL(route.request().url()).searchParams),
+    });
+  });
+  await page.goto("/assets");
+  await page
+    .locator(".asset-record")
+    .filter({ has: page.getByRole("link", { name: late.name, exact: true }) })
+    .getByRole("button", { name: "금액 입력·수정", exact: true })
+    .click();
+  await expect(page.getByText("아직 포함되지 않았어요", { exact: false })).toBeVisible();
+  expect(months.writes).toHaveLength(0);
+});
+
 test("quick amount entry preserves a confirmed month and offers its correction path", async ({
   page,
 }) => {

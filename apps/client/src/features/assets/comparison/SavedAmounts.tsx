@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 import { Link } from "react-router";
 import { ApiError } from "../../../platform/api";
 import { MonthPicker, formatMonth, useMonth } from "../../../shared/MonthContext";
-import { useResource } from "../../finance/queries";
+import { allPages, useResource } from "../../finance/queries";
+import { useAssetsApi } from "../api";
+import { scopeChanges } from "../months/MonthCommands";
 import { FinanceError, dateLabel, type HouseholdMember } from "../../finance/FinanceSupport";
 import { formatKrw, maxAsOfDate, valueDraft } from "../months/model";
 import { useAssetComparisonApi } from "./api";
@@ -15,6 +17,7 @@ import { useHouseholdOverview } from "../../dashboard/overviewApi";
 export function useSavedAmounts() {
   const api = useAssetComparisonApi();
   const months = useAssetMonthsApi();
+  const assetsApi = useAssetsApi();
   const { month, currentMonth } = useMonth();
   const resource = useResource(useCallback(() => api.all({ to: month }), [api, month]));
   // Each item's latest entered amount, shown when the selected month has none of its own.
@@ -27,13 +30,34 @@ export function useSavedAmounts() {
     if (editor || command.busy || month > currentMonth) return;
     setNotice(null);
     const result = await command.run(async (signal) => {
+      let record;
       try {
-        return await months.all(month, signal);
+        record = await months.all(month, signal);
       } catch (error) {
         if (!(error instanceof ApiError) || error.code !== "MONTH_NOT_FOUND") throw error;
         await months.draft(month, { copy_previous: false }, draftKey, signal);
         return months.all(month, signal);
       }
+      // An item registered after this month's record was started joins it without a detour,
+      // as long as nothing else in the list would change; other differences stay a reviewed step.
+      if (
+        record.state !== "confirmed" &&
+        !record.values.some((value) => value.asset_id === assetId)
+      ) {
+        const assets = await allPages((cursor) =>
+          assetsApi.list({ status: "all", limit: 200, ...(cursor ? { cursor } : {}) }),
+        );
+        const scope = scopeChanges(month, record.values, assets);
+        if (
+          scope.added.some((asset) => asset.id === assetId) &&
+          scope.removed.length === 0 &&
+          scope.changed.length === 0
+        ) {
+          await months.sync(month, { revision_id: record.revision_id }, record.version, signal);
+          return months.all(month, signal);
+        }
+      }
+      return record;
     });
     if (!result.ok || !command.mounted.current) return;
     const record = result.value;

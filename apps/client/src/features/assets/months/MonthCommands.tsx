@@ -647,6 +647,25 @@ export function ReopenMonth({ initial, reload, close }: RecordActionProps) {
   );
 }
 
+/** How a month record's list differs from the assets held in that month today. */
+function heldInMonth(month: string, all: Asset[]) {
+  return all.filter(
+    (asset) =>
+      asset.started_on <= monthEnd(month) && (!asset.ended_on || asset.ended_on >= `${month}-01`),
+  );
+}
+export function scopeChanges(month: string, values: MonthValue[], all: Asset[]) {
+  const held = heldInMonth(month, all);
+  return {
+    held,
+    added: held.filter((asset) => !values.some((row) => row.asset_id === asset.id)),
+    removed: values.filter((row) => !held.some((asset) => asset.id === row.asset_id)),
+    changed: held.filter((asset) => {
+      const row = values.find((item) => item.asset_id === asset.id);
+      return row && !sameLiveScope(row, asset);
+    }),
+  };
+}
 function sameLiveScope(row: MonthValue, asset: Asset): boolean {
   return (
     scopeIdentity(row) ===
@@ -701,14 +720,7 @@ export function SynchronizeMonthScope({
           seen.add(cursor);
         }
       } while (cursor && active);
-      if (active)
-        setAssets(
-          items.filter(
-            (asset) =>
-              asset.started_on <= monthEnd(initial.month) &&
-              (!asset.ended_on || asset.ended_on >= `${initial.month}-01`),
-          ),
-        );
+      if (active) setAssets(heldInMonth(initial.month, items));
     })().catch((failure) => {
       if (active) setLoadError(toApiError(failure));
     });
@@ -716,16 +728,9 @@ export function SynchronizeMonthScope({
       active = false;
     };
   }, [assetsApi, initial.month, retry]);
-  const added =
-    assets?.filter((asset) => !initial.values.some((row) => row.asset_id === asset.id)) ?? [];
-  const removed = assets
-    ? initial.values.filter((row) => !assets.some((asset) => asset.id === row.asset_id))
-    : [];
-  const changed =
-    assets?.filter((asset) => {
-      const row = initial.values.find((item) => item.asset_id === asset.id);
-      return row && !sameLiveScope(row, asset);
-    }) ?? [];
+  const { added, removed, changed } = scopeChanges(initial.month, initial.values, assets ?? []);
+  // Until the assets arrive nothing is known to have left the list.
+  if (!assets) removed.length = 0;
   async function synchronize(event: FormEvent) {
     event.preventDefault();
     if (!ack || !assets || blocked) return;

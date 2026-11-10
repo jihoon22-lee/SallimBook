@@ -375,6 +375,35 @@ export async function mockMonths(page: Page) {
             row.version++;
           }
         }
+        // Items registered after the record was started join it with no amount yet.
+        for (const asset of finance.assets) {
+          if (current.values.some((row) => row.asset_id === asset.id)) continue;
+          if (asset.ended_on && asset.ended_on < `${current.month}-01`) continue;
+          current.values.push({
+            ...structuredClone(current.values[0]!),
+            id: uid(150 + current.values.length),
+            asset_id: asset.id,
+            name: asset.name,
+            kind: asset.kind,
+            category: asset.category,
+            ownership_kind: asset.ownership_kind,
+            owner_member_id: asset.owner_member_id ?? null,
+            household_share: asset.household_share ?? "1",
+            amount_basis: asset.amount_basis,
+            inclusion_status: asset.inclusion_status ?? "included",
+            started_on: asset.started_on,
+            ended_on: asset.ended_on ?? null,
+            source_asset_version: asset.version,
+            input_amount_krw: null,
+            owned_amount_krw: null,
+            as_of_date: null,
+            verification_state: "missing",
+            origin: "manual",
+            origin_revision_id: null,
+            change_reason: null,
+            version: 1,
+          });
+        }
         current.scope_stale = false;
         current.version++;
         current.totals = total(current.values);
