@@ -22,7 +22,7 @@ internal enum class FinanceOperation {
     LIST_INCOME, INCOME_SUMMARY, INCOME_DUPLICATE_CANDIDATES, GET_INCOME, INCOME_HISTORY,
     CREATE_INCOME, CORRECT_INCOME, VOID_INCOME, RETURN_INCOME, CONVERT_INCOME_PRECISION,
     LIST_CARDS, GET_CARD, CREATE_CARD, UPDATE_CARD, ARCHIVE_CARD, DELETE_CARD,
-    GET_ASSET_COMPARISON, GET_ASSET_TRENDS, HOUSEHOLD_OVERVIEW,
+    GET_ASSET_COMPARISON, GET_ASSET_TRENDS, HOUSEHOLD_OVERVIEW, HOUSEHOLD_TRENDS, INSURANCE_SUMMARY,
     LIST_RECURRING_RULES, CREATE_RECURRING_RULE, GET_RECURRING_RULE, CHANGE_RECURRING_RULE, END_RECURRING_RULE, DELETE_RECURRING_RULE,
     GENERATE_OBLIGATIONS, LIST_OBLIGATIONS, LIST_OVERDUE_OBLIGATIONS, FIXED_COST_SUMMARY, GET_OBLIGATION, OBLIGATION_HISTORY,
     RESCHEDULE_OBLIGATION, SKIP_OBLIGATION, UNSKIP_OBLIGATION, COMPLETE_OBLIGATION, REOPEN_OBLIGATION,
@@ -51,7 +51,8 @@ internal object FinancePolicy {
     private val assetFields = setOf("name", "kind", "category", "ownership_kind", "owner_member_id", "household_share",
         "amount_basis", "inclusion_status", "started_on", "ended_on", "note")
     private val assetRequired = setOf("name", "kind", "category", "ownership_kind", "amount_basis", "started_on")
-    private val accountFields = setOf("institution_name", "account_type", "purpose", "opened_on")
+    private val accountFields = setOf("institution_name", "account_type", "purpose", "opened_on", "contributed_krw", "contributed_as_of")
+    private val krw = Regex("0|[1-9][0-9]{0,19}")
     private val auditFields = setOf("id", "household_id", "created_by_member_id", "updated_by_member_id", "created_at", "updated_at", "version")
 
     private fun invalid(): Nothing = throw AuthFailure(AuthCode.INVALID_REQUEST)
@@ -132,6 +133,8 @@ internal object FinancePolicy {
             "account_type" -> choice(item, accountTypes)
             "purpose" -> if (item != null) text(item, 500, true)
             "opened_on" -> if (item != null) date(item)
+            "contributed_krw" -> if (item != null && (item !is String || !krw.matches(item))) invalid()
+            "contributed_as_of" -> if (item != null) date(item)
             "asset_id" -> if (item != null) id(item)
             "asset" -> if (item != null) {
                 val asset = assetInput(item, false)
@@ -316,6 +319,9 @@ internal object FinancePolicy {
         choice(row["account_type"], accountTypes)
         row["purpose"]?.let { text(it, 500, true) }
         row["opened_on"]?.let(::date)
+        row["contributed_krw"]?.let { if (it !is String || !krw.matches(it)) invalid() }
+        row["contributed_as_of"]?.let(::date)
+        if (row["contributed_krw"] == null && row["contributed_as_of"] != null) invalid()
         row["closed_on"]?.let(::date)
         choice(row["status"], setOf("active", "closed"))
         val hasNumber = row["has_number"] as? Boolean ?: invalid()

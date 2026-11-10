@@ -81,7 +81,8 @@ internal object InsurancePolicy {
     private val policyFields = mapOf("insurer" to text(120), "product_name" to text(120), "policyholder_member_id" to nullable(id),
         "insured_member_id" to nullable(id), "beneficiary_note" to nullable(text(1000, true)), "contract_start" to nullable(date),
         "contract_end" to nullable(date), "coverage_start" to date, "coverage_end" to nullable(date), "payment_start" to nullable(date),
-        "payment_end" to nullable(date), "status" to choice("active", "ended", "lapsed"), "valuation_asset_id" to nullable(id), "note" to nullable(text(2000, true)))
+        "payment_end" to nullable(date), "premium_paid_before_krw" to nullable(money), "premium_paid_through" to nullable(date),
+        "status" to choice("active", "ended", "lapsed"), "valuation_asset_id" to nullable(id), "note" to nullable(text(2000, true)))
     private val coverageFields = mapOf("name" to text(120), "benefit_type" to choice("reimbursement", "fixed", "other"),
         "insured_amount_krw" to nullable(money), "coverage_start" to nullable(date), "coverage_end" to nullable(date), "note" to nullable(text(2000, true)), "active" to bool)
     private val caseFields = mapOf("title" to text(120), "patient_member_id" to id, "diagnosis_note" to nullable(text(2000, true)),

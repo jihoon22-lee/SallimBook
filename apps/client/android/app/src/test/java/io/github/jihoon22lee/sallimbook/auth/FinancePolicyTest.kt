@@ -17,7 +17,8 @@ class FinancePolicyTest {
         "created_by_member_id" to memberId, "updated_by_member_id" to memberId, "created_at" to now, "updated_at" to now, "version" to 1)
     private fun account() = mapOf<String, Any?>("id" to accountId, "household_id" to householdId, "asset_id" to assetId,
         "asset" to asset(), "institution_name" to "합성 기관", "account_type" to "irp", "masked_number" to "**** A123",
-        "has_number" to true, "purpose" to null, "opened_on" to null, "closed_on" to null, "status" to "active",
+        "has_number" to true, "purpose" to null, "opened_on" to null, "contributed_krw" to "10000000", "contributed_as_of" to null,
+        "closed_on" to null, "status" to "active",
         "created_by_member_id" to memberId, "updated_by_member_id" to memberId, "created_at" to now, "updated_at" to now, "version" to 2)
     private fun invalid(code: AuthCode = AuthCode.INVALID_REQUEST, action: () -> Unit) {
         try { action(); fail("Unsafe finance input accepted") } catch (failure: AuthFailure) {

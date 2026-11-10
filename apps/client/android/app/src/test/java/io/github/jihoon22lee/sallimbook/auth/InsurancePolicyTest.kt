@@ -13,7 +13,7 @@ class InsurancePolicyTest {
     private val audit get() = mapOf("id" to id, "household_id" to other, "created_by_member_id" to other, "updated_by_member_id" to other, "created_at" to now, "updated_at" to now, "version" to 7)
     private fun policyInput() = mapOf<String, Any?>("insurer" to "합성 보험사", "product_name" to "합성 계약", "policyholder_member_id" to null, "insured_member_id" to other,
         "beneficiary_note" to null, "contract_start" to null, "contract_end" to null, "coverage_start" to day, "coverage_end" to null,
-        "payment_start" to null, "payment_end" to null, "status" to "active", "valuation_asset_id" to null, "note" to null)
+        "payment_start" to null, "payment_end" to null, "premium_paid_before_krw" to null, "premium_paid_through" to null, "status" to "active", "valuation_asset_id" to null, "note" to null)
     private fun policy() = policyInput() + audit + mapOf("has_number" to true, "masked_number" to "**** C123")
     private fun coverage() = mapOf<String, Any?>("name" to "합성 보장", "benefit_type" to "fixed", "insured_amount_krw" to null, "coverage_start" to null, "coverage_end" to null, "note" to null, "active" to true)
     private fun caseInput() = mapOf<String, Any?>("title" to "합성 사건", "patient_member_id" to other, "diagnosis_note" to null, "diagnosis_code" to null, "start_on" to day, "end_on" to null, "treatment_state" to "ongoing", "financial_state" to "settled")

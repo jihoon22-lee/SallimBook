@@ -579,6 +579,16 @@ export interface SallimBookAuth {
   }): Promise<
     NativeAuthResult<NativeFinanceResponse<components["schemas"]["HouseholdOverviewResponse"]>>
   >;
+  householdTrends(options: {
+    query: Required<operations["getHouseholdTrends"]["parameters"]["query"]>;
+  }): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["HouseholdTrendsResponse"]>>
+  >;
+  insuranceSummary(
+    options: Record<string, never>,
+  ): Promise<
+    NativeAuthResult<NativeFinanceResponse<components["schemas"]["InsuranceSummaryResponse"]>>
+  >;
   listOverdueObligations(options: {
     query?: NonNullable<operations["listOverdueObligations"]["parameters"]["query"]>;
   }): Promise<
