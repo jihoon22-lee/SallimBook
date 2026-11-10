@@ -103,7 +103,7 @@ python -m ops.schedule activate /PRIVATE/schedule-v001
 `activation-failed.json`에 각 정리 결과와 남은 unit을 기록한다. 원인을 해결한 뒤 명시적 `activate`를
 재시도할 수 있다. Compose 데이터·볼륨·이미지를 삭제하지 않는다.
 
-startup의 SDK/APK preflight를 통과해야 나머지 예약 서비스가 시작된다. 이미 준비한 앱 배포가 바뀌면
+health는 startup이 성공해야 실행된다(`Requires=`). backup·restore-check·cvd-refresh는 startup 뒤에 실행하되 startup이 실패해도 실행한다(`Wants=`). 서명 DB가 만료되어 scanner가 멈추면 startup이 실패하는데, 그때도 백업은 계속되고 cvd-refresh가 새 이미지를 만들어 복구해야 하기 때문이다. cvd-refresh는 scanner에 연결할 수 없으면 갱신이 필요한 상태로 본다. 이미 준비한 앱 배포가 바뀌면
 기존 baseline 설정과 충돌하므로 최종 배포 후 해당 manifest에 연결한다. 새 앱 소스로 운영 설정을
 전환할 때는 이전 중단 작업부터 해결하고 새 운영 state/config/schedule을 사용한다. 이전 장부와 실제
 백업은 보존한다. 기존 unit 교체는 별도 운영 절차이며 `install`이 덮어쓰지 않는다.

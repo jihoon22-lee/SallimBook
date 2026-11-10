@@ -36,11 +36,18 @@ def units(config, configuration, sha256):
     result = {}
     for task in ("startup", *CALENDARS):
         name = project + "-" + task
+        # Health reports on the started stack, so it requires startup. The backup, the
+        # restore check and the scanner refresh must still run when startup fails: a
+        # scanner whose database expired fails startup, and only the refresh repairs it.
         dependency = (
             ""
             if task == "startup"
             else (
-                "Requires=" + project + "-startup.service\nAfter=" + project + "-startup.service\n"
+                ("Requires=" if task == "health" else "Wants=")
+                + project
+                + "-startup.service\nAfter="
+                + project
+                + "-startup.service\n"
             )
         )
         result[name + ".service"] = (

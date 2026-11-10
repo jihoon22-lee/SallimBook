@@ -58,7 +58,7 @@ uv run --project services/api python -m ops.preflight /PRIVATE_CONFIG/NEW_RENDER
 
 `write_config`는 운영자 전용 최상위 출력 디렉터리를 0700으로 유지한다. 컨테이너에 mount하는 공개 설정의 `node/`, `public/`, `public/.well-known/`, `downloads/`는 0755, 생성 설정 파일은 0644로 명시하여 `umask 077`에서도 cap-drop된 node와 UID 10001 Caddy가 읽을 수 있게 한다. 비밀번호·keyring·서명키 등 비밀 파일은 이 출력 디렉터리에 생성하지 않으며 기존 owner-only 권한을 유지한다.
 
-ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검사에 실패한다. scanner와 API의 Compose healthcheck는 실제 Unix PING과 VERSIONCOMMANDS, 고정 엔진·INSTREAM 지원·DB freshness를 기존 업로드 검사와 같은 함수로 확인한다. API healthcheck는 DB HTTP readiness도 확인하며, scanner가 healthy가 된 뒤 API를 시작하고 API가 healthy가 된 뒤 웹을 시작한다. 실행 중 scanner 중단·stale 상태는 API container를 unhealthy로 바꾼다. 기존 `/api/v1/ready`의 DB 검사 계약은 유지하며 운영 준비 상태는 Compose health를 기준으로 확인한다. unhealthy 표시는 서비스를 자동 중지시키는 기능이 아니며 첨부 업로드는 기존 검사에서도 실패 시 거부한다. `SALLIMBOOK_CVD_REFRESH`를 실제 갱신일로 바꿔 새 이미지로 배포한다. 오래된 이미지의 태그만 다시 붙여 검사 실패를 우회하지 않는다.
+ClamAV DB는 공식 서명 DB만 빌드 시 내려받고 7일을 넘으면 검사에 실패한다. scanner와 API의 Compose healthcheck는 실제 Unix PING과 VERSIONCOMMANDS, 고정 엔진·INSTREAM 지원·DB freshness를 기존 업로드 검사와 같은 함수로 확인한다. API healthcheck는 DB HTTP readiness도 확인하며, scanner가 healthy가 된 뒤 API를 시작하고 API가 healthy가 된 뒤 웹을 시작한다. 실행 중 scanner 중단·stale 상태는 API container를 unhealthy로 바꾼다. 기존 `/api/v1/ready`의 DB 검사 계약은 유지하며 운영 준비 상태는 Compose health를 기준으로 확인한다. unhealthy 표시는 서비스를 자동 중지시키는 기능이 아니며 첨부 업로드는 기존 검사에서도 실패 시 거부한다. `SALLIMBOOK_CVD_REFRESH`를 실제 갱신일로 바꿔 새 이미지로 배포한다. 예약된 `cvd-refresh`는 scanner가 만료된 DB로 멈춰 응답하지 않아도 갱신 대상으로 보고 새 이미지를 만든다. 빌드에 쓰는 `git archive` 소스는 디렉터리 0755, 파일 0644(실행 파일 0755)로 고정하므로 `tar.umask` 설정과 관계없이 세대 봉인 검사(`CVD_TREE_IDENTITY`)를 통과한다. 오래된 이미지의 태그만 다시 붙여 검사 실패를 우회하지 않는다.
 
 ### 앱 8443 Funnel 공개 선택
 

@@ -708,6 +708,37 @@ class ReleaseTests(unittest.TestCase):
                 with self.assertRaises(zipfile.BadZipFile):
                     preflight.verify_download_apk(directory, config(), directory)
 
+    def test_source_snapshot_drops_group_and_other_write_bits(self):
+        """`git archive` hands out 0775/0664 by default; retention rejects such trees."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            (root / "nested").mkdir(parents=True)
+
+            def git(*args):
+                return subprocess.check_output(
+                    ["git", *args], cwd=root, stderr=subprocess.DEVNULL
+                )
+
+            git("init", "-q")
+            git("config", "user.email", "synthetic@example.invalid")
+            git("config", "user.name", "Synthetic")
+            git("config", "tar.umask", "0002")
+            (root / "nested/code.txt").write_text("reviewed source")
+            (root / "nested/tool.sh").write_text("#!/bin/sh\n")
+            (root / "nested/tool.sh").chmod(0o755)
+            git("add", ".")
+            git("commit", "-qm", "synthetic")
+            commit = git("rev-parse", "HEAD").decode().strip()
+            with patch.object(build_context, "ROOT", root):
+                with build_context.source_snapshot(commit, Path(tmp)) as checkout:
+                    modes = {
+                        path.relative_to(checkout).as_posix(): stat.S_IMODE(path.stat().st_mode)
+                        for path in checkout.rglob("*")
+                    }
+            self.assertEqual(
+                modes, {"nested": 0o755, "nested/code.txt": 0o644, "nested/tool.sh": 0o755}
+            )
+
     def test_source_snapshot_excludes_ignored_private_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
