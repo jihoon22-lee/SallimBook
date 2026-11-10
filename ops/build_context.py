@@ -62,7 +62,7 @@ def source_snapshot(commit, parent):
                     target = checkout / name
                     if member.isdir():
                         target.mkdir(parents=True, exist_ok=True)
-                        target.chmod(member.mode & 0o777)
+                        target.chmod(0o755)
                     else:
                         target.parent.mkdir(parents=True, exist_ok=True)
                         with (
@@ -70,7 +70,10 @@ def source_snapshot(commit, parent):
                             target.open("xb") as output,
                         ):
                             shutil.copyfileobj(source, output)
-                        target.chmod(member.mode & 0o777)
+                        # `git archive` applies tar.umask (002 by default), so entries
+                        # arrive group-writable. Committed sources are public build
+                        # inputs: keep only the executable bit.
+                        target.chmod(0o755 if member.mode & 0o100 else 0o644)
             if proc.wait(timeout=30):
                 raise ValueError("Committed source export failed")
             yield checkout

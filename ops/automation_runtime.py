@@ -702,7 +702,14 @@ class Runtime:
     def cvd_refresh(self):
         self.preflight()
         self.services(require_healthy=False)
-        current = self.scanner()
+        try:
+            current = self.scanner()
+        except AutomationError as failure:
+            # A scanner that stopped on an expired database cannot report its age.
+            # This refresh is the only way back, so an unreachable scanner is due.
+            if failure.code not in {"COMMAND_FAILED", "WORKER_FAILED"}:
+                raise
+            current = {"fresh": False, "unreachable": True}
         if current.get("fresh") and not current.get("refresh_due"):
             return {"status": "refresh-not-due", "scanner": current}
         from ops.cvd_retention import Retention

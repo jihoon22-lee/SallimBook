@@ -689,6 +689,36 @@ class RuntimeBoundaries(unittest.TestCase):
         self.assertFalse((Path(self.config["state_directory"]) / "active-deployment.json").exists())
         self.assertTrue(all(call.args[0] != "image" for call in docker.call_args_list))
 
+    def test_cvd_refresh_treats_an_unreachable_scanner_as_due(self):
+        """A scanner that stopped on an expired database must not block its own repair."""
+        for code, reaches_build in (("COMMAND_FAILED", True), ("SCANNER_VOLUME_IDENTITY", False)):
+            with self.subTest(code=code):
+                item = self.make_runtime()
+
+                @contextmanager
+                def source(*args):
+                    yield self.root
+
+                with ExitStack() as stack:
+                    prepare = stack.enter_context(patch("ops.cvd_retention.Retention.prepare"))
+                    stack.enter_context(patch.object(item, "preflight"))
+                    stack.enter_context(patch.object(item, "services"))
+                    stack.enter_context(
+                        patch.object(item, "scanner", side_effect=auto.AutomationError(code))
+                    )
+                    stack.enter_context(patch.object(runtime, "source_snapshot", source))
+                    stack.enter_context(
+                        patch.object(
+                            runtime,
+                            "stage_api_snapshot",
+                            side_effect=auto.AutomationError("SYNTHETIC_BUILD_REACHED"),
+                        )
+                    )
+                    expected = "SYNTHETIC_BUILD_REACHED" if reaches_build else code
+                    with self.assertRaisesRegex(auto.AutomationError, expected):
+                        item.cvd_refresh()
+                self.assertEqual(prepare.called, reaches_build)
+
     @contextmanager
     def prepared_cvd(self, item):
         @contextmanager

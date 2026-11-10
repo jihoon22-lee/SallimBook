@@ -55,6 +55,18 @@ class ScheduleTests(unittest.TestCase):
             self.assertIn("Asia/Seoul", path.read_text())
             self.assertIn("Persistent=true", path.read_text())
 
+    def test_only_health_requires_startup(self):
+        """A failed startup must not skip the backup or the refresh that repairs the scanner."""
+        project = self.config["project"]
+        rendered = schedule.units(self.config, self.configuration, "d" * 64)
+        startup = project + "-startup.service\nAfter=" + project + "-startup.service\n"
+        self.assertIn("Requires=" + startup, rendered[project + "-health.service"])
+        for task in ("backup", "restore-check", "cvd-refresh"):
+            unit = rendered[project + "-" + task + ".service"]
+            self.assertIn("Wants=" + startup, unit)
+            self.assertNotIn("Requires=", unit)
+        self.assertNotIn("startup.service", rendered[project + "-startup.service"])
+
     def test_validate_checks_all_files_without_systemctl(self):
         schedule.validate(self.directory, runner=self.runner)
         self.assertTrue(
