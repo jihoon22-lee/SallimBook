@@ -34,8 +34,8 @@
       "git_sha1": "ffcfdbdc9f2ebd5edf23ff3d32273ba992243814"
     },
     "CHANGELOG.md": {
-      "sha256": "7be0aabcaf09c63eac6ee239ec0323310eb30ebda410716fdd5d2988c3cf0831",
-      "git_sha1": "c393b4b6a18758107d261a021d02a58801587b4b"
+      "sha256": "b12dcdafc83d5273240d16739e7923c6da28a379693c9cdb29a32f3bb5167e5e",
+      "git_sha1": "78667d1d570f0208eeff22f467d61cff96b0afbd"
     },
     "CONTRIBUTING.md": {
       "sha256": "acc150b1986b3760e780c8fe98ee4477603d718e0ccce5b6be6950b236b6f4db",
@@ -70,8 +70,8 @@
       "git_sha1": "f53826078c9b1c9dade3b33fb849d253d2415dae"
     },
     "docs/screen-specifications.md": {
-      "sha256": "3cfb5c9ae9207e62c4d5a4fd7de93479f2e131c02f3364448b37bf13bf6e763e",
-      "git_sha1": "bd469ed290eb659343449b74237bc6b45495451f"
+      "sha256": "5e6070e913bb541a4f90df6edee5bf5d771b7a689e91476d8a047a9a463ac35b",
+      "git_sha1": "275f4c2ff7758e0ab0425b723fa1dbfdbf161396"
     },
     "docs/security-authentication.md": {
       "sha256": "7cbbfb33c48729a0d6fb28ebaacc2f8e0cf43fb4251c347a612f63b4ee26f1fc",
