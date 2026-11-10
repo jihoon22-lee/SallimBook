@@ -2,7 +2,13 @@ import type { Page } from "@playwright/test";
 import type { components } from "@sallimbook/api-client";
 import catalog from "../../../../packages/test-fixtures/catalog.json" with { type: "json" };
 import { incomeRow } from "./cashflow";
-import { insuranceFixture, mockInsurance, caseRow, nodeRow } from "./insurance";
+import {
+  insuranceFixture,
+  mockInsurance,
+  mockInsuranceSummary,
+  caseRow,
+  nodeRow,
+} from "./insurance";
 import { uid } from "./finance";
 type S = components["schemas"];
 type Result = { status: number; body: unknown; abort?: boolean };
@@ -647,5 +653,7 @@ export async function mockInsuranceEvents(page: Page) {
     if (result.status === 204) return route.fulfill({ status: 204 });
     return route.fulfill({ status: result.status, json: result.body });
   });
+  // The events route above would otherwise shadow the summary read.
+  await mockInsuranceSummary(page, core);
   return Object.assign(events, { cashflow: core.cashflow });
 }

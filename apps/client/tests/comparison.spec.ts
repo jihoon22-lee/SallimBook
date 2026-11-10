@@ -176,7 +176,8 @@ test("home shows full totals before today's consumables even when requesting onl
   await expect(summary).toContainText("+1,340원");
   expect(state.queries.at(-1)?.get("limit")).toBe("1");
   const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
-  expect(headings[0]).toBe("수입·지출");
+  expect(headings[0]).toBe("등록 기준 순자산");
+  expect(headings).toContain("이번 달 돈의 흐름");
   expect(headings).toContain("우리 집 보유 현황");
 });
 

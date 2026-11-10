@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { useAuth } from "../auth/AuthProvider";
-import { FinanceError } from "../finance/FinanceSupport";
 import { formatKrw } from "../assets/months/model";
 import { formatMonth, useMonth } from "../../shared/MonthContext";
-import { StaleNotice } from "../../shared/StaleNotice";
+import { formatKrwChange, formatKrwShort, sharePercent } from "../../shared/krwShort";
 import {
   holdingGroups,
   type HouseholdOverview as Overview,
+  type InsuranceSummary,
   type OverviewResource,
 } from "./overviewApi";
 
@@ -41,72 +41,36 @@ function ItemAmount({ item, month }: { item: Holding; month: string }) {
   );
 }
 
-function Balance({ data, month }: { data: Overview; month: string }) {
-  const holdings = data.holdings;
-  const notes = [
-    holdings.missing_count > 0 && `금액 미입력 ${holdings.missing_count}개`,
-    holdings.stale_count > 0 && `오래된 금액 ${holdings.stale_count}개`,
-    holdings.oldest_basis_month &&
-      holdings.oldest_basis_month !== month &&
-      `가장 오래된 기준 ${formatMonth(holdings.oldest_basis_month)}`,
-  ].filter(Boolean);
-  return (
-    <section className="card portfolio-balance" aria-label="저장된 자산 금액">
-      <div className="item-heading">
-        <h3>자산·부채</h3>
-        <Link to="/assets">자산 전체 보기</Link>
-      </div>
-      {holdings.item_count === 0 ? (
-        <p>
-          아직 합계에 넣을 자산·계좌가 없어요. <Link to="/assets/new">자산 등록</Link> ·{" "}
-          <Link to="/accounts/new">계좌 등록</Link>
-        </p>
-      ) : holdings.known_count === 0 ? (
-        <p>등록한 {holdings.item_count}개 항목의 금액을 아직 입력하지 않았어요.</p>
-      ) : (
-        <>
-          <dl className="metric-strip">
-            <div className="metric-primary">
-              <dt>등록 기준 순자산</dt>
-              <dd>{formatKrw(holdings.net_assets_krw)}</dd>
-            </div>
-            <div>
-              <dt>자산</dt>
-              <dd>{formatKrw(holdings.assets_krw)}</dd>
-            </div>
-            <div>
-              <dt>부채</dt>
-              <dd>{formatKrw(holdings.liabilities_krw)}</dd>
-            </div>
-          </dl>
-          <p className="muted">
-            항목마다 마지막으로 입력하거나 확인한 금액이에요.
-            {notes.length > 0 && ` ${notes.join(" · ")}`}
-          </p>
-        </>
-      )}
-      <Link to={`/assets/months/${month}`}>금액 입력·수정</Link>
-    </section>
-  );
+/** The larger side of a group as a share of the largest group, for the bar's length only. */
+function groupSize(group: GroupTotal) {
+  return BigInt(group.assets_krw) > BigInt(group.liabilities_krw)
+    ? group.assets_krw
+    : group.liabilities_krw;
 }
 
-function GroupTile({
+function GroupRow({
   group,
   items,
   month,
+  largest,
 }: {
   group: GroupTotal;
   items: Holding[];
   month: string;
+  largest: string;
 }) {
   const { label, to } = holdingGroups[group.group];
   const missing = group.count - group.known_count;
+  const debt = group.assets_krw === "0" && group.liabilities_krw !== "0";
   return (
-    <section className="card household-category" aria-label={label}>
+    <section className="holding-row" aria-label={label}>
       <h3>
         <Link to={to}>{label}</Link>
       </h3>
       <p className="household-amount">{groupAmount(group)}</p>
+      <div className={debt ? "holding-bar holding-bar-debt" : "holding-bar"} aria-hidden="true">
+        <span style={{ width: `${sharePercent(groupSize(group), largest)}%` }} />
+      </div>
       <p className="muted">
         {group.count}개{missing > 0 && ` · 금액 미입력 ${missing}개`}
       </p>
@@ -139,7 +103,7 @@ function RegisteredTile({
   children?: ReactNode;
 }) {
   return (
-    <section className="card household-category" aria-label={title}>
+    <section className="card home-panel household-category" aria-label={title}>
       <h3>
         <Link to={to}>{title}</Link>
       </h3>
@@ -182,75 +146,206 @@ export function InsuranceCounts({ insurance }: { insurance: Overview["insurance"
   );
 }
 
-function Holdings({ overview, quiet }: { overview: OverviewResource; quiet: boolean }) {
+function Investments({ data }: { data: Overview["investments"] }) {
+  if (data.count === 0 && data.missing_contribution_count === 0) return null;
+  return (
+    <section className="card home-panel" aria-label="투자·연금">
+      <div className="item-heading">
+        <h3>투자·연금</h3>
+        <Link to="/accounts">계좌별 보기</Link>
+      </div>
+      {data.count > 0 ? (
+        <>
+          <p className="panel-figure">
+            <strong title={formatKrw(data.value_krw)}>{formatKrwShort(data.value_krw)}</strong>
+            <span className={BigInt(data.gain_krw) < 0n ? "gain gain-down" : "gain"}>
+              {formatKrwChange(data.gain_krw)}
+              {data.return_percent !== null && ` (${data.return_percent}%)`}
+            </span>
+          </p>
+          <p className="muted">넣은 돈 {formatKrw(data.contributed_krw)} 대비 최근 입력 평가액</p>
+          <ul className="panel-rows">
+            {data.items.map((item) => (
+              <li key={item.account_id}>
+                <Link to={`/accounts/${item.account_id}`}>{item.name}</Link>
+                <strong title={formatKrw(item.value_krw)}>{formatKrwShort(item.value_krw)}</strong>
+                <small>
+                  넣은 돈 {formatKrwShort(item.contributed_krw)} ·{" "}
+                  <span className={BigInt(item.gain_krw) < 0n ? "gain gain-down" : "gain"}>
+                    {formatKrwChange(item.gain_krw)}
+                  </span>{" "}
+                  · {formatMonth(item.basis_month)} 기준
+                </small>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="muted">계좌에 넣은 돈을 적어 두면 평가액과의 차이를 볼 수 있어요.</p>
+      )}
+      {data.missing_contribution_count > 0 && (
+        <p className="muted">
+          넣은 돈을 적지 않은 투자·연금 계좌 {data.missing_contribution_count}개
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Premiums paid against benefits received; counts come from the status read. */
+function Insurance({
+  insurance,
+  summary,
+}: {
+  insurance: Overview["insurance"];
+  summary: InsuranceSummary | null;
+}) {
+  const paid = summary && summary.paid_unknown_count < summary.policy_count;
+  return (
+    <section className="card home-panel" aria-label="보험">
+      <div className="item-heading">
+        <h3>
+          <Link to="/insurance/policies">보험</Link>
+        </h3>
+        <Link to="/insurance">계약별 보기</Link>
+      </div>
+      {insurance.active_policy_count === 0 ? (
+        <p className="muted">아직 등록한 항목이 없어요.</p>
+      ) : (
+        <>
+          {summary && paid && (
+            <>
+              <p className="panel-figure">
+                <strong>
+                  {summary.recovery_percent === null ? "—" : `${summary.recovery_percent}%`}
+                </strong>
+                <span className="muted">낸 보험료 대비 받은 보험금</span>
+              </p>
+              <dl className="ratio-rows">
+                <div>
+                  <dt>낸 보험료</dt>
+                  <dd>
+                    <span className="ratio-track">
+                      <span className="ratio-paid" style={{ width: "100%" }} />
+                    </span>
+                    <b title={formatKrw(summary.paid_total_krw)}>
+                      {formatKrwShort(summary.paid_total_krw)}
+                    </b>
+                  </dd>
+                </div>
+                <div>
+                  <dt>받은 보험금</dt>
+                  <dd>
+                    <span className="ratio-track">
+                      <span
+                        className="ratio-received"
+                        style={{
+                          width: `${sharePercent(summary.matched_received_krw, summary.paid_total_krw)}%`,
+                        }}
+                      />
+                    </span>
+                    <b title={formatKrw(summary.matched_received_krw)}>
+                      {formatKrwShort(summary.matched_received_krw)}
+                    </b>
+                  </dd>
+                </div>
+              </dl>
+              {summary.paid_unknown_count > 0 && (
+                <p className="muted">
+                  낸 보험료를 모르는 계약 {summary.paid_unknown_count}개는 비율에서 뺐어요.
+                </p>
+              )}
+            </>
+          )}
+          <p className="muted">
+            가입 중인 계약 {insurance.active_policy_count}개
+            {summary &&
+              summary.monthly_premium_krw !== "0" &&
+              ` · 매달 ${formatKrw(summary.monthly_premium_krw)}`}
+          </p>
+          <InsuranceCounts insurance={insurance} />
+          <ul className="overview-items">
+            {insurance.policies.map((item) => (
+              <li key={item.id}>
+                <Link to={`/insurance/policies/${item.id}`}>{item.name}</Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+function Holdings({
+  overview,
+  insurance: insuranceSummary,
+}: {
+  overview: OverviewResource;
+  insurance: InsuranceSummary | null;
+}) {
   const { month } = useMonth();
   // A failed refresh keeps the status already on screen; only a first load has nothing to show.
   const data = overview.data;
-  if (overview.error && !data)
-    return quiet ? null : (
-      <>
-        <FinanceError error={overview.error} />
-        <button type="button" onClick={() => void overview.reload()}>
-          보유 현황 다시 불러오기
-        </button>
-      </>
-    );
-  if (!data) return <p role="status">보유 현황 불러오는 중</p>;
+  if (!data) return overview.error ? null : <p role="status">보유 현황 불러오는 중</p>;
   const { holdings, insurance } = data;
+  const largest = holdings.groups.reduce(
+    (most, group) => (BigInt(groupSize(group)) > BigInt(most) ? groupSize(group) : most),
+    "0",
+  );
   return (
-    <div aria-busy={overview.loading}>
-      {overview.error && !quiet && <StaleNotice retry={() => void overview.reload()} />}
-      <Balance data={data} month={month} />
-      <div className="household-overview-grid">
-        {holdings.groups.map((group) => (
-          <GroupTile
-            key={group.group}
-            group={group}
-            month={month}
-            items={holdings.items.filter((item) => item.group === group.group)}
-          />
-        ))}
-        <RegisteredTile
-          title="보험"
-          to="/insurance/policies"
-          path="/insurance/policies"
-          count={insurance.active_policy_count}
-          items={insurance.policies}
-        >
-          <InsuranceCounts insurance={insurance} />
-        </RegisteredTile>
-        <RegisteredTile
-          title="카드"
-          to="/cards"
-          path="/cards"
-          count={data.cards.count}
-          items={data.cards.items}
-        />
-        <RegisteredTile
-          title="가전·전자제품"
-          to="/appliances"
-          path="/appliances"
-          count={data.appliances.count}
-          items={data.appliances.items}
-        />
-      </div>
+    <div className="home-panels" aria-busy={overview.loading}>
+      {holdings.groups.length > 0 && (
+        <section className="card home-panel" aria-label="자산 구성">
+          <div className="item-heading">
+            <h3>자산 구성</h3>
+            <Link to="/assets">전체 보기</Link>
+          </div>
+          {holdings.groups.map((group) => (
+            <GroupRow
+              key={group.group}
+              group={group}
+              month={month}
+              largest={largest}
+              items={holdings.items.filter((item) => item.group === group.group)}
+            />
+          ))}
+        </section>
+      )}
+      <Investments data={data.investments} />
+      <Insurance insurance={insurance} summary={insuranceSummary} />
+      <RegisteredTile
+        title="카드"
+        to="/cards"
+        path="/cards"
+        count={data.cards.count}
+        items={data.cards.items}
+      />
+      <RegisteredTile
+        title="가전·전자제품"
+        to="/appliances"
+        path="/appliances"
+        count={data.appliances.count}
+        items={data.appliances.items}
+      />
     </div>
   );
 }
 
 export function HouseholdOverview({
   overview,
-  quiet = false,
+  insurance = null,
 }: {
   overview?: OverviewResource;
-  quiet?: boolean;
+  /** Premiums against benefits; the panel shows counts alone until this arrives. */
+  insurance?: InsuranceSummary | null;
 }) {
   const { state } = useAuth();
   return (
     <section aria-label="우리 집 보유 현황">
       <h2>우리 집 보유 현황</h2>
       {state.status === "authenticated" && overview ? (
-        <Holdings overview={overview} quiet={quiet} />
+        <Holdings overview={overview} insurance={insurance} />
       ) : (
         <p>로그인하면 등록한 자산·계좌·보험·가전을 한눈에 볼 수 있어요.</p>
       )}

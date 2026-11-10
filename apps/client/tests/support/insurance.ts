@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import type { components } from "@sallimbook/api-client";
 import { mockCashflow, planFromRule, ruleRow } from "./cashflow";
-import { jointAsset, uid } from "./finance";
+import { emptyInsuranceSummary, jointAsset, uid } from "./finance";
 type S = components["schemas"];
 const entity = (id: number) => ({
   id: uid(id),
@@ -443,6 +443,16 @@ export function insuranceFixture() {
   }
   return Object.assign(state, { handle });
 }
+/** Registered last so it wins over the catch-all insurance route. */
+export async function mockInsuranceSummary(
+  page: Page,
+  state: { summary?: S["InsuranceSummaryResponse"] | null },
+) {
+  await page.route("**/api/v1/insurance/summary", (route) =>
+    route.fulfill({ json: state.summary ?? emptyInsuranceSummary }),
+  );
+}
+
 export async function mockInsurance(page: Page) {
   const cashflow = await mockCashflow(page);
   const state = insuranceFixture();
@@ -464,7 +474,12 @@ export async function mockInsurance(page: Page) {
       ? route.fulfill({ json: { items: insurancePlans(state, cashflow), next_cursor: null } })
       : route.fallback(),
   );
-  return Object.assign(state, { cashflow });
+  const result = Object.assign(state, {
+    cashflow,
+    summary: null as S["InsuranceSummaryResponse"] | null,
+  });
+  await mockInsuranceSummary(page, result);
+  return result;
 }
 export function insurancePlans(
   state: { plans: S["PlanResponse"][] },

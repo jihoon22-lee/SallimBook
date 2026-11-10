@@ -29,8 +29,40 @@ class HouseholdOverviewPolicyTest {
         "expected_income_unknown_count" to 1, "spending_known_krw" to "2500000", "loan_known_krw" to "1055000", "transfer_known_krw" to "300000",
         "planned_unknown_count" to 1, "unconverted_count" to 0, "excluded_known_krw" to "0",
         "margin_before_transfers_krw" to "1445000", "margin_after_transfers_krw" to "-1145000")
-    private fun overview(month: String = "2026-03") = mapOf("month" to month, "holdings" to holdings(), "cards" to registered(),
-        "appliances" to registered(5), "insurance" to insurance(), "plan" to plan())
+    private fun investment(gain: String = "1490000", percent: String? = "14.9") = mapOf<String, Any?>("asset_id" to id, "account_id" to account,
+        "name" to "합성 증권 계좌", "account_type" to "brokerage", "value_krw" to "11490000", "basis_month" to "2026-03",
+        "contributed_krw" to "10000000", "contributed_as_of" to "2026-02-28", "gain_krw" to gain, "return_percent" to percent)
+    private fun investments(items: List<Map<String, Any?>> = listOf(investment())) = mapOf<String, Any?>("count" to items.size,
+        "value_krw" to "11490000", "contributed_krw" to "10000000", "gain_krw" to "1490000", "return_percent" to "14.9",
+        "missing_contribution_count" to 1, "items" to items)
+    private fun overview(month: String = "2026-03") = mapOf("month" to month, "holdings" to holdings(), "investments" to investments(),
+        "cards" to registered(), "appliances" to registered(5), "insurance" to insurance(), "plan" to plan())
+    private val trendsOp = FinanceOperation.HOUSEHOLD_TRENDS
+    private val summaryOp = FinanceOperation.INSURANCE_SUMMARY
+    private fun trendsRequest(to: Any? = "2026-03", months: Any? = 2) =
+        FinancePolicy.prepare(trendsOp, mapOf("query" to mapOf("to" to to, "months" to months)))
+    private fun netPoint(month: String, net: String? = "201700000") = mapOf<String, Any?>("month" to month,
+        "assets_krw" to net?.let { "301700000" }, "liabilities_krw" to net?.let { "100000000" }, "net_assets_krw" to net,
+        "item_count" to 5, "known_count" to if (net == null) 0 else 4, "entered_count" to if (net == null) 0 else 1, "confirmed" to false)
+    private fun planPoint(month: String, margin: String? = "-1145000") = mapOf<String, Any?>("month" to month, "as_of" to "$month-15",
+        "income_known_krw" to if (margin == null) "0" else "5000000", "income_count" to if (margin == null) 0 else 2,
+        "income_unknown_count" to if (margin == null) 0 else 1, "spending_known_krw" to "2500000", "loan_known_krw" to "1055000",
+        "transfer_known_krw" to "300000", "planned_unknown_count" to 1, "margin_before_transfers_krw" to margin?.let { "1445000" },
+        "margin_after_transfers_krw" to margin, "actual_income_krw" to "0")
+    private fun trends() = mapOf<String, Any?>("to_month" to "2026-03", "months" to 2,
+        "net_assets" to listOf(netPoint("2026-02", null), netPoint("2026-03")),
+        "plan" to listOf(planPoint("2026-02", null), planPoint("2026-03")))
+    private fun policyMoney(policy: String = id, before: String? = "1000000", months: Int = 3) = mapOf<String, Any?>("policy_id" to policy,
+        "insurer" to "합성 보험사", "product_name" to "합성 실손", "status" to "active", "monthly_premium_krw" to "100000",
+        "paid_before_krw" to before, "paid_through" to before?.let { "2025-12-31" }, "paid_estimated_krw" to if (months == 0) "0" else "300000",
+        "estimated_from_month" to if (months == 0) null else "2026-01", "estimated_months" to months, "unknown_months" to 0,
+        "paid_total_krw" to if (before == null && months == 0) null else "1300000", "received_krw" to "350000",
+        "recovery_percent" to if (before == null && months == 0) null else "26.9")
+    private fun summary(policies: List<Map<String, Any?>> = listOf(policyMoney(), policyMoney(other, null, 0))) = mapOf<String, Any?>(
+        "as_of" to "2026-03-15", "policy_count" to policies.size, "paid_unknown_count" to 1, "monthly_premium_krw" to "100000",
+        "paid_total_krw" to "1300000", "received_krw" to "450000", "matched_received_krw" to "350000",
+        "unassigned_received_krw" to "100000", "recovery_percent" to "26.9",
+        "policies" to policies)
 
     @Test fun onlyTheNamedMonthReachesTheReadOnlyRoute() {
         val r = request()
@@ -95,6 +127,84 @@ class HouseholdOverviewPolicyTest {
         for (change in changes) bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request(), 200, overview() + change) }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request(), 201, overview()) }
         bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request("2026-04"), 200, overview()) }
+    }
+
+    @Test fun investmentsKeepSignedGainsAndRejectInconsistentRows() {
+        val loss = overview() + mapOf("investments" to investments(listOf(investment("-1000000", "-16.7"))))
+        assertEquals(loss, FinancePolicy.response(op, request(), 200, loss))
+        val none = overview() + mapOf("investments" to investments(emptyList()) + mapOf("return_percent" to null))
+        assertEquals(none, FinancePolicy.response(op, request(), 200, none))
+        for (change in listOf(
+            investments() + mapOf("count" to 2),
+            investments(listOf(investment(), investment())),
+            investments(listOf(investment() + mapOf("account_type" to "checking"))),
+            investments(listOf(investment() + mapOf("return_percent" to "14.95"))),
+            investments(listOf(investment() + mapOf("return_percent" to 14.9))),
+            investments(listOf(investment() + mapOf("contributed_krw" to null))),
+            investments() + mapOf("gain_krw" to "1,490,000"),
+        )) bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request(), 200, overview() + mapOf("investments" to change)) }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(op, request(), 200, overview() - "investments") }
+    }
+
+    @Test fun trendsReachOnlyTheBoundedReadOnlyRouteAndKeepEmptyMonthsEmpty() {
+        val r = trendsRequest()
+        assertEquals("GET", r.method)
+        assertEquals("/api/v1/household-trends?to=2026-03&months=2", r.path)
+        assertTrue(FinancePolicy.metadataHttpAllowed(r.method, r.path, null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("POST", r.path, null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("GET", r.path, null, null, "synthetic"))
+        for (path in listOf("/api/v1/household-trends", "/api/v1/household-trends?to=2026-03", "/api/v1/household-trends?to=2026-13&months=2",
+            "/api/v1/household-trends?to=2026-03&months=0", "/api/v1/household-trends?to=2026-03&months=37",
+            "/api/v1/household-trends?months=2&to=2026-03", "/api/v1/household-trends?to=2026-03&months=2&household_id=$id"))
+            assertFalse(path, FinancePolicy.metadataHttpAllowed("GET", path, null, null))
+        for ((to, months) in listOf<Pair<Any?, Any?>>("2026-13" to 2, "2026-03" to 0, "2026-03" to 37, "2026-03" to "2", "2026-03" to 2.5, null to 2))
+            bad { trendsRequest(to, months) }
+        bad { FinancePolicy.prepare(trendsOp, mapOf("query" to mapOf("to" to "2026-03"))) }
+        val response = trends()
+        assertEquals(response, FinancePolicy.response(trendsOp, r, 200, response))
+        assertEquals(response, FinancePolicy.response(trendsOp, r, 200, withAddedFields(response)))
+        for (change in listOf(
+            mapOf("to_month" to "2026-04"),
+            mapOf("months" to 3),
+            mapOf("net_assets" to listOf(netPoint("2026-03"))),
+            mapOf("net_assets" to listOf(netPoint("2026-01", null), netPoint("2026-03"))),
+            mapOf("net_assets" to listOf(netPoint("2026-02", null) + mapOf("net_assets_krw" to "0"), netPoint("2026-03"))),
+            mapOf("net_assets" to listOf(netPoint("2026-02", null), netPoint("2026-03") + mapOf("net_assets_krw" to null))),
+            mapOf("net_assets" to listOf(netPoint("2026-02", null), netPoint("2026-03") + mapOf("entered_count" to 5))),
+            mapOf("plan" to listOf(planPoint("2026-02", null), planPoint("2026-04"))),
+            mapOf("plan" to listOf(planPoint("2026-02", null) + mapOf("margin_after_transfers_krw" to "0"), planPoint("2026-03"))),
+            mapOf("plan" to listOf(planPoint("2026-02", null), planPoint("2026-03") + mapOf("margin_before_transfers_krw" to null))),
+            mapOf("plan" to listOf(planPoint("2026-02", null), planPoint("2026-03") + mapOf("actual_income_krw" to 0))),
+            mapOf("plan" to listOf(planPoint("2026-02", null), planPoint("2026-03") + mapOf("token" to "synthetic"))),
+        )) bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(trendsOp, r, 200, trends() + change) }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(trendsOp, trendsRequest("2026-03", 1), 200, trends()) }
+        bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(trendsOp, r, 201, trends()) }
+    }
+
+    @Test fun insuranceSummaryTakesNoArgumentsAndKeepsUnknownPremiumsUnknown() {
+        val r = FinancePolicy.prepare(summaryOp, emptyMap<String, Any?>())
+        assertEquals("GET", r.method)
+        assertEquals("/api/v1/insurance/summary", r.path)
+        assertTrue(FinancePolicy.metadataHttpAllowed(r.method, r.path, null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("POST", r.path, null, null))
+        assertFalse(FinancePolicy.metadataHttpAllowed("GET", r.path + "?household_id=$id", null, null))
+        bad { FinancePolicy.prepare(summaryOp, mapOf("query" to mapOf("month" to "2026-03"))) }
+        val response = summary()
+        assertEquals(response, FinancePolicy.response(summaryOp, r, 200, response))
+        assertEquals(response, FinancePolicy.response(summaryOp, r, 200, withAddedFields(response)))
+        for (change in listOf(
+            mapOf("policy_count" to 3),
+            mapOf("paid_unknown_count" to 3),
+            mapOf("recovery_percent" to "26.95"),
+            mapOf("matched_received_krw" to null),
+            mapOf("received_krw" to 450000),
+            mapOf("policies" to listOf(policyMoney(), policyMoney())),
+            mapOf("policies" to listOf(policyMoney() + mapOf("paid_through" to null), policyMoney(other, null, 0))),
+            mapOf("policies" to listOf(policyMoney() + mapOf("paid_total_krw" to null), policyMoney(other, null, 0))),
+            mapOf("policies" to listOf(policyMoney(), policyMoney(other, null, 0) + mapOf("recovery_percent" to "0.0"))),
+            mapOf("policies" to listOf(policyMoney(), policyMoney(other, null, 0) + mapOf("estimated_from_month" to "2026-01"))),
+            mapOf("policies" to listOf(policyMoney() + mapOf("policy_number" to "synthetic"), policyMoney(other, null, 0))),
+        )) bad(AuthCode.ACCESS_DENIED) { FinancePolicy.response(summaryOp, r, 200, summary() + change) }
     }
 
     @Test fun addedFieldsNamedLikeSecretsNeverReachTheBridge() {

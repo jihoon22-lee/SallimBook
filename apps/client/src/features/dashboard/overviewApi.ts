@@ -6,6 +6,8 @@ import { useAuth } from "../auth/AuthProvider";
 import { useResource } from "../finance/queries";
 
 export type HouseholdOverview = components["schemas"]["HouseholdOverviewResponse"];
+export type HouseholdTrends = components["schemas"]["HouseholdTrendsResponse"];
+export type InsuranceSummary = components["schemas"]["InsuranceSummaryResponse"];
 export type HoldingGroup = components["schemas"]["HoldingGroup"];
 export type OverviewResource = ReturnType<typeof useHouseholdOverview>;
 
@@ -29,6 +31,20 @@ export function useOverviewApi() {
           () =>
             cancellableNative(signal, () => nativeFinance.householdOverview({ query: { month } })),
         ),
+      trends: (to: string, months: number, signal?: AbortSignal) =>
+        domainApi.read(
+          (client) =>
+            client.GET("/api/v1/household-trends", { params: { query: { to, months } }, signal }),
+          () =>
+            cancellableNative(signal, () =>
+              nativeFinance.householdTrends({ query: { to, months } }),
+            ),
+        ),
+      insurance: (signal?: AbortSignal) =>
+        domainApi.read(
+          (client) => client.GET("/api/v1/insurance/summary", { signal }),
+          () => cancellableNative(signal, () => nativeFinance.insuranceSummary()),
+        ),
     }),
     [domainApi],
   );
@@ -38,4 +54,16 @@ export function useOverviewApi() {
 export function useHouseholdOverview(month: string) {
   const api = useOverviewApi();
   return useResource(useCallback(() => api.overview(month), [api, month]));
+}
+
+/** Month-by-month totals and plan estimates ending at `to`; read-only like the status itself. */
+export function useHouseholdTrends(to: string, months: number) {
+  const api = useOverviewApi();
+  return useResource(useCallback(() => api.trends(to, months), [api, to, months]));
+}
+
+/** Premiums paid (entered and estimated) against benefits actually received. */
+export function useInsuranceSummary() {
+  const api = useOverviewApi();
+  return useResource(useCallback(() => api.insurance(), [api]));
 }

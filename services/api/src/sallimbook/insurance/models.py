@@ -77,6 +77,11 @@ class InsurancePolicy(ActorFields, EntityMixin, Base):
             "AND octet_length(number_nonce) = 12 AND last_four ~ '^[A-Za-z0-9]{4}$')",
             name="number_envelope",
         ),
+        CheckConstraint(
+            "(premium_paid_before_krw IS NULL) = (premium_paid_through IS NULL) "
+            "AND (premium_paid_before_krw IS NULL OR premium_paid_before_krw >= 0)",
+            name="premium_paid_before",
+        ),
         Index("ix_insurance_policies_household_status_id", "household_id", "status", "id"),
     )
     insurer: Mapped[str] = mapped_column(String(120))
@@ -90,6 +95,9 @@ class InsurancePolicy(ActorFields, EntityMixin, Base):
     coverage_end: Mapped[date | None]
     payment_start: Mapped[date | None]
     payment_end: Mapped[date | None]
+    # Premiums paid up to a date, entered by hand for the time before plans were registered.
+    premium_paid_before_krw: Mapped[Decimal | None] = mapped_column(KrwNumeric())
+    premium_paid_through: Mapped[date | None]
     status: Mapped[str] = mapped_column(String(8))
     valuation_asset_id: Mapped[UUID | None]
     note: Mapped[str | None] = mapped_column(String(2000))

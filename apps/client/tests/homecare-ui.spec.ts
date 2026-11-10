@@ -403,11 +403,13 @@ test("T24 dashboard keeps today status independent of selected asset month and u
   await expect(
     page
       .getByRole("region", { name: "저장된 자산 금액" })
+      .locator(".net-totals")
       .getByText("5,000,000원", { exact: true }),
   ).toBeVisible();
   await expect(
     page
       .getByRole("region", { name: "저장된 자산 금액" })
+      .locator(".net-totals")
       .getByText("1,000,000원", { exact: true }),
   ).toBeVisible();
   expect(
@@ -422,7 +424,7 @@ test("T24 dashboard keeps today status independent of selected asset month and u
   ).toBe(true);
   expect(state.cashflow.finance.overviewMonths).toContain(t24.inputs.selected_asset_month);
   const h2 = await page.getByRole("heading", { level: 2 }).allTextContents();
-  expect(h2[0]).toBe("수입·지출");
+  expect(h2[0]).toBe("등록 기준 순자산");
   expect(h2).toContain("우리 집 보유 현황");
   await expect(page.getByRole("link", { name: /SYNTHETIC-CLAIM-1200/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

@@ -98,6 +98,7 @@ export function householdOverviewFor(options: {
   cards?: { id: string; alias?: string | null; product_name: string }[];
   plan?: Partial<S["MonthlyPlanOverview"]>;
   insurance?: Partial<S["InsuranceOverview"]>;
+  investments?: Partial<S["InvestmentsOverview"]>;
 }): S["HouseholdOverviewResponse"] {
   const end = lastDay(options.month);
   const accountOf = new Map(options.accounts.map((row) => [row.asset_id, row.id]));
@@ -166,6 +167,16 @@ export function householdOverviewFor(options: {
         .slice(0, 4)
         .map((card) => ({ id: card.id, name: card.alias || card.product_name })),
     },
+    investments: {
+      count: 0,
+      value_krw: "0",
+      contributed_krw: "0",
+      gain_krw: "0",
+      return_percent: null,
+      missing_contribution_count: 0,
+      items: [],
+      ...options.investments,
+    },
     appliances: { count: 0, items: [] },
     insurance: {
       active_policy_count: 0,
@@ -192,6 +203,68 @@ export function householdOverviewFor(options: {
     },
   };
 }
+
+const previousMonth = (month: string, back: number) => {
+  const index = Number(month.slice(0, 4)) * 12 + Number(month.slice(5)) - 1 - back;
+  return `${String(Math.floor(index / 12)).padStart(4, "0")}-${String((index % 12) + 1).padStart(2, "0")}`;
+};
+
+/** Month-by-month figures consistent with the status each month would show. */
+export function householdTrendsFor(
+  to: string,
+  months: number,
+  overview: (month: string) => S["HouseholdOverviewResponse"],
+): S["HouseholdTrendsResponse"] {
+  const labels = Array.from({ length: months }, (_, index) =>
+    previousMonth(to, months - 1 - index),
+  );
+  const rows = labels.map((month) => overview(month));
+  return {
+    to_month: to,
+    months,
+    net_assets: rows.map(({ holdings }, index) => ({
+      month: labels[index]!,
+      assets_krw: holdings.known_count ? holdings.assets_krw : null,
+      liabilities_krw: holdings.known_count ? holdings.liabilities_krw : null,
+      net_assets_krw: holdings.known_count ? holdings.net_assets_krw : null,
+      item_count: holdings.item_count,
+      known_count: holdings.known_count,
+      entered_count: holdings.current_count,
+      confirmed: false,
+    })),
+    plan: rows.map(({ plan }, index) => {
+      const ready = plan.expected_income_count > plan.expected_income_unknown_count;
+      return {
+        month: labels[index]!,
+        as_of: `${labels[index]}-01`,
+        income_known_krw: plan.expected_income_known_krw,
+        income_count: plan.expected_income_count,
+        income_unknown_count: plan.expected_income_unknown_count,
+        spending_known_krw: plan.spending_known_krw,
+        loan_known_krw: plan.loan_known_krw,
+        transfer_known_krw: plan.transfer_known_krw,
+        planned_unknown_count: plan.planned_unknown_count,
+        margin_before_transfers_krw: ready ? plan.margin_before_transfers_krw : null,
+        margin_after_transfers_krw: ready ? plan.margin_after_transfers_krw : null,
+        actual_income_krw: "0",
+      };
+    }),
+  };
+}
+
+/** A household with no policies: nothing paid, nothing received. */
+export const emptyInsuranceSummary: S["InsuranceSummaryResponse"] = {
+  as_of: "2025-02-20",
+  policy_count: 0,
+  paid_unknown_count: 0,
+  monthly_premium_krw: "0",
+  paid_total_krw: "0",
+  received_krw: "0",
+  matched_received_krw: "0",
+  unassigned_received_krw: "0",
+  recovery_percent: null,
+  policies: [],
+};
 
 /** A household with no monthly plans yet. */
 export const emptyExpensePlanSummary: S["PlanSummaryResponse"] = {
@@ -261,6 +334,8 @@ export async function mockFinance(page: Page) {
     deleteFailureAfter: false,
     /** Replaces the default household status built from the registered assets above. */
     overview: null as null | ((month: string) => S["HouseholdOverviewResponse"]),
+    trends: null as null | ((to: string, months: number) => S["HouseholdTrendsResponse"]),
+    insuranceSummary: null as null | S["InsuranceSummaryResponse"],
     overviewFailure: false,
     overviewMonths: [] as string[],
   };
@@ -287,6 +362,24 @@ export async function mockFinance(page: Page) {
           householdOverviewFor({ month, assets: state.assets, accounts: state.accounts }),
       });
     }
+    if (path === "/api/v1/household-trends" && method === "GET") {
+      const to = url.searchParams.get("to")!;
+      const months = Number(url.searchParams.get("months") ?? 12);
+      if (state.overviewFailure) return error(route, 503, "UNAVAILABLE");
+      return route.fulfill({
+        json:
+          state.trends?.(to, months) ??
+          householdTrendsFor(
+            to,
+            months,
+            (month) =>
+              state.overview?.(month) ??
+              householdOverviewFor({ month, assets: state.assets, accounts: state.accounts }),
+          ),
+      });
+    }
+    if (path === "/api/v1/insurance/summary" && method === "GET")
+      return route.fulfill({ json: state.insuranceSummary ?? emptyInsuranceSummary });
     if (path === "/api/v1/me")
       return state.signedIn
         ? route.fulfill({ json: members[0] })

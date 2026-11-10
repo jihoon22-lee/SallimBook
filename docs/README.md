@@ -50,6 +50,7 @@ SallimBook v1.0.0을 구현하기 위한 문서다. **작성 완료는 기능 �
 | [ADR: late insurance records](adr/late-insurance-records.md) | 종료 계약의 사후 청구·직접 보험금 배분 허용 |
 | [ADR: document inspection isolation](adr/document-inspection-isolation.md) | 문서 구조 검사·OCR을 네트워크·비밀 없는 별도 컨테이너로 격리 |
 | [ADR: dashboard first household status](adr/dashboard-first-household-status.md) | 등록 기록 기반 살림 현황 홈, 항목별 최근 금액·알림만 하는 갱신 안내·월 계획 기준 여유 |
+| [ADR: household flow dashboard](adr/household-flow-dashboard.md) | 순자산 추이·월별 남는 돈·투자 손익·보험료 대비 보험금, 억·만 읽기 표기 |
 
 ## 문서 유지 규칙
 

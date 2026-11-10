@@ -181,6 +181,8 @@ class SallimBookAuthPlugin : Plugin() {
     @PluginMethod fun getAssetComparison(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_COMPARISON)
     @PluginMethod fun getAssetTrends(call: PluginCall) = finance(call, FinanceOperation.GET_ASSET_TRENDS)
     @PluginMethod fun householdOverview(call: PluginCall) = finance(call, FinanceOperation.HOUSEHOLD_OVERVIEW)
+    @PluginMethod fun householdTrends(call: PluginCall) = finance(call, FinanceOperation.HOUSEHOLD_TRENDS)
+    @PluginMethod fun insuranceSummary(call: PluginCall) = finance(call, FinanceOperation.INSURANCE_SUMMARY)
 
     @PluginMethod fun listOverdueObligations(call: PluginCall) = finance(call, FinanceOperation.LIST_OVERDUE_OBLIGATIONS)
     @PluginMethod fun listObligations(call: PluginCall) = finance(call, FinanceOperation.LIST_OBLIGATIONS)

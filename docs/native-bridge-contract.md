@@ -633,5 +633,17 @@ JVM **308개**, debug APK·release Kotlin, 브라우저 **58개**(신규 export 
 기존 잠금·세대 검증을 그대로 쓴다.
 
 검증: JVM **495개**(새 `HouseholdOverviewPolicyTest` 4개와 상여 합계 시험 1개 포함)와 release Kotlin 컴파일을 통과했다.
+
+### 월별 추이·보험 집계 조회와 새 입력 필드
+
+`householdTrends({ query: { to, months } })`는 `GET /api/v1/household-trends?to=YYYY-MM&months=N`(N은 1~36)만 만든다.
+`insuranceSummary({})`는 인자 없이 `GET /api/v1/insurance/summary`만 만든다. 둘 다 body·버전·중복 방지 키·임의 헤더를
+받지 않는다. 응답은 `HouseholdOverviewPolicy`가 검증한다. 추이는 두 계열이 요청한 달에서 끝나는 같은 연속 월인지,
+금액 없는 달의 합계와 예상 수입 없는 달의 남는 돈이 null인지 확인한다. 보험 집계는 계약 수·중복 ID와, 낸 보험료를
+모르는 계약에 합계·비율이 없는지 확인한다. 현황 응답의 `investments`는 계좌 유형·부호 있는 차이·소수 한 자리 비율을
+확인한다. 계좌 입력은 `contributed_krw`·`contributed_as_of`를, 보험 계약 입력은 `premium_paid_before_krw`·
+`premium_paid_through`를 추가로 받는다. 0.1.18 이하 APK는 응답에 추가된 필드를 버리고 동작하지만 새 조회와 새 입력
+필드는 쓰지 못하며, 감사 이력에 새 필드 이름이 나오면 그 목록을 거부하므로 서버 다음에 바로 업데이트한다.
+검증: JVM **498개**(`HouseholdOverviewPolicyTest`의 투자·추이·보험 집계 시험 3개 포함) 통과.
 웹의 모의 bridge 시험으로 홈이 `householdOverview` 한 번으로 보유 현황을 그리고 자산·계좌·카드·보험 목록 명령을
 부르지 않는 것을 확인했다. 이 시험은 실제 Android 기기 보안을 검증하지 않으며 실기기 시험은 사용자가 따로 수행한다.

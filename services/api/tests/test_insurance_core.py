@@ -93,7 +93,7 @@ def test_insurance_openapi_versions_and_list_privacy():
     app = FastAPI()
     app.include_router(router)
     schema = app.openapi()
-    assert sum(len(v) for v in schema["paths"].values()) == 23
+    assert sum(len(v) for v in schema["paths"].values()) == 24
     for path, operations in schema["paths"].items():
         for method, operation in operations.items():
             if method in {"patch", "delete"}:

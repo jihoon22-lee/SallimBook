@@ -282,6 +282,9 @@ export const nativeFinance = {
     metadata(() => plugin.getAssetTrends(options)),
   householdOverview: (options: Parameters<SallimBookAuth["householdOverview"]>[0]) =>
     metadata(() => plugin.householdOverview(options)),
+  householdTrends: (options: Parameters<SallimBookAuth["householdTrends"]>[0]) =>
+    metadata(() => plugin.householdTrends(options)),
+  insuranceSummary: () => metadata(() => plugin.insuranceSummary({})),
   listOverdueObligations: (options: Parameters<SallimBookAuth["listOverdueObligations"]>[0]) =>
     metadata(() => plugin.listOverdueObligations(options)),
   listObligations: (options: Parameters<SallimBookAuth["listObligations"]>[0]) =>

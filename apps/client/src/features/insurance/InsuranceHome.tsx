@@ -1,4 +1,5 @@
 import { InsuranceCounts } from "../dashboard/HouseholdOverview";
+import { InsuranceMoney } from "./policies/PolicyMoney";
 import { useHouseholdOverview } from "../dashboard/overviewApi";
 import { FinanceError } from "../finance/FinanceSupport";
 import { Link } from "react-router";
@@ -83,6 +84,7 @@ export function InsuranceHome() {
       navigation={navigation}
     >
       <InsuranceStatus />
+      <InsuranceMoney />
       <details className="card">
         <summary>보험 기록 도움말</summary>
         <ol>

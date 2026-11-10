@@ -27,7 +27,7 @@ test("home keeps the registered status on screen when a later refresh fails", as
   await expect.poll(() => failed).toBeGreaterThan(0);
   // The status stays; one retry is offered (the page-wide one when other parts failed too).
   await expect(accounts).toContainText("합성 개인 금융 자산");
-  await expect(page.getByRole("region", { name: "월 계획 기준 여유", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "계획상 남는 돈", exact: true })).toBeVisible();
   const retry = page.getByRole("button", { name: /다시 불러오기$/ }).first();
   await expect(retry).toBeVisible();
   await expect(holdings.getByText("보유 현황 불러오는 중", { exact: true })).toHaveCount(0);

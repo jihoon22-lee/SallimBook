@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
@@ -9,7 +9,7 @@ from sallimbook.accounts.schemas import AccountNumber
 from sallimbook.assets.schemas import DateOnly
 from sallimbook.cashflow.recurring_schemas import RuleResponse
 from sallimbook.cashflow.schemas import InputModel, Note, Reason
-from sallimbook.core.types import KrwString, SignedKrwString
+from sallimbook.core.types import KrwString, SignedKrwString, YearMonth
 
 Title = Annotated[
     str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=120)
@@ -54,6 +54,11 @@ class PolicyFields(InputModel):
     coverage_end: DateOnly | None = None
     payment_start: DateOnly | None = None
     payment_end: DateOnly | None = None
+    premium_paid_before_krw: KrwString | None = Field(
+        default=None,
+        description="기준일까지 이미 낸 보험료 합계. 월 계획 등록 이전 납입분을 직접 입력합니다.",
+    )
+    premium_paid_through: DateOnly | None = None
     status: PolicyStatus = "active"
     valuation_asset_id: UUID | None = None
     note: Note | None = Field(default=None, repr=False)
@@ -63,6 +68,8 @@ class PolicyFields(InputModel):
         _period(self.contract_start, self.contract_end)
         _period(self.coverage_start, self.coverage_end)
         _period(self.payment_start, self.payment_end)
+        if (self.premium_paid_before_krw is None) != (self.premium_paid_through is None):
+            raise ValueError("Premiums already paid need both the amount and its date")
         return self
 
 
@@ -85,6 +92,8 @@ class PolicyPatch(InputModel):
     coverage_end: DateOnly | None = None
     payment_start: DateOnly | None = None
     payment_end: DateOnly | None = None
+    premium_paid_before_krw: KrwString | None = None
+    premium_paid_through: DateOnly | None = None
     status: PolicyStatus | SkipJsonSchema[None] = Field(default_factory=lambda: None)
     valuation_asset_id: UUID | None = None
     note: Note | None = Field(default=None, repr=False)
@@ -175,6 +184,38 @@ class PremiumLinkResponse(EntityResponse):
     active: bool
     ended_at: datetime | None
     rule: RuleResponse
+
+
+class PolicyMoney(BaseModel):
+    """Premiums paid (entered and estimated) against benefits actually received for one policy."""
+
+    policy_id: UUID
+    insurer: str
+    product_name: str
+    status: PolicyStatus
+    monthly_premium_krw: KrwString
+    paid_before_krw: KrwString | None
+    paid_through: date | None
+    paid_estimated_krw: KrwString
+    estimated_from_month: YearMonth | None
+    estimated_months: int
+    unknown_months: int
+    paid_total_krw: KrwString | None
+    received_krw: SignedKrwString
+    recovery_percent: str | None
+
+
+class InsuranceSummaryResponse(BaseModel):
+    as_of: date
+    policy_count: int
+    paid_unknown_count: int
+    monthly_premium_krw: KrwString
+    paid_total_krw: KrwString
+    received_krw: SignedKrwString
+    matched_received_krw: SignedKrwString
+    unassigned_received_krw: SignedKrwString
+    recovery_percent: str | None
+    policies: list[PolicyMoney]
 
 
 class PremiumLinkListResponse(BaseModel):

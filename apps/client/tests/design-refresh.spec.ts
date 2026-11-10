@@ -39,7 +39,7 @@ test("390px home prioritizes registered household information and keeps consumab
   await page.setViewportSize({ width: 390, height: 844 });
   await homeData(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "수입·지출", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이번 달 돈의 흐름", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "우리 집 보유 현황", exact: true })).toBeVisible();
   await expect(page.locator(".home-today .care-count")).toHaveText("기기별 확인 2건");
   await page.locator(".home-today").scrollIntoViewIfNeeded();

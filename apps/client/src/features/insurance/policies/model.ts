@@ -1,6 +1,7 @@
 import type { Policy, PolicyInput } from "../model";
 import { optional, validPeriod } from "../model";
-import { isUuid } from "../../finance/dates";
+import { isDateOnly, isUuid } from "../../finance/dates";
+import { parseKrwInput } from "../../../shared/krw";
 export type PolicyDraft = {
   insurer: string;
   product: string;
@@ -13,6 +14,9 @@ export type PolicyDraft = {
   coverageEnd: string;
   paymentStart: string;
   paymentEnd: string;
+  /** Premiums already paid up to a date, for the time before plans were registered. */
+  paidBefore: string;
+  paidThrough: string;
   status: Policy["status"];
   asset: string;
   note: string;
@@ -30,6 +34,8 @@ export function policyDraft(row?: Policy): PolicyDraft {
     coverageEnd: row?.coverage_end ?? "",
     paymentStart: row?.payment_start ?? "",
     paymentEnd: row?.payment_end ?? "",
+    paidBefore: row?.premium_paid_before_krw ?? "",
+    paidThrough: row?.premium_paid_through ?? "",
     status: row?.status ?? "active",
     asset: row?.valuation_asset_id ?? "",
     note: row?.note ?? "",
@@ -49,6 +55,14 @@ export function policyInput(d: PolicyDraft): PolicyInput | null {
     !validPeriod(d.paymentStart, d.paymentEnd)
   )
     return null;
+  // The amount and its date belong together: both or neither.
+  const paid = d.paidBefore.trim() ? parseKrwInput(d.paidBefore) : null;
+  if (
+    (paid && !paid.ok) ||
+    Boolean(paid) !== Boolean(d.paidThrough) ||
+    (paid && !isDateOnly(d.paidThrough))
+  )
+    return null;
   return {
     insurer: d.insurer.trim(),
     product_name: d.product.trim(),
@@ -61,6 +75,8 @@ export function policyInput(d: PolicyDraft): PolicyInput | null {
     coverage_end: optional(d.coverageEnd),
     payment_start: optional(d.paymentStart),
     payment_end: optional(d.paymentEnd),
+    premium_paid_before_krw: paid?.ok ? paid.krw : null,
+    premium_paid_through: paid ? d.paidThrough : null,
     status: d.status,
     valuation_asset_id: optional(d.asset),
     note: optional(d.note),

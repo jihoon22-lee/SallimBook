@@ -8,17 +8,26 @@ import { useAuth } from "../auth/AuthProvider";
 import { HomeAssetSummary } from "./HomeAssetSummary";
 import { TodayConsumables } from "../homecare/TodayConsumables";
 import { HomeSecondary } from "./HomeSecondary";
-import { useHouseholdOverview } from "./overviewApi";
+import { NetWorthHero } from "./NetWorthHero";
+import { useHouseholdOverview, useHouseholdTrends, useInsuranceSummary } from "./overviewApi";
+
+const TREND_MONTHS = 12;
 
 /** One status read feeds the plan margin and the holdings; each part still loads on its own. */
 function SignedInHome() {
-  const { month } = useMonth();
+  const { month, currentMonth } = useMonth();
   const overview = useHouseholdOverview(month);
+  // The trend ends at the selected month; a future month has no history of its own yet.
+  const trends = useHouseholdTrends(month > currentMonth ? currentMonth : month, TREND_MONTHS);
+  const insurance = useInsuranceSummary();
   const quiet = useRetryReport("household-overview", overview.error, overview.reload);
   return (
     <>
-      <HomeSecondary overview={overview} overviewQuiet={quiet} />
-      <HouseholdOverview overview={overview} quiet={quiet} />
+      <div className="home-top">
+        <NetWorthHero overview={overview} trends={trends} quiet={quiet} />
+        <HomeSecondary overview={overview} overviewQuiet={quiet} trend={trends.data?.plan} />
+      </div>
+      <HouseholdOverview overview={overview} insurance={insurance.data} />
       <TodayConsumables compact />
     </>
   );
@@ -32,9 +41,7 @@ export function Dashboard({ welcome }: { welcome?: ReactNode }) {
     <>
       <div className="dashboard-heading">
         <div className="intro">
-          <p className="eyebrow">우리 집의 기록</p>
           <h1>오늘의 살림</h1>
-          <p>등록한 기록으로 지금 우리 집 살림을 한눈에.</p>
         </div>
         <MonthPicker />
       </div>

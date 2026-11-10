@@ -33,7 +33,8 @@ import { MisregistrationDelete } from "../assets/MisregistrationDelete";
 import { AccountEditor } from "./AccountEditor";
 import { AccountNumber } from "./AccountNumber";
 import { useAccountsApi } from "./api";
-import { accountTypes } from "./model";
+import { accountTypes, investmentTypes } from "./model";
+import { formatKrw } from "../assets/months/model";
 import type { Account, AccountQuery } from "./model";
 import { usePagedList } from "../finance/queries";
 
@@ -347,6 +348,20 @@ function AccountDetail({ id }: { id: string }) {
             <dt>개설일</dt>
             <dd>{dateLabel(account.opened_on)}</dd>
           </div>
+          {(account.contributed_krw != null || investmentTypes.has(account.account_type)) && (
+            <div>
+              <dt>지금까지 넣은 돈</dt>
+              <dd>
+                {account.contributed_krw == null
+                  ? "미입력"
+                  : `${formatKrw(account.contributed_krw)}${
+                      account.contributed_as_of
+                        ? ` · ${dateLabel(account.contributed_as_of)} 기준`
+                        : ""
+                    }`}
+              </dd>
+            </div>
+          )}
           <div>
             <dt>종료일</dt>
             <dd>{dateLabel(account.closed_on)}</dd>
