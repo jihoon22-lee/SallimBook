@@ -49,7 +49,7 @@ export function IncomeEditor({ initial }: { initial?: Income }) {
     : input
       ? { ...input, duplicate_acknowledged: acknowledged }
       : null;
-  const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, body]));
+  const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, body]), command.uncertain);
   function change(next: IncomeDraft) {
     setDraft(next);
     setDuplicates(null);

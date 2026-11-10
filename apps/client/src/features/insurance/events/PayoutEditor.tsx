@@ -234,7 +234,10 @@ export function PayoutEditor({
   const attempt = useSubmitAttempt();
   const input = payoutInput(draft);
   const sum = exactSum(draft.allocations.map((a) => a.amount));
-  const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, input, reason.trim()]));
+  const key = useIdempotencyKey(
+    JSON.stringify([base?.id, base?.version, input, reason.trim()]),
+    command.uncertain,
+  );
   const ready = !!input && (!base || (base.cash.state === "active" && !!reason.trim()));
   const change = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));

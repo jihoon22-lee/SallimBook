@@ -153,7 +153,7 @@ function PeopleWorkspace() {
     [relation, setRelation] = useState<Relation>("child");
   const [notice, setNotice] = useState("");
   const guard = useUnsavedChangesGuard(Boolean(name));
-  const key = useIdempotencyKey(JSON.stringify([name.trim(), relation]));
+  const key = useIdempotencyKey(JSON.stringify([name.trim(), relation]), command.uncertain);
   async function create(event: FormEvent) {
     event.preventDefault();
     const result = await command.run(() =>

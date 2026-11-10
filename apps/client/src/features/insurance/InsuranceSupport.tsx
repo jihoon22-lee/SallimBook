@@ -126,7 +126,8 @@ export function useMetadataCommand() {
       if (mounted.current) {
         const problem = toApiError(failure);
         setError(problem);
-        if (creating && problem.status === 0) setUncertain(true);
+        // A gateway or server error can arrive after the record was saved.
+        if (creating && (problem.status === 0 || problem.status >= 500)) setUncertain(true);
       }
     } finally {
       flight.current = false;

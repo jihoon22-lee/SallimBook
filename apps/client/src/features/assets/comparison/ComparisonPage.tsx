@@ -374,6 +374,9 @@ function ComparisonWorkspace() {
     const next = new URLSearchParams(pending.current);
     if (value) next.set(name, value);
     else next.delete(name);
+    // A chosen earlier month must stay earlier; otherwise compare with the month before again.
+    const earlier = next.get("from");
+    if (name === "to" && earlier && isValidMonth(value) && earlier >= value) next.delete("from");
     pending.current = next;
     setParams(next, replace ? { replace: true } : undefined);
   }
