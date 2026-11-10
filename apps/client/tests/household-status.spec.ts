@@ -99,17 +99,22 @@ test("the home shows each item's latest amount and only notes what could be upda
 test("the plan margin is the server's estimate and never reads as a balance", async ({ page }) => {
   const { state } = await household(page);
   await page.goto("/");
-  const margin = page.getByRole("region", { name: "월 계획 기준 여유", exact: true });
+  const margin = page.getByRole("region", { name: "계획상 남는 돈", exact: true });
   await expect(margin).toContainText("1,445,000원");
   await expect(margin).toContainText("1,145,000원");
-  await expect(margin).toContainText(
-    "확인된 예상 수입 5,000,000원 − 소비성 비용 2,500,000원 − 대출 원리금 1,055,000원",
-  );
+  // The estimate is shown as where the expected income goes, each part with its exact amount.
+  await expect(margin).toContainText("예상 수입5,000,000원");
+  const uses = margin
+    .getByRole("group", { name: "예상 수입의 쓰임" })
+    .or(margin.locator(".share-keys"));
+  await expect(uses).toContainText("소비성 비용2,500,000원");
+  await expect(uses).toContainText("대출 원리금1,055,000원");
+  await expect(uses).toContainText("남는 돈1,145,000원");
   // Plans kept outside the budget are named, not silently left out.
   await expect(margin).toContainText("별도 표시 120,000원 제외");
   await expect(margin).toContainText("실제 잔액·저축액이 아니에요");
   await page.goto("/living");
-  await expect(page.getByRole("region", { name: "월 계획 기준 여유", exact: true })).toContainText(
+  await expect(page.getByRole("region", { name: "계획상 남는 돈", exact: true })).toContainText(
     "1,445,000원",
   );
   // Without a known expected income the margin waits instead of showing a deficit.
@@ -122,8 +127,8 @@ test("the plan margin is the server's estimate and never reads as a balance", as
     };
   };
   await page.goto("/");
-  await expect(page.getByRole("region", { name: "월 계획 기준 여유", exact: true })).toContainText(
-    "예상 수입 금액을 등록하면 월 계획 기준 여유를 볼 수 있어요.",
+  await expect(page.getByRole("region", { name: "계획상 남는 돈", exact: true })).toContainText(
+    "예상 수입 금액을 등록하면 계획상 남는 돈을 볼 수 있어요.",
   );
   await expect(page.getByText("1,445,000원", { exact: true })).toHaveCount(0);
 });

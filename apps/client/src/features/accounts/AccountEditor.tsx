@@ -12,6 +12,7 @@ import { useAssetsApi } from "../assets/api";
 import { assetInput, newAssetDraft } from "../assets/model";
 import type { Asset } from "../assets/model";
 import { useAccountsApi } from "./api";
+import { AmountField } from "../../shared/AmountField";
 import { accountDraft, accountInput, accountLabels, accountTypes } from "./model";
 import type { Account, AccountDraft, AccountPatch } from "./model";
 import { useUnsavedChangesGuard } from "../../shared/UnsavedChanges";
@@ -119,7 +120,7 @@ export function AccountEditor({ initial }: { initial?: Account }) {
         (base?.closed_on ?? linked?.ended_on) &&
         input.opened_on > (base?.closed_on ?? linked?.ended_on)!)
     ) {
-      setFormError("계좌 기본정보와 금융 자산, 개설일·종료일을 확인해 주세요.");
+      setFormError("계좌 기본정보와 금융 자산, 개설일·종료일, 넣은 돈을 확인해 주세요.");
       return;
     }
     const before = base ? accountInput(accountDraft(base))! : null;
@@ -308,7 +309,9 @@ export function AccountEditor({ initial }: { initial?: Account }) {
           <OptionalFields
             title="계좌 용도·개설일"
             hasError={Boolean(formError)}
-            hasValues={Boolean(draft.purpose || draft.opened_on)}
+            hasValues={Boolean(
+              draft.purpose || draft.opened_on || draft.contributed_krw || draft.contributed_as_of,
+            )}
           >
             <div className="form-field">
               <label htmlFor="account-purpose">용도 (선택)</label>
@@ -328,6 +331,22 @@ export function AccountEditor({ initial }: { initial?: Account }) {
                 max={base?.closed_on || "9999-12-31"}
                 value={draft.opened_on}
                 onChange={(event) => setDraft({ ...draft, opened_on: event.target.value })}
+              />
+            </div>
+            <AmountField
+              label="지금까지 넣은 돈 (원, 선택)"
+              value={draft.contributed_krw}
+              onChange={(value) => setDraft({ ...draft, contributed_krw: value })}
+              hint="증권·연금 계좌에 직접 넣은 돈의 합계예요. 적어 두면 홈에서 평가액과의 차이를 보여 드려요. 기록에서 자동으로 계산하지 않아요."
+            />
+            <div className="form-field">
+              <label htmlFor="account-contributed-as-of">넣은 돈 기준일 (선택)</label>
+              <DateInput
+                id="account-contributed-as-of"
+                min="0001-01-01"
+                max="9999-12-31"
+                value={draft.contributed_as_of}
+                onChange={(event) => setDraft({ ...draft, contributed_as_of: event.target.value })}
               />
             </div>
           </OptionalFields>

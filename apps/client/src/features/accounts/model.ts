@@ -1,3 +1,4 @@
+import { parseKrwInput } from "../../shared/krw";
 import type { components, operations } from "@sallimbook/api-client";
 import { isDateOnly } from "../finance/dates";
 export type Account = components["schemas"]["AccountResponse"];
@@ -21,12 +22,24 @@ export type AccountDraft = {
   account_type: Account["account_type"] | "";
   purpose: string;
   opened_on: string;
+  contributed_krw: string;
+  contributed_as_of: string;
 };
+/** Accounts whose value moves with the market, where money put in is worth comparing. */
+export const investmentTypes: ReadonlySet<Account["account_type"]> = new Set([
+  "brokerage",
+  "pension_savings",
+  "irp",
+  "dc_pension",
+  "isa",
+]);
 export const accountLabels: Record<keyof AccountDraft, string> = {
   institution_name: "금융기관",
   account_type: "계좌 유형",
   purpose: "용도",
   opened_on: "개설일",
+  contributed_krw: "지금까지 넣은 돈",
+  contributed_as_of: "넣은 돈 기준일",
 };
 export function accountDraft(account?: Account): AccountDraft {
   return {
@@ -34,6 +47,8 @@ export function accountDraft(account?: Account): AccountDraft {
     account_type: account?.account_type ?? "",
     purpose: account?.purpose ?? "",
     opened_on: account?.opened_on ?? "",
+    contributed_krw: account?.contributed_krw ?? "",
+    contributed_as_of: account?.contributed_as_of ?? "",
   };
 }
 export function accountInput(draft: AccountDraft) {
@@ -43,10 +58,18 @@ export function accountInput(draft: AccountDraft) {
     (draft.opened_on && !isDateOnly(draft.opened_on))
   )
     return null;
+  const contributed = draft.contributed_krw.trim() ? parseKrwInput(draft.contributed_krw) : null;
+  if (
+    (contributed && !contributed.ok) ||
+    (draft.contributed_as_of && (!contributed || !isDateOnly(draft.contributed_as_of)))
+  )
+    return null;
   return {
     institution_name: draft.institution_name.trim(),
     account_type: draft.account_type,
     purpose: draft.purpose.trim() || null,
     opened_on: draft.opened_on || null,
+    contributed_krw: contributed?.ok ? contributed.krw : null,
+    contributed_as_of: draft.contributed_as_of || null,
   };
 }

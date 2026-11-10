@@ -392,6 +392,33 @@ PATCH에는 `If-Match: "7"`처럼 version을 보내며 최신 버전이 아니�
   실제 잔액·저축액이 아니다.
 - 모든 금액은 정수 원 십진 문자열이고 다른 가계의 기록은 포함하지 않는다. 합계가 범위를 넘으면 422 `TOTAL_OUT_OF_RANGE`다.
   Android는 같은 응답을 `householdOverview` bridge에서 형식·불변식 검증 후 전달한다.
+- `investments`: 합계에 포함한 증권·연금저축·IRP·DC·ISA 계좌 중 `contributed_krw`를 적은 계좌다. `value_krw`는 위와 같은
+  최근 입력 평가액, `gain_krw`는 평가액 − 넣은 돈(부호 있음), `return_percent`는 그 비율을 소수 첫째 자리로 반올림한
+  문자열이며 넣은 돈이 0이면 null이다. 넣은 돈을 적지 않은 투자형 계좌 수는 `missing_contribution_count`다.
+
+### 월별 추이 · `GET /api/v1/household-trends?to=YYYY-MM&months=N`
+
+`getHouseholdTrends`는 `to`까지 연속한 N개월(1~36, 기본 12)을 돌려준다. `to`가 서울 현재 월보다 뒤이면 422
+`INVALID_MONTH_RANGE`다. 읽기 전용이며 [자산 흐름 대시보드 ADR](adr/household-flow-dashboard.md)을 따른다.
+
+- `net_assets[]`: 달마다 홈 현황과 같은 규칙의 `assets_krw`·`liabilities_krw`·`net_assets_krw`다. 그 달까지 금액이 하나도
+  없으면 셋 다 null이다. `entered_count`는 그 달에 새로 입력·확인한 항목 수, `confirmed`는 그 달 기록의 확정 여부다.
+- `plan[]`: 지난달은 말일, 이번 달은 오늘(`as_of`) 기준으로 적용 중인 월 지출 계획과 그때까지 저장된 예상 수입의
+  상태다. 금액이 있는 예상 수입이 하나도 없으면 두 `margin_*`은 null이다. `actual_income_krw`는 그 달에 귀속된
+  실제 근로·부수입 순액이며 기록이 없으면 "0"이다.
+
+### 낸 보험료와 받은 보험금 · `GET /api/v1/insurance/summary`
+
+`getInsuranceSummary`는 계약마다 `paid_before_krw`·`paid_through`(직접 입력), `paid_estimated_krw`(그 뒤 달마다 연결한
+보험료 항목의 월 환산액 합, `estimated_from_month`·`estimated_months`·금액 미정 `unknown_months`), 둘의 합
+`paid_total_krw`(알 수 없으면 null), 실제 수령 − 반환인 `received_krw`, `recovery_percent`를 준다. 전체 합계의
+`received_krw`에는 계약을 지정하지 않은 수령(`unassigned_received_krw`)도 들어가지만, 전체 `recovery_percent`는 낸 보험료를
+아는 계약의 수령(`matched_received_krw`)만 그 계약들의 낸 보험료로 나눈다. 추정은 달 단위다. 그 달의 어느 날에든 적용된
+보험료 항목이 있으면 한 번 세고, 달 중간에 금액이 바뀌면 새 금액으로 센다. 이번 달도 포함한다. 유지 중이 아닌 계약은
+마지막으로 고친 달까지만 센다. 낸 보험료는 추정이며 납부 원장이 아니다.
+
+계좌 생성·수정은 선택 필드 `contributed_krw`·`contributed_as_of`를, 보험 계약 생성·수정은 함께 주거나 함께 비우는
+`premium_paid_before_krw`·`premium_paid_through`를 받는다.
 
 ## 4. 보험금 수동 입력 예시
 

@@ -8,6 +8,10 @@ SB-006의 `0003_passkeys`는 `auth_credentials`, `auth_challenges`, `auth_step_u
 SB-010의 `0004_assets`는 자산 식별 정보와 `audit_events`를 추가한다.
 SB-011의 `0005_accounts`는 금융 자산과 1:1 연결되는 `financial_accounts`를 추가한다.
 SB-012의 `0006_asset_months`는 월·revision·확인 금액과 확정 이력의 DB 변경 차단을 추가한다.
+`0028_dashboard_inputs`는 대시보드용 선택 입력 두 가지를 nullable 컬럼으로 추가한다. `financial_accounts`의
+`contributed_krw`·`contributed_as_of`(지금까지 넣은 돈, 기준일은 금액이 있을 때만)와 `insurance_policies`의
+`premium_paid_before_krw`·`premium_paid_through`(기준일까지 이미 낸 보험료, 둘 다 있거나 둘 다 없음)다. 기존 행은
+모두 null로 남고 downgrade는 두 컬럼 쌍과 CHECK 제약만 지운다.
 아래 나머지 업무 테이블은 담당 Issue의 migration에서 순차적으로 추가한다.
 공통 ORM은 UUID·UTC timestamp·낙관적 version을 제공하며, `KrwNumeric` 바인딩은
 float·소수 원·20자리 초과 금액을 DB 반올림 전에 거부한다. 새 DB에 사용자 가계를 자동 생성하지 않는다.
@@ -71,7 +75,7 @@ challenge/credential 카운터와 grant 소비는 행 잠금으로 직렬화한�
 | 테이블 | 핵심 필드 | 제약·용도 |
 |---|---|---|
 | assets | id, kind(asset/liability), category, name, owner_member_id?, ownership_kind, household_share, amount_basis, started_on, ended_on, inclusion_status | 금융·부동산·보증금·대출 공통 집계 단위 |
-| financial_accounts | asset_id, institution_name, account_type, account_number_ciphertext?, number_nonce?, number_key_version?, last_four?, purpose?, opened_on?, created_by_member_id, updated_by_member_id | asset_id unique; 가계·자산 및 작성/수정 구성원 복합 FK; 번호 envelope 전체 null 또는 전체 유효 |
+| financial_accounts | asset_id, institution_name, account_type, account_number_ciphertext?, number_nonce?, number_key_version?, last_four?, purpose?, opened_on?, contributed_krw?, contributed_as_of?, created_by_member_id, updated_by_member_id | asset_id unique; 가계·자산 및 작성/수정 구성원 복합 FK; 번호 envelope 전체 null 또는 전체 유효 |
 | asset_months | household_id, period_month, current_revision_id | unique(household_id,period_month) |
 | asset_month_revisions | month_id, revision_no, state, confirmed_at, reopened_reason, previous_revision_id? | unique(month_id,revision_no), 완료본 보존 |
 | asset_values | revision_id, asset_id, source_asset_version, name, kind, category, ownership_kind, owner_member_id?, household_share, amount_basis, inclusion_status, started_on, ended_on?, input_amount_krw?, owned_amount_krw?, as_of_date?, verification_state, origin(carried/manual), origin_revision_id?, change_reason? | unique(revision_id,asset_id); 금액과 당시 범위의 독립 보존; null과 0 구분 |
@@ -141,7 +145,7 @@ medical_payment/fixed_payment/insurance_receipt는 해당 subtype가 정확히 1
 
 | 테이블 | 핵심 필드 | 제약·용도 |
 |---|---|---|
-| insurance_policies | insurer, product_name, policy_number_ciphertext, policyholder_member_id?, insured_member_id?, beneficiary_note, coverage_start, coverage_end?, payment_end?, status, valuation_asset_id? | 보험료는 연결 규칙에서 읽음 |
+| insurance_policies | insurer, product_name, policy_number_ciphertext, policyholder_member_id?, insured_member_id?, beneficiary_note, coverage_start, coverage_end?, payment_end?, premium_paid_before_krw?, premium_paid_through?, status, valuation_asset_id? | 보험료는 연결 규칙에서 읽음 |
 | insurance_coverages | policy_id, name, benefit_type, insured_amount_krw?, coverage_start?, coverage_end?, note | 정액/실손/기타 설명; 자동 보상 판정 아님 |
 | insurance_cases | title, patient_member_id, diagnosis_note?, diagnosis_code?, start_on, end_on?, treatment_state, financial_state | 사건은 보험계약의 자식이 아님 |
 | medical_nodes | case_id, parent_id?, kind, label, provider_name?, start_on?, end_on?, sort_order, note | 같은 사건 부모만 허용; 순환 금지 |

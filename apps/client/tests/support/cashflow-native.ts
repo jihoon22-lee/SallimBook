@@ -1,5 +1,10 @@
 import type { Page } from "@playwright/test";
-import { members } from "./finance";
+import {
+  emptyInsuranceSummary,
+  householdOverviewFor,
+  householdTrendsFor,
+  members,
+} from "./finance";
 import type { mockCashflow } from "./cashflow";
 type State = Awaited<ReturnType<typeof mockCashflow>>;
 type Args = Record<string, any>;
@@ -141,6 +146,23 @@ export async function mockNativeCashflow(
         series_kind: "asset_owned_amount",
         points: [],
       });
+    if (method === "householdTrends")
+      return metadata(
+        state.finance.trends?.(args.query.to, args.query.months) ??
+          householdTrendsFor(
+            args.query.to,
+            args.query.months,
+            (month) =>
+              state.finance.overview?.(month) ??
+              householdOverviewFor({
+                month,
+                assets: state.finance.assets,
+                accounts: state.finance.accounts,
+              }),
+          ),
+      );
+    if (method === "insuranceSummary")
+      return metadata(state.finance.insuranceSummary ?? emptyInsuranceSummary);
     const route = mapping[method];
     if (!route) return { ok: false, code: "INVALID_REQUEST" };
     const query = new URLSearchParams(
@@ -184,6 +206,8 @@ export async function mockNativeCashflow(
                 "getAsset",
                 "getAssetComparison",
                 "getAssetTrends",
+                "householdTrends",
+                "insuranceSummary",
               ]
                 .map((name) => ({ name, rtype: "promise" }))
                 .concat([

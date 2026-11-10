@@ -14,6 +14,7 @@ import { policyStatuses } from "../model";
 import type { PolicyQuery } from "../model";
 import { InsuranceError, InsurancePage, MemberSelect } from "../InsuranceSupport";
 import { PolicyEditor, PolicySummary } from "./PolicyEditor";
+import { PolicyMoney } from "./PolicyMoney";
 import { PolicyNumber } from "./PolicyNumber";
 import { Coverages } from "./Coverages";
 import { ClaimsList } from "../claims/ClaimPages";
@@ -187,6 +188,7 @@ function PolicyDetail({ id, edit }: { id: string; edit: boolean }) {
             )}
             <DocumentPanel kind="policy" id={id} />
             <PolicyNumber policy={row} refresh={() => void resource.reload()} />
+            <PolicyMoney policyId={id} />
             <Coverages policyId={id} />
             <PremiumLinks policy={row} />
             <ClaimsList policyId={id} />

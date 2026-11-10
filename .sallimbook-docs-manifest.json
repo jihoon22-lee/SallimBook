@@ -34,8 +34,8 @@
       "git_sha1": "ffcfdbdc9f2ebd5edf23ff3d32273ba992243814"
     },
     "CHANGELOG.md": {
-      "sha256": "05ccc63ca68022ca25282622fcd164c9161884510b78418f92ff98eeb4e7f827",
-      "git_sha1": "ea46c30e4cc14d2148aff2f67d8b87e40ab395a8"
+      "sha256": "7be0aabcaf09c63eac6ee239ec0323310eb30ebda410716fdd5d2988c3cf0831",
+      "git_sha1": "c393b4b6a18758107d261a021d02a58801587b4b"
     },
     "CONTRIBUTING.md": {
       "sha256": "acc150b1986b3760e780c8fe98ee4477603d718e0ccce5b6be6950b236b6f4db",
@@ -50,8 +50,8 @@
       "git_sha1": "022a000a8757c9e2e3303849ef0a68bd233fba4d"
     },
     "docs/product-requirements.md": {
-      "sha256": "ac27bd2da63b07e9b314954d55a0c8de85334dd8a3f99d447b8401922783edab",
-      "git_sha1": "e66320b1e3a74d003ccca3072c54eb8e81ea33af"
+      "sha256": "3f6ea9ebc2cf9694eaae6dcab4c3b4092348b415df8cfb0af259650360347733",
+      "git_sha1": "fa8fb20f79cfed1c1d945f23602cc094f8168f63"
     },
     "docs/architecture.md": {
       "sha256": "9271ea46e56ff9f5f7ea87499ea52e07b1f90f0c7193d924ec0bdfd711fb90ed",
@@ -62,16 +62,16 @@
       "git_sha1": "f27ef4a5f0cc315e92c6af858378215f5bf1b869"
     },
     "docs/data-model.md": {
-      "sha256": "6b4180d166ac9ca8fd362fec630af7ac3e2801c58bf0884ae7ad1add65ac9e04",
-      "git_sha1": "8c672582b7beacba1503c19efe65372c32956149"
+      "sha256": "4ca2f0391351c4f545340389145f19b070fbd3b5dc57497ae63eecdc16233fed",
+      "git_sha1": "5d3d1ee17dfbfda7dcfae2ccf05ea3229d519505"
     },
     "docs/api-contract.md": {
-      "sha256": "79d58620ede184f8054fce3db1a76fec0acfaa9496e817b1e4612c5611ee92aa",
-      "git_sha1": "b98b3b21e2ff9cca813bedb21cc729ad7af27728"
+      "sha256": "45a414109b1b4e1a87d314a8124dccc386b15604af3270946ed4e32c4d88dfc6",
+      "git_sha1": "f53826078c9b1c9dade3b33fb849d253d2415dae"
     },
     "docs/screen-specifications.md": {
-      "sha256": "278b00f6cf0a70d55e13b01882a6e84c161e71dea0c4d10a0ab08ea5dc2b27d3",
-      "git_sha1": "0a19550d7f1bd31afbc0c00ca41360500609b666"
+      "sha256": "3cfb5c9ae9207e62c4d5a4fd7de93479f2e131c02f3364448b37bf13bf6e763e",
+      "git_sha1": "bd469ed290eb659343449b74237bc6b45495451f"
     },
     "docs/security-authentication.md": {
       "sha256": "7cbbfb33c48729a0d6fb28ebaacc2f8e0cf43fb4251c347a612f63b4ee26f1fc",
@@ -106,8 +106,8 @@
       "git_sha1": "ef012269cc1891ba65bc869badbf5efed032294b"
     },
     "docs/design-system.md": {
-      "sha256": "6fefdd616f96841cc28abc594d230133dd494fb0841b775c841bd93d3e235b57",
-      "git_sha1": "44f74e174f7064d1484f0225cc6cdc02e9386fa2"
+      "sha256": "d9b84381a23e08d5110aa756d5bc2fc887102475e3bc77d5675ef8994decacbb",
+      "git_sha1": "6cae6e1dad5814378c0d35c269319f9c7da7c110"
     },
     "docs/future-integrations.md": {
       "sha256": "9efb2233e7edebb057fe8c4ba6e557c86ba34d8085eb43998ac471f9adbf9689",
@@ -122,12 +122,12 @@
       "git_sha1": "1064d2c69225bdb4bbe563e65465a4550edad069"
     },
     "docs/native-bridge-contract.md": {
-      "sha256": "9ab620c30df20911bba9d6e7fcc6d9c24ff231f83fc0cf09a8a485af6c4dea47",
-      "git_sha1": "d883b93b967f5123b66b4c8405257cb933f7bff5"
+      "sha256": "e95754131d2bcc1dac810400971403386ae0083afebd7e195eb5201ff4fdd879",
+      "git_sha1": "57fb710b80c031ce258f5c985126834cb6cf734b"
     },
     "docs/README.md": {
-      "sha256": "280163bf3a689068ef69b2da9433831a82c5c32e8089dc10dd47de56bac589c9",
-      "git_sha1": "66fc8f31cb2a99e1f04c9d49c03743ea90f1951f"
+      "sha256": "f8ed8a00f5a9cb7a76bb78e1b5467547daca8049a72ae34351f8679e9af8f30b",
+      "git_sha1": "0a900136039415c3698c1d1c8afe63da17fd3389"
     },
     "docs/adr/android-web-shared-ui.md": {
       "sha256": "a6127f75b2d8884ce6f5aaf993802f4b7ff3db7f9d9e22a73516d0067fc307a9",
@@ -472,6 +472,10 @@
     "docs/testing/household-status.md": {
       "sha256": "927bce78a0cb3381d6ced30279cafa6116a2e8607481be67992622c4b4bbacb6",
       "git_sha1": "05fbadc4b3a205e31f3964d7efd29eac5e142507"
+    },
+    "docs/adr/household-flow-dashboard.md": {
+      "sha256": "a6739e8593ee76f5a7b4943643f66f486f4e1e2c3deb0dedb7d05ccf98c2a0dc",
+      "git_sha1": "e2b41f404a8878db15437f5df304f2525ce048bc"
     }
   }
 }

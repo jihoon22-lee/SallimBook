@@ -1,4 +1,10 @@
-import { emptyExpensePlanSummary, householdOverviewFor, householdPeople } from "./finance";
+import {
+  emptyExpensePlanSummary,
+  emptyInsuranceSummary,
+  householdOverviewFor,
+  householdPeople,
+  householdTrendsFor,
+} from "./finance";
 import type { Page } from "@playwright/test";
 import { members } from "./finance";
 import { homeComparison } from "./homecare";
@@ -261,6 +267,13 @@ export async function mockNativeHomecare(page: Page, state: State) {
     // Like the lists above, this household has no registered assets or accounts yet.
     if (method === "householdOverview")
       return metadata(householdOverviewFor({ month: args.query.month, assets: [], accounts: [] }));
+    if (method === "householdTrends")
+      return metadata(
+        householdTrendsFor(args.query.to, args.query.months, (month) =>
+          householdOverviewFor({ month, assets: [], accounts: [] }),
+        ),
+      );
+    if (method === "insuranceSummary") return metadata(emptyInsuranceSummary);
     if (method === "expensePlanSummary") return metadata(emptyExpensePlanSummary);
     if (method === "getAssetComparison") return metadata(homeComparison(args.query.to));
     if (method === "getAssetTrends")
@@ -323,7 +336,14 @@ export async function mockNativeHomecare(page: Page, state: State) {
         PluginHeaders: [
           {
             name: "SallimBookAuth",
-            methods: [...methods, "listHouseholdPeople", "getSession", "request"]
+            methods: [
+              ...methods,
+              "listHouseholdPeople",
+              "getSession",
+              "request",
+              "householdTrends",
+              "insuranceSummary",
+            ]
               .map((name) => ({ name, rtype: "promise" }))
               .concat([
                 { name: "addListener", rtype: "callback" },

@@ -14,7 +14,7 @@ import { useIncomeApi } from "../income/api";
 import { useRetryReport } from "../../shared/RetryFailed";
 import { StaleNotice } from "../../shared/StaleNotice";
 import { PlanMargin } from "./PlanMargin";
-import type { OverviewResource } from "./overviewApi";
+import type { HouseholdTrends, OverviewResource } from "./overviewApi";
 
 function IncomeSummary() {
   const api = useIncomeApi();
@@ -113,18 +113,22 @@ function FixedSummary() {
 export function HomeSecondary({
   overview,
   overviewQuiet = false,
+  trend,
 }: {
   /** The household status read shared with the rest of the page, for the plan-based margin. */
   overview?: OverviewResource;
   overviewQuiet?: boolean;
+  trend?: HouseholdTrends["plan"] | null;
 }) {
   const { state } = useAuth();
-  return (
-    <section className="card secondary-summary" aria-label="다른 기록 살펴보기">
-      <h2>수입·지출</h2>
-      {state.status === "authenticated" ? (
-        <>
-          {overview && <PlanMargin overview={overview} quiet={overviewQuiet} />}
+  if (state.status === "authenticated")
+    return (
+      <>
+        <section className="card secondary-summary" aria-label="다른 기록 살펴보기">
+          <h2>이번 달 돈의 흐름</h2>
+          {overview && <PlanMargin overview={overview} quiet={overviewQuiet} trend={trend} />}
+        </section>
+        <section className="card home-records" aria-label="이번 달 수입·지출 기록">
           <div className="home-monthly-grid">
             <IncomeSummary />
             <FixedSummary />
@@ -136,20 +140,23 @@ export function HomeSecondary({
             <Link to="/insurance/claims">보험 청구 내역</Link>
             <Link to="/insurance/cases?financial=open">진행 중인 보험 기록</Link>
           </div>
-        </>
-      ) : (
-        <RelatedLinks
-          links={[
-            { to: "/income", label: "이번 달 수입", description: "등록 수입과 실제 반환" },
-            {
-              to: "/fixed-payments",
-              label: "등록된 고정 납부",
-              description: "예정 회차와 실제 납부",
-            },
-            { to: "/insurance/cases", label: "진행 보험 사건", description: "치료·청구·실제 지급" },
-          ]}
-        />
-      )}
+        </section>
+      </>
+    );
+  return (
+    <section className="card secondary-summary" aria-label="다른 기록 살펴보기">
+      <h2>이번 달 돈의 흐름</h2>
+      <RelatedLinks
+        links={[
+          { to: "/income", label: "이번 달 수입", description: "등록 수입과 실제 반환" },
+          {
+            to: "/fixed-payments",
+            label: "등록된 고정 납부",
+            description: "예정 회차와 실제 납부",
+          },
+          { to: "/insurance/cases", label: "진행 보험 사건", description: "치료·청구·실제 지급" },
+        ]}
+      />
     </section>
   );
 }

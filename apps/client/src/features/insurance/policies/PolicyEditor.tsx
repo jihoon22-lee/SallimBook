@@ -1,3 +1,5 @@
+import { AmountField } from "../../../shared/AmountField";
+import { formatKrw } from "../../assets/months/model";
 import { LastModified } from "../../../shared/RecordActor";
 import { DateInput } from "../../../shared/DateInput";
 import { OptionalFields } from "../../../shared/OptionalFields";
@@ -75,6 +77,15 @@ export function PolicySummary({ row }: { row: Policy }) {
             {dateLabel(row.payment_start ?? null)} ~ {dateLabel(row.payment_end ?? null)}
           </dd>
         </div>
+        {row.premium_paid_before_krw != null && (
+          <div>
+            <dt>이미 낸 보험료</dt>
+            <dd>
+              {formatKrw(row.premium_paid_before_krw)} ·{" "}
+              {dateLabel(row.premium_paid_through ?? null)}까지
+            </dd>
+          </div>
+        )}
         <div>
           <dt>평가액 연결</dt>
           <dd>
@@ -139,7 +150,9 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
     if (command.error?.status === 409) return;
     const input = policyInput(draft);
     if (!input) {
-      setValidation("보험사·상품명·보장 시작일과 각 기간을 확인해 주세요.");
+      setValidation(
+        "보험사·상품명·보장 시작일과 각 기간, 이미 낸 보험료의 금액·기준일을 확인해 주세요.",
+      );
       return;
     }
     const changes = base ? changedFields(policyInput(policyDraft(base))!, input) : null;
@@ -259,6 +272,8 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
                 draft.coverageEnd ||
                 draft.paymentStart ||
                 draft.paymentEnd ||
+                draft.paidBefore ||
+                draft.paidThrough ||
                 draft.asset ||
                 draft.note,
               )}
@@ -297,6 +312,22 @@ export function PolicyEditor({ initial }: { initial?: Policy }) {
                     </label>
                   </div>
                 ))}
+              <AmountField
+                label="이미 낸 보험료 합계 (원, 선택)"
+                value={draft.paidBefore}
+                onChange={(value) => change("paidBefore", value)}
+                hint="가입 후 기준일까지 낸 보험료를 적어 두면, 그 뒤는 연결한 보험료 항목으로 이어서 계산해요. 금액과 기준일을 함께 적어 주세요."
+              />
+              <div className="form-field">
+                <label>
+                  이미 낸 보험료 기준일
+                  <DateInput
+                    max="9999-12-31"
+                    value={draft.paidThrough}
+                    onChange={(e) => change("paidThrough", e.target.value)}
+                  />
+                </label>
+              </div>
               <div className="form-field">
                 <label>
                   환급·적립 평가액 자산

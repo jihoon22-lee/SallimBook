@@ -95,6 +95,9 @@ const FixedDetailPage = lazyPage(() => fixed().then((m) => m.FixedDetailPage));
 const RuleListPage = lazyPage(() => fixed().then((m) => m.RuleListPage));
 const RuleNewPage = lazyPage(() => fixed().then((m) => m.RuleNewPage));
 const RuleDetailPage = lazyPage(() => fixed().then((m) => m.RuleDetailPage));
+const MonthlyFlowPage = lazyPage(() =>
+  import("../features/living/MonthlyFlowPage").then((m) => m.MonthlyFlowPage),
+);
 const LivingPage = lazyPage(() =>
   import("../features/living/LivingPage").then((m) => m.LivingPage),
 );
@@ -448,6 +451,14 @@ const screens = [
     parent: { to: "/", label: "홈" },
     live: true,
     element: <LivingPage />,
+  },
+  {
+    path: "/living/monthly",
+    title: "월별 흐름",
+    group: "living" as NavigationGroup,
+    parent: { to: "/living", label: "생활비" },
+    live: true,
+    element: <MonthlyFlowPage />,
   },
   {
     path: "/income",
@@ -822,6 +833,7 @@ const navigation: {
       { to: "/income", label: "수입" },
       { to: "/fixed-payments", label: "고정 지출" },
       { to: "/cards", label: "카드" },
+      { to: "/living/monthly", label: "월별 흐름" },
     ],
   },
   {
