@@ -124,8 +124,24 @@ export function SavedAmountsStatus({
     </div>
   );
 }
-export function SavedAmount({ result, assetId }: { result: Amounts; assetId: string }) {
+/** Held in a month when it started by the month's end and had not ended before its start. */
+function heldIn(month: string, held: { started_on: string; ended_on?: string | null }) {
+  return (
+    held.started_on.slice(0, 7) <= month && (!held.ended_on || held.ended_on.slice(0, 7) >= month)
+  );
+}
+export function SavedAmount({
+  result,
+  assetId,
+  held,
+}: {
+  result: Amounts;
+  assetId: string;
+  /** The item's holding period, so a month outside it is not shown as a missing amount. */
+  held?: { started_on: string; ended_on?: string | null };
+}) {
   const { month, currentMonth } = useMonth();
+  const outside = held !== undefined && !heldIn(month, held);
   const data = !result.error && !result.loading ? result.data : null;
   const row = data?.items.find((item) => item.asset_id === assetId)?.after;
   // A quiet hint only: a failed status read never adds an error to the list.
@@ -138,7 +154,9 @@ export function SavedAmount({ result, assetId }: { result: Amounts; assetId: str
       {data && (
         <p>
           <span>{formatMonth(month)} 가계 보유분 </span>
-          <strong>{row ? formatKrw(row.owned_amount_krw) : "미입력"}</strong>
+          <strong>
+            {row ? formatKrw(row.owned_amount_krw) : outside ? "보유 기간이 아니에요" : "미입력"}
+          </strong>
           {latest?.owned_amount_krw != null && latest.basis_month && (
             <small>
               {" "}
@@ -156,7 +174,7 @@ export function SavedAmount({ result, assetId }: { result: Amounts; assetId: str
       <button
         type="button"
         className="secondary-button"
-        disabled={result.locked || month > currentMonth}
+        disabled={result.locked || month > currentMonth || (outside && !row)}
         onClick={() => void result.open(assetId)}
       >
         금액 입력·수정

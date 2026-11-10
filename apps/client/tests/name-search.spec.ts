@@ -184,6 +184,8 @@ for (const native of [false, true]) {
   test(`eight server name searches include rows beyond fifty and preserve paging ${native ? "native" : "web"}`, async ({
     page,
   }) => {
+    // Eight screens are opened and searched in one test; the default 30s leaves no margin.
+    test.setTimeout(90_000);
     const state = await searchLists(page, native);
     for (const domain of domains) {
       await page.goto(domain.path + (domain.path === "/accounts" ? "?status=all" : ""));

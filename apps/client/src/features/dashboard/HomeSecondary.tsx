@@ -12,6 +12,7 @@ import { useResource } from "../finance/queries";
 import { useFixedApi } from "../fixed/api";
 import { useIncomeApi } from "../income/api";
 import { useRetryReport } from "../../shared/RetryFailed";
+import { StaleNotice } from "../../shared/StaleNotice";
 import { PlanMargin } from "./PlanMargin";
 import type { OverviewResource } from "./overviewApi";
 
@@ -21,18 +22,20 @@ function IncomeSummary() {
   const { month } = useMonth();
   const result = useResource(useCallback(() => api.summary(month), [api, month]));
   const quiet = useRetryReport("home-income", result.error, result.reload);
-  const ready = result.data && !result.loading && !result.error;
+  // Records already loaded stay visible while a refresh runs or after it fails.
+  const ready = result.data !== null;
   return (
     <section className="home-summary-part" aria-label="홈 등록 수입 요약">
       {ready && (
         <ExpectedIncomeSummary data={result.data!.expected} members={members.members} level={3} />
       )}
       <h3>{formatMonth(month)} 실제 입금</h3>
-      {!quiet && <CashflowError error={result.error} />}
-      {result.loading && <p role="status">등록 수입 확인 중</p>}
-      {result.error && !quiet && (
+      {!quiet && !ready && <CashflowError error={result.error} />}
+      {result.loading && !ready && <p role="status">등록 수입 확인 중</p>}
+      {result.error && !quiet && !ready && (
         <button onClick={() => void result.reload()}>홈 수입 다시 확인</button>
       )}
+      {result.error && !quiet && ready && <StaleNotice retry={() => void result.reload()} />}
       {ready &&
         (result.data!.totals.record_count === 0 ? (
           <p>
@@ -59,12 +62,15 @@ function PaymentFacts() {
   const api = useFixedApi();
   const { month } = useMonth();
   const result = useResource(useCallback(() => api.summary(month), [api, month]));
-  const ready = result.data && !result.loading && !result.error;
+  const ready = result.data !== null;
   return (
     <>
-      <CashflowError error={result.error} />
-      {result.loading && <p role="status">고정 납부 확인 중</p>}
-      {result.error && <button onClick={() => void result.reload()}>홈 고정 납부 다시 확인</button>}
+      {!ready && <CashflowError error={result.error} />}
+      {result.loading && !ready && <p role="status">고정 납부 확인 중</p>}
+      {result.error && !ready && (
+        <button onClick={() => void result.reload()}>홈 고정 납부 다시 확인</button>
+      )}
+      {result.error && ready && <StaleNotice retry={() => void result.reload()} />}
       {ready && (
         <>
           <dl className="metadata-grid compact-metadata">

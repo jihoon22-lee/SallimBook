@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { FinanceError } from "../finance/FinanceSupport";
 import { formatKrw } from "../assets/months/model";
 import { formatMonth, useMonth } from "../../shared/MonthContext";
+import { StaleNotice } from "../../shared/StaleNotice";
 import {
   holdingGroups,
   type HouseholdOverview as Overview,
@@ -183,8 +184,9 @@ export function InsuranceCounts({ insurance }: { insurance: Overview["insurance"
 
 function Holdings({ overview, quiet }: { overview: OverviewResource; quiet: boolean }) {
   const { month } = useMonth();
-  const data = overview.error ? null : overview.data;
-  if (overview.error)
+  // A failed refresh keeps the status already on screen; only a first load has nothing to show.
+  const data = overview.data;
+  if (overview.error && !data)
     return quiet ? null : (
       <>
         <FinanceError error={overview.error} />
@@ -197,6 +199,7 @@ function Holdings({ overview, quiet }: { overview: OverviewResource; quiet: bool
   const { holdings, insurance } = data;
   return (
     <div aria-busy={overview.loading}>
+      {overview.error && !quiet && <StaleNotice retry={() => void overview.reload()} />}
       <Balance data={data} month={month} />
       <div className="household-overview-grid">
         {holdings.groups.map((group) => (

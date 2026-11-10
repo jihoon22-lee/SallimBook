@@ -476,6 +476,7 @@ function PlanEditor({
   const command = useMonthCommand();
   const key = useIdempotencyKey(
     JSON.stringify([row?.id, row?.version, draft, amount, effective, endOn, action]),
+    command.uncertain,
   );
   const ended = !!row?.ended_on && row.ended_on <= todaySeoul();
   function update(value: Partial<S["PlanCreate"]>) {

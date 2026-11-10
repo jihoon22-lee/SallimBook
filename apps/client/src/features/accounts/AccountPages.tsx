@@ -177,7 +177,7 @@ function AccountList() {
                 {account.status === "closed" ? "종료" : "사용 중"}
               </span>
             </div>
-            <SavedAmount result={amounts} assetId={account.asset.id} />
+            <SavedAmount result={amounts} assetId={account.asset.id} held={account.asset} />
             <dl className="metadata-grid compact-metadata">
               <div>
                 <dt>금융기관·유형</dt>

@@ -307,7 +307,7 @@ function AssetList() {
                 {asset.status === "archived" ? "사용 종료" : "사용 중"}
               </span>
             </div>
-            <SavedAmount result={amounts} assetId={asset.id} />
+            <SavedAmount result={amounts} assetId={asset.id} held={asset} />
             <details className="record-details">
               <summary>소유·지분·보유기간 자세히</summary>
               <AssetSummary asset={asset} members={members.members} />

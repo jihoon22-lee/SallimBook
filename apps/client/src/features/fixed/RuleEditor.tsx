@@ -86,7 +86,10 @@ export function RuleEditor({ initial }: { initial?: Rule }) {
         draft.from > plan!.floor &&
         (!base.ended_on || draft.from < base.ended_on)));
   const payload = base ? changed : input;
-  const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, payload]));
+  const key = useIdempotencyKey(
+    JSON.stringify([base?.id, base?.version, payload]),
+    command.uncertain,
+  );
   function change(field: keyof RuleDraft, value: string) {
     setDraft((old) => {
       const next = {

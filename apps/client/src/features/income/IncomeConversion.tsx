@@ -75,7 +75,7 @@ function ConversionWorkspace() {
           reason: reason.trim(),
         }
       : null;
-  const key = useIdempotencyKey(JSON.stringify(payload));
+  const key = useIdempotencyKey(JSON.stringify(payload), command.uncertain);
   function scopeChange(update: () => void) {
     update();
     setSources(null);

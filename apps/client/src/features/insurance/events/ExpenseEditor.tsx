@@ -116,7 +116,10 @@ export function ExpenseEditor({
   const selected = nodes.data?.find((n) => n.id === draft.nodeId);
   const provider = base || providerTouched ? draft.provider : (selected?.provider_name ?? "");
   const input = expenseInput({ ...draft, provider });
-  const key = useIdempotencyKey(JSON.stringify([base?.id, base?.version, input, reason.trim()]));
+  const key = useIdempotencyKey(
+    JSON.stringify([base?.id, base?.version, input, reason.trim()]),
+    command.uncertain,
+  );
   const ready =
     !!input &&
     selected?.kind !== "prescription" &&

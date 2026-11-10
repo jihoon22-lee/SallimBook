@@ -430,7 +430,8 @@ function MonthWorkspace({
       </>
     );
   const readOnly = revisionNo !== undefined || record.state === "confirmed";
-  const locked = Boolean(editor || panel || loading || error || nextAfter);
+  // A failed re-read leaves the loaded record on screen with its own retry; it stays editable.
+  const locked = Boolean(editor || panel || loading || nextAfter);
   const nextUnverified = record.values.find(
     (row) =>
       row.inclusion_status === "included" &&

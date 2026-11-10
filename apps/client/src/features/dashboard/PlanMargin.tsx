@@ -6,7 +6,8 @@ import type { OverviewResource } from "./overviewApi";
 
 /** The server's plan-based estimate; it is never shown as a balance or an amount saved. */
 export function PlanMargin({ overview, quiet }: { overview: OverviewResource; quiet: boolean }) {
-  const plan = overview.error ? null : overview.data?.plan;
+  // A failed refresh keeps the estimate already shown; the holdings section offers the retry.
+  const plan = overview.data?.plan;
   // Without one known expected income the margin would read as a deficit, so it waits for one.
   const ready = plan && plan.expected_income_count > plan.expected_income_unknown_count;
   const notes = plan
@@ -22,7 +23,7 @@ export function PlanMargin({ overview, quiet }: { overview: OverviewResource; qu
     <section className="plan-margin" aria-label="월 계획 기준 여유">
       <h3>월 계획 기준 여유</h3>
       {overview.loading && !plan && <p role="status">계획 기준 여유 확인 중</p>}
-      {overview.error && !quiet && (
+      {overview.error && !plan && !quiet && (
         <>
           <FinanceError error={overview.error} />
           <button type="button" onClick={() => void overview.reload()}>
