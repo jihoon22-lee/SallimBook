@@ -933,3 +933,116 @@ button[type="submit"].danger-button:hover, .danger-review button[type="submit"]:
 }
 .net-table { min-width: 38rem !important; }
 .net-hero .home-detail { margin-top: 6px; }
+
+/* ── Refinement layer (2026-11): quieter chrome, clearer hierarchy, one look for actions ──
+   Links read as actions instead of underlined document text, outlines get lighter, native
+   markers and arrows are replaced, and narrow screens spend less height on page furniture. */
+:root { --radius: 14px; --border-soft: #e9eef2; --shadow: 0 1px 2px rgb(28 45 61 / 5%); }
+@media (prefers-color-scheme: dark) { :root { --border-soft: #26362f; } }
+
+/* Links */
+a { text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.button-link:hover, .nav-item:hover, .subnav a:hover, .topbar-link:hover, .brand:hover, .sidebar-account:hover, .related-links a:hover, .skip-link:hover { text-decoration: none; }
+p a, li a, dd a, td a, th a, .card > a:not(.button-link), .net-hero > a, .home-summary-part > a, .form-actions > a:not(.button-link), .item-heading > a, .flow-subtitle a { color: var(--accent); font-weight: 600; }
+h1 a, h2 a, h3 a, h4 a, .overview-items a, .panel-rows a, .home-task-links a { color: var(--foreground); }
+/* The empty alternative text keeps the chevron out of each link's accessible name. */
+.item-heading > a::after, .flow-subtitle a::after, .card > a:not(.button-link)::after, .net-hero > a::after, .home-summary-part > a::after { content: "›" / ""; margin-left: 5px; font-weight: 500; }
+.net-hero .item-heading > a, .home-panel .item-heading > a, .flow-subtitle a { color: var(--muted); }
+
+/* Buttons: one filled action, soft outlines for the rest */
+button, .button-link { border-color: var(--border); border-radius: 11px; box-shadow: none; }
+.button-link, .primary-button, .secondary-button, button[type="submit"] { box-shadow: var(--shadow); }
+button:hover, .secondary-button:hover { border-color: var(--border-strong); }
+.secondary-button, .button-link.secondary-button { border-color: var(--border); box-shadow: var(--shadow); }
+.button-link, button[type="submit"], .primary-button { border-color: var(--accent); }
+.danger-button { border-color: transparent; background: var(--danger-soft); color: var(--danger); box-shadow: none; }
+.danger-button:hover { border-color: var(--danger); background: var(--danger-soft); }
+.quiet-button, .segmented-control button, .month-step, .text-button { box-shadow: none; }
+.text-button { border-color: transparent; background: none; color: var(--accent); padding-inline: 6px; font-size: .8125rem; }
+.text-button:hover { background: var(--surface-subtle); border-color: transparent; }
+.form-actions { gap: 10px; }
+.form-actions > a:not(.button-link) { padding-inline: 8px; border-radius: 10px; }
+.form-actions > a:not(.button-link):hover { background: var(--surface-subtle); text-decoration: none; }
+
+/* Disclosure: a chevron instead of the native triangle */
+details:not(.optional-fields):not(.filter-panel):not(.asset-filter-panel) > summary { display: flex; align-items: center; gap: 10px; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details:not(.optional-fields):not(.filter-panel):not(.asset-filter-panel) > summary::before { content: ""; flex: 0 0 auto; width: 7px; height: 7px; margin-inline: 3px 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; opacity: .65; }
+details:not(.optional-fields):not(.filter-panel):not(.asset-filter-panel)[open] > summary::before { transform: rotate(45deg); }
+@media (prefers-reduced-motion: reduce) { details > summary::before { transition: none; } }
+.optional-fields > summary { list-style: none; }
+
+/* Form controls */
+html select:not([multiple]) { appearance: none; padding-right: 40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.500l5 5 5-5' fill='none' stroke='%237a8898' stroke-width='1.800' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 12px 8px; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width: 20px; height: 20px; }
+input:not([type="checkbox"]):not([type="radio"]):focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
+.status-chip { border-radius: 999px; padding: 3px 10px; }
+
+/* Month picker: one compact pill */
+.month-picker { gap: 0; }
+.month-picker > .muted { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.month-control { gap: 8px; padding: 3px 4px 3px 14px; border-radius: 999px; box-shadow: var(--shadow); }
+.month-control .month-field { flex-wrap: nowrap; gap: 8px; }
+.month-control .month-field-row { display: flex; flex-wrap: nowrap; gap: 0; }
+.month-control .month-step { min-width: 44px; padding: 6px; border-color: transparent; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.125rem; }
+.month-control .month-step:hover { background: var(--surface-subtle); border-color: transparent; color: var(--foreground); }
+.month-control .month-step .month-step-text { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.month-control .month-today { min-width: 0; border-radius: 999px; font-size: .75rem; padding-inline: 10px; color: var(--accent); }
+.month-control .month-today .month-step-text { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip-path: none; }
+.month-control input { text-align: center; font-variant-numeric: tabular-nums; }
+.month-picker .month-field > label { flex-basis: auto; white-space: nowrap; }
+
+/* Search: field and button on one line */
+form[role="search"].card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px 10px; padding: 14px 16px; }
+form[role="search"].card > .form-field { margin: 0; }
+form[role="search"].card > .form-field label { font-size: .8125rem; color: var(--muted); }
+form[role="search"].card > .muted { grid-column: 1 / -1; margin: 0; font-size: .78rem; }
+form[role="search"].card > .form-actions { margin: 0; flex-wrap: nowrap; }
+form[role="search"].card button[type="submit"] { background: var(--surface); color: var(--foreground); border-color: var(--border); }
+
+/* Cards and page furniture */
+.card { border-color: var(--border-soft); }
+.card h2 { letter-spacing: -.025em; }
+.back-row { margin-bottom: 0; }
+.intro { padding: 8px 0 18px; }
+.intro h1 { margin: 2px 0 6px; }
+.mobile-tabs { background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(14px); box-shadow: 0 -1px 0 var(--border-soft), 0 -6px 18px rgb(28 45 61 / 4%); border-top-color: transparent; }
+.mobile-tabs .nav-item { color: var(--muted); }
+.mobile-tabs .nav-item[aria-current] { color: var(--accent); }
+@media (max-width: 600px) {
+  .card { padding: 16px; }
+  .intro .eyebrow { display: none; }
+  .intro { padding: 4px 0 12px; }
+  .intro h1 { font-size: 1.45rem; }
+  .intro > p:last-child { font-size: .8125rem; }
+  .form-actions { margin-block: 12px; }
+  .form-actions > .button-link, .form-actions > button { padding-inline: 14px; font-size: .875rem; }
+  .dashboard-heading { align-items: center; }
+}
+
+/* The home heading stacks on narrow screens so the month control has room to breathe. */
+@media (max-width: 600px) {
+  .dashboard-heading { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 12px; }
+  .dashboard-heading .month-picker { margin: 0; }
+  .dashboard-heading .month-control { width: 100%; justify-content: space-between; }
+  /* With enlarged text the buttons and the typed month drop below the label and keep their width. */
+  .dashboard-heading .month-control { border-radius: 24px; }
+  .dashboard-heading .month-control .month-field { flex: 1; flex-wrap: wrap; justify-content: space-between; }
+  .dashboard-heading .month-control .month-field-row { flex: 1 1 14rem; justify-content: flex-end; }
+  .dashboard-heading .month-picker input { flex: 1 1 8rem; font-size: .9375rem; }
+}
+.quiet-button { border-color: transparent !important; background: transparent; }
+.related-links a, .related-links a strong { color: var(--foreground); }
+.related-links a:hover { border-color: var(--border-strong); }
+/* Page-level shortcuts stay on one swipeable line on narrow screens instead of piling up. */
+@media (max-width: 600px) {
+  .intro + .form-actions { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding: 2px 0 6px; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .intro + .form-actions::-webkit-scrollbar { display: none; }
+  .intro + .form-actions > * { flex: 0 0 auto; white-space: nowrap; scroll-snap-align: start; border-radius: 999px; }
+}
+.card + .button-link, form[role="search"].card + .button-link, .card + .form-actions { margin-top: 12px; }
+.home-records .home-monthly-grid { gap: 1.25rem 2rem; align-items: start; }
+.home-records h3 { margin-top: 0; }
+.home-records .form-actions { margin-bottom: 0; }
+.card + .month-picker, .form-actions + .month-picker { margin-top: 12px; }

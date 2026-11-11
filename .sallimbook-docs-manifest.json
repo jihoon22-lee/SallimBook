@@ -34,8 +34,8 @@
       "git_sha1": "ffcfdbdc9f2ebd5edf23ff3d32273ba992243814"
     },
     "CHANGELOG.md": {
-      "sha256": "b12dcdafc83d5273240d16739e7923c6da28a379693c9cdb29a32f3bb5167e5e",
-      "git_sha1": "78667d1d570f0208eeff22f467d61cff96b0afbd"
+      "sha256": "7de41d6113efceb6d830990a7f5225e48f99811f55029d118edfcfc5f5863da3",
+      "git_sha1": "0bd5f3a11c1728f88d00b42141a78dd9706fcb3c"
     },
     "CONTRIBUTING.md": {
       "sha256": "acc150b1986b3760e780c8fe98ee4477603d718e0ccce5b6be6950b236b6f4db",
@@ -106,8 +106,8 @@
       "git_sha1": "ef012269cc1891ba65bc869badbf5efed032294b"
     },
     "docs/design-system.md": {
-      "sha256": "d9b84381a23e08d5110aa756d5bc2fc887102475e3bc77d5675ef8994decacbb",
-      "git_sha1": "6cae6e1dad5814378c0d35c269319f9c7da7c110"
+      "sha256": "3e08a0f1fe4fa263ea4423a9c527ccd111b2e1245922513684995e0730ef84ca",
+      "git_sha1": "2997cc076dc0ddc59734e2e57ff8e5169a5c27e5"
     },
     "docs/future-integrations.md": {
       "sha256": "9efb2233e7edebb057fe8c4ba6e557c86ba34d8085eb43998ac471f9adbf9689",

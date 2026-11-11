@@ -51,6 +51,8 @@ function Ratio({ paid, received }: { paid: string; received: string }) {
 export function PolicyMoney({ policyId }: { policyId: string }) {
   const summary = useInsuranceSummary();
   const row = summary.data?.policies.find((item) => item.policy_id === policyId);
+  // A summary that does not list this policy has nothing to show; an empty card would only add noise.
+  if (summary.data && !row) return null;
   return (
     <section className="card" aria-labelledby="policy-money-title">
       <h2 id="policy-money-title">낸 보험료와 받은 보험금</h2>
