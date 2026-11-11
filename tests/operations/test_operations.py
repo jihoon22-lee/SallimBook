@@ -739,6 +739,37 @@ class ReleaseTests(unittest.TestCase):
                 modes, {"nested": 0o755, "nested/code.txt": 0o644, "nested/tool.sh": 0o755}
             )
 
+    def test_staged_web_assets_stay_readable_under_a_restrictive_umask(self):
+        """Owner-only assets would be copied as root's and the web server could not read them."""
+        with tempfile.TemporaryDirectory() as tmp:
+            previous = os.umask(0o077)
+            try:
+                web = Path(tmp) / "web"
+                (web / "dist/assets").mkdir(parents=True)
+                (web / "dist/index.html").write_text("<!doctype html>")
+                (web / "dist/assets/app.js").write_text("synthetic")
+                (web / "Dockerfile").write_text("FROM scratch")
+            finally:
+                os.umask(previous)
+            self.assertEqual(stat.S_IMODE((web / "dist/index.html").stat().st_mode), 0o600)
+            build_context.public_modes(web)
+            modes = {
+                path.relative_to(web).as_posix(): stat.S_IMODE(path.stat().st_mode)
+                for path in [web, *web.rglob("*")]
+            }
+        self.assertEqual(
+            modes,
+            {
+                ".": 0o755,
+                "Dockerfile": 0o644,
+                "dist": 0o755,
+                "dist/assets": 0o755,
+                "dist/assets/app.js": 0o644,
+                "dist/index.html": 0o644,
+            },
+        )
+        self.assertIn("public_modes(web)", Path(build_context.__file__).read_text())
+
     def test_source_snapshot_excludes_ignored_private_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"

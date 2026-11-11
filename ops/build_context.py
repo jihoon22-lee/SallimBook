@@ -180,6 +180,20 @@ def stage_api_snapshot(api, commit, checkout, *, uv="uv"):
     return lock_hash
 
 
+def public_modes(root):
+    """Make a staged tree readable by the image's unprivileged user whatever the umask was.
+
+    Built assets are public files served by UID 10001. Staged under umask 077 they would be
+    owner-only, `COPY` would keep those modes for root, and every page would answer 404.
+    """
+    for directory, directories, files in os.walk(root, followlinks=False):
+        for name in directories:
+            (Path(directory) / name).chmod(0o755)
+        for name in files:
+            (Path(directory) / name).chmod(0o644)
+    Path(root).chmod(0o755)
+
+
 def stage_snapshot(output, commit, checkout):
     api, web = output / "api", output / "web"
     lock_hash = stage_api_snapshot(api, commit, checkout)
@@ -188,6 +202,7 @@ def stage_snapshot(output, commit, checkout):
     subprocess.run(["pnpm", "build"], cwd=checkout, env=build_environment(), check=True)
     shutil.copytree(checkout / "apps/client/dist", web / "dist")
     write_image_source(web, checkout / "ops/Dockerfile.web", commit, "web")
+    public_modes(web)
     files = {
         path.relative_to(output).as_posix(): hashlib.sha256(
             path.read_bytes()
